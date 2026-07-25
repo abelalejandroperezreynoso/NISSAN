@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sistema de Gestión de Seguridad</title>
+    
+    <link rel="stylesheet" href="estilos.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        .btn-logout-safe {
+            background: #fff1f2;
+            color: #e11d48;
+            border: 1px solid #fecdd3;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(225, 29, 72, 0.1);
+        }
+        .btn-logout-safe:hover {
+            background: #fce7f3;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(225, 29, 72, 0.2);
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background-color: #ef4444; /* Rojo */
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: bold;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <div id="vista-login" class="login-view hidden">
+        <div class="login-card">
+            <h2 style="color:#1e40af; margin-bottom:20px;">Iniciar Sesión</h2>
+            
+            <div id="login-loading"><div class="spinner"></div><div style="font-size:0.8rem">Conectando...</div></div>
+            
+            <div id="login-form-content">
+                <div class="input-group">
+                    <input type="text" id="login-name" autocomplete="off" placeholder="Usuario / Nombre">
+                    <div id="suggestions-list"></div>
+                </div>
+                
+                <div class="input-group">
+                    <input type="password" id="login-id" placeholder="Contraseña">
+                </div>
+                
+                <button id="btn-login-action" class="btn-login">Ingresar al Sistema</button>
+            </div>
+            
+            <div id="error-msg"></div>
+        </div>
+    </div>
+
+    <div id="vista-dashboard" class="main-container hidden">
+        
+        <div style="display:flex; align-items:center; margin-bottom: 15px; padding: 0 5px;">
+            <div style="display:flex; align-items:center; gap: 15px;">
+                <button id="btn-volver" class="btn-back-floating" onclick="volverAlDashboard()">‹ Atrás</button>
+                <h1 id="app-title" class="super-title" title="Toca aquí para activar modo Admin" style="margin:0;">Seguridad</h1>
+            </div>
+        </div>
+
+        <header id="main-user-header" class="main-header ios-header">
+            <div id="header-user-info" class="user-info-block" style="flex: 1; padding-right: 10px;">
+                </div>
+
+            <div id="header-radar-container" style="display:none; width: 120px; height: 120px; position: relative; flex-shrink: 0; margin-left: 10px;">
+                <canvas id="dashboard-main-radar"></canvas>
+            </div>
+        </header>
+
+        <div id="quick-team-view" style="display:none; gap:15px; flex-wrap:wrap; justify-content:center; padding:10px 5px; margin-bottom:10px;"></div>
+        
+        <div id="top-pendientes-container" style="display:flex; margin-bottom: 15px; padding: 0 5px;">
+            <button id="btn-ver-pendientes-init" class="btn-main" style="flex: 1; margin:0; background-color:white; color:#c2410c; border:none; text-align:center; justify-content:center; display:flex; align-items:center;">
+                Ver Mis Pendientes
+            </button>
+        </div>
+
+        
+        <div id="container-accesos-directos" style="margin-bottom: 20px;"></div>
+
+        <div id="admin-toolbar" class="admin-toolbar">
+            <div class="admin-label">Panel de Administración</div>
+            <div class="admin-actions-group">
+                <button id="btn-toggle-ahorro" class="admin-btn" onclick="window.toggleAhorroGlobal()" style="border-color: #64748b; color: #64748b;">
+                    📡 Cargando...
+                </button>
+                
+                <input type="file" id="inp-import-db" style="display:none" accept=".json" onchange="window.importarBaseDatos(this)">
+                <button id="btn-backup-download" class="admin-btn" onclick="window.exportarBaseDatos()">Respaldar</button>
+                <button id="btn-backup-upload" class="admin-btn" onclick="document.getElementById('inp-import-db').click()">Restaurar</button>
+                
+                <button class="admin-btn" onclick="window.abrirModalAccesos()" style="border-color: #eab308; color: #ca8a04;">⭐ Accesos Directos</button>
+                
+                <button id="btn-nueva-eval" class="admin-btn">Nueva Evaluación</button>
+                <button id="btn-nuevo" class="admin-btn">Nuevo Registro</button>
+            </div>
+        </div>
+        
+        <!-- Modal Flotante para Stats Difusión -->
+                <div id="modal-stats-difusion" style="display:none; position:fixed; z-index:4000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+                    <div class="form-content" style="max-width: 800px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 90vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: white; border-radius: 16px; padding: 0; overflow: hidden;">
+                        
+                        <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
+                            <div>
+                                <h2 style="color:#0f172a; margin:0; font-size: 1.3rem;">📈 Estadísticas de Difusión</h2>
+                            </div>
+                            <button onclick="document.getElementById('modal-stats-difusion').style.display='none'" style="border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b; font-weight:bold; font-size: 1rem;">✕</button>
+                        </div>
+
+                        <div id="global-stats" style="flex:1; overflow-y: auto; padding: 20px; background: #f8fafc;">
+                            <div class="stats-header-row" style="margin-bottom: 15px;">
+                                <div class="stats-title" style="font-size: 1rem; color:#475569;">Filtro de Datos</div>
+                                <select id="stats-filter-type" class="filter-select" onchange="window.calcularAvanceGlobal(false)">
+                                    <option value="">Todo General</option>
+                                    <option value="Incidente">Incidentes</option>
+                                    <option value="Difusión">Difusiones</option>
+                                </select>
+                            </div>
+                            <div class="global-info" style="margin-bottom:10px;"><span style="color:#64748b">Cumplimiento Total</span><span id="global-text" style="font-weight:bold;">Calculando...</span></div>
+                            <div class="global-track" style="margin-bottom:20px;"><div id="global-fill" class="global-fill"></div></div>
+                            <div id="stats-nav-header"><button id="btn-stats-back" class="btn-back-small">Volver</button><span id="stats-nav-title"></span></div>
+                            <div id="dept-stats-container"></div>
+                        </div>
+
+                    </div>
+                </div>
+
+        <div id="dashboard-calendar-widget" style="display:none; background:white; margin-bottom:15px; border-radius:16px; padding:15px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #e2e8f0;">
+            </div>
+        
+       <div id="init-load-container" style="margin-top: 15px;">
+    <div class="ios-grid-container">
+        
+        <div class="ios-app-btn" id="btn-ver-pendientes-equipo" style="display:none;">
+            <div class="ios-app-icon bg-equipo">👥</div>
+            <div class="ios-app-label">Mi Equipo</div>
+        </div>
+        
+        <div class="ios-app-btn" id="btn-ver-tipo-incidente">
+            <div class="ios-app-icon bg-incidentes">🚨</div>
+            <div class="ios-app-label">Incidentes</div>
+        </div>
+
+        <div class="ios-app-btn" id="btn-ver-tipo-difusion">
+            <div class="ios-app-icon bg-difusiones">📢</div>
+            <div class="ios-app-label">Difusiones</div>
+        </div>
+
+        <div class="ios-app-btn" id="btn-ver-tipo-capacitacion">
+            <div class="ios-app-icon bg-capacitaciones">📚</div>
+            <div class="ios-app-label">Cursos</div>
+        </div>
+
+        <div class="ios-app-btn" id="btn-ver-evaluaciones">
+            <div class="ios-app-icon bg-encuestas">📝</div>
+            <div class="ios-app-label">Encuestas</div>
+        </div>
+        
+        <div class="ios-app-btn" id="btn-registrar-hallazgo">
+            <div class="ios-app-icon bg-hallazgos-nuevo">🔍</div>
+            <div class="ios-app-label">Nuevo Hallazgo</div>
+        </div>
+
+        <div class="ios-app-btn" id="btn-panel-hallazgos">
+            <div class="ios-app-icon bg-hallazgos-panel">📋</div>
+            <div class="ios-app-label">Hallazgos</div>
+        </div>
+
+        <div class="ios-app-btn" onclick="window.cargarVistaObjetivos()">
+            <div class="ios-app-icon bg-objetivos">🎯</div>
+            <div class="ios-app-label">Objetivos</div>
+        </div>
+
+        <div class="ios-app-btn" id="btn-ver-stats">
+            <div class="ios-app-icon bg-stats-dif">📈</div>
+            <div class="ios-app-label">Stats Difusión</div>
+        </div>
+
+        <div class="ios-app-btn" id="btn-ver-stats-encuestas">
+            <div class="ios-app-icon bg-stats-enc">📊</div>
+            <div class="ios-app-label">Stats Encuestas</div>
+        </div>
+
+    </div>
+</div>
+
+        <div id="container-evaluaciones" style="display:none;"></div>
+        <div id="container-evaluaciones-historial" style="display:none;"></div>
+
+        <div id="modal-lista-incidentes" style="display:none; position:fixed; z-index:1800; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+            <div class="form-content" style="max-width: 600px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: #f0f2f5; border-radius: 16px; padding:0; overflow:hidden;">
+                
+                <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
+                    <h2 id="titulo-modal-lista-incidentes" style="margin:0; color:#1e293b; font-size:1.2rem; display:flex; align-items:center; gap:8px;">Registros</h2>
+                    <button onclick="window.cerrarModalListaIncidentes()" style="border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b; font-weight:bold; font-size: 1rem; flex-shrink:0; margin-left: 10px; transition: transform 0.2s;">✕</button>
+                </div>
+
+                <div id="contenido-modal-lista-incidentes" style="flex:1; overflow-y: auto; padding: 15px;">
+                    <div id="search-bar-container" style="display:none; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0;">
+                        <input type="text" id="search-input-text" class="search-input" placeholder="🔍 Buscar por título o tema..." style="flex: 1; min-width: 150px;">
+                        <input type="date" id="search-input-date" class="search-input" style="max-width: 150px;">
+                        <button class="btn-search-action" onclick="window.realizarBusqueda()">Buscar</button>
+                        <button class="btn-search-clear" onclick="window.limpiarBusqueda()">Limpiar</button>
+                    </div>
+
+                    <div id="loading-indicator" style="display:none; text-align:center; padding:20px; color:#64748b;">
+                        <div class="spinner" style="margin: 0 auto 10px auto;"></div>Buscando datos...
+                    </div>
+                    
+                    <div id="container-incidentes"></div>
+                    
+                    <button id="btn-mas" class="btn-main" style="display:none; margin-top:20px; background:white; color:#64748b; justify-content: center;">Cargar más registros</button>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 50px; margin-bottom: 20px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 30px;">
+            <button id="btn-logout" class="btn-logout-safe">
+                Cerrar Sesión
+            </button>
+        </div>
+    </div>
+
+    <div id="modal-firma">
+        <div class="firma-content">
+            <h3 style="margin:0; color:#1e293b; margin-bottom:5px;">Firmar de Conformidad</h3>
+            <p style="font-size:0.8rem; color:#64748b; margin-bottom:15px;">Dibuja tu firma en el recuadro</p>
+            <canvas id="signature-pad" width="300" height="150"></canvas>
+            <div style="display:flex; justify-content:space-between; margin-top:20px; gap:10px;">
+                <button onclick="cerrarFirma()" style="background:white; color:#475569; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:600; flex:1;">Cancelar</button>
+                <button onclick="limpiarFirma()" style="background:white; color:#ea580c; border:none; padding:10px 15px; border-radius:8px; cursor:pointer; font-weight:600; flex:1;">Borrar</button>
+                <button onclick="guardarFirma()" id="btn-save-sig" style="background:white; color:#22c55e; border:none; padding:10px 15px; border-radius:8px; font-weight:bold; cursor:pointer; flex:1.5;">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-form">
+        <div class="form-content">
+            <h2 id="form-title" style="margin-top:0; color:#1e40af; border-bottom:1px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">Gestión de Registro</h2>
+            <div class="form-group"><label>Tipo de Registro:</label>
+                <select id="inp-tipo" onchange="window.toggleGradoVisibility()"><option value="Incidente">Incidente</option><option value="Difusión">Difusión</option><option value="Capacitación">Capacitación</option></select>
+            </div>
+            
+            <div class="form-group" id="div-vinculo-container" style="background: #eff6ff; padding: 10px; border-radius: 8px; border: 1px dashed #bfdbfe; display: none;">
+                <label style="color: #1e40af;">🔗 Vincular con Capacitación existente:</label>
+                
+                <div style="position:relative;">
+                    <input type="text" id="inp-vinculo-search" placeholder="Escribe para buscar capacitación..." oninput="window.buscarVinculo(this)" autocomplete="off" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box;">
+                    <input type="hidden" id="inp-vinculo-id"> <div id="vinculo-suggestions" style="display:none; position:absolute; top:100%; left:0; width:100%; background:white; border:1px solid #cbd5e1; border-top:none; border-radius: 0 0 6px 6px; max-height:200px; overflow-y:auto; z-index:1000; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></div>
+                </div>
+
+                <div style="font-size: 0.75rem; color: #64748b; margin-top: 5px;">
+                    * Al vincular, se usarán las <b>imágenes</b> de la capacitación, pero se recolectarán <b>firmas nuevas</b>.
+                </div>
+            </div>
+
+            <div class="form-group"><label>Título:</label><input type="text" id="inp-titulo" placeholder="Ej. Caída en pasillo B"></div>
+            <div class="form-group"><label>Fecha:</label><input type="date" id="inp-fecha"></div>
+            <div class="form-group"><label>Origen:</label>
+                <select id="inp-origen"><option value="Otro">Otro</option><option value="Mantenimiento">Mantenimiento</option><option value="Producción">Producción</option><option value="Seguridad">Seguridad</option></select>
+            </div>
+            <div class="form-group" id="div-grado-container"><label>Grado / Severidad:</label>
+                <select id="inp-grado"><option value="Incidente H.H">Incidente H.H</option><option value="Incidente FR0">Incidente FR0</option><option value="Incidente FR1">Incidente FR1</option><option value="Incidente R">Incidente R</option><option value="Incidente U">Incidente U</option><option value="Incidente G">Incidente G</option><option value="Otro">Otro</option></select>
+            </div>
+            <div class="form-group"><label>Evidencia Fotográfica:</label>
+                <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                    <label for="inp-foto" style="background:white; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:0.9rem; color:#2563eb; font-weight:bold;"> Seleccionar fotos</label>
+                    <input type="file" id="inp-foto" accept="image/*" multiple style="display:none;">
+                    <button id="btn-paste" style="background:white; color:#475569; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:0.9rem;">Pegar</button>
+                </div>
+                <div id="gallery-preview-container" style="background:#f8fafc; padding:10px; border-radius:8px; border:1px dashed #cbd5e1; min-height:50px;"></div>
+            </div>
+            <div class="form-actions" style="display:flex; justify-content:flex-end; gap:12px; margin-top:30px;">
+                <button id="btn-cancelar" style="padding:10px 20px; background:white; border:none; border-radius:8px; cursor:pointer; color:#64748b;">Cancelar</button>
+                <button id="btn-guardar-db" style="padding:10px 25px; background:white; color:#2563eb; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Guardar</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="modal-visor">
+        <div id="txt-cerrar">✕</div> <div id="visor-content"></div>
+    </div>
+
+    <div id="modal-crear-eval">
+        <div class="form-content" style="max-width: 500px;">
+            <h2 style="color:#7c3aed; margin-top:0;">Nueva Evaluación</h2>
+            <div class="form-group"><label>Título de la Evaluación:</label><input type="text" id="eval-title-input" placeholder="Ej. Encuesta de Clima Laboral"></div>
+            
+            <div class="form-group">
+                <label>Descripción / Instrucciones:</label>
+                <textarea id="eval-desc-input" rows="3" placeholder="Ej. Evalúa del 1 al 5 considerando los objetivos del mes..." style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:10px; background:#f9fafb; font-family:inherit;"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label>Clasificación / Categoría:</label>
+                <select id="eval-category-input" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#f9fafb;">
+                    <option value="General">General</option>
+                    <option value="Seguridad">Seguridad</option>
+                    <option value="Calidad">Calidad</option>
+                    <option value="RRHH">RRHH</option>
+                    <option value="Operaciones">Operaciones</option>
+                    <option value="Capacitación">Capacitación</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Frecuencia Sugerida:</label>
+                <select id="eval-frequency-input" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#f9fafb;">
+                    <option value="once">Sin repetición (Única vez)</option>
+                    <option value="weekly">📅 1 vez por semana</option>
+                    <option value="biweekly">🗓️ 1 vez por quincena</option>
+                    <option value="monthly">🈷️ 1 vez al mes</option>
+                    <option value="quarterly">🍂 Cada 3 meses (Trimestral)</option>
+                    <option value="semiannual">🌗 Cada 6 meses (Semestral)</option>
+                    <option value="yearly">🎂 Cada año (Anual)</option>
+                    <option value="biennial">⏳ Cada 2 años</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Modo de Evaluación:</label>
+                <select id="eval-mode-input" onchange="window.verificarRestriccionesModo()" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#f9fafb;">
+                    <option value="self">👤 Autoevaluación (El usuario responde)</option>
+                    <option value="boss">👔 Evaluación de Jefe (El supervisor responde)</option>
+                </select>
+                <p style="font-size:0.75rem; color:#64748b; margin:4px 0 0 0;">Define quién debe llenar el formulario.</p>
+            </div>
+
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
+                
+                <div class="form-group" style="flex: 1; min-width: 150px; background:#f0f9ff; padding:10px; border-radius:10px; border:1px solid #bae6fd; margin-bottom: 0;">
+                    <label style="color:#0284c7; font-weight:bold; font-size:0.8rem; margin-bottom:5px; display:block;">🎯 Puestos:</label>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="chk-all-puestos" onchange="window.toggleSelectorPuestos()" checked style="width:16px; height:16px;">
+                        <span style="font-weight:600; color:#334155; font-size:0.85rem;">Todos</span>
+                    </label>
+                    <div id="container-lista-puestos" style="display:none; max-height:120px; overflow-y:auto; background:white; border:1px solid #cbd5e1; border-radius:8px; padding:8px; margin-top:5px;"></div>
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 150px; background:#f0fdf4; padding:10px; border-radius:10px; border:1px solid #bbf7d0; margin-bottom: 0;">
+                    <label style="color:#166534; font-weight:bold; font-size:0.8rem; margin-bottom:5px; display:block;">🏢 Deptos:</label>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="chk-all-deptos" onchange="window.toggleSelectorDeptos()" checked style="width:16px; height:16px;">
+                        <span style="font-weight:600; color:#334155; font-size:0.85rem;">Todos</span>
+                    </label>
+                    <div id="container-lista-deptos" style="display:none; max-height:120px; overflow-y:auto; background:white; border:1px solid #cbd5e1; border-radius:8px; padding:8px; margin-top:5px;"></div>
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 150px; background:#fdf4ff; padding:10px; border:1px solid #fbcfe8; border-radius:10px; display:flex; align-items:center; gap:8px; margin-bottom: 0;">
+                    <input type="checkbox" id="chk-eval-por-area" style="width:18px; height:18px; accent-color:#be185d; cursor:pointer;">
+                    <div>
+                        <label for="chk-eval-por-area" style="font-weight:bold; color:#be185d; cursor:pointer; display:block; font-size:0.85rem;">📍 Por Área</label>
+                        <div style="font-size:0.7rem; color:#64748b; line-height:1.1;">Agrupar resultados.</div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 150px; background:#fffbeb; padding:10px; border:1px solid #fde68a; border-radius:10px; display:flex; align-items:center; gap:8px; margin-bottom: 0;">
+                    <input type="checkbox" id="chk-eval-obligatoria" checked style="width:18px; height:18px; accent-color:#d97706; cursor:pointer;">
+                                                <div>
+                                                    <label for="chk-eval-obligatoria" style="font-weight:bold; color:#d97706; cursor:pointer; display:block; font-size:0.85rem;">⚠️ Obligatoria</label>
+                                                    <div style="font-size:0.7rem; color:#64748b; line-height:1.1;">Si se desactiva, será opcional.</div>
+                                                </div>
+                                            </div>
+
+                                        </div>
+
+                                        <div class="form-group" style="background:#f3e8ff; padding:15px; border-radius:10px; border:1px solid #d8b4fe; margin-bottom: 15px;">
+                                            <label style="color:#7e22ce; font-weight:bold; font-size:0.9rem; margin-bottom:5px; display:block;">👤 Dirigir a Colaboradores Específicos:</label>
+                                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom: 8px;">
+                                                <input type="checkbox" id="chk-all-empleados" onchange="window.toggleSelectorEmpleados()" checked style="width:18px; height:18px; accent-color:#7e22ce;">
+                                                <span style="font-weight:600; color:#334155; font-size:0.85rem;">Todos</span>
+                                            </label>
+                                            <div id="container-selector-empleados" style="display:none; background:white; border:1px solid #cbd5e1; border-radius:8px; padding:12px; margin-top:10px;">
+                                                <div style="position:relative; margin-bottom: 10px;">
+                                                    <span style="position:absolute; left:10px; top:8px; font-size:0.9rem;">🔍</span>
+                                                    <input type="text" id="inp-buscar-empleado-eval" placeholder="Buscar por nombre o ID..." oninput="window.buscarEmpleadoParaEval(this.value)" autocomplete="off" style="width: 100%; padding: 8px 8px 8px 30px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; box-sizing: border-box; outline:none;">
+                                                </div>
+                                                <div id="lista-resultados-empleados-eval" style="max-height: 140px; overflow-y: auto; margin-bottom: 15px; border-radius: 6px;"></div>
+                                                <div style="font-size: 0.8rem; font-weight: bold; color: #475569; margin-bottom: 8px; border-top: 1px solid #e2e8f0; padding-top:10px;">Colaboradores Seleccionados:</div>
+                                                <div id="lista-empleados-seleccionados-eval" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px;">
+                                                    <span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Ninguno seleccionado.</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div id="div-rango-labels" class="form-group" style="display:none; background:#fdf2f8; padding:15px; border-radius:10px; border:1px dashed #be185d;">
+                <label style="color:#be185d; font-weight:bold; margin-bottom:8px; display:block;">Configuración de Escala:</label>
+                <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+                    <span style="font-size:0.85rem; color:#be185d;">Puntaje Máximo:</span>
+                    <input type="number" id="eval-max-scale" value="5" min="1" max="20" onchange="window.renderConfiguracionEscala()" style="width:60px; padding:6px; border-radius:6px; border:1px solid #fbcfe8;">
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+                    <input type="checkbox" id="eval-half-points" style="width:16px; height:16px; accent-color:#be185d; cursor:pointer;">
+                    <label for="eval-half-points" style="font-size:0.85rem; color:#be185d; cursor:pointer;">Permitir puntos medios (ej. 1.5, 2.5)</label>
+                </div>
+                <p style="font-size:0.75rem; color:#be185d; margin:0 0 10px 0;">Define qué significa cada puntaje (opcional):</p>
+                <div id="dynamic-labels-container" style="display:grid; gap:8px;">
+                    </div>
+            </div>
+
+            <div id="questions-container" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px;"></div>
+            <button onclick="agregarCampoPregunta()" style="width:100%; background:#f5f3ff; color:#7c3aed; border:1px dashed #7c3aed; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; margin-bottom:15px;">+ Agregar Pregunta Abierta</button>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button onclick="document.getElementById('modal-crear-eval').style.display='none'" style="padding:10px; background:white; border:none; cursor:pointer; color:#64748b;">Cancelar</button>
+                <button onclick="guardarNuevaEvaluacion()" style="padding:10px 20px; background:#7c3aed; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Publicar Evaluación</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-responder-eval">
+        <div class="form-content" style="max-width: 500px;">
+            <h2 id="responder-eval-title" style="color:#1e40af; margin-top:0;">Responder</h2>
+            <p id="responder-subtitle" style="color:#64748b; font-size:0.9rem;">Por favor responde con honestidad.</p>
+            <div id="responder-questions-list" style="max-height: 60vh; overflow-y: auto; margin-bottom:20px;"></div>
+            <div id="admin-grading-actions" style="display:none; text-align:right; border-top:1px solid #e2e8f0; padding-top:10px; margin-bottom:10px;">
+                <button id="btn-save-grades" onclick="guardarCalificacionAdmin()" style="background:#22c55e; color:white; padding:10px 20px; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Guardar Revisión</button>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button onclick="document.getElementById('modal-responder-eval').style.display='none'" style="padding:10px; background:white; border:none; cursor:pointer; color:#64748b;">Cerrar</button>
+                <button id="btn-enviar-respuestas" onclick="enviarRespuestasEval()" style="padding:10px 20px; background:#2563eb; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Enviar Respuestas</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-stats-empleado" style="display:none; position:fixed; z-index:3000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+            <div style="background:white; padding:0; border-radius:24px; width:90%; max-width:500px; box-shadow:0 20px 50px rgba(0,0,0,0.25); position:relative; animation:scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); max-height: 90vh; overflow-y: auto; overflow-x: hidden;">
+                
+                <div style="padding: 25px 25px 10px 25px; display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h3 id="stats-emp-name" style="margin:0; color:#1e293b; font-size: 1.3rem;">Detalle de Desempeño</h3>
+                    </div>
+                    <button onclick="document.getElementById('modal-stats-empleado').style.display='none'" style="background:#f1f5f9; border:none; width:32px; height:32px; border-radius:50%; font-weight:bold; color:#64748b; cursor:pointer; font-size: 1rem; flex-shrink: 0; display:flex; align-items:center; justify-content:center;">✕</button>
+                </div>
+
+                <div style="padding: 0 25px;">
+                                <div style="background: white; border-radius: 16px; padding: 15px; border: none; margin-top: 15px;">
+                                    
+                                    <div id="radar-scroll-container" class="hide-scrollbar" style="display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; scroll-behavior: smooth;"></div>
+
+                                    <div id="stats-no-data" style="display:none; text-align:center; padding:30px; color:#94a3b8; font-style:italic; font-size: 0.9rem;">
+                                        Sin datos de evaluaciones recientes.
+                                    </div>
+                                </div>
+                            </div>
+
+            <div style="padding: 25px;">
+                <h4 style="margin:0 0 10px 0; color:#475569; font-size:0.8rem; text-transform:uppercase; letter-spacing: 0.5px;">⚡ Estado de Pendientes</h4>
+                <div id="stats-summary-content"></div>
+            </div>
+            
+        </div>
+    </div>
+
+    <div id="modal-reclamar-empleado" style="display:none; position:fixed; z-index:3500; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+        
+        <div class="form-content" style="max-width: 420px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 3rem; margin-bottom: 10px;">🤝</div>
+                <h2 style="color:#0f172a; margin:0; font-size: 1.5rem;">Agregar a mi Equipo</h2>
+                <p style="color:#64748b; font-size:0.95rem; margin-top: 5px; line-height: 1.5;">
+                    Busca a un colaborador para asignarte como su <br><b>Supervisor directo</b>.
+                </p>
+            </div>
+            
+            <div style="position:relative; width: 100%;">
+                <label style="font-size: 0.8rem; font-weight: bold; color: #475569; margin-bottom: 5px; display: block;">Buscar Colaborador:</label>
+                <div style="position: relative; display: flex; align-items: center;">
+                    <span style="position: absolute; left: 12px; font-size: 1.1rem;">🔍</span>
+                    <input type="text" id="inp-buscar-reclamo" placeholder="Escribe el nombre..."
+                           oninput="window.buscarEmpleadoReclamo(this.value)" autocomplete="off"
+                           style="width: 100%; padding: 12px 12px 12px 40px; border: 1px solid #cbd5e1; border-radius: 12px; font-size:1rem; outline: none; transition: border 0.3s; background: #f8fafc;">
+                </div>
+                
+                <div id="lista-resultados-reclamo" style="max-height: 200px; overflow-y: auto; margin-top: 10px; border: 1px solid #e2e8f0; border-radius: 12px; display:none; background: white; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);"></div>
+            </div>
+
+            <div style="margin-top:auto; padding-top: 25px; display:flex; gap: 10px;">
+                <button onclick="document.getElementById('modal-reclamar-empleado').style.display='none'" style="flex:1; padding:12px; background:#f1f5f9; border:none; border-radius:10px; color:#475569; cursor:pointer; font-weight:600; font-size: 0.95rem;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-todos-empleados" style="display:none; position:fixed; z-index:4000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+        <div class="form-content" style="max-width: 600px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: white; border-radius: 16px;">
+            <div style="padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="color:#0f172a; margin:0; font-size: 1.2rem;">👥 Todos los Colaboradores</h2>
+                    <div style="color:#64748b; font-size:0.8rem;">Modo Administrador</div>
+                </div>
+                <button onclick="document.getElementById('modal-todos-empleados').style.display='none'" style="border:none; background:#f1f5f9; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b; font-weight:bold;">✕</button>
+            </div>
+            
+            <div style="padding: 10px 15px; border-bottom: 1px solid #f1f5f9; display: flex; gap: 10px; align-items: center;">
+                <div style="position: relative; flex: 1; display: flex; align-items: center;">
+                    <span style="position: absolute; left: 12px; font-size: 1.1rem;">🔍</span>
+                    <input type="text" id="inp-buscar-todos" placeholder="Buscar colaborador por nombre..." oninput="window.filtrarTodosLosEmpleados(this.value)" style="width: 100%; padding: 10px 10px 10px 35px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 0.95rem; box-sizing: border-box; outline:none;">
+                </div>
+                <button id="btn-orden-todos" onclick="window.toggleOrdenTodos()" style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px 15px; border-radius: 8px; font-size: 0.85rem; color: #475569; font-weight: bold; cursor: pointer; white-space: nowrap;">
+                    ⏳ Ordenar: Mayor Cantidad
+                </button>
+            </div>
+
+            <div id="lista-todos-empleados" style="flex:1; overflow-y: auto; padding: 15px; display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; background: #f8fafc;">
+                </div>
+        </div>
+    </div>
+
+    <div id="modal-stats-encuestas" style="display:none; position:fixed; z-index:4000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+            <div class="form-content" style="max-width: 800px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 90vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: white; border-radius: 16px; padding: 0; overflow: hidden;">
+                
+                <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <h2 style="color:#0f172a; margin:0; font-size: 1.3rem;">📊 Estadísticas de Encuestas</h2>
+                        <div style="color:#64748b; font-size:0.85rem;">Universo: <b id="stats-universo-count">Calculando...</b></div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <div id="encabezado-filtro-stats"></div>
+                        <button onclick="document.getElementById('modal-stats-encuestas').style.display='none'" style="border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b; font-weight:bold; font-size: 1rem;">✕</button>
+                    </div>
+                </div>
+                <div id="contenedor-modal-stats-encuestas" style="flex:1; overflow-y: auto; padding: 20px; background: #f8fafc;">
+                    <div style="text-align:center; color:#64748b; padding: 20px;">
+                        <div class="spinner"></div> Cargando datos...
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        </div>
+    </div>
+
+    <div id="modal-pendientes" style="display:none; position:fixed; z-index:1900; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+        <div class="form-content" style="max-width: 600px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: #f0f2f5; border-radius: 16px; padding:0; overflow:hidden;">
+            
+            <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
+                <div id="titulo-modal-pendientes" style="width:100%;">
+                    </div>
+                <button onclick="window.cerrarModalPendientes()" style="border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b; font-weight:bold; font-size: 1rem; flex-shrink:0; margin-left: 10px; transition: transform 0.2s;">✕</button>
+            </div>
+
+            <div id="contenido-modal-pendientes" style="flex:1; overflow-y: auto; padding: 15px;">
+                </div>
+        </div>
+    </div>
+
+    <div id="modal-detalle-independiente" style="display:none; position:fixed; z-index:1950; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+        <div class="form-content" style="max-width: 600px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 90vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: #f8fafc; border-radius: 16px; padding:0; overflow:hidden;">
+            
+            <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
+                <h3 id="titulo-modal-detalle" style="margin:0; color:#0f172a; font-size:1.15rem; line-height: 1.3;">Detalles del Registro</h3>
+                <button onclick="document.getElementById('modal-detalle-independiente').style.display='none'" style="border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold; font-size: 1rem; flex-shrink: 0; margin-left:10px; transition: transform 0.2s;">✕</button>
+            </div>
+            
+            <div id="contenido-modal-detalle" style="flex:1; overflow-y: auto; padding: 20px;">
+                </div>
+        </div>
+    </div>
+
+    <div id="modal-gestionar-accesos" style="display:none; position:fixed; z-index:4000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+        <div class="form-content" style="max-width: 500px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: white; border-radius: 16px;">
+            <div style="padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="color:#0f172a; margin:0; font-size: 1.2rem;">⭐ Accesos Directos</h2>
+                    <div style="color:#64748b; font-size:0.8rem;">Selecciona cuáles aparecerán en el Dashboard</div>
+                </div>
+                <button onclick="document.getElementById('modal-gestionar-accesos').style.display='none'" style="border:none; background:#f1f5f9; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b; font-weight:bold;">✕</button>
+            </div>
+            
+            <div id="lista-gestionar-accesos" style="flex:1; overflow-y: auto; padding: 15px; background: #f8fafc; display: flex; flex-direction: column; gap: 10px;">
+                <div style="text-align:center; padding:20px; color:#64748b;">Cargando lista...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-pedir-area" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15,23,42,0.8); backdrop-filter:blur(5px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+        <div class="form-content" style="max-width: 400px; width: 100%; margin: auto; text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); background: white; border-radius: 20px; padding: 30px;">
+            <div style="font-size: 3rem; margin-bottom: 10px;">📍</div>
+            <h2 style="color:#0f172a; margin:0 0 10px 0;">Falta tu Área</h2>
+            <p style="color:#64748b; font-size:0.95rem; margin-bottom: 25px;">
+                Para mostrarte las encuestas correctas, necesitamos saber a qué área perteneces.
+            </p>
+            
+            <div style="text-align: left; margin-bottom: 25px;">
+                <label style="font-size: 0.85rem; font-weight: bold; color: #475569; margin-bottom: 8px; display: block;">Selecciona tu área:</label>
+                
+                <select id="sel-user-area" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 1rem; outline: none; box-sizing: border-box; background: white; cursor: pointer;">
+                    </select>
+            </div>
+
+            <div style="display:flex; gap: 10px;">
+                <button onclick="window.volverAlDashboard(); document.getElementById('modal-pedir-area').style.display='none';" style="flex:1; padding:12px; background:#f1f5f9; border:none; border-radius:10px; color:#475569; cursor:pointer; font-weight:600;">Cancelar</button>
+                <button id="btn-guardar-area" onclick="window.guardarAreaUsuario()" style="flex:1; padding:12px; background:#2563eb; color:white; border:none; border-radius:10px; font-weight:bold; cursor:pointer; box-shadow: 0 4px 6px rgba(37,99,235,0.2);">Guardar Área</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <script src="1-config.js"></script>
+    <script src="2a-core-nav.js"></script>
+    <script src="2b-core-dashboard.js"></script>
+    <script src="3-incidentes.js"></script>
+    <script src="4-evaluaciones-base.js"></script>
+    <script src="4-evaluaciones-admin.js"></script>
+    <script src="4b-evaluaciones-stats.js"></script>
+    <script src="5-objetivos.js"></script>
+    <script src="6-calendario.js"></script>
+    <script src="7-pendientes.js"></script>
+    <script src="8-hallazgos.js"></script>
+    <script src="9-estadisticas.js"></script>
+    <!-- Agrega aquí el nuevo archivo independiente -->
+    <script src="10-refacciones.js"></script> 
+    <script>
+        window.addEventListener('load', () => {
+            if(window.iniciarApp) {
+                window.iniciarApp();
+            } else {
+                console.error("Error: No se pudo iniciar la aplicación.");
+            }
+        });
+    </script>
+</body>
+</html>

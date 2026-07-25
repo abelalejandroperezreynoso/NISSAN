@@ -1,0 +1,2996 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Panel de Gestión de Refacciones</title>
+    
+    <link rel="stylesheet" href="estilos.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <style>
+        html, body {
+            background-color: #f8fafc;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            height: 100%;
+            overflow: hidden;
+            overscroll-behavior-y: none;
+            touch-action: none;
+        }
+
+        #panel-independiente-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            width: 100%;
+            background: white;
+            overflow: hidden;
+        }
+
+        #lista-refacciones-container {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+            background: white;
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="panel-independiente-container">
+        
+        <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white; flex-wrap:wrap; gap:15px; flex-shrink: 0;">
+            
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div id="user-profile-header" style="display: flex; align-items: center; gap: 10px; padding-right: 15px; border-right: 1px solid #e2e8f0;">
+                    <div id="user-avatar-container" style="width: 42px; height: 42px; border-radius: 50%; background: #eff6ff; border: 2px solid #bfdbfe; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                        <span style="font-size: 1.2rem;">👤</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column;">
+                        <span id="user-name-display" style="font-weight: 700; color: #1e293b; font-size: 0.95rem; line-height: 1.2;">Cargando...</span>
+                        <span id="user-role-display" style="font-size: 0.75rem; color: #64748b; line-height: 1.2;"></span>
+                    </div>
+                </div>
+
+                <h2 id="titulo-refacciones-admin" style="margin:0; color:#0f172a; font-size:1.4rem; display:flex; align-items:center; gap:8px; cursor:pointer;" title="Toca aquí para activar modo Admin">⚙️ Historial de Refacciones</h2>
+            </div>
+            
+            <div style="display:flex; align-items:center; gap:10px;">
+                                        <button onclick="window.abrirModalRefacciones()" style="border:none; background:#f59e0b; color:white; padding: 8px 16px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; cursor:pointer; display:flex; align-items:center; gap:5px; box-shadow: 0 2px 4px rgba(245,158,11,0.2);">
+                                            ➕ Nueva Solicitud
+                                        </button>
+                                        <button id="btn-exportar-refacciones" onclick="window.copiarReporteCorreo()" style="border:none; background:#f0f9ff; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#0ea5e9; font-weight:bold; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #bae6fd;" title="Generar Reporte para Correo">📋</button>
+                                        
+                                        <button id="btn-toggle-filtros" onclick="window.toggleFiltrosRefacciones()" style="border:none; background:#f8fafc; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; transition: all 0.2s;" title="Mostrar/Ocultar Filtros">🔎</button>
+                                                                                
+                                                                                <button onclick="window.location.href='11-mapa-activos.html'" style="border:none; background:#f0fdf4; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #bbf7d0; transition: all 0.2s;" title="Ver Mapa de Activos">🕸️</button>
+
+                                                                                <button id="btn-config-refacciones" onclick="window.abrirConfigRefacciones()" style="display:none; border:none; background:#f8fafc; width:36px; height:36px; border-radius:50%; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">⚙️</button>
+                                                                                <button onclick="window.location.href='index.html'" style="border:none; background:#fef2f2; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#ef4444; font-weight:bold; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #fecdd3;" title="Cerrar y Volver al Inicio">✕</button>
+                                    </div>
+        </div>
+
+        <div id="contenedor-indicadores-refacciones" style="padding: 15px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-around; flex-wrap: wrap; gap: 15px;">
+                    <div onclick="window.abrirDetalleIndicador('Total')" style="text-align: center; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="font-size: 0.7rem; color: #64748b; font-weight: bold; text-transform: uppercase;">Total Filtradas</div>
+                        <div id="stats-refacciones-total" style="font-size: 2rem; font-weight: 800; color: #f59e0b; line-height: 1.2;">0</div>
+                    </div>
+                    <div onclick="window.abrirDetalleIndicador('SinAtender')" style="text-align: center; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="font-size: 0.7rem; color: #ef4444; font-weight: bold; text-transform: uppercase;">Sin Atender</div>
+                        <div style="display: flex; align-items: baseline; justify-content: center; gap: 4px;">
+                            <div id="stats-refacciones-sin-atender" style="font-size: 2rem; font-weight: 800; color: #dc2626; line-height: 1.2;">0</div>
+                            <span id="pct-sin-atender" style="font-size: 0.9rem; font-weight: 700; color: #ef4444; opacity: 0.8;"></span>
+                        </div>
+                    </div>
+                    <div onclick="window.abrirDetalleIndicador('EnCamino')" style="text-align: center; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="font-size: 0.7rem; color: #0284c7; font-weight: bold; text-transform: uppercase;">En Camino</div>
+                        <div style="display: flex; align-items: baseline; justify-content: center; gap: 4px;">
+                            <div id="stats-refacciones-en-camino" style="font-size: 2rem; font-weight: 800; color: #0ea5e9; line-height: 1.2;">0</div>
+                            <span id="pct-en-camino" style="font-size: 0.9rem; font-weight: 700; color: #0ea5e9; opacity: 0.8;"></span>
+                        </div>
+                    </div>
+                    <div id="box-refacciones-revisando" onclick="window.abrirDetalleIndicador('Asignadas')" style="text-align: center; display: none; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="font-size: 0.7rem; color: #8b5cf6; font-weight: bold; text-transform: uppercase;">Asignadas</div>
+                        <div style="display: flex; align-items: baseline; justify-content: center; gap: 4px;">
+                            <div id="stats-refacciones-revisando" style="font-size: 2rem; font-weight: 800; color: #7c3aed; line-height: 1.2;">0</div>
+                            <span id="pct-revisando" style="font-size: 0.9rem; font-weight: 700; color: #8b5cf6; opacity: 0.8;"></span>
+                        </div>
+                    </div>
+                    <div id="box-refacciones-entregadas" onclick="window.abrirDetalleIndicador('Entregadas')" style="text-align: center; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="font-size: 0.7rem; color: #16a34a; font-weight: bold; text-transform: uppercase;">Entregadas</div>
+                        <div style="display: flex; align-items: baseline; justify-content: center; gap: 4px;">
+                            <div id="stats-refacciones-entregadas" style="font-size: 2rem; font-weight: 800; color: #22c55e; line-height: 1.2;">0</div>
+                            <span id="pct-entregadas" style="font-size: 0.9rem; font-weight: 700; color: #22c55e; opacity: 0.8;"></span>
+                        </div>
+                    </div>
+                </div>
+
+        <div id="panel-filtros-refacciones" style="display: none; padding: 10px 20px; background: #e0f2fe; border-bottom: 1px solid #bae6fd; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; transition: all 0.3s ease;">
+                    <span style="font-weight: 700; color: #0369a1; font-size: 0.9rem;">🔎 Mostrar:</span>
+                    
+                    <input type="text" id="inp-busqueda-refacciones" placeholder="Buscar refacción, modelo o nota..." oninput="window.aplicarFiltroRefacciones()" style="flex: 1; min-width: 200px; padding: 6px 10px; border-radius: 8px; border: 1px solid #7dd3fc; background: white; font-weight: 600; outline: none; color: #0f172a;">
+                    
+                    <select id="sel-filtro-refacciones" onchange="window.aplicarFiltroRefacciones()" style="flex: 1; min-width: 150px; padding: 6px 10px; border-radius: 8px; border: 1px solid #7dd3fc; background: white; font-weight: 600; cursor: pointer;">
+                        <option value="Pendientes">📋 Todas las Pendientes</option>
+                        <option value="MisSolicitudes">👤 Mis Solicitudes (Creadas por mí)</option>
+                        <option value="MisAsignadas">🙋‍♂️ Mis Asignaciones (Tomadas por mí)</option>
+                        <option value="Urgente">🚨 Prioridad: Urgente</option>
+                        <option value="Alta">🔺 Prioridad: Alta</option>
+                        <option value="Normal">🟢 Prioridad: Normal</option>
+                        <option value="NoAtendidas">⏳ Sin Atender</option>
+                        <option value="Atendidas">🧑‍🔧 Atendidas (En revisión)</option>
+                        <option value="ConFecha">📅 Con Fecha de Llegada</option>
+                        <option value="Entregadas">✅ Entregadas</option>
+                        <option value="Canceladas">🚫 Canceladas</option>
+                        <option value="Todas">🌐 Historial Completo</option>
+                    </select>
+
+                    
+
+                    <select id="sel-filtro-atendedor" onchange="window.aplicarFiltroRefacciones()" style="flex: 1; min-width: 150px; padding: 6px 10px; border-radius: 8px; border: 1px solid #7dd3fc; background: white; font-weight: 600; cursor: pointer;">
+                                    <option value="Todos">🛡️ Todo el Personal</option>
+                                </select>
+
+                    <style>
+                        .scroll-pastillas {
+                            display: flex;
+                            overflow-x: auto;
+                            gap: 8px;
+                            padding-bottom: 8px;
+                            -webkit-overflow-scrolling: touch;
+                            scrollbar-width: thin;
+                            width: 100%;
+                        }
+                        .scroll-pastillas::-webkit-scrollbar {
+                            height: 5px;
+                        }
+                        .scroll-pastillas::-webkit-scrollbar-track {
+                            background: transparent;
+                        }
+                        .scroll-pastillas::-webkit-scrollbar-thumb {
+                            background: #cbd5e1;
+                            border-radius: 10px;
+                        }
+                        .scroll-pastillas > span {
+                            flex-shrink: 0;
+                        }
+                        .scroll-pastillas::after {
+                            content: '';
+                            flex: 0 0 10px;
+                        }
+                    </style>
+
+                    <div style="flex-basis: 100%; margin-top: 5px; min-width: 0;">
+                                            <div id="contenedor-filtros-lineas" class="scroll-pastillas">
+                                            </div>
+                                        </div>
+
+                                        <div style="flex-basis: 100%; margin-top: 5px; min-width: 0;">
+                                            <div id="contenedor-filtros-etiquetas" class="scroll-pastillas">
+                                            </div>
+                                        </div>
+
+                                        <div style="flex-basis: 100%; margin-top: 5px; min-width: 0;">
+                                            <div id="contenedor-filtros-equipos" class="scroll-pastillas">
+                                            </div>
+                                        </div>
+                            </div> <div id="lista-refacciones-container">
+                                
+            <div id="loading-refacciones" style="text-align:center; color:#64748b; padding:20px;">Cargando solicitudes...</div>
+        </div>
+    </div>
+
+    <div id="modal-refacciones" style="display:none; position:fixed; z-index:4500; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; box-sizing: border-box; padding:20px;">
+        <div class="form-content" style="max-width: 600px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow-y: auto; max-height: 90vh; padding: 25px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); touch-action: pan-y; -webkit-overflow-scrolling: touch;">
+            <h2 id="titulo-modal-refacciones" style="margin-top:0; color:#0f172a; font-size:1.2rem; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">⚙️ Solicitar Refacciones</h2>
+            
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Nombre de la Refacción:</label>
+                <input type="text" id="inp-refaccion-nombre" placeholder="Ej. Balero 6204">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Modelo / No. de Parte (Opcional):</label>
+                <input type="text" id="inp-refaccion-modelo" placeholder="Ej. SKF-6204-2Z">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px; display: flex; gap: 15px;">
+                <div style="flex: 1;">
+                    <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Cantidad:</label>
+                    <div style="display:flex; gap:5px;">
+                        <input type="number" id="inp-refaccion-cantidad" min="1" value="1" style="width: 50%;">
+                        <select id="inp-refaccion-unidad" style="width: 50%; background: white;">
+                            <option value="Pzas">Pzas</option>
+                            <option value="Mts">Mts</option>
+                            <option value="Lts">Lts</option>
+                            <option value="Kgs">Kgs</option>
+                            <option value="Kits">Kits</option>
+                            <option value="Pares">Pares</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="flex: 1;">
+                    <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Prioridad:</label>
+                    <select id="inp-refaccion-prioridad" style="width: 100%; background: white;">
+                        <option value="Normal">Normal</option>
+                        <option value="Alta">Alta</option>
+                        <option value="Urgente">Urgente 🚨</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Máquina / Equipo destino:</label>
+                            <div style="display:flex; gap:10px;">
+                                <div style="flex:1; position:relative;">
+                                    <input type="text" id="inp-refaccion-maquina-search" placeholder="Escribe para buscar equipo..." autocomplete="off" oninput="window.buscarEquipo(this.value)" style="width: 100%;">
+                                    <input type="hidden" id="inp-refaccion-maquina-id">
+                                    <div id="lista-sugerencias-equipos" style="display:none; position:absolute; top:100%; left:0; width:100%; background:white; border:1px solid #cbd5e1; border-top:none; border-radius: 0 0 8px 8px; max-height:200px; overflow-y:auto; z-index:1000; box-shadow:0 4px 6px rgba(0,0,0,0.1);"></div>
+                                </div>
+                                <button onclick="window.agregarNuevoEquipo()" style="background:#f0f9ff; color:#0ea5e9; border:1px solid #bae6fd; border-radius:8px; padding:0 15px; font-weight:bold; cursor:pointer; font-size:1.2rem;">+</button>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Etiquetas de Proyecto (Opcional):</label>
+                            
+                            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                                <input type="text" id="inp-refaccion-grupo-nuevo" placeholder="Escribe una nueva etiqueta..." autocomplete="off" onkeypress="window.manejarEnterEtiqueta(event)" style="flex:1;">
+                                <button type="button" onclick="window.agregarNuevaEtiquetaFormulario()" style="background:#f0f9ff; color:#0ea5e9; border:1px solid #bae6fd; border-radius:8px; padding:0 15px; font-weight:bold; cursor:pointer; font-size:1.2rem;">+</button>
+                            </div>
+                            
+                            <div id="contenedor-etiquetas-formulario" style="display:flex; flex-wrap:wrap; gap:8px; max-height:120px; overflow-y:auto; padding:5px 2px;">
+                                </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Justificación / Fallo:</label>
+                            <textarea id="inp-refaccion-notas" rows="3" placeholder="Describe el motivo de la solicitud..."></textarea>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Fotografía (Opcional):</label>
+                            <input type="file" id="inp-foto-nueva-solicitud" accept="image/*" style="width:100%;">
+                        </div>
+
+                        <div style="display:flex; justify-content:flex-end; gap:10px;">
+                            <button onclick="window.cerrarModalRefacciones()" style="padding:10px 20px; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer; color:#475569; font-weight:600;">Cancelar</button>
+                <button id="btn-guardar-refaccion" onclick="window.enviarSolicitudRefaccion()" style="padding:10px 20px; background:#f59e0b; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Enviar Solicitud</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-nuevo-equipo" style="display:none; position:fixed; z-index:4600; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+        <div class="form-content" style="max-width: 400px; width: 100%; background: white; border-radius: 16px; padding: 25px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <h3 style="margin-top:0; color:#0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">➕ Agregar Nuevo Equipo</h3>
+                        <div class="form-group" style="margin-bottom: 15px; margin-top: 15px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Nombre del Equipo/Máquina:</label>
+                            <input type="text" id="inp-nuevo-equipo-nombre" placeholder="Ej. Motor Principal" style="width:100%;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">ID / Código del Equipo (Opcional):</label>
+                            <input type="text" id="inp-nuevo-equipo-id-interno" placeholder="Ej. EQ-105" style="width:100%;">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 15px;">
+                            <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Planta:</label>
+                <div style="display:flex; gap:10px;">
+                    <select id="inp-nuevo-equipo-planta" style="flex:1; background:white;"><option value="">Cargando...</option></select>
+                    <button id="btn-crear-planta" onclick="window.crearNuevaPlanta()" style="background:#f0f9ff; color:#0ea5e9; border:1px solid #bae6fd; border-radius:8px; padding:0 15px; font-weight:bold; cursor:pointer;">+</button>
+                </div>
+            </div>
+            <div class="form-group" style="margin-bottom: 25px;">
+                <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Línea:</label>
+                <div style="display:flex; gap:10px;">
+                    <select id="inp-nuevo-equipo-linea" style="flex:1; background:white;"><option value="">Cargando...</option></select>
+                    <button id="btn-crear-linea" onclick="window.crearNuevaLinea()" style="background:#f0f9ff; color:#0ea5e9; border:1px solid #bae6fd; border-radius:8px; padding:0 15px; font-weight:bold; cursor:pointer;">+</button>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button onclick="document.getElementById('modal-nuevo-equipo').style.display='none'" style="padding:10px 15px; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer; color:#475569; font-weight:600;">Cancelar</button>
+                <button onclick="window.guardarNuevoEquipo()" style="padding:10px 15px; background:#0ea5e9; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Guardar Equipo</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-detalle-refaccion" style="display:none; position:fixed; z-index:4700; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+        <div class="form-content" style="max-width: 500px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow: hidden; padding: 0; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+            <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+                <h3 style="margin:0; color:#0f172a; font-size:1.1rem;">📄 Detalles de Solicitud</h3>
+                <button onclick="window.cerrarDetallesRefaccion()" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
+            </div>
+            <div id="contenido-detalle-refaccion" style="padding: 20px; overflow-y: auto; max-height: 70vh;">
+                </div>
+        </div>
+    </div>
+
+    <div id="modal-config-refacciones" style="display:none; position:fixed; z-index:4800; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; box-sizing: border-box; padding:20px;">
+        <div class="form-content" style="max-width: 500px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow: hidden; padding: 25px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
+                <h3 style="margin:0; color:#0f172a; font-size:1.2rem;">⚙️ Configurar Permisos</h3>
+                <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" style="border:none; background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
+            </div>
+            
+            <p style="margin:0 0 15px 0; color:#64748b; font-size:0.9rem;">Selecciona los puestos que tendrán autorización para visualizar <b>todas</b> las solicitudes de la empresa (además de los administradores):</p>
+            
+            <div id="lista-puestos-refacciones" style="display:flex; flex-wrap:wrap; gap:10px; max-height:250px; overflow-y:auto; margin-bottom:20px; padding: 5px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;"></div>
+            
+            <div style="display: flex; justify-content: flex-end; gap: 10px;">
+                <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" style="padding:10px 15px; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer; color:#475569; font-weight:600;">Cancelar</button>
+                <button onclick="window.guardarRolesRefacciones()" style="background:#0ea5e9; color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:bold; cursor:pointer; box-shadow: 0 4px 6px rgba(14, 165, 233, 0.2);">Guardar Permisos</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="1-config.js"></script>
+    <script>
+        // Variables Globales de Control
+        window.refaccionEditandoId = null;
+        window.equiposRefaccionesCache = [];
+        window.refaccionesDataCache = [];
+        window.puedeVerTodoRefacciones = false;
+
+        // --- Cierre de sugerencias al hacer click fuera ---
+                document.addEventListener('click', (e) => {
+                    const searchContainer = document.getElementById('inp-refaccion-maquina-search')?.parentElement;
+                    const lista = document.getElementById('lista-sugerencias-equipos');
+                    if (searchContainer && lista && !searchContainer.contains(e.target)) {
+                        lista.style.display = 'none';
+                    }
+
+                    const grupoContainer = document.getElementById('inp-refaccion-grupo')?.parentElement;
+                    const listaGrupos = document.getElementById('lista-sugerencias-grupos');
+                    if (grupoContainer && listaGrupos && !grupoContainer.contains(e.target)) {
+                        listaGrupos.style.display = 'none';
+                    }
+                });
+
+        // --- Funciones Lógicas ---
+
+        // Función para abrir la configuración en su modal
+                window.abrirConfigRefacciones = async () => {
+                    const modal = document.getElementById('modal-config-refacciones');
+                    const containerPuestos = document.getElementById('lista-puestos-refacciones');
+                    modal.style.display = 'flex';
+                    containerPuestos.innerHTML = '<div style="text-align:center; color:#64748b; padding:10px;">Consultando puestos en la base de datos...</div>';
+
+                    let rolesAutorizados = [];
+                    try {
+                        const { data: cfg } = await sb.from('system_config').select('texto').eq('key', 'roles_refacciones');
+                        if (cfg && cfg.length > 0 && cfg[0].texto) {
+                            rolesAutorizados = JSON.parse(cfg[0].texto).map(r => r.toUpperCase().trim());
+                        }
+                    } catch(e) { console.error("Error al cargar configuración", e); }
+
+                    try {
+                        // Hacemos una consulta directa para asegurar que SIEMPRE traiga los puestos,
+                        // independientemente de si la carga inicial de la página falló o se demoró.
+                        const { data: empleados, error } = await sb.from('employees').select('puesto').not('is_active', 'eq', false);
+                        
+                        if (error) throw error;
+
+                        if (empleados && empleados.length > 0) {
+                            // Extraemos valores únicos, ignorando nulos y vacíos
+                            const puestos = [...new Set(empleados.map(e => (e.puesto || 'Sin Puesto').trim()))].filter(p => p !== '');
+                            
+                            let chkHtml = '';
+                            puestos.sort().forEach(p => {
+                                const isChecked = rolesAutorizados.includes(p.toUpperCase()) ? 'checked' : '';
+                                chkHtml += `
+                                    <label style="display:flex; align-items:center; gap:5px; background:white; padding:6px 12px; border-radius:8px; border:1px solid #bae6fd; font-size:0.85rem; cursor:pointer; color:#0f172a; transition: background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='white'">
+                                        <input type="checkbox" class="chk-puesto-refaccion" value="${p}" ${isChecked} style="accent-color:#0ea5e9; width:16px; height:16px; cursor:pointer;"> 
+                                        ${p}
+                                    </label>
+                                `;
+                            });
+                            
+                            containerPuestos.innerHTML = chkHtml || '<div style="color:#ef4444; font-size:0.85rem;">La base de datos no tiene puestos registrados.</div>';
+                        } else {
+                                                    containerPuestos.innerHTML = '<div style="color:#ef4444; font-size:0.85rem;">No se encontraron empleados registrados.</div>';
+                                                }
+                                            } catch (error) {
+                                                console.error("Error al consultar puestos:", error);
+                                                containerPuestos.innerHTML = '<div style="color:#ef4444; font-size:0.85rem;">Hubo un error de conexión al cargar los puestos.</div>';
+                                            }
+                                        };
+
+                                // NUEVA FUNCIÓN: Muestra u oculta el panel de filtros
+                                window.toggleFiltrosRefacciones = () => {
+                                    const panel = document.getElementById('panel-filtros-refacciones');
+                                    const btn = document.getElementById('btn-toggle-filtros');
+                                    
+                                    if (panel.style.display === 'none' || panel.style.display === '') {
+                                        panel.style.display = 'flex'; // Mostramos el panel
+                                        btn.style.background = '#e0f2fe'; // Cambiamos color del botón a seleccionado
+                                        btn.style.borderColor = '#7dd3fc';
+                                        btn.style.boxShadow = 'inset 0 2px 4px rgba(0,0,0,0.1)';
+                                    } else {
+                                        panel.style.display = 'none'; // Ocultamos el panel
+                                        btn.style.background = '#f8fafc'; // Restauramos color del botón
+                                        btn.style.borderColor = '#e2e8f0';
+                                        btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.05)';
+                                    }
+                                };
+
+                                window.verDetallesRefaccion = (req) => {
+            const modal = document.getElementById('modal-detalle-refaccion');
+            const contenido = document.getElementById('contenido-detalle-refaccion');
+            
+            const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+            const loggedUserId = userLog ? String(userLog.id) : null;
+            
+            let nombreSolicitante = "Desconocido";
+                        let nombreAtendedor = "Sin Asignar";
+                        let avatarAtendedorHtml = `<div style="width:24px; height:24px; border-radius:50%; background:#f1f5f9; color:#94a3b8; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:bold; border:1px solid #e2e8f0; flex-shrink:0;">?</div>`;
+                        
+                        let nombreAsignador = null;
+
+                        if (window.todosLosEmpleadosData) {
+                            const empSol = window.todosLosEmpleadosData.find(e => String(e.id) === String(req.solicitante_id));
+                            if (empSol) nombreSolicitante = empSol.name;
+
+                            if (req.atendido_por_id) {
+                                const empAt = window.todosLosEmpleadosData.find(e => String(e.id) === String(req.atendido_por_id));
+                                if (empAt) {
+                                    nombreAtendedor = empAt.name;
+                                    
+                                    // Generamos el HTML del avatar del atendedor
+                                    if (empAt.avatar) {
+                                        const safeUrl = window.procesarUrlImagen ? window.procesarUrlImagen(empAt.avatar) : empAt.avatar;
+                                        avatarAtendedorHtml = `<img src="${safeUrl}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid #bae6fd; flex-shrink:0; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">`;
+                                    } else {
+                                        avatarAtendedorHtml = `<div style="width:24px; height:24px; border-radius:50%; background:#e0f2fe; color:#0284c7; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:bold; border:1px solid #bae6fd; flex-shrink:0;">${empAt.name.charAt(0).toUpperCase()}</div>`;
+                                    }
+                                }
+                            }
+
+                            if (req.asignado_por_id) {
+                                const empAsig = window.todosLosEmpleadosData.find(e => String(e.id) === String(req.asignado_por_id));
+                                if (empAsig) nombreAsignador = empAsig.name;
+                            }
+                        }
+
+                        // Inyectamos la foto y el nombre
+                        let htmlAtendedor = `<div style="display:flex; align-items:center; gap:6px;">${avatarAtendedorHtml} <span style="color:#0284c7; font-weight:bold;">${nombreAtendedor}</span></div>`;
+                        
+                        if (window.puedeVerTodoRefacciones && req.estado !== 'Cancelada') {
+                            let opcionesPersonal = `<option value="">-- Sin Asignar --</option>`;
+                            if (window.todosLosEmpleadosData) {
+                                
+                                // Identificamos el departamento del usuario logueado
+                                let miDepartamento = null;
+                                const miUsuario = window.todosLosEmpleadosData.find(e => String(e.id) === loggedUserId);
+                                if (miUsuario) miDepartamento = miUsuario.dept;
+
+                                const empleadosUnicos = [];
+                                const nombresAgregados = new Set();
+                                window.todosLosEmpleadosData.forEach(e => {
+                                    const puestoNormalizado = (e.puesto || '').toUpperCase().trim();
+                                    const esElAsignadoActual = String(e.id) === String(req.atendido_por_id);
+                                    
+                                    if ((esElAsignadoActual || (puestoNormalizado === 'STAFF' && e.dept === miDepartamento)) && !nombresAgregados.has(e.name)) {
+                                        nombresAgregados.add(e.name);
+                                        empleadosUnicos.push(e);
+                                    }
+                                });
+                                
+                                // Ordenar alfabéticamente
+                                                                empleadosUnicos.sort((a, b) => a.name.localeCompare(b.name)).forEach(e => {
+                                                                    const seleccionado = String(e.id) === String(req.atendido_por_id) ? 'selected' : '';
+                                                                    opcionesPersonal += `<option value="${e.id}" ${seleccionado}>${e.name}</option>`;
+                                                                });
+                                                            }
+                                                            // Inyectamos la foto al lado del selector
+                                                            htmlAtendedor = `<div style="display:flex; align-items:center; gap:6px;">
+                                                                ${avatarAtendedorHtml}
+                                                                <select onchange="window.cambiarAsignacionRefaccion('${req.id}', this.value)" style="padding:2px 5px; border-radius:6px; border:1px solid #bae6fd; font-family:inherit; font-size:0.85rem; outline:none; background:#f0f9ff; color:#0369a1; font-weight:bold; cursor:pointer; max-width:180px; text-overflow:ellipsis;">${opcionesPersonal}</select>
+                                                            </div>`;
+                                                        }
+
+                        const equipo = req.equipos ? req.equipos.nombre : 'S/E';
+            const linea = req.equipos && req.equipos.lineas ? req.equipos.lineas.nombre : 'S/L';
+            const planta = req.equipos && req.equipos.plantas ? req.equipos.plantas.nombre : 'S/P';
+            
+            const fechaObj = new Date(req.created_at);
+            const fCreacion = fechaObj.toLocaleDateString() + ' ' + fechaObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            const reqSeguro = JSON.stringify(req).replace(/'/g, "&#39;");
+                        
+                        // NUEVO: Normalizamos TODOS los IDs y permisos para evitar fallos por espacios o tipos de datos
+                        const loggedUserPuesto = userLog ? (userLog.puesto || '').toUpperCase().trim() : '';
+                                    
+                                    // Función auxiliar para interceptar cualquier ID (texto o número) y devolver el ID numérico real
+                                    const obtenerIdNumerico = (idCualquiera) => {
+                                        if (!idCualquiera) return null;
+                                        if (window.todosLosEmpleadosData) {
+                                            const emp = window.todosLosEmpleadosData.find(e => e.id === String(idCualquiera).trim());
+                                            if (emp && emp.id_numerico) return emp.id_numerico;
+                                        }
+                                        return String(idCualquiera).trim();
+                                    };
+
+                                    const miIdNumerico = obtenerIdNumerico(loggedUserId);
+                                    const atendedorIdNumerico = obtenerIdNumerico(req.atendido_por_id);
+                                    const solicitanteIdNumerico = obtenerIdNumerico(req.solicitante_id);
+                                    
+                                    const soyElAtendedor = (atendedorIdNumerico !== null && atendedorIdNumerico === miIdNumerico);
+                                    const soyElSolicitante = (solicitanteIdNumerico !== null && solicitanteIdNumerico === miIdNumerico);
+
+                                    // Buscamos si el usuario actual es el jefe inmediato del solicitante
+                                    let esJefeInmediato = false;
+                                    if (window.todosLosEmpleadosData) {
+                                        const empSol = window.todosLosEmpleadosData.find(e => e.id === String(req.solicitante_id).trim());
+                                        if (empSol && empSol.supId) {
+                                            const jefeIdNumerico = obtenerIdNumerico(empSol.supId);
+                                            if (jefeIdNumerico === miIdNumerico) {
+                                                esJefeInmediato = true;
+                                            }
+                                        }
+                                    }
+
+            // 1. Inicialización: Botón de copiar siempre visible
+            let botonesAccionHtml = `
+                <button onclick='window.copiarDetalleRefaccion(${reqSeguro})' style="background:#f8fafc; color:#334155; border:1px solid #cbd5e1; padding:10px 16px; border-radius:8px; font-size:0.85rem; font-weight:bold; cursor:pointer; flex:1;">
+                    📋 Copiar Info
+                </button>
+            `;
+
+            // Acciones de Gestión (Eliminar / Editar)
+                        if (soyElSolicitante) {
+                            botonesAccionHtml += `
+                                <button onclick="window.cerrarDetallesRefaccion(); window.eliminarSolicitudRefaccion('${req.id}')" style="background:#fef2f2; color:#ef4444; border:1px solid #fecdd3; padding:10px 16px; border-radius:8px; font-size:0.85rem; font-weight:bold; cursor:pointer; flex:1;">
+                                    🗑️ Eliminar
+                                </button>
+                            `;
+                        }
+
+                        // Se añadió el permiso de Administrador y el estado 'Recibida'
+                        if ((req.estado === 'Pendiente' || req.estado === 'Entregada' || req.estado === 'Recibida') && (soyElSolicitante || esJefeInmediato || window.modoAdminActivo)) {
+                            botonesAccionHtml += `
+                                <button onclick='window.cerrarDetallesRefaccion(); window.prepararEdicionRefaccion(${reqSeguro})' style="background:#fffbeb; color:#d97706; border:1px solid #fde68a; padding:10px 16px; border-radius:8px; font-size:0.85rem; font-weight:bold; cursor:pointer; flex:1;">
+                                    ✏️ Editar Solicitud
+                                </button>
+                            `;
+                        }
+
+            
+
+            // 2. Acciones de Flujo Principal (Para el Atendedor / Staff)
+            if (req.estado === 'Pendiente') {
+                if (soyElAtendedor || (req.atendido_por_id && window.modoAdminActivo)) {
+                    botonesAccionHtml += `
+                        <button onclick="window.cerrarDetallesRefaccion(); window.marcarRefaccionEntregada('${req.id}')" style="background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; padding:10px 16px; border-radius:8px; font-size:0.85rem; font-weight:bold; cursor:pointer; flex:1;">
+                            📦 Complete la solicitud
+                        </button>
+                    `;
+                } else if (window.puedeVerTodoRefacciones && loggedUserPuesto === 'STAFF' && !req.atendido_por_id) {
+                    botonesAccionHtml += `
+                        <button onclick="window.cerrarDetallesRefaccion(); window.tomarSolicitudRefaccion('${req.id}')" style="background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe; padding:10px 16px; border-radius:8px; font-size:0.85rem; font-weight:bold; cursor:pointer; flex:1;">
+                            🙋‍♂️ Tomar Solicitud
+                        </button>
+                    `;
+                }
+            }
+            
+            // 2.5 Confirmar Recibido (Para el Solicitante - visible en Pendiente o Entregada)
+            if ((req.estado === 'Pendiente' || req.estado === 'Entregada') && (soyElSolicitante || window.modoAdminActivo)) {
+                botonesAccionHtml += `
+                    <button onclick="window.cerrarDetallesRefaccion(); window.marcarRefaccionRecibida('${req.id}')" style="background:#ecfdf5; color:#059669; border:1px solid #a7f3d0; padding:10px 16px; border-radius:8px; font-size:0.85rem; font-weight:bold; cursor:pointer; flex:1;">
+                        ✅ Confirmar Recibido
+                    </button>
+                `;
+            }
+
+            // 3. Cancelar y Deshacer
+            if ((req.estado === 'Pendiente' || req.estado === 'Entregada') && (soyElSolicitante || window.modoAdminActivo)) {
+                botonesAccionHtml += `
+                    <button onclick="window.cerrarDetallesRefaccion(); window.cancelarSolicitudRefaccion('${req.id}')" style="background:#fef2f2; color:#ef4444; border:1px solid #fecdd3; padding:10px 16px; border-radius:8px; font-size:0.85rem; font-weight:bold; cursor:pointer; flex:1;">
+                        ❌ Ya no la necesito
+                    </button>
+                `;
+            }
+
+            if ((req.estado === 'Entregada' || req.estado === 'Recibida') && (soyElSolicitante || window.modoAdminActivo)) {
+                botonesAccionHtml += `
+                    <button onclick="window.cerrarDetallesRefaccion(); window.revertirRefaccionPendiente('${req.id}')" style="background:#f0f9ff; color:#0369a1; border:1px solid #bae6fd; padding:10px 16px; border-radius:8px; font-size:0.85rem; font-weight:bold; cursor:pointer; flex:1;">
+                        ⏪ Deshacer
+                    </button>
+                `;
+            }
+
+            // 4. Volver a solicitar (Siempre visible al final)
+            botonesAccionHtml += `
+                <button onclick='window.cerrarDetallesRefaccion(); window.duplicarSolicitudRefaccion(${reqSeguro})' style="background:#f8fafc; color:#334155; border:1px solid #cbd5e1; padding:10px 16px; border-radius:8px; font-size:0.85rem; font-weight:bold; cursor:pointer; flex:1;">
+                    🔁 Volver a Solicitar
+                </button>
+            `;
+
+            let selectorFechaHtml = '';
+                        
+                        // Usamos la variable soyElAtendedor que ya definimos arriba en el código
+                        if ((soyElAtendedor || window.modoAdminActivo) && req.estado !== 'Entregada' && req.estado !== 'Cancelada' && req.atendido_por_id) {
+                            selectorFechaHtml = `
+                                <div style="margin-bottom:15px; display:flex; align-items:center; justify-content:space-between; font-size:0.85rem; background:#fffbeb; padding:10px; border-radius:8px; border:1px solid #fde68a;">
+                                    <span style="font-weight:600; color:#b45309;">📅 Definir Llegada Est.:</span>
+                                    <input type="date" value="${req.fecha_estimada || ''}" onchange="window.actualizarFechaEstimada('${req.id}', this.value); window.cerrarDetallesRefaccion();" style="padding:4px 8px; border-radius:6px; border:1px solid #fcd34d; font-family:inherit; font-size:0.85rem; outline:none; background:white; color:#92400e;">
+                                </div>
+                            `;
+                        } else if (req.fecha_estimada && req.estado !== 'Cancelada') {
+                            selectorFechaHtml = `
+                                <div style="margin-bottom:15px; display:flex; align-items:center; font-size:0.85rem; background:#f0f9ff; padding:10px; border-radius:8px; border:1px solid #bae6fd;">
+                                    <span style="color:#0369a1;">📅 Llegada Estimada: <b style="color:#0284c7;">${req.fecha_estimada}</b></span>
+                                </div>
+                            `;
+                        } else if (req.fecha_estimada && req.estado !== 'Cancelada') {
+                            selectorFechaHtml = `
+                                <div style="margin-bottom:15px; display:flex; align-items:center; font-size:0.85rem; background:#f0f9ff; padding:10px; border-radius:8px; border:1px solid #bae6fd;">
+                                    <span style="color:#0369a1;">📅 Llegada Estimada: <b style="color:#0284c7;">${req.fecha_estimada}</b></span>
+                                </div>
+                            `;
+                        }
+
+                        let etiquetasHtml = '';
+                        if (req.grupo && req.grupo.trim() !== '') {
+                            const etiquetas = req.grupo.split(',').filter(e => e.trim() !== '');
+                            etiquetasHtml = '<div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">';
+                            etiquetas.forEach(tag => {
+                                etiquetasHtml += `<span style="background:#f3e8ff; color:#7c3aed; padding:4px 10px; border-radius:14px; font-size:0.75rem; font-weight:700; border:1px solid #d8b4fe; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">#${tag.trim()}</span>`;
+                            });
+                            etiquetasHtml += '</div>';
+                        }
+
+                        contenido.innerHTML = `
+                                        <div style="margin-bottom: 15px;">
+                                            <span style="font-size:0.75rem; color:#64748b; font-weight:bold; text-transform:uppercase;">Refacción</span>
+                                            <div style="font-size:1.1rem; font-weight:bold; color:#0f172a;">${req.nombre_refaccion} <span style="color:#3b82f6;">(x${req.cantidad} ${req.unidad || 'Pzas'})</span></div>
+                                            ${req.modelo ? `<div style="font-size:0.85rem; color:#475569; margin-top:2px;">Modelo/NP: <b>${req.modelo}</b></div>` : ''}
+                                            ${etiquetasHtml}
+                                        </div>
+                                        
+                                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom: 15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #f1f5f9;">
+                    <div>
+                        <span style="font-size:0.7rem; color:#64748b; font-weight:bold;">ESTADO</span>
+                        <div style="font-size:0.9rem; font-weight:bold; color:#0f172a;">${req.estado}</div>
+                    </div>
+                    <div>
+                        <span style="font-size:0.7rem; color:#64748b; font-weight:bold;">PRIORIDAD</span>
+                        <div style="font-size:0.9rem; font-weight:bold; color:#ea580c;">${req.prioridad}</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #f1f5f9;">
+                    <span style="font-size:0.7rem; color:#64748b; font-weight:bold; text-transform:uppercase;">Destino</span>
+                    <div style="font-size:0.9rem; color:#0f172a;"><b>Equipo:</b> ${equipo}</div>
+                    <div style="font-size:0.85rem; color:#475569; margin-top:2px;"><b>Ubicación:</b> ${planta} - ${linea}</div>
+                </div>
+
+                    <div style="margin-bottom: 15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #f1f5f9;">
+                                        <span style="font-size:0.7rem; color:#64748b; font-weight:bold; text-transform:uppercase;">Fechas y Personal</span>
+                                        <div style="font-size:0.85rem; color:#475569; margin-top:4px;"><b>Solicitado el:</b> ${fCreacion}</div>
+                                        <div style="font-size:0.85rem; color:#475569;"><b>Solicitante:</b> ${nombreSolicitante}</div>
+                                        <div style="font-size:0.85rem; color:#475569; display:flex; align-items:center; margin-top:4px;"><b>Atiende:</b> ${htmlAtendedor}</div>
+                                        ${nombreAsignador && String(req.asignado_por_id) !== String(req.atendido_por_id) ? `<div style="font-size:0.75rem; color:#94a3b8; margin-top:4px;"><i>Asignado por: ${nombreAsignador}</i></div>` : ''}
+                                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                                        <span style="font-size:0.7rem; color:#64748b; font-weight:bold; text-transform:uppercase;">Notas y Comunicación</span>
+                                        ${req.notas ? `
+                                        <div style="background:#fffbeb; padding:10px; border-radius:8px; border:1px solid #fde68a; font-size:0.85rem; color:#92400e; white-space: pre-wrap; max-height: 250px; overflow-y: auto; margin-bottom: 10px;">${req.notas}</div>` : ''}
+                                        
+                                        ${req.estado !== 'Cancelada' ? `
+                                        <div style="display:flex; gap:10px; align-items:flex-start;">
+                                            <textarea id="inp-nueva-nota-detalle" placeholder="Escribe un mensaje o actualización..." rows="2" style="flex:1; padding:8px; border-radius:8px; border:1px solid #cbd5e1; font-family:inherit; font-size:0.85rem; resize:vertical; outline:none; background: #f8fafc; color: #334155;"></textarea>
+                                            <button onclick="window.agregarNotaDetalle('${req.id}')" style="background:#0ea5e9; color:white; border:none; padding:8px 12px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:0.85rem; transition: background 0.2s;">Enviar</button>
+                                        </div>` : ''}
+                                    </div>
+
+                                    ${req.comentario_revisor ? `
+                                                    <div style="margin-bottom: 15px;">
+                                                        <span style="font-size:0.7rem; color:#64748b; font-weight:bold; text-transform:uppercase;">Comentario del Revisor</span>
+                                                        <div style="background:#f0fdf4; padding:10px; border-radius:8px; border:1px solid #bbf7d0; font-size:0.85rem; color:#166534;">
+                                                            ${req.comentario_revisor}
+                                                        </div>
+                                                    </div>` : ''}
+                                                    
+                                                    <div style="margin-bottom: 15px;">
+                                                        <span style="font-size:0.7rem; color:#64748b; font-weight:bold; text-transform:uppercase;">Fotografía de la pieza</span>
+                                                        ${req.foto_url ? `<img src="${req.foto_url}" style="width:100%; border-radius:8px; margin-top:5px; border:1px solid #e2e8f0;" />` : ''}
+                                                        <input type="file" id="inp-foto-refaccion" accept="image/*" onchange="window.procesarYSubirImagen('${req.id}', this)" style="margin-top:8px; width:100%; font-size:0.85rem;">
+                                                        <div id="status-foto-${req.id}" style="font-size:0.75rem; color:#64748b; margin-top:2px;"></div>
+                                                    </div>
+
+                                                    ${selectorFechaHtml}
+
+                <div style="border-top:1px solid #e2e8f0; padding-top:15px; margin-top:5px; display:flex; flex-wrap:wrap; gap:10px;">
+                    ${botonesAccionHtml}
+                </div>
+            `;
+            modal.style.display = 'flex';
+                    };
+
+                    window.agregarNotaDetalle = async (idRefaccion) => {
+                        const inpNota = document.getElementById('inp-nueva-nota-detalle');
+                        const nuevoTexto = inpNota ? inpNota.value.trim() : '';
+                        
+                        if (!nuevoTexto) return;
+
+                        const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+                        if (!userLog) return;
+                        
+                        // Obtenemos nombre y fecha
+                        const nombreUsuario = userLog.name.split(' ')[0] + ' ' + (userLog.name.split(' ')[1] || '');
+                        const ahora = new Date();
+                        const fechaStr = ahora.toLocaleDateString() + ' ' + ahora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+                        // Recuperamos las notas anteriores
+                        const req = window.refaccionesDataCache.find(r => r.id === idRefaccion);
+                        const notasAnteriores = req && req.notas ? req.notas : '';
+
+                        // Construimos el nuevo bloque de texto con el separador
+                        const separador = notasAnteriores ? '\n\n------------------------\n' : '';
+                        const notaAñadida = `${separador}👤 ${nombreUsuario} (${fechaStr}):\n${nuevoTexto}`;
+                        const notasActualizadas = notasAnteriores + notaAñadida;
+
+                        const btn = inpNota.nextElementSibling;
+                        const textoOriginalBtn = btn.innerText;
+                        btn.innerText = '...';
+                        btn.disabled = true;
+
+                        try {
+                            const { error } = await sb.from('refacciones').update({ notas: notasActualizadas }).eq('id', idRefaccion);
+                            if (error) throw error;
+                            
+                            // Actualizamos visualmente al instante
+                            if (req) req.notas = notasActualizadas;
+                            window.abrirStatsRefacciones();
+                            window.verDetallesRefaccion(req);
+
+                        } catch (error) {
+                            console.error("Error al agregar nota:", error);
+                            alert("No se pudo agregar la nota. Revisa tu conexión.");
+                            btn.innerText = textoOriginalBtn;
+                            btn.disabled = false;
+                        }
+                    };
+
+                    window.cerrarDetallesRefaccion = () => {
+                        document.getElementById('modal-detalle-refaccion').style.display = 'none';
+                    };
+        
+        window.copiarDetalleRefaccion = async (req) => {
+                    const nombre = req.nombre_refaccion || '[Sin Nombre]';
+                    const cantidad = req.cantidad || '1';
+                    const unidad = req.unidad || 'Pzas';
+                    const modelo = req.modelo || '';
+                    const prioridad = req.prioridad || 'Normal';
+                    const notas = req.notas || '';
+
+                    const equipo = req.equipos ? req.equipos.nombre : 'S/E';
+                    const linea = req.equipos && req.equipos.lineas ? req.equipos.lineas.nombre : 'S/L';
+                    const planta = req.equipos && req.equipos.plantas ? req.equipos.plantas.nombre : 'S/P';
+                    const equipoStr = `${equipo} (${planta} - ${linea})`;
+
+                    let msj = `⚙️ *Refacción:* ${nombre} (x${cantidad} ${unidad})\n`;
+                    if (modelo) msj += `🏷️ *Modelo/NP:* ${modelo}\n`;
+                    msj += `⚡ *Prioridad:* ${prioridad}\n`;
+                    msj += `📍 *Equipo:* ${equipoStr}\n`;
+                    if (notas) msj += `📝 *Fallo/Notas:* ${notas}\n`;
+
+                    try {
+                        await navigator.clipboard.writeText(msj);
+                        alert("📋 ¡Información copiada al portapapeles!\nYa puedes pegarla en WhatsApp o donde quieras.");
+                    } catch (err) {
+                        console.error("No se pudo copiar:", err);
+                        alert("❌ Tu navegador no permite copiar automáticamente.");
+                    }
+                };
+
+        window.cargarListaEquipos = async (idParaSeleccionar = null) => {
+            const inputSearch = document.getElementById('inp-refaccion-maquina-search');
+            inputSearch.placeholder = 'Cargando equipos...';
+            inputSearch.disabled = true;
+            
+            try {
+                // AQUÍ SE AÑADIÓ LA COLUMNA id_interno AL SELECT
+                const { data, error } = await sb.from('equipos').select('id, nombre, id_interno, plantas(nombre), lineas(nombre)').eq('activo', true).order('nombre');
+                if (error) throw error;
+                
+                window.equiposRefaccionesCache = data || [];
+                inputSearch.placeholder = 'Escribe para buscar equipo...';
+
+                if (idParaSeleccionar) {
+                    const eq = window.equiposRefaccionesCache.find(e => String(e.id) === String(idParaSeleccionar));
+                    if (eq) window.seleccionarEquipoRefaccion(eq);
+                }
+            } catch (e) {
+                console.error("Error cargando equipos:", e);
+                inputSearch.placeholder = 'Error al cargar equipos';
+            } finally {
+                inputSearch.disabled = false;
+            }
+        };
+
+        window.buscarEquipo = (texto) => {
+            const lista = document.getElementById('lista-sugerencias-equipos');
+            const inputId = document.getElementById('inp-refaccion-maquina-id');
+            
+            inputId.value = '';
+
+            if (!texto || texto.trim().length === 0) {
+                lista.style.display = 'none';
+                return;
+            }
+
+            const busqueda = texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            
+            const resultados = window.equiposRefaccionesCache.filter(eq => {
+                const nom = eq.nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+                return nom.includes(busqueda);
+            });
+
+            if (resultados.length === 0) {
+                lista.innerHTML = '<div style="padding:10px; color:#94a3b8; font-size:0.85rem; text-align:center;">No se encontraron equipos</div>';
+            } else {
+                let html = '';
+                resultados.forEach(eq => {
+                    const plantaNom = eq.plantas ? eq.plantas.nombre : 'S/P';
+                    const lineaNom = eq.lineas ? eq.lineas.nombre : 'S/L';
+                    const detalles = (plantaNom !== 'S/P' || lineaNom !== 'S/L') ? ` (${plantaNom} - ${lineaNom})` : '';
+                    
+                    const eqSeguro = JSON.stringify(eq).replace(/'/g, "&#39;");
+                    
+                    html += `
+                        <div style="padding:10px; border-bottom:1px solid #f1f5f9; cursor:pointer; font-size:0.9rem; color:#334155; transition:background 0.2s;" 
+                             onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'" 
+                             onclick='window.seleccionarEquipoRefaccion(${eqSeguro})'>
+                            <b>${eq.nombre}</b> <span style="font-size:0.75rem; color:#64748b;">${detalles}</span>
+                        </div>`;
+                });
+                lista.innerHTML = html;
+            }
+            lista.style.display = 'block';
+        };
+
+        window.seleccionarEquipoRefaccion = (eq) => {
+            const inputSearch = document.getElementById('inp-refaccion-maquina-search');
+            const inputId = document.getElementById('inp-refaccion-maquina-id');
+            const lista = document.getElementById('lista-sugerencias-equipos');
+            
+            const plantaNom = eq.plantas ? eq.plantas.nombre : 'S/P';
+            const lineaNom = eq.lineas ? eq.lineas.nombre : 'S/L';
+            const detalles = (plantaNom !== 'S/P' || lineaNom !== 'S/L') ? ` (${plantaNom} - ${lineaNom})` : '';
+            
+            inputSearch.value = `${eq.nombre}${detalles}`;
+            inputId.value = eq.id;
+            lista.style.display = 'none';
+        };
+        
+        window.etiquetasSeleccionadas = new Set();
+
+        window.renderizarEtiquetasFormulario = () => {
+                    const contenedor = document.getElementById('contenedor-etiquetas-formulario');
+                    if (!contenedor) return;
+
+                    const todasLasEtiquetas = new Set();
+
+                    // 1. Insertamos PRIMERO las etiquetas seleccionadas o recién creadas
+                    window.etiquetasSeleccionadas.forEach(tag => todasLasEtiquetas.add(tag));
+
+                    // 2. Insertamos el resto desde el caché (que ya viene del más reciente al más antiguo)
+                    if (window.refaccionesDataCache) {
+                        window.refaccionesDataCache.forEach(r => {
+                            if (r.grupo && r.grupo.trim() !== '') {
+                                r.grupo.split(',').forEach(g => {
+                                    if (g.trim()) todasLasEtiquetas.add(g.trim());
+                                });
+                            }
+                        });
+                    }
+
+                    let html = '';
+                    
+                    // 3. Quitamos el .sort() para que se respete el orden natural de "más reciente a más antiguo"
+                    Array.from(todasLasEtiquetas).forEach(tag => {
+                        const estaSeleccionada = window.etiquetasSeleccionadas.has(tag);
+                        const tagSeguro = tag.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                        
+                        if (estaSeleccionada) {
+                            html += `<span onclick="window.toggleEtiquetaFormulario('${tagSeguro}')" style="background:#7c3aed; color:white; padding:6px 12px; border-radius:16px; font-size:0.8rem; font-weight:bold; cursor:pointer; box-shadow: 0 2px 4px rgba(124,58,237,0.3); transition:all 0.2s; display:flex; align-items:center; gap:5px; user-select:none;">#${tag} ✕</span>`;
+                        } else {
+                            html += `<span onclick="window.toggleEtiquetaFormulario('${tagSeguro}')" style="background:#f8fafc; color:#64748b; padding:6px 12px; border-radius:16px; font-size:0.8rem; font-weight:600; cursor:pointer; border:1px solid #cbd5e1; transition:all 0.2s; user-select:none;">#${tag}</span>`;
+                        }
+                    });
+
+                    if (todasLasEtiquetas.size === 0) {
+                        html = '<span style="color:#94a3b8; font-size:0.8rem; font-style:italic;">No hay etiquetas guardadas. Crea una arriba.</span>';
+                    }
+
+                    contenedor.innerHTML = html;
+                };
+
+                window.toggleEtiquetaFormulario = (tag) => {
+                    if (window.etiquetasSeleccionadas.has(tag)) {
+                        window.etiquetasSeleccionadas.delete(tag);
+                    } else {
+                        window.etiquetasSeleccionadas.add(tag);
+                    }
+                    window.renderizarEtiquetasFormulario();
+                };
+
+                window.agregarNuevaEtiquetaFormulario = () => {
+                    const input = document.getElementById('inp-refaccion-grupo-nuevo');
+                    const nuevaTag = input.value.trim();
+                    if (nuevaTag !== '') {
+                        const tagsLimpias = nuevaTag.split(',').map(t => t.trim()).filter(t => t);
+                        tagsLimpias.forEach(t => window.etiquetasSeleccionadas.add(t));
+                        input.value = '';
+                        window.renderizarEtiquetasFormulario();
+                    }
+                };
+
+                window.manejarEnterEtiqueta = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        window.agregarNuevaEtiquetaFormulario();
+                    }
+                };
+
+        window.abrirModalRefacciones = () => {
+                    window.refaccionEditandoId = null;
+                    document.getElementById('titulo-modal-refacciones').innerHTML = "⚙️ Solicitar Refacciones";
+                    document.getElementById('btn-guardar-refaccion').innerText = "Enviar Solicitud";
+
+                    document.getElementById('modal-refacciones').style.display = 'flex';
+                    
+                    document.getElementById('inp-refaccion-nombre').value = '';
+                    document.getElementById('inp-refaccion-modelo').value = '';
+                    document.getElementById('inp-refaccion-cantidad').value = '1';
+                    document.getElementById('inp-refaccion-unidad').value = 'Pzas';
+                    document.getElementById('inp-refaccion-prioridad').value = 'Normal';
+                    
+                    document.getElementById('inp-refaccion-maquina-search').value = '';
+                    document.getElementById('inp-refaccion-maquina-id').value = '';
+                    document.getElementById('lista-sugerencias-equipos').style.display = 'none';
+                    document.getElementById('inp-refaccion-notas').value = '';
+                    document.getElementById('inp-foto-nueva-solicitud').value = '';
+
+                    document.getElementById('inp-refaccion-grupo-nuevo').value = '';
+                    window.etiquetasSeleccionadas.clear();
+                    window.renderizarEtiquetasFormulario();
+                    
+                    window.cargarListaEquipos();
+                };
+
+                window.cerrarModalRefacciones = () => {
+                    document.getElementById('modal-refacciones').style.display = 'none';
+                    document.getElementById('inp-refaccion-nombre').value = '';
+                    document.getElementById('inp-refaccion-modelo').value = '';
+                    document.getElementById('inp-refaccion-prioridad').value = 'Normal';
+                    document.getElementById('inp-refaccion-cantidad').value = '1';
+                    document.getElementById('inp-refaccion-maquina-search').value = '';
+                    document.getElementById('inp-refaccion-maquina-id').value = '';
+                    document.getElementById('lista-sugerencias-equipos').style.display = 'none';
+                    document.getElementById('inp-refaccion-notas').value = '';
+                    document.getElementById('inp-foto-nueva-solicitud').value = '';
+
+                    document.getElementById('inp-refaccion-grupo-nuevo').value = '';
+                    window.etiquetasSeleccionadas.clear();
+                    window.renderizarEtiquetasFormulario();
+
+                    window.refaccionEditandoId = null;
+                };
+
+                window.prepararEdicionRefaccion = (req) => {
+                    window.refaccionEditandoId = req.id;
+                    
+                    document.getElementById('titulo-modal-refacciones').innerHTML = "✏️ Editar Solicitud";
+                    document.getElementById('btn-guardar-refaccion').innerText = "Guardar Cambios";
+                    
+                    document.getElementById('inp-refaccion-nombre').value = req.nombre_refaccion;
+                    document.getElementById('inp-refaccion-cantidad').value = req.cantidad;
+                    document.getElementById('inp-refaccion-notas').value = req.notas || '';
+                    document.getElementById('inp-refaccion-modelo').value = req.modelo || '';
+                    document.getElementById('inp-refaccion-prioridad').value = req.prioridad || 'Normal';
+                    document.getElementById('inp-refaccion-unidad').value = req.unidad || 'Pzas';
+
+                    document.getElementById('inp-refaccion-grupo-nuevo').value = '';
+                    window.etiquetasSeleccionadas.clear();
+                    if (req.grupo && req.grupo.trim() !== '') {
+                        req.grupo.split(',').forEach(g => {
+                            if (g.trim()) window.etiquetasSeleccionadas.add(g.trim());
+                        });
+                    }
+                    window.renderizarEtiquetasFormulario();
+                                
+                    document.getElementById('modal-refacciones').style.display = 'flex';
+                    window.cargarListaEquipos(req.equipo_id);
+                };
+
+                window.duplicarSolicitudRefaccion = (req) => {
+                    // MUY IMPORTANTE: Lo dejamos en null para que cree un registro NUEVO
+                    window.refaccionEditandoId = null;
+                    
+                    document.getElementById('titulo-modal-refacciones').innerHTML = "🔁 Volver a Solicitar";
+                    document.getElementById('btn-guardar-refaccion').innerText = "Enviar Nueva Solicitud";
+                    
+                    document.getElementById('inp-refaccion-nombre').value = req.nombre_refaccion;
+                    document.getElementById('inp-refaccion-cantidad').value = req.cantidad;
+                    document.getElementById('inp-refaccion-notas').value = req.notas || '';
+                    document.getElementById('inp-refaccion-modelo').value = req.modelo || '';
+                    document.getElementById('inp-refaccion-prioridad').value = req.prioridad || 'Normal';
+                    document.getElementById('inp-refaccion-unidad').value = req.unidad || 'Pzas';
+                    document.getElementById('inp-foto-nueva-solicitud').value = '';
+
+                    document.getElementById('inp-refaccion-grupo-nuevo').value = '';
+                    window.etiquetasSeleccionadas.clear();
+                    if (req.grupo && req.grupo.trim() !== '') {
+                        req.grupo.split(',').forEach(g => {
+                            if (g.trim()) window.etiquetasSeleccionadas.add(g.trim());
+                        });
+                    }
+                    window.renderizarEtiquetasFormulario();
+                    
+                    document.getElementById('modal-refacciones').style.display = 'flex';
+                    window.cargarListaEquipos(req.equipo_id);
+                };
+
+        window.duplicarSolicitudRefaccion = (req) => {
+            // MUY IMPORTANTE: Lo dejamos en null para que cree un registro NUEVO
+            window.refaccionEditandoId = null;
+            
+            document.getElementById('titulo-modal-refacciones').innerHTML = "🔁 Volver a Solicitar";
+            document.getElementById('btn-guardar-refaccion').innerText = "Enviar Nueva Solicitud";
+            
+            document.getElementById('inp-refaccion-nombre').value = req.nombre_refaccion;
+            document.getElementById('inp-refaccion-cantidad').value = req.cantidad;
+            document.getElementById('inp-refaccion-notas').value = req.notas || '';
+            document.getElementById('inp-refaccion-modelo').value = req.modelo || '';
+            document.getElementById('inp-refaccion-grupo').value = req.grupo || '';
+            document.getElementById('inp-refaccion-prioridad').value = req.prioridad || 'Normal';
+            document.getElementById('inp-refaccion-unidad').value = req.unidad || 'Pzas';
+            
+            // --> Limpieza de la imagen para que no se arrastre de la solicitud anterior <--
+            document.getElementById('inp-foto-nueva-solicitud').value = '';
+            
+            document.getElementById('modal-refacciones').style.display = 'flex';
+            
+            // Carga la lista y preselecciona la máquina destino
+            window.cargarListaEquipos(req.equipo_id);
+        };
+
+                    window.crearNuevaPlanta = async () => {
+            const nueva = prompt("Ingresa el nombre de la nueva Planta:");
+            if (nueva && nueva.trim() !== "") {
+                const val = nueva.trim();
+                try {
+                    const { data, error } = await sb.from('plantas').insert([{ nombre: val }]).select();
+                    if (error) throw error;
+                    if (data && data.length > 0) {
+                        const select = document.getElementById('inp-nuevo-equipo-planta');
+                        select.add(new Option(data[0].nombre, data[0].id));
+                        select.value = data[0].id;
+                        alert("✅ Planta agregada correctamente.");
+                    }
+                } catch (e) {
+                    console.error("Error al crear planta:", e);
+                    alert("Error al guardar la Planta (Es posible que ya exista).");
+                }
+            }
+        };
+
+        window.crearNuevaLinea = async () => {
+            const nueva = prompt("Ingresa el nombre de la nueva Línea:");
+            if (nueva && nueva.trim() !== "") {
+                const val = nueva.trim();
+                try {
+                    const { data, error } = await sb.from('lineas').insert([{ nombre: val }]).select();
+                    if (error) throw error;
+                    if (data && data.length > 0) {
+                        const select = document.getElementById('inp-nuevo-equipo-linea');
+                        select.add(new Option(data[0].nombre, data[0].id));
+                        select.value = data[0].id;
+                        alert("✅ Línea agregada correctamente.");
+                    }
+                } catch (e) {
+                    console.error("Error al crear línea:", e);
+                    alert("Error al guardar la Línea (Es posible que ya exista).");
+                }
+            }
+        };
+
+        window.agregarNuevoEquipo = async () => {
+                    document.getElementById('modal-nuevo-equipo').style.display = 'flex';
+                    document.getElementById('inp-nuevo-equipo-nombre').value = '';
+                    document.getElementById('inp-nuevo-equipo-id-interno').value = '';
+                    
+                    const selPlanta = document.getElementById('inp-nuevo-equipo-planta');
+            const selLinea = document.getElementById('inp-nuevo-equipo-linea');
+            const btnCrearPlanta = document.getElementById('btn-crear-planta');
+            const btnCrearLinea = document.getElementById('btn-crear-linea');
+            
+            selPlanta.innerHTML = '<option value="">Cargando...</option>';
+            selLinea.innerHTML = '<option value="">Cargando...</option>';
+
+            let rolesAutorizados = [];
+            try {
+                const { data: cfg } = await sb.from('system_config').select('texto').eq('key', 'roles_refacciones');
+                if (cfg && cfg.length > 0 && cfg[0].texto) {
+                    rolesAutorizados = JSON.parse(cfg[0].texto).map(r => r.toUpperCase().trim());
+                }
+            } catch(e) {}
+
+            const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+            const loggedUserPuesto = userLog ? (userLog.puesto || '').toUpperCase().trim() : '';
+            const tienePermisosEspeciales = window.modoAdminActivo || rolesAutorizados.includes(loggedUserPuesto);
+
+            if (tienePermisosEspeciales) {
+                btnCrearPlanta.style.display = 'block';
+                btnCrearLinea.style.display = 'block';
+            } else {
+                btnCrearPlanta.style.display = 'none';
+                btnCrearLinea.style.display = 'none';
+            }
+
+            try {
+                const { data: dataPlantas, error: errPlantas } = await sb.from('plantas').select('id, nombre').order('nombre');
+                if (errPlantas) throw errPlantas;
+                selPlanta.innerHTML = '<option value="">Selecciona una Planta...</option>' +
+                    dataPlantas.map(p => `<option value="${p.id}">${p.nombre}</option>`).join('');
+
+                const { data: dataLineas, error: errLineas } = await sb.from('lineas').select('id, nombre').order('nombre');
+                if (errLineas) throw errLineas;
+                selLinea.innerHTML = '<option value="">Selecciona una Línea...</option>' +
+                    dataLineas.map(l => `<option value="${l.id}">${l.nombre}</option>`).join('');
+
+            } catch (error) {
+                console.error("Error al extraer bases de datos relacionales:", error);
+                selPlanta.innerHTML = '<option value="">Error al cargar</option>';
+                selLinea.innerHTML = '<option value="">Error al cargar</option>';
+            }
+        };
+
+        window.guardarNuevoEquipo = async () => {
+                    const nombre = document.getElementById('inp-nuevo-equipo-nombre').value.trim();
+                    const idInterno = document.getElementById('inp-nuevo-equipo-id-interno').value.trim();
+                    const plantaId = document.getElementById('inp-nuevo-equipo-planta').value;
+                    const lineaId = document.getElementById('inp-nuevo-equipo-linea').value;
+
+                    if (!nombre || !plantaId || !lineaId) {
+                        alert("Por favor, completa Nombre del Equipo, Planta y Línea.");
+                        return;
+                    }
+
+                    try {
+                        // Estructuramos los datos base
+                        const payload = {
+                            nombre: nombre,
+                            planta_id: parseInt(plantaId),
+                            linea_id: parseInt(lineaId),
+                            activo: true
+                        };
+
+                        // Si el usuario ingresó un ID opcional, lo agregamos al envío
+                        if (idInterno !== "") {
+                            payload.id_interno = idInterno;
+                        }
+
+                        const { data, error } = await sb.from('equipos')
+                            .insert([payload])
+                            .select();
+
+                        if (error) throw error;
+
+                alert("✅ Equipo agregado correctamente.");
+                document.getElementById('modal-nuevo-equipo').style.display = 'none';
+                
+                if (data && data.length > 0) {
+                    window.cargarListaEquipos(data[0].id);
+                } else {
+                    window.cargarListaEquipos();
+                }
+
+            } catch (error) {
+                console.error("Error al guardar equipo:", error);
+                alert("Hubo un error al agregar el equipo. Verifica tu conexión.");
+            }
+        };
+
+        window.copiarTextoRefaccion = async () => {
+            const nombre = document.getElementById('inp-refaccion-nombre').value.trim() || '[Sin Nombre]';
+            const cantidad = document.getElementById('inp-refaccion-cantidad').value || '1';
+            const modelo = document.getElementById('inp-refaccion-modelo').value.trim();
+            const prioridad = document.getElementById('inp-refaccion-prioridad').value;
+            const equipoStr = document.getElementById('inp-refaccion-maquina-search').value || '[Sin Equipo]';
+            const notas = document.getElementById('inp-refaccion-notas').value.trim();
+
+            let msj = `⚙️ *Refacción:* ${nombre} (x${cantidad})\n`;
+            if (modelo) msj += `🏷️ *Modelo/NP:* ${modelo}\n`;
+            msj += `⚡ *Prioridad:* ${prioridad}\n`;
+            msj += `📍 *Equipo:* ${equipoStr}\n`;
+            if (notas) msj += `📝 *Fallo/Notas:* ${notas}\n`;
+
+            try {
+                await navigator.clipboard.writeText(msj);
+                alert("📋 ¡Información copiada al portapapeles!\nYa puedes pegarla en WhatsApp o donde quieras.");
+            } catch (err) {
+                console.error("No se pudo copiar:", err);
+                alert("❌ Tu navegador no permite copiar automáticamente.");
+            }
+        };
+
+        window.enviarSolicitudRefaccion = async () => {
+            // 1. Obtenemos todos los valores del formulario
+            const nombre = document.getElementById('inp-refaccion-nombre').value.trim();
+            const cantidad = document.getElementById('inp-refaccion-cantidad').value || '1';
+            const unidad = document.getElementById('inp-refaccion-unidad').value;
+            const equipoId = document.getElementById('inp-refaccion-maquina-id').value;
+            const notas = document.getElementById('inp-refaccion-notas').value.trim();
+            
+            const modelo = document.getElementById('inp-refaccion-modelo').value.trim();
+            const grupo = Array.from(window.etiquetasSeleccionadas).join(', ');
+            const prioridad = document.getElementById('inp-refaccion-prioridad').value;
+            const equipoStr = document.getElementById('inp-refaccion-maquina-search').value || '[Sin Equipo]';
+
+            const btnEnviar = document.getElementById('btn-guardar-refaccion');
+            const fileInput = document.getElementById('inp-foto-nueva-solicitud');
+
+            if (!nombre || !cantidad || !equipoId) {
+                alert("Por favor, completa Nombre, Cantidad y selecciona una Máquina de la lista.");
+                return;
+            }
+
+            // ==========================================
+            // 2. COPIAMOS AL PORTAPAPELES INMEDIATAMENTE
+            // ==========================================
+            let msjExitoFinal = "";
+            let msjPortapapeles = `⚙️ *Refacción:* ${nombre} (x${cantidad} ${unidad})\n`;
+            if (modelo) msjPortapapeles += `🏷️ *Modelo/NP:* ${modelo}\n`;
+            msjPortapapeles += `⚡ *Prioridad:* ${prioridad}\n`;
+            msjPortapapeles += `📍 *Equipo:* ${equipoStr}\n`;
+            if (notas) msjPortapapeles += `📝 *Fallo/Notas:* ${notas}\n`;
+
+            try {
+                await navigator.clipboard.writeText(msjPortapapeles);
+                msjExitoFinal = "\n\n📋 ¡Información copiada al portapapeles!\nYa puedes ir a WhatsApp y darle 'Pegar'.";
+            } catch (err) {
+                console.error("No se pudo copiar automáticamente al portapapeles:", err);
+                msjExitoFinal = "\n\n⚠️ Tu navegador no permitió copiar el texto automáticamente.";
+            }
+
+            // ==========================================
+            // 3. PROCESAMOS Y SUBIMOS LA IMAGEN (Si existe)
+            // ==========================================
+            let fotoUrl = null;
+            if (fileInput.files && fileInput.files[0]) {
+                btnEnviar.innerText = "Subiendo foto...";
+                btnEnviar.disabled = true;
+                try {
+                    const blob = await window.optimizarImagen(fileInput.files[0]);
+                    const extension = blob.type === 'image/jpeg' ? 'jpg' : 'webp';
+                    const fileName = `ref-${Date.now()}.${extension}`;
+                    
+                    const { error: uploadError } = await sb.storage.from('fotos-refacciones').upload(fileName, blob, {
+                        contentType: blob.type,
+                        upsert: true
+                    });
+                    if (uploadError) throw uploadError;
+                    const { data: publicUrlData } = sb.storage.from('fotos-refacciones').getPublicUrl(fileName);
+                    fotoUrl = publicUrlData.publicUrl;
+                } catch (e) {
+                    console.error("Detalle del error de imagen:", e);
+                    alert("Error al procesar la foto: " + (e.message || JSON.stringify(e)));
+                    btnEnviar.innerText = "Enviar Solicitud";
+                    btnEnviar.disabled = false;
+                    return;
+                }
+            }
+
+            // ==========================================
+            // 4. GUARDAMOS LA SOLICITUD EN BASE DE DATOS
+            // ==========================================
+            const textoOriginal = btnEnviar.innerText;
+            btnEnviar.innerText = "Guardando...";
+            btnEnviar.disabled = true;
+
+            try {
+                const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+                const userId = userLog ? userLog.id : "Desconocido";
+
+                if (window.refaccionEditandoId) {
+                    const camposUpdate = {
+                        nombre_refaccion: nombre,
+                        modelo: modelo,
+                        grupo: grupo || null,
+                        prioridad: prioridad,
+                        cantidad: parseInt(cantidad),
+                        unidad: unidad,
+                        equipo_id: parseInt(equipoId),
+                        notas: notas
+                    };
+
+                    if (fotoUrl) {
+                        camposUpdate.foto_url = fotoUrl;
+                    }
+
+                    const { error } = await sb.from('refacciones').update(camposUpdate).eq('id', window.refaccionEditandoId);
+                    if (error) throw error;
+                    msjExitoFinal = "✅ Solicitud actualizada correctamente." + msjExitoFinal;
+                    
+                } else {
+                    const { error } = await sb.from('refacciones').insert([{
+                        solicitante_id: String(userId),
+                        nombre_refaccion: nombre,
+                        modelo: modelo,
+                        grupo: grupo || null,
+                        prioridad: prioridad,
+                        cantidad: parseInt(cantidad),
+                        unidad: unidad,
+                        equipo_id: parseInt(equipoId),
+                        notas: notas,
+                        estado: 'Pendiente',
+                        foto_url: fotoUrl
+                    }]);
+                    
+                    if (error) throw error;
+                    msjExitoFinal = "✅ Solicitud enviada correctamente." + msjExitoFinal;
+                }
+                
+                alert(msjExitoFinal);
+                window.cerrarModalRefacciones();
+                window.abrirStatsRefacciones();
+                
+            } catch (error) {
+                console.error("Error al enviar solicitud:", error);
+                alert("Ocurrió un error al guardar la solicitud en el servidor.");
+            } finally {
+                btnEnviar.innerText = textoOriginal;
+                btnEnviar.disabled = false;
+            }
+        };
+
+        window.tomarSolicitudRefaccion = async (idRefaccion) => {
+            const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+            if (!userLog) {
+                alert("Sesión no encontrada.");
+                return;
+            }
+
+            const comentario = prompt("¿Confirmas que tomarás esta solicitud?\n\nPuedes dejar un comentario opcional para el solicitante (Ej. 'Falta el número de serie', 'Se pidió la pieza', etc.). \n\nSi no deseas dejar comentario, solo dale a Aceptar.");
+            
+            if (comentario === null) return;
+
+            try {
+                            const updateData = {
+                                atendido_por_id: String(userLog.id),
+                                asignado_por_id: String(userLog.id) // Registramos que él mismo se lo asignó
+                            };
+                            
+                            if (comentario.trim() !== "") {
+                                updateData.comentario_revisor = comentario.trim();
+                            }
+
+                            const { error } = await sb.from('refacciones').update(updateData).eq('id', idRefaccion);
+                
+                if (error) throw error;
+                                window.abrirStatsRefacciones();
+                                
+                            } catch (error) {
+                                console.error("Error al tomar la solicitud:", error);
+                                alert("Ocurrió un error al asignarte la solicitud.");
+                            }
+                        };
+
+        window.cambiarAsignacionRefaccion = async (idRefaccion, nuevoIdUsuario) => {
+                    try {
+                        // Obtenemos quién está haciendo el cambio
+                        const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+                        const loggedUserId = userLog ? String(userLog.id) : null;
+
+                        const valorAInsertar = nuevoIdUsuario ? String(nuevoIdUsuario) : null;
+                        
+                        const updateData = {
+                            atendido_por_id: valorAInsertar
+                        };
+
+                        // Si hay un nuevo usuario asignado, guardamos quién lo asignó. Si se dejó "Sin Asignar", borramos el asignador.
+                        if (valorAInsertar) {
+                            updateData.asignado_por_id = loggedUserId;
+                        } else {
+                            updateData.asignado_por_id = null;
+                        }
+
+                        const { error } = await sb.from('refacciones').update(updateData).eq('id', idRefaccion);
+                        
+                        if (error) throw error;
+                        
+                        window.abrirStatsRefacciones();
+                        // Cerramos el modal para que no quede con información visual desactualizada
+                        window.cerrarDetallesRefaccion();
+                    } catch (error) {
+                        console.error("Error al reasignar refacción:", error);
+                        alert("No se pudo cambiar la asignación. Verifica tu conexión.");
+                    }
+                };
+
+                        window.editarComentarioRevisor = async (idRefaccion) => {
+                            const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+            if (!userLog) return;
+
+            const req = window.refaccionesDataCache.find(r => r.id === idRefaccion);
+            const comentarioActual = req ? (req.comentario_revisor || "") : "";
+
+            const nuevoComentario = prompt("Añadir o modificar la nota del revisor:\n(Deja en blanco y dale a Aceptar para borrar la nota actual)", comentarioActual);
+            
+            if (nuevoComentario === null) return;
+
+            try {
+                const valorFinal = nuevoComentario.trim() === "" ? null : nuevoComentario.trim();
+
+                const { error } = await sb.from('refacciones').update({
+                    comentario_revisor: valorFinal
+                }).eq('id', idRefaccion);
+                
+                if (error) throw error;
+                
+                if (req) req.comentario_revisor = valorFinal;
+                window.abrirStatsRefacciones();
+                
+            } catch (error) {
+                console.error("Error al actualizar el comentario:", error);
+                alert("Ocurrió un error al intentar guardar la nota.");
+            }
+        };
+
+        window.actualizarFechaEstimada = async (idRefaccion, fechaSeleccionada) => {
+            try {
+                const valorAInsertar = fechaSeleccionada ? fechaSeleccionada : null;
+                const { error } = await sb.from('refacciones').update({
+                    fecha_estimada: valorAInsertar
+                }).eq('id', idRefaccion);
+                
+                if (error) throw error;
+                window.abrirStatsRefacciones();
+            } catch (error) {
+                console.error("Error al actualizar la fecha estimada:", error);
+                alert("No se pudo guardar la fecha. Verifica tu conexión.");
+            }
+        };
+
+        window.eliminarSolicitudRefaccion = async (idRefaccion) => {
+                            // Buscamos la solicitud en el caché para verificar de quién es
+                            const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+                            const loggedUserId = userLog ? String(userLog.id) : null;
+                            const req = window.refaccionesDataCache.find(r => r.id === idRefaccion);
+
+                            // Bloqueamos a cualquier usuario que no sea el creador original
+                            if (!req || String(req.solicitante_id) !== loggedUserId) {
+                                alert("Solo el creador de la solicitud puede eliminarla.");
+                                return;
+                            }
+
+                            if (!confirm("⚠️ ¿Estás seguro de que deseas ELIMINAR esta solicitud de forma permanente? Esta acción no se puede deshacer.")) return;
+
+                            try {
+                const { error } = await sb.from('refacciones').delete().eq('id', idRefaccion);
+                if (error) throw error;
+                
+                alert("🗑️ Solicitud eliminada correctamente.");
+                window.abrirStatsRefacciones();
+                
+            } catch (error) {
+                console.error("Error al eliminar solicitud:", error);
+                alert("Ocurrió un error al intentar eliminar la solicitud.");
+            }
+        };
+
+        window.guardarRolesRefacciones = async () => {
+            const checkboxes = document.querySelectorAll('.chk-puesto-refaccion:checked');
+            const rolesSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+            const jsonStr = JSON.stringify(rolesSeleccionados);
+
+            try {
+                const { data: configRows } = await sb.from('system_config').select('key').eq('key', 'roles_refacciones');
+                
+                if (configRows && configRows.length > 0) {
+                    await sb.from('system_config').update({ texto: jsonStr }).eq('key', 'roles_refacciones');
+                } else {
+                    await sb.from('system_config').insert([{ key: 'roles_refacciones', texto: jsonStr }]);
+                }
+                
+                alert("✅ Permisos actualizados correctamente.");
+                document.getElementById('modal-config-refacciones').style.display = 'none';
+                window.abrirStatsRefacciones();
+                
+            } catch (error) {
+                console.error("Error al guardar permisos:", error);
+                alert("Hubo un error al intentar guardar los permisos.");
+            }
+        };
+
+        window.marcarRefaccionEntregada = async (idRefaccion) => {
+                    if (!confirm("📦 ¿Confirmas que ya entregaste esta refacción al solicitante?")) return;
+
+                    try {
+                        const { error } = await sb.from('refacciones').update({ estado: 'Entregada' }).eq('id', idRefaccion);
+                        if (error) throw error;
+                        window.abrirStatsRefacciones();
+                    } catch (error) {
+                        console.error("Error al marcar refacción como entregada:", error);
+                        alert("Ocurrió un error: " + (error.message || "No se pudo actualizar el estado."));
+                    }
+                };
+
+                window.marcarRefaccionRecibida = async (idRefaccion) => {
+                    if (!confirm("✅ ¿Confirmas que ya recibiste esta refacción en tus manos y deseas cerrar la solicitud?")) return;
+
+                    try {
+                        const { error } = await sb.from('refacciones').update({ estado: 'Recibida' }).eq('id', idRefaccion);
+                        if (error) throw error;
+                        window.abrirStatsRefacciones();
+                    } catch (error) {
+                        console.error("Error al marcar refacción como recibida:", error);
+                        alert("Ocurrió un error: " + (error.message || "No se pudo actualizar el estado."));
+                    }
+                };
+
+        window.cancelarSolicitudRefaccion = async (idRefaccion) => {
+                    if (!confirm("⚠️ ¿Estás seguro de que YA NO NECESITAS esta refacción? Se marcará como Cancelada y desaparecerá de las solicitudes pendientes.")) return;
+
+                    try {
+                        const { error } = await sb.from('refacciones').update({ estado: 'Cancelada' }).eq('id', idRefaccion);
+                        if (error) throw error;
+                        window.abrirStatsRefacciones();
+                    } catch (error) {
+                        console.error("Error al cancelar la refacción:", error);
+                        alert("Ocurrió un error: " + (error.message || "No se pudo actualizar el estado."));
+                    }
+                };
+
+                window.revertirRefaccionPendiente = async (idRefaccion) => {
+                    if (!confirm("¿Deseas deshacer la entrega y marcar esta solicitud nuevamente como Pendiente?")) return;
+
+                    try {
+                        const { error } = await sb.from('refacciones').update({ estado: 'Pendiente' }).eq('id', idRefaccion);
+                        if (error) throw error;
+                        window.abrirStatsRefacciones();
+                    } catch (error) {
+                        console.error("Error al revertir la refacción:", error);
+                        alert("Ocurrió un error: " + (error.message || "No se pudo actualizar el estado."));
+                    }
+                };
+
+        window.copiarReporteCorreo = async () => {
+                            const btn = document.getElementById('btn-exportar-refacciones');
+                            const txtOriginal = btn ? btn.innerHTML : '📋';
+                            if(btn) btn.innerHTML = '⏳'; // Solo el emoji para que no se deforme el botón circular
+
+                            try {
+                                        // En lugar de consultar a Supabase, tomamos los datos ya filtrados de la vista principal
+                                        const data = window.refaccionesFiltradasCache || [];
+                                        
+                                        if (!data || data.length === 0) {
+                                            alert("No hay solicitudes en pantalla con los filtros actuales para reportar.");
+                                            if(btn) btn.innerHTML = txtOriginal;
+                                            return;
+                                        }
+
+                                        const hoyCalculo = new Date();
+                                        hoyCalculo.setHours(0, 0, 0, 0);
+
+                                        // Ajustamos las métricas para que solo cuenten las "Pendientes" dentro de lo filtrado
+                                        const pendientesData = data.filter(r => r.estado === 'Pendiente');
+                                        const totalPendientes = pendientesData.length;
+                                        const totalSinAtender = pendientesData.filter(req => !req.atendido_por_id).length;
+                                        const totalEnCamino = pendientesData.filter(req => req.atendido_por_id && req.fecha_estimada).length;
+                                        
+                                        const totalAtrasadas = pendientesData.filter(req => {
+                                            if (req.atendido_por_id && req.fecha_estimada) {
+                                                const [year, month, day] = req.fecha_estimada.split('-');
+                                                const fechaEst = new Date(year, month - 1, day);
+                                                return fechaEst.getTime() < hoyCalculo.getTime();
+                                            }
+                                            return false;
+                                        }).length;
+
+                                        const fechaHoyStr = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+
+                                        let htmlContent = `
+                                        <div style="font-family: Arial, Helvetica, sans-serif; color: #1e293b; max-width: 850px; margin: 0 auto; user-select: all;">
+                                            <h2 style="color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 5px;">📋 Reporte de Refacciones (Filtrado)</h2>
+                            <p style="color: #64748b; font-size: 14px; margin-top: 0; margin-bottom: 20px;">Generado el: <b>${fechaHoyStr}</b></p>
+                            
+                            <table style="width: 100%; margin-bottom: 20px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 15px; text-align: center; width: 25%;">
+                                        <div style="font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase;">Total Pendientes</div>
+                                        <div style="font-size: 24px; font-weight: 800; color: #f59e0b; margin-top: 5px;">${totalPendientes}</div>
+                                    </td>
+                                    <td style="padding: 15px; text-align: center; width: 25%; border-left: 1px solid #e2e8f0;">
+                                        <div style="font-size: 11px; color: #dc2626; font-weight: bold; text-transform: uppercase;">Sin Atender</div>
+                                        <div style="font-size: 24px; font-weight: 800; color: #dc2626; margin-top: 5px;">${totalSinAtender}</div>
+                                    </td>
+                                    <td style="padding: 15px; text-align: center; width: 25%; border-left: 1px solid #e2e8f0;">
+                                        <div style="font-size: 11px; color: #0284c7; font-weight: bold; text-transform: uppercase;">En Camino</div>
+                                        <div style="font-size: 24px; font-weight: 800; color: #0ea5e9; margin-top: 5px;">${totalEnCamino}</div>
+                                    </td>
+                                    <td style="padding: 15px; text-align: center; width: 25%; border-left: 1px solid #e2e8f0; background-color: #fef2f2; border-radius: 0 8px 8px 0;">
+                                        <div style="font-size: 11px; color: #991b1b; font-weight: bold; text-transform: uppercase;">Atrasadas</div>
+                                        <div style="font-size: 24px; font-weight: 800; color: #b91c1c; margin-top: 5px;">${totalAtrasadas}</div>
+                                    </td>
+                                </tr>
+                            </table>
+                            
+                            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                                <thead>
+                                    <tr>
+                                        <th style="background-color: #0f172a; color: white; padding: 10px; text-align: left; border: 1px solid #cbd5e1;">Refacción</th>
+                                        <th style="background-color: #0f172a; color: white; padding: 10px; text-align: center; border: 1px solid #cbd5e1;">Prioridad</th>
+                                        <th style="background-color: #0f172a; color: white; padding: 10px; text-align: center; border: 1px solid #cbd5e1;">Espera</th>
+                                        <th style="background-color: #0f172a; color: white; padding: 10px; text-align: left; border: 1px solid #cbd5e1;">Destino</th>
+                                        <th style="background-color: #0f172a; color: white; padding: 10px; text-align: left; border: 1px solid #cbd5e1;">Personal</th>
+                                        <th style="background-color: #0f172a; color: white; padding: 10px; text-align: center; border: 1px solid #cbd5e1;">Llegada Est.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        `;
+
+                        data.forEach((req, index) => {
+                            const equipo = req.equipos ? req.equipos.nombre : 'S/E';
+                            const linea = req.equipos && req.equipos.lineas ? req.equipos.lineas.nombre : 'S/L';
+                            
+                            let nombreSolicitante = "Usuario Desconocido";
+                            let nombreAtendedor = "Sin asignar";
+
+                            if (window.todosLosEmpleadosData) {
+                                const empSol = window.todosLosEmpleadosData.find(e => String(e.id) === String(req.solicitante_id));
+                                if (empSol) nombreSolicitante = empSol.name;
+
+                                if (req.atendido_por_id) {
+                                    const empAt = window.todosLosEmpleadosData.find(e => String(e.id) === String(req.atendido_por_id));
+                                    if (empAt) nombreAtendedor = empAt.name;
+                                }
+                            }
+
+                            let colorPrioridad = '#475569';
+                            let bgPrioridad = '#f1f5f9';
+                            if(req.prioridad === 'Urgente') { colorPrioridad = '#dc2626'; bgPrioridad = '#fee2e2'; }
+                            if(req.prioridad === 'Alta') { colorPrioridad = '#ea580c'; bgPrioridad = '#ffedd5'; }
+                            
+                            const fechaCreacion = new Date(req.created_at);
+                            fechaCreacion.setHours(0, 0, 0, 0);
+                            const hoy = new Date();
+                            hoy.setHours(0, 0, 0, 0);
+                            
+                            const diffTime = hoy.getTime() - fechaCreacion.getTime();
+                            const diasEspera = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                            
+                            let badgeEspera = '';
+                            if (diasEspera === 0) {
+                                badgeEspera = `<div style="font-size:12px; color:#64748b; font-weight:bold;">🕒 Hoy</div>`;
+                            } else if (diasEspera > 3) {
+                                badgeEspera = `<div style="font-size:12px; color:#dc2626; font-weight:bold;">⏳ ${diasEspera} días</div>`;
+                            } else {
+                                badgeEspera = `<div style="font-size:12px; color:#ea580c; font-weight:bold;">⏱️ ${diasEspera} días</div>`;
+                            }
+
+                            const bgColorFila = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+
+                            htmlContent += `
+                                <tr style="background-color: ${bgColorFila};">
+                                    <td style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: top;">
+                                        <strong style="color: #0f172a; font-size: 14px;">${req.nombre_refaccion} (x${req.cantidad} ${req.unidad || 'Pzas'})</strong><br/>
+                                        <span style="color: #64748b; font-size: 12px;">NP: ${req.modelo || 'N/A'}</span>
+                                    </td>
+                                    <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center; vertical-align: top;">
+                                        <span style="background-color: ${bgPrioridad}; color: ${colorPrioridad}; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; display:inline-block;">
+                                            ${req.prioridad}
+                                        </span>
+                                    </td>
+                                    <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center; vertical-align: top; white-space: nowrap;">
+                                        ${badgeEspera}
+                                    </td>
+                                    <td style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: top;">
+                                        <strong style="color: #334155;">${equipo}</strong><br/>
+                                        <span style="color: #64748b; font-size: 11px;">⚙️ ${linea}</span>
+                                    </td>
+                                    <td style="padding: 10px; border: 1px solid #cbd5e1; vertical-align: top;">
+                                        <span style="color: #475569; font-size: 12px;">👤 Solicita: <strong>${nombreSolicitante}</strong></span><br/>
+                                        <span style="color: #0284c7; font-size: 12px;">🧑‍🔧 Atiende: <strong>${nombreAtendedor}</strong></span>
+                                    </td>
+                                    <td style="padding: 10px; border: 1px solid #cbd5e1; text-align: center; vertical-align: top;">
+                                        <strong style="color: #0284c7;">${req.fecha_estimada || 'Sin Fecha'}</strong>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+
+                        htmlContent += `
+                                </tbody>
+                            </table>
+                            <p style="font-size: 12px; color: #94a3b8; margin-top: 20px; text-align: center;">
+                                Reporte emitido desde el Sistema de Gestión de Mantenimiento y Refacciones
+                            </p>
+                        </div>`;
+
+                        // ==========================================
+                        // NUEVO SISTEMA DE COPIADO: VISTA PREVIA Y BOTÓN SÍNCRONO
+                        // ==========================================
+                        let modalPrevio = document.getElementById('modal-preview-reporte');
+                        if (!modalPrevio) {
+                            modalPrevio = document.createElement('div');
+                            modalPrevio.id = 'modal-preview-reporte';
+                            modalPrevio.style.cssText = 'position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;';
+                            document.body.appendChild(modalPrevio);
+                        }
+
+                        modalPrevio.innerHTML = `
+                            <div style="background:white; border-radius:16px; max-width:850px; width:100%; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); overflow:hidden;">
+                                <div style="padding:15px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
+                                    <h3 style="margin:0; color:#0f172a; display:flex; align-items:center; gap:8px;">👀 Vista Previa del Reporte</h3>
+                                    <button onclick="document.getElementById('modal-preview-reporte').style.display='none'" style="border:none; background:#e2e8f0; width:30px; height:30px; border-radius:50%; cursor:pointer; font-weight:bold; color:#475569; display:flex; align-items:center; justify-content:center;">✕</button>
+                                </div>
+                                
+                                <div id="contenedor-html-copiar" style="padding:20px; overflow-y:auto; flex:1; background:white;">
+                                    ${htmlContent}
+                                </div>
+                                
+                                <div style="padding:15px 20px; border-top:1px solid #e2e8f0; background:#f8fafc; display:flex; justify-content:flex-end; gap:10px;">
+                                    <button onclick="document.getElementById('modal-preview-reporte').style.display='none'" style="padding:10px 20px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; color:#475569; background:#e2e8f0;">Cancelar</button>
+                                    <button id="btn-ejecutar-copia" style="padding:10px 25px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; color:white; background:#0ea5e9; box-shadow:0 4px 6px rgba(14,165,233,0.2); font-size:1.05rem;">📋 COPIAR AL PORTAPAPELES</button>
+                                </div>
+                            </div>
+                        `;
+
+                        modalPrevio.style.display = 'flex';
+
+                        // Lógica del botón síncrono (Esto burla el bloqueo de seguridad)
+                        document.getElementById('btn-ejecutar-copia').onclick = function() {
+                            const contenido = document.getElementById('contenedor-html-copiar');
+                            const btnCopia = this;
+                            
+                            try {
+                                // Método clásico y seguro
+                                const selection = window.getSelection();
+                                const range = document.createRange();
+                                range.selectNodeContents(contenido);
+                                selection.removeAllRanges();
+                                selection.addRange(range);
+                                
+                                document.execCommand('copy');
+                                selection.removeAllRanges();
+                                
+                                btnCopia.innerHTML = '✅ ¡TABLA COPIADA!';
+                                btnCopia.style.background = '#16a34a';
+                                
+                                setTimeout(() => {
+                                    document.getElementById('modal-preview-reporte').style.display = 'none';
+                                }, 1500);
+                                
+                            } catch (e) {
+                                alert("Por favor, selecciona la tabla con tu dedo o ratón y presiona 'Copiar'.");
+                            }
+                        };
+
+                        if(btn) btn.innerHTML = txtOriginal;
+
+                    } catch (error) {
+                        console.error("Error al generar el reporte:", error);
+                        alert("Ocurrió un error al cargar los datos de la base de datos.");
+                        if(btn) btn.innerHTML = txtOriginal;
+                    }
+                };
+
+        window.abrirStatsRefacciones = async () => {
+            const modalSolicitud = document.getElementById('modal-refacciones');
+            if (modalSolicitud) modalSolicitud.style.display = 'none';
+            
+            const container = document.getElementById('lista-refacciones-container');
+            const totalDiv = document.getElementById('stats-refacciones-total');
+            const sinAtenderDiv = document.getElementById('stats-refacciones-sin-atender');
+            const enCaminoDiv = document.getElementById('stats-refacciones-en-camino');
+            const entregadasDiv = document.getElementById('stats-refacciones-entregadas');
+            const btnConfig = document.getElementById('btn-config-refacciones');
+            
+            container.innerHTML = '<div style="text-align:center; color:#64748b; padding:20px;">Cargando datos desde el servidor...</div>';
+            
+            if(totalDiv) totalDiv.innerText = "...";
+            if(sinAtenderDiv) sinAtenderDiv.innerText = "-";
+            if(enCaminoDiv) enCaminoDiv.innerText = "-";
+            if(entregadasDiv) entregadasDiv.innerText = "-";
+
+            if (window.modoAdminActivo) {
+                btnConfig.style.display = 'flex';
+            } else {
+                btnConfig.style.display = 'none';
+            }
+
+            let rolesAutorizados = [];
+            try {
+                const { data: cfg } = await sb.from('system_config').select('texto').eq('key', 'roles_refacciones');
+                if (cfg && cfg.length > 0 && cfg[0].texto) {
+                    rolesAutorizados = JSON.parse(cfg[0].texto).map(r => r.toUpperCase().trim());
+                }
+            } catch(e) {}
+
+            const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+            const loggedUserId = userLog ? String(userLog.id) : null;
+            const loggedUserPuesto = userLog ? (userLog.puesto || '').toUpperCase().trim() : '';
+
+            window.puedeVerTodoRefacciones = window.modoAdminActivo || rolesAutorizados.includes(loggedUserPuesto);
+
+            try {
+                let query = sb.from('refacciones').select('*, equipos(nombre, id_interno, plantas(nombre), lineas(nombre))').order('created_at', { ascending: false });
+
+                            const { data, error } = await query;
+                                if (error) throw error;
+
+                                window.refaccionesDataCache = data;
+                                
+                                // NUEVO: Memorizamos el estado actual de los filtros antes de reconstruirlos
+                                const selFiltro = document.getElementById('sel-filtro-refacciones');
+                                const valFiltro = selFiltro ? selFiltro.value : 'Todas';
+                                
+                                const selLinea = document.getElementById('sel-filtro-linea');
+                                const valLinea = selLinea ? selLinea.value : 'Todos';
+                                
+                                const selEquipo = document.getElementById('sel-filtro-equipo');
+                                const valEquipo = selEquipo ? selEquipo.value : 'Todos';
+                                
+                                const selAtendedor = document.getElementById('sel-filtro-atendedor');
+                                const valAtendedor = selAtendedor ? selAtendedor.value : 'Todos';
+                                
+                                const selGrupo = document.getElementById('sel-filtro-grupo');
+                                const valGrupo = selGrupo ? selGrupo.value : 'Todos';
+
+                                // Restauramos el filtro principal
+                                if (selFiltro && !window.filtroInicializado) {
+                                    selFiltro.value = 'Todas';
+                                    window.filtroInicializado = true;
+                                } else if (selFiltro) {
+                                    selFiltro.value = valFiltro;
+                                }
+                                
+                                // Renderizamos las pastillas de líneas para los filtros
+                                                                window.renderizarFiltroLineas();
+
+                                                                window.renderizarFiltroEquipos();
+
+                                // Reconstruimos y restauramos: Atendedor
+                                if (selAtendedor) {
+                                    const atendedoresUnicos = new Set();
+                                    data.forEach(req => {
+                                        if (req.atendido_por_id) {
+                                            let nombre = "Usuario Desconocido";
+                                            if (window.todosLosEmpleadosData) {
+                                                const emp = window.todosLosEmpleadosData.find(e => String(e.id) === String(req.atendido_por_id));
+                                                if (emp) nombre = emp.name;
+                                            }
+                                            atendedoresUnicos.add(nombre);
+                                        }
+                                    });
+                                    
+                                    let opcionesAtendedorHTML = '<option value="Todos">🧑‍🔧 Todo el Personal</option>';
+                                    [...atendedoresUnicos].sort().forEach(nombre => opcionesAtendedorHTML += `<option value="${nombre}">${nombre}</option>`);
+                                    opcionesAtendedorHTML += `<option value="SinAsignar">⏳ Sin Asignar</option>`;
+                                    selAtendedor.innerHTML = opcionesAtendedorHTML;
+                                    selAtendedor.value = Array.from(selAtendedor.options).some(opt => opt.value === valAtendedor) ? valAtendedor : 'Todos';
+                                }
+
+                                // Renderizamos las pastillas de etiquetas para los filtros
+                                                                window.renderizarFiltroEtiquetas();
+                                                                    
+                                                                window.aplicarFiltroRefacciones();
+
+                                } catch (error) {
+                console.error("Error al cargar stats de refacciones:", error);
+                container.innerHTML = '<div style="color:#ef4444; text-align:center; padding:20px;">Hubo un error al cargar los datos.</div>';
+            }
+        };
+
+        window.abrirDetalleIndicador = (tipo) => {
+                    // Usamos la variable de los filtros (si existe), o el caché completo
+                    const dataBase = window.refaccionesFiltradasCache || window.refaccionesDataCache || [];
+                    
+                    if (dataBase.length === 0) {
+                        alert("No hay datos cargados para analizar.");
+                        return;
+                    }
+
+                    let dataObjetivo = [];
+                    let titulo = "";
+                    let icono = "";
+                    let agruparPor = ""; // 'personal', 'prioridad', o 'estado'
+
+                    // Determinar qué datos analizar según el botón presionado
+                    if (tipo === 'Total') {
+                        dataObjetivo = dataBase;
+                        titulo = "Distribución del Total";
+                        icono = "📊";
+                        agruparPor = 'estado';
+                    } else if (tipo === 'SinAtender') {
+                        dataObjetivo = dataBase.filter(r => r.estado === 'Pendiente' && !r.atendido_por_id);
+                        titulo = "Sin Atender (Por Prioridad)";
+                        icono = "🚨";
+                        agruparPor = 'prioridad';
+                    } else if (tipo === 'EnCamino') {
+                        dataObjetivo = dataBase.filter(r => r.estado === 'Pendiente' && r.atendido_por_id && r.fecha_estimada);
+                        titulo = "En Camino (Carga por Personal)";
+                        icono = "🚚";
+                        agruparPor = 'personal';
+                    } else if (tipo === 'Asignadas') {
+                        dataObjetivo = dataBase.filter(r => r.estado === 'Pendiente' && r.atendido_por_id && !r.fecha_estimada);
+                        titulo = "Asignadas / Revisando (Por Personal)";
+                        icono = "🧑‍🔧";
+                        agruparPor = 'personal';
+                    } else if (tipo === 'Entregadas') {
+                                            dataObjetivo = dataBase.filter(r => r.estado === 'Entregada' || r.estado === 'Recibida');
+                                            titulo = "Entregadas / Cerradas (Carga por Personal)";
+                                            icono = "✅";
+                                            agruparPor = 'personal';
+                                        }
+
+                    const contenedor = document.getElementById('contenido-modal-indicador');
+                    document.getElementById('titulo-modal-indicador').innerHTML = `${icono} ${titulo}`;
+
+                    if (dataObjetivo.length === 0) {
+                        contenedor.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b; font-style:italic;">No hay registros en esta categoría.</div>';
+                        document.getElementById('modal-detalle-indicadores').style.display = 'flex';
+                        return;
+                    }
+
+                    // Función auxiliar para buscar el nombre
+                    const obtenerNombrePersonal = (id) => {
+                        if (!id) return "Sin Asignar";
+                        if (window.todosLosEmpleadosData) {
+                            const emp = window.todosLosEmpleadosData.find(e => String(e.id) === String(id));
+                            if (emp) return emp.name;
+                        }
+                        return "Usuario Desconocido";
+                    };
+
+                    // Contar las ocurrencias
+                    const conteo = {};
+                    dataObjetivo.forEach(req => {
+                        let clave = "Desconocido";
+                        if (agruparPor === 'estado') clave = req.estado || 'Pendiente';
+                        else if (agruparPor === 'prioridad') clave = req.prioridad || 'Normal';
+                        else if (agruparPor === 'personal') clave = obtenerNombrePersonal(req.atendido_por_id);
+                        
+                        conteo[clave] = (conteo[clave] || 0) + 1;
+                    });
+
+                    // Generar el HTML ordenado de mayor a menor
+                    const totalElementos = dataObjetivo.length;
+                    const clavesOrdenadas = Object.keys(conteo).sort((a, b) => conteo[b] - conteo[a]);
+
+                    let htmlList = `<div style="display:flex; flex-direction:column; gap:10px;">
+                                    <div style="font-size:0.8rem; color:#64748b; margin-bottom:5px;">Total en esta categoría: <b>${totalElementos} solicitudes</b></div>`;
+
+                    clavesOrdenadas.forEach(clave => {
+                        const cantidad = conteo[clave];
+                        const porcentaje = Math.round((cantidad / totalElementos) * 100);
+                        
+                        // Darle un toque visual diferente a los nombres vs prioridades
+                        let colorBarra = '#0ea5e9';
+                        let colorFondoBarra = '#e0f2fe';
+                        
+                        if (clave === 'Urgente' || clave === 'Cancelada') { colorBarra = '#ef4444'; colorFondoBarra = '#fee2e2'; }
+                        if (clave === 'Alta') { colorBarra = '#f59e0b'; colorFondoBarra = '#fef3c7'; }
+                        if (clave === 'Entregada') { colorBarra = '#22c55e'; colorFondoBarra = '#dcfce3'; }
+
+                        let avatarImgHtml = '';
+                                                // Solo buscamos foto si el agrupador es por "personal"
+                                                if (agruparPor === 'personal' && clave !== 'Sin Asignar' && clave !== 'Usuario Desconocido' && window.todosLosEmpleadosData) {
+                                                    const emp = window.todosLosEmpleadosData.find(e => e.name === clave);
+                                                    if (emp) {
+                                                        if (emp.avatar) {
+                                                            const safeUrl = window.procesarUrlImagen ? window.procesarUrlImagen(emp.avatar) : emp.avatar;
+                                                            avatarImgHtml = `<img src="${safeUrl}" style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid #bae6fd; flex-shrink:0;">`;
+                                                        } else {
+                                                            avatarImgHtml = `<div style="width:24px; height:24px; border-radius:50%; background:#e0f2fe; color:#0284c7; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:bold; border:1px solid #bae6fd; flex-shrink:0;">${clave.charAt(0).toUpperCase()}</div>`;
+                                                        }
+                                                    }
+                                                }
+
+                                                htmlList += `
+                                                    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; position:relative; overflow:hidden;">
+                                                        <div style="position:absolute; left:0; top:0; bottom:0; width:${porcentaje}%; background:${colorFondoBarra}; opacity:0.5; z-index:1;"></div>
+                                                        
+                                                        <div style="position:relative; z-index:2; display:flex; justify-content:space-between; align-items:center;">
+                                                                                            <div style="font-weight:600; color:#1e293b; font-size:0.9rem; display:flex; align-items:center; gap:8px;">
+                                                                                                ${avatarImgHtml}
+                                                                                                ${clave}
+                                                                                            </div>
+                                                                                            <div style="display:flex; align-items:center;">
+                                                                                                <span style="font-size:0.9rem; background:white; color:${colorBarra}; border:1px solid ${colorBarra}; padding:4px 10px; border-radius:12px; font-weight:800; box-shadow:0 1px 2px rgba(0,0,0,0.05);">${porcentaje}%</span>
+                                                                                            </div>
+                                                                                        </div>
+                            </div>
+                        `;
+                    });
+
+                    htmlList += `</div>`;
+                                        contenedor.innerHTML = htmlList;
+
+                                        // Mostrar el modal
+                                        document.getElementById('modal-detalle-indicadores').style.display = 'flex';
+                                    };
+
+                            // ==========================================
+                            // NUEVO: LÓGICA DE PASTILLAS PARA EL FILTRO
+                            // ==========================================
+                            window.etiquetaFiltroSeleccionada = 'Todos';
+
+                            window.renderizarFiltroEtiquetas = () => {
+                                const container = document.getElementById('contenedor-filtros-etiquetas');
+                                if (!container) return;
+                                
+                                const gruposSet = new Set();
+                                
+                                // 1. Calculamos las estadísticas de progreso (Entregadas / Total)
+                                const stats = {
+                                    'Todos': { total: 0, entregadas: 0 },
+                                    'SinGrupo': { total: 0, entregadas: 0 }
+                                };
+
+                                if (window.refaccionesDataCache) {
+                                    window.refaccionesDataCache.forEach(req => {
+                                        // --- INICIO FILTRO EN CASCADA ---
+                                        // A) Filtro por Líneas
+                                        if (window.lineasFiltroSeleccionadas && window.lineasFiltroSeleccionadas.size > 0) {
+                                            const nombreLinea = (req.equipos && req.equipos.lineas) ? req.equipos.lineas.nombre : 'Otros / Sin Línea';
+                                            if (!window.lineasFiltroSeleccionadas.has(nombreLinea)) return;
+                                        }
+                                        
+                                        // B) Filtro por Equipos
+                                        if (window.equiposFiltroSeleccionados && window.equiposFiltroSeleccionados.size > 0) {
+                                            const nombreEquipo = (req.equipos && req.equipos.nombre) ? String(req.equipos.nombre) : 'S/E';
+                                            if (!window.equiposFiltroSeleccionados.has(nombreEquipo)) return;
+                                        }
+                                        // --- FIN FILTRO EN CASCADA ---
+
+                                        const esEntregada = (req.estado === 'Entregada' || req.estado === 'Recibida');
+                                        
+                                        stats['Todos'].total++;
+                                        if (esEntregada) stats['Todos'].entregadas++;
+
+                                        if (req.grupo && req.grupo.trim() !== '') {
+                                            req.grupo.split(',').forEach(g => {
+                                                const tag = g.trim();
+                                                if (tag) {
+                                                    gruposSet.add(tag);
+                                                    if (!stats[tag]) stats[tag] = { total: 0, entregadas: 0 };
+                                                    stats[tag].total++;
+                                                    if (esEntregada) stats[tag].entregadas++;
+                                                }
+                                            });
+                                        } else {
+                                            stats['SinGrupo'].total++;
+                                            if (esEntregada) stats['SinGrupo'].entregadas++;
+                                        }
+                                    });
+                                }
+
+                                // Limpieza automática: Si teníamos una etiqueta seleccionada pero cambiamos de línea/equipo y ya no existe, la quitamos
+                                if (window.etiquetaFiltroSeleccionada !== 'Todos' && window.etiquetaFiltroSeleccionada !== 'SinGrupo') {
+                                    if (!gruposSet.has(window.etiquetaFiltroSeleccionada)) {
+                                        window.etiquetaFiltroSeleccionada = 'Todos';
+                                    }
+                                }
+                                
+                                // Función auxiliar para sacar el porcentaje
+                                const calcPct = (clave) => {
+                                    if (!stats[clave] || stats[clave].total === 0) return 0;
+                                    return Math.round((stats[clave].entregadas / stats[clave].total) * 100);
+                                };
+                                
+                                let html = '';
+                                
+                                // 2. Pastilla "Todas"
+                                const esTodas = window.etiquetaFiltroSeleccionada === 'Todos';
+                                const pctTodas = calcPct('Todos');
+                                const bgTodas = esTodas
+                                    ? `linear-gradient(to right, #10b981 ${pctTodas}%, #0ea5e9 ${pctTodas}%)`
+                                    : `linear-gradient(to right, #d1fae5 ${pctTodas}%, #f8fafc ${pctTodas}%)`;
+                                const borderTodas = esTodas ? '#0ea5e9' : (pctTodas > 0 ? '#a7f3d0' : '#cbd5e1');
+                                
+                                html += `<span onclick="window.seleccionarFiltroEtiqueta('Todos')" style="background:${bgTodas}; color:${esTodas ? 'white' : '#64748b'}; padding:6px 12px; border-radius:16px; font-size:0.8rem; font-weight:bold; cursor:pointer; border:1px solid ${borderTodas}; transition:all 0.2s; user-select:none; display:flex; align-items:center; gap:4px;">🏷️ Todas <span style="font-size:0.7rem; opacity:0.8;">${pctTodas}%</span></span>`;
+                                
+                                // 3. Pastillas de Etiquetas Individuales
+                                Array.from(gruposSet).sort().forEach(tag => {
+                                    const isSelected = window.etiquetaFiltroSeleccionada === tag;
+                                    const pct = calcPct(tag);
+                                    const tagSeguro = tag.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                                    
+                                    const bgTag = isSelected
+                                        ? `linear-gradient(to right, #10b981 ${pct}%, #7c3aed ${pct}%)`
+                                        : `linear-gradient(to right, #d1fae5 ${pct}%, #f8fafc ${pct}%)`;
+                                    const borderTag = isSelected ? '#7c3aed' : (pct > 0 ? '#a7f3d0' : '#cbd5e1');
+                                    
+                                    html += `<span onclick="window.seleccionarFiltroEtiqueta('${tagSeguro}')" style="background:${bgTag}; color:${isSelected ? 'white' : '#64748b'}; padding:6px 12px; border-radius:16px; font-size:0.8rem; font-weight:bold; cursor:pointer; border:1px solid ${borderTag}; transition:all 0.2s; user-select:none; display:flex; align-items:center; gap:4px;">#${tag} <span style="font-size:0.7rem; opacity:0.8;">${pct}%</span> <span onclick="event.stopPropagation(); window.editarNombreEtiqueta('${tagSeguro}')" style="margin-left:2px; opacity:0.7; font-size:0.85rem;" title="Editar etiqueta">✏️</span></span>`;
+                                });
+                                
+                                // 4. Pastilla "Sin Etiqueta"
+                                const esSinGrupo = window.etiquetaFiltroSeleccionada === 'SinGrupo';
+                                const pctSin = calcPct('SinGrupo');
+                                const bgSin = esSinGrupo
+                                    ? `linear-gradient(to right, #10b981 ${pctSin}%, #ef4444 ${pctSin}%)`
+                                    : `linear-gradient(to right, #d1fae5 ${pctSin}%, #f8fafc ${pctSin}%)`;
+                                const borderSin = esSinGrupo ? '#ef4444' : (pctSin > 0 ? '#a7f3d0' : '#cbd5e1');
+                                    
+                                html += `<span onclick="window.seleccionarFiltroEtiqueta('SinGrupo')" style="background:${bgSin}; color:${esSinGrupo ? 'white' : '#64748b'}; padding:6px 12px; border-radius:16px; font-size:0.8rem; font-weight:bold; cursor:pointer; border:1px solid ${borderSin}; transition:all 0.2s; user-select:none; display:flex; align-items:center; gap:4px;">🚫 Sin Etiqueta <span style="font-size:0.7rem; opacity:0.8;">${pctSin}%</span></span>`;
+                                
+                                container.innerHTML = html;
+                            };
+
+                                                window.seleccionarFiltroEtiqueta = (tag) => {
+                                                    window.etiquetaFiltroSeleccionada = tag;
+                                                    window.renderizarFiltroEtiquetas();
+                                                    window.aplicarFiltroRefacciones();
+                                                };
+        
+        window.editarNombreEtiqueta = async (tagAntiguo) => {
+            const tagNuevo = prompt(`Ingresa el nuevo nombre para la etiqueta #${tagAntiguo}:\n(Esto actualizará todas las solicitudes que la tengan en el historial)`, tagAntiguo);
+            
+            if (!tagNuevo || tagNuevo.trim() === "" || tagNuevo.trim() === tagAntiguo) return;
+            
+            const nuevoTexto = tagNuevo.trim();
+            
+            if (!confirm(`⚠️ ¿Estás seguro de renombrar #${tagAntiguo} a #${nuevoTexto}? Se actualizarán todas las solicitudes asociadas.`)) return;
+
+            try {
+                // Encontrar todas las solicitudes locales que contienen la etiqueta vieja
+                const solicitudesAActualizar = window.refaccionesDataCache.filter(r => {
+                    if (!r.grupo) return false;
+                    const etiquetas = r.grupo.split(',').map(e => e.trim());
+                    return etiquetas.includes(tagAntiguo);
+                });
+                
+                if (solicitudesAActualizar.length === 0) return;
+                
+                // Iteramos y actualizamos en la base de datos una por una
+                for (let req of solicitudesAActualizar) {
+                    let etiquetas = req.grupo.split(',').map(e => e.trim());
+                    etiquetas = etiquetas.map(e => e === tagAntiguo ? nuevoTexto : e);
+                    const nuevoGrupo = etiquetas.filter(e => e !== '').join(', ');
+                    
+                    const { error } = await sb.from('refacciones').update({ grupo: nuevoGrupo }).eq('id', req.id);
+                    if (error) throw error;
+                    
+                    // Actualizar la caché local para no tener que recargar toda la base de datos
+                    req.grupo = nuevoGrupo;
+                }
+                
+                // Si teníamos seleccionado este filtro, lo movemos al nuevo nombre
+                if (window.etiquetaFiltroSeleccionada === tagAntiguo) {
+                    window.etiquetaFiltroSeleccionada = nuevoTexto;
+                }
+                
+                alert(`✅ Etiqueta #${nuevoTexto} actualizada correctamente.`);
+                window.renderizarFiltroEtiquetas();
+                window.aplicarFiltroRefacciones();
+                
+            } catch (error) {
+                console.error("Error al renombrar etiqueta:", error);
+                alert("Ocurrió un error al actualizar las etiquetas en el servidor.");
+            }
+        };
+
+        window.lineasFiltroSeleccionadas = new Set();
+
+        window.renderizarFiltroLineas = () => {
+            const container = document.getElementById('contenedor-filtros-lineas');
+            if (!container) return;
+            
+            const lineasSet = new Set();
+            const stats = {
+                'Todos': { total: 0, entregadas: 0 }
+            };
+
+            if (window.refaccionesDataCache) {
+                window.refaccionesDataCache.forEach(req => {
+                    const esEntregada = (req.estado === 'Entregada' || req.estado === 'Recibida');
+                    const lineaNom = (req.equipos && req.equipos.lineas) ? req.equipos.lineas.nombre : 'Otros / Sin Línea';
+                    
+                    stats['Todos'].total++;
+                    if (esEntregada) stats['Todos'].entregadas++;
+
+                    lineasSet.add(lineaNom);
+                    if (!stats[lineaNom]) stats[lineaNom] = { total: 0, entregadas: 0 };
+                    stats[lineaNom].total++;
+                    if (esEntregada) stats[lineaNom].entregadas++;
+                });
+            }
+            
+            const calcPct = (clave) => {
+                if (!stats[clave] || stats[clave].total === 0) return 0;
+                return Math.round((stats[clave].entregadas / stats[clave].total) * 100);
+            };
+            
+            let html = '';
+            
+            const esTodas = window.lineasFiltroSeleccionadas.size === 0;
+            const pctTodas = calcPct('Todos');
+            const bgTodas = esTodas
+                ? `linear-gradient(to right, #10b981 ${pctTodas}%, #f59e0b ${pctTodas}%)`
+                : `linear-gradient(to right, #d1fae5 ${pctTodas}%, #f8fafc ${pctTodas}%)`;
+            const borderTodas = esTodas ? '#f59e0b' : (pctTodas > 0 ? '#a7f3d0' : '#cbd5e1');
+            
+            html += `<span onclick="window.seleccionarFiltroLinea('Todos')" style="background:${bgTodas}; color:${esTodas ? 'white' : '#64748b'}; padding:6px 12px; border-radius:16px; font-size:0.8rem; font-weight:bold; cursor:pointer; border:1px solid ${borderTodas}; transition:all 0.2s; user-select:none; display:flex; align-items:center; gap:4px;">⚙️ Todas las Líneas <span style="font-size:0.7rem; opacity:0.8;">${pctTodas}%</span></span>`;
+            
+            Array.from(lineasSet).sort().forEach(linea => {
+                const isSelected = window.lineasFiltroSeleccionadas.has(linea);
+                const pct = calcPct(linea);
+                const lineaSegura = linea.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
+                const bgLinea = isSelected
+                    ? `linear-gradient(to right, #10b981 ${pct}%, #f59e0b ${pct}%)`
+                    : `linear-gradient(to right, #d1fae5 ${pct}%, #f8fafc ${pct}%)`;
+                const borderLinea = isSelected ? '#f59e0b' : (pct > 0 ? '#a7f3d0' : '#cbd5e1');
+                
+                html += `<span onclick="window.seleccionarFiltroLinea('${lineaSegura}')" style="background:${bgLinea}; color:${isSelected ? 'white' : '#64748b'}; padding:6px 12px; border-radius:16px; font-size:0.8rem; font-weight:bold; cursor:pointer; border:1px solid ${borderLinea}; transition:all 0.2s; user-select:none; display:flex; align-items:center; gap:4px;">${linea} ${isSelected ? '✕ ' : ''}<span style="font-size:0.7rem; opacity:0.8;">${pct}%</span></span>`;
+            });
+            
+            container.innerHTML = html;
+        };
+
+        window.seleccionarFiltroLinea = (linea) => {
+            if (linea === 'Todos') {
+                window.lineasFiltroSeleccionadas.clear();
+            } else {
+                if (window.lineasFiltroSeleccionadas.has(linea)) {
+                    window.lineasFiltroSeleccionadas.delete(linea);
+                } else {
+                    window.lineasFiltroSeleccionadas.add(linea);
+                }
+            }
+            window.renderizarFiltroLineas();
+            window.renderizarFiltroEquipos();
+            window.renderizarFiltroEtiquetas(); // <-- ESTA LÍNEA ES NUEVA
+            window.aplicarFiltroRefacciones();
+        };
+        
+        window.equiposFiltroSeleccionados = new Set();
+
+        window.renderizarFiltroEquipos = () => {
+            const container = document.getElementById('contenedor-filtros-equipos');
+            if (!container) return;
+            
+            const equiposSet = new Set();
+            const stats = {
+                'Todos': { total: 0, entregadas: 0 }
+            };
+
+            if (window.refaccionesDataCache) {
+                window.refaccionesDataCache.forEach(req => {
+                    // Filtro en cascada: Si hay líneas seleccionadas, ignoramos los equipos que no pertenezcan a ellas
+                    if (window.lineasFiltroSeleccionadas && window.lineasFiltroSeleccionadas.size > 0) {
+                        const nombreLinea = (req.equipos && req.equipos.lineas) ? req.equipos.lineas.nombre : 'Otros / Sin Línea';
+                        if (!window.lineasFiltroSeleccionadas.has(nombreLinea)) return;
+                    }
+
+                    const esEntregada = (req.estado === 'Entregada' || req.estado === 'Recibida');
+                                        let equipoNom = 'S/E';
+                                        if (req.equipos && req.equipos.nombre) {
+                                            equipoNom = req.equipos.id_interno ? `[${req.equipos.id_interno}] ${req.equipos.nombre}` : String(req.equipos.nombre);
+                                        }
+                                        
+                                        stats['Todos'].total++;
+                    if (esEntregada) stats['Todos'].entregadas++;
+
+                    equiposSet.add(equipoNom);
+                    if (!stats[equipoNom]) stats[equipoNom] = { total: 0, entregadas: 0 };
+                    stats[equipoNom].total++;
+                    if (esEntregada) stats[equipoNom].entregadas++;
+                });
+            }
+
+            // Limpieza automática: Si teníamos un equipo seleccionado pero cambiamos de línea y ya no existe, lo quitamos
+            if (window.equiposFiltroSeleccionados && window.equiposFiltroSeleccionados.size > 0) {
+                Array.from(window.equiposFiltroSeleccionados).forEach(eq => {
+                    if (!equiposSet.has(eq)) {
+                        window.equiposFiltroSeleccionados.delete(eq);
+                    }
+                });
+            }
+            
+            const calcPct = (clave) => {
+                if (!stats[clave] || stats[clave].total === 0) return 0;
+                return Math.round((stats[clave].entregadas / stats[clave].total) * 100);
+            };
+            
+            let html = '';
+            
+            const esTodas = window.equiposFiltroSeleccionados.size === 0;
+            const pctTodas = calcPct('Todos');
+            const bgTodas = esTodas
+                ? `linear-gradient(to right, #10b981 ${pctTodas}%, #0284c7 ${pctTodas}%)`
+                : `linear-gradient(to right, #d1fae5 ${pctTodas}%, #f8fafc ${pctTodas}%)`;
+            const borderTodas = esTodas ? '#0284c7' : (pctTodas > 0 ? '#a7f3d0' : '#cbd5e1');
+            
+            html += `<span onclick="window.seleccionarFiltroEquipo('Todos')" style="background:${bgTodas}; color:${esTodas ? 'white' : '#64748b'}; padding:6px 12px; border-radius:16px; font-size:0.8rem; font-weight:bold; cursor:pointer; border:1px solid ${borderTodas}; transition:all 0.2s; user-select:none; display:flex; align-items:center; gap:4px;">🏭 Todos los Equipos <span style="font-size:0.7rem; opacity:0.8;">${pctTodas}%</span></span>`;
+            
+            Array.from(equiposSet).sort().forEach(equipo => {
+                const isSelected = window.equiposFiltroSeleccionados.has(equipo);
+                const pct = calcPct(equipo);
+                const equipoSeguro = equipo.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                
+                const bgEquipo = isSelected
+                    ? `linear-gradient(to right, #10b981 ${pct}%, #0284c7 ${pct}%)`
+                    : `linear-gradient(to right, #d1fae5 ${pct}%, #f8fafc ${pct}%)`;
+                const borderEquipo = isSelected ? '#0284c7' : (pct > 0 ? '#a7f3d0' : '#cbd5e1');
+                
+                let btnEditar = '';
+                if (equipo !== 'S/E') {
+                    btnEditar = `<span onclick="event.stopPropagation(); window.editarNombreEquipo('${equipoSeguro}')" style="margin-left:2px; opacity:0.7; font-size:0.85rem;" title="Editar equipo">✏️</span>`;
+                }
+                
+                html += `<span onclick="window.seleccionarFiltroEquipo('${equipoSeguro}')" style="background:${bgEquipo}; color:${isSelected ? 'white' : '#64748b'}; padding:6px 12px; border-radius:16px; font-size:0.8rem; font-weight:bold; cursor:pointer; border:1px solid ${borderEquipo}; transition:all 0.2s; user-select:none; display:flex; align-items:center; gap:4px;">${equipo} ${isSelected ? '✕ ' : ''}<span style="font-size:0.7rem; opacity:0.8;">${pct}%</span>${btnEditar}</span>`;
+            });
+            
+            container.innerHTML = html;
+        };
+
+        window.seleccionarFiltroEquipo = (equipo) => {
+            if (equipo === 'Todos') {
+                window.equiposFiltroSeleccionados.clear();
+            } else {
+                if (window.equiposFiltroSeleccionados.has(equipo)) {
+                    window.equiposFiltroSeleccionados.delete(equipo);
+                } else {
+                    window.equiposFiltroSeleccionados.add(equipo);
+                }
+            }
+            window.renderizarFiltroEquipos();
+            window.renderizarFiltroEtiquetas(); // <-- ESTA LÍNEA ES NUEVA
+            window.aplicarFiltroRefacciones();
+        };
+        
+        // 1. Abre el modal y carga los datos actuales
+        window.editarNombreEquipo = (equipoAntiguoGrd) => {
+            // 1. Decodificar entidades HTML de forma segura (ej. &quot; -> ")
+            const decodificarHTML = (html) => {
+                const txt = document.createElement("textarea");
+                txt.innerHTML = html;
+                return txt.value;
+            };
+            const nombreRealBuscado = decodificarHTML(equipoAntiguoGrd);
+
+            let nombreReal = nombreRealBuscado;
+            let idInternoReal = "";
+            let idsUnicos = [];
+
+            // Buscar la información desglosada en la caché local
+            if (window.refaccionesDataCache) {
+                const solicitudesMatch = window.refaccionesDataCache.filter(r => {
+                    if (!r.equipos || !r.equipos.nombre) return false;
+                    const eqNom = r.equipos.id_interno ? `[${r.equipos.id_interno}] ${r.equipos.nombre}` : String(r.equipos.nombre);
+                    return eqNom === nombreRealBuscado;
+                });
+
+                if (solicitudesMatch.length > 0) {
+                    nombreReal = solicitudesMatch[0].equipos.nombre;
+                    idInternoReal = solicitudesMatch[0].equipos.id_interno || "";
+                    // Filtramos nulos o undefined por seguridad
+                    idsUnicos = [...new Set(solicitudesMatch.map(r => r.equipo_id).filter(id => id != null))];
+                } else if (window.equiposRefaccionesCache) {
+                    // Fallback: buscar en el caché general
+                    const eqCatalog = window.equiposRefaccionesCache.find(e => {
+                        const nomCat = e.id_interno ? `[${e.id_interno}] ${e.nombre}` : String(e.nombre);
+                        return nomCat === nombreRealBuscado;
+                    });
+                    if (eqCatalog) {
+                        nombreReal = eqCatalog.nombre;
+                        idInternoReal = eqCatalog.id_interno || "";
+                        if (eqCatalog.id) idsUnicos.push(eqCatalog.id);
+                    }
+                }
+            }
+
+            if (idsUnicos.length === 0) {
+                alert("No se encontró la referencia en el sistema para actualizar este equipo. (IDs no encontrados)");
+                return;
+            }
+
+            // Llenar los campos del modal
+            document.getElementById('edit-filtro-equipo-original').value = nombreRealBuscado;
+            document.getElementById('edit-filtro-ids-unicos').value = JSON.stringify(idsUnicos);
+            document.getElementById('edit-filtro-nombre').value = nombreReal;
+            document.getElementById('edit-filtro-id-interno').value = idInternoReal;
+
+            // Mostrar el panel
+            document.getElementById('modal-editar-equipo-filtro').style.display = 'flex';
+        };
+
+                // 2. Procesa la actualización en Supabase
+                window.guardarEdicionEquipoFiltro = async () => {
+                    const equipoAntiguoGrd = document.getElementById('edit-filtro-equipo-original').value;
+                    const idsUnicos = JSON.parse(document.getElementById('edit-filtro-ids-unicos').value);
+                    
+                    const equipoNuevoNombre = document.getElementById('edit-filtro-nombre').value.trim();
+                    const textoId = document.getElementById('edit-filtro-id-interno').value.trim();
+                    const equipoNuevoId = textoId === "" ? null : textoId;
+
+                    if (!equipoNuevoNombre) {
+                        alert("El nombre del equipo no puede estar vacío.");
+                        return;
+                    }
+
+                    const btn = document.getElementById('btn-guardar-edicion-filtro');
+                    const txtOriginal = btn.innerText;
+                    btn.innerText = "Guardando...";
+                    btn.disabled = true;
+
+                    try {
+                        // Actualizar en la base de datos (forzamos Number para la columna id)
+                        for (let idEq of idsUnicos) {
+                            const { error } = await sb.from('equipos').update({
+                                nombre: equipoNuevoNombre,
+                                id_interno: equipoNuevoId
+                            }).eq('id', Number(idEq));
+                            
+                            if (error) throw error;
+                        }
+                        
+                        const nuevoEquipoNomGrd = equipoNuevoId ? `[${equipoNuevoId}] ${equipoNuevoNombre}` : equipoNuevoNombre;
+
+                        // Actualizar la caché local para no recargar la página forzando String()
+                        if (window.refaccionesDataCache) {
+                            window.refaccionesDataCache.forEach(req => {
+                                if (req.equipos && idsUnicos.some(id => String(id) === String(req.equipo_id))) {
+                                    req.equipos.nombre = equipoNuevoNombre;
+                                    req.equipos.id_interno = equipoNuevoId;
+                                }
+                            });
+                        }
+
+                        if (window.equiposRefaccionesCache) {
+                            window.equiposRefaccionesCache.forEach(eq => {
+                                if (idsUnicos.some(id => String(id) === String(eq.id))) {
+                                    eq.nombre = equipoNuevoNombre;
+                                    eq.id_interno = equipoNuevoId;
+                                }
+                            });
+                        }
+                        
+                        // Mover la selección del filtro si estaba activa
+                        if (window.equiposFiltroSeleccionados && window.equiposFiltroSeleccionados.has(equipoAntiguoGrd)) {
+                            window.equiposFiltroSeleccionados.delete(equipoAntiguoGrd);
+                            window.equiposFiltroSeleccionados.add(nuevoEquipoNomGrd);
+                        }
+                        
+                        document.getElementById('modal-editar-equipo-filtro').style.display = 'none';
+                        
+                        // Renderizar los cambios visualmente
+                        window.renderizarFiltroEquipos();
+                        window.aplicarFiltroRefacciones();
+                        
+                        // Confirmación visual
+                        alert("✅ Equipo actualizado correctamente.");
+                        
+                    } catch (error) {
+                        console.error("Error al editar equipo:", error);
+                        alert("Ocurrió un error de red al intentar actualizar el equipo.");
+                    } finally {
+                        btn.innerText = txtOriginal;
+                        btn.disabled = false;
+                    }
+                };
+        
+        
+        
+        window.aplicarFiltroRefacciones = () => {
+                                    const filtro = document.getElementById('sel-filtro-refacciones').value;
+                                    const filtroLinea = window.lineaFiltroSeleccionada || 'Todos';
+                                    
+                            const filtroAtendedor = document.getElementById('sel-filtro-atendedor') ? document.getElementById('sel-filtro-atendedor').value : 'Todos';
+                            const filtroGrupo = window.etiquetaFiltroSeleccionada || 'Todos';
+                            const textoBusqueda = document.getElementById('inp-busqueda-refacciones') ? document.getElementById('inp-busqueda-refacciones').value.trim().toLowerCase() : '';
+                            const container = document.getElementById('lista-refacciones-container');
+            
+            const totalDiv = document.getElementById('stats-refacciones-total');
+            const labelTotalDiv = totalDiv ? totalDiv.previousElementSibling : null;
+            const sinAtenderDiv = document.getElementById('stats-refacciones-sin-atender');
+            const enCaminoDiv = document.getElementById('stats-refacciones-en-camino');
+            const revisandoDiv = document.getElementById('stats-refacciones-revisando');
+            const revisandoBox = document.getElementById('box-refacciones-revisando');
+            const entregadasDiv = document.getElementById('stats-refacciones-entregadas');
+            
+            if (!window.refaccionesDataCache || window.refaccionesDataCache.length === 0) {
+                container.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:20px; font-style:italic;">Aún no hay solicitudes de refacciones en tu historial.</div>';
+                if (totalDiv) totalDiv.innerText = "0";
+                if (sinAtenderDiv) sinAtenderDiv.innerText = "0";
+                if (enCaminoDiv) enCaminoDiv.innerText = "0";
+                if (entregadasDiv) entregadasDiv.innerText = "0";
+                if (revisandoBox) revisandoBox.style.display = 'none';
+                return;
+            }
+
+            const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
+            const loggedUserId = userLog ? String(userLog.id) : null;
+
+            let dataFiltrada = window.refaccionesDataCache;
+
+            switch(filtro) {
+                            case 'Pendientes': dataFiltrada = dataFiltrada.filter(r => r.estado === 'Pendiente'); break;
+                            case 'MisSolicitudes': dataFiltrada = dataFiltrada.filter(r => String(r.solicitante_id) === loggedUserId); break;
+                            case 'MisAsignadas': dataFiltrada = dataFiltrada.filter(r => String(r.atendido_por_id) === loggedUserId && r.estado === 'Pendiente'); break;
+                            case 'Urgente': dataFiltrada = dataFiltrada.filter(r => r.prioridad === 'Urgente' && r.estado === 'Pendiente'); break;
+                case 'Alta': dataFiltrada = dataFiltrada.filter(r => r.prioridad === 'Alta' && r.estado === 'Pendiente'); break;
+                case 'Normal': dataFiltrada = dataFiltrada.filter(r => r.prioridad === 'Normal' && r.estado === 'Pendiente'); break;
+                case 'NoAtendidas': dataFiltrada = dataFiltrada.filter(r => !r.atendido_por_id && r.estado === 'Pendiente'); break;
+                case 'Atendidas': dataFiltrada = dataFiltrada.filter(r => r.atendido_por_id && r.estado === 'Pendiente'); break;
+                case 'ConFecha': dataFiltrada = dataFiltrada.filter(r => r.fecha_estimada && r.estado === 'Pendiente'); break;
+                case 'Entregadas': dataFiltrada = dataFiltrada.filter(r => r.estado === 'Entregada' || r.estado === 'Recibida'); break;
+                case 'Canceladas': dataFiltrada = dataFiltrada.filter(r => r.estado === 'Cancelada'); break;
+                case 'Todas': break;
+            }
+
+            if (window.lineasFiltroSeleccionadas && window.lineasFiltroSeleccionadas.size > 0) {
+                dataFiltrada = dataFiltrada.filter(r => {
+                    const nombreLinea = (r.equipos && r.equipos.lineas) ? r.equipos.lineas.nombre : 'Otros / Sin Línea';
+                    return window.lineasFiltroSeleccionadas.has(nombreLinea);
+                });
+            }
+            
+            if (window.equiposFiltroSeleccionados && window.equiposFiltroSeleccionados.size > 0) {
+                                        dataFiltrada = dataFiltrada.filter(r => {
+                                            let nombreEquipo = 'S/E';
+                                            if (r.equipos && r.equipos.nombre) {
+                                                nombreEquipo = r.equipos.id_interno ? `[${r.equipos.id_interno}] ${r.equipos.nombre}` : String(r.equipos.nombre);
+                                            }
+                                            return window.equiposFiltroSeleccionados.has(nombreEquipo);
+                                        });
+                                    }
+
+            
+
+            if (filtroAtendedor !== 'Todos') {
+                                        dataFiltrada = dataFiltrada.filter(r => {
+                                            if (filtroAtendedor === 'SinAsignar') {
+                                                return !r.atendido_por_id;
+                                            }
+                                            let textNameAt = "Usuario Desconocido";
+                                            if (r.atendido_por_id && window.todosLosEmpleadosData) {
+                                                const empAt = window.todosLosEmpleadosData.find(e => String(e.id) === String(r.atendido_por_id));
+                                                if (empAt) textNameAt = empAt.name;
+                                            }
+                                            return textNameAt === filtroAtendedor;
+                                        });
+                                    }
+
+            // NUEVO: Filtro por Grupo (Pastillas)
+                                    if (filtroGrupo !== 'Todos') {
+                                        dataFiltrada = dataFiltrada.filter(r => {
+                                            if (filtroGrupo === 'SinGrupo') {
+                                                return !r.grupo || r.grupo.trim() === '';
+                                            }
+                                            if (!r.grupo) return false;
+                                            
+                                            const etiquetas = r.grupo.split(',').map(e => e.trim());
+                                            return etiquetas.includes(filtroGrupo);
+                                        });
+                                    }
+
+                        // NUEVO: Filtro de texto libre (Busca en nombre, modelo y notas)
+                                    if (textoBusqueda !== '') {
+                            dataFiltrada = dataFiltrada.filter(r => {
+                                const nombre = (r.nombre_refaccion || '').toLowerCase();
+                                const modelo = (r.modelo || '').toLowerCase();
+                                const notas = (r.notas || '').toLowerCase();
+                                return nombre.includes(textoBusqueda) || modelo.includes(textoBusqueda) || notas.includes(textoBusqueda);
+                            });
+                        }
+
+                        // GUARDAMOS LOS DATOS FILTRADOS EN UNA VARIABLE GLOBAL PARA EL REPORTE
+                        window.refaccionesFiltradasCache = dataFiltrada;
+
+                        const pendientesFiltradas = dataFiltrada.filter(r => r.estado === 'Pendiente');
+                        const totalActual = dataFiltrada.length;
+                        const calcPct = (cantidad) => totalActual > 0 ? Math.round((cantidad / totalActual) * 100) + '%' : '0%';
+
+                        if (totalDiv) {
+                            totalDiv.innerText = totalActual;
+                            if (labelTotalDiv) {
+                                labelTotalDiv.innerText = filtro === 'Pendientes' ? 'Total Pendientes' : 'Total Filtradas';
+                            }
+                        }
+
+                        if (sinAtenderDiv) {
+                            const numSinAtender = pendientesFiltradas.filter(req => !req.atendido_por_id).length;
+                            sinAtenderDiv.innerText = numSinAtender;
+                            document.getElementById('pct-sin-atender').innerText = calcPct(numSinAtender);
+                        }
+
+                        if (enCaminoDiv) {
+                            const numEnCamino = pendientesFiltradas.filter(req => req.atendido_por_id && req.fecha_estimada).length;
+                            enCaminoDiv.innerText = numEnCamino;
+                            document.getElementById('pct-en-camino').innerText = calcPct(numEnCamino);
+                        }
+
+                        const entregadasBox = document.getElementById('box-refacciones-entregadas');
+                                                if (entregadasDiv) {
+                                                    const numEntregadas = dataFiltrada.filter(req => req.estado === 'Entregada' || req.estado === 'Recibida').length;
+                                                    entregadasDiv.innerText = numEntregadas;
+                                                    document.getElementById('pct-entregadas').innerText = calcPct(numEntregadas);
+                                                }
+
+                        if (entregadasBox) {
+                            if (filtro === 'Todas' || filtro === 'Entregadas') {
+                                entregadasBox.style.display = 'block';
+                            } else {
+                                entregadasBox.style.display = 'none';
+                            }
+                        }
+
+                        if (revisandoBox && revisandoDiv) {
+                            const numEnRevision = pendientesFiltradas.filter(req => req.atendido_por_id && !req.fecha_estimada).length;
+                            if (numEnRevision > 0) {
+                                revisandoDiv.innerText = numEnRevision;
+                                document.getElementById('pct-revisando').innerText = calcPct(numEnRevision);
+                                revisandoBox.style.display = 'block';
+                            } else {
+                                revisandoBox.style.display = 'none';
+                            }
+                        }
+
+                        if(dataFiltrada.length === 0) {
+                            container.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:20px; font-style:italic;">No se encontraron resultados para este filtro.</div>';
+                            return;
+                        }
+
+            // NUEVO: Ordenamos la lista por cantidad de días.
+                        // Menor a mayor cantidad de días (0 días primero, luego 1, luego 2...)
+                        dataFiltrada.sort((a, b) => {
+                            const fechaA = new Date(a.created_at).getTime();
+                            const fechaB = new Date(b.created_at).getTime();
+                            return fechaB - fechaA;
+                        });
+
+                        // Cambiamos Flexbox por CSS Grid para lograr la distribución estilo iOS
+                        let html = '<div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap:25px 10px; padding:15px 5px; justify-items:center;">';
+                        
+                        dataFiltrada.forEach(req => {
+                                        const reqSeguro = JSON.stringify(req).replace(/'/g, "&#39;");
+
+                                        let bgGradient = '';
+                    let emojiIcon = '⚙️';
+                    
+                    if (req.estado === 'Cancelada') {
+                        bgGradient = 'rgba(148, 163, 184, 0.4)';
+                        emojiIcon = '🚫';
+                    } else if (req.estado === 'Recibida') {
+                        // SOLO VERDE cuando el solicitante ya confirmó de recibido
+                        bgGradient = 'linear-gradient(135deg, #22c55e, #15803d)';
+                        emojiIcon = '✅';
+                    } else if (req.estado === 'Entregada') {
+                        // AZUL/CYAN cuando la pieza se entregó, pero falta que el solicitante confirme
+                        bgGradient = 'linear-gradient(135deg, #0ea5e9, #0369a1)';
+                        emojiIcon = '📦';
+                    } else if (req.estado === 'Pendiente') {
+                        // Asignamos colores basándonos en la prioridad
+                        if (req.prioridad === 'Urgente') {
+                            bgGradient = 'linear-gradient(135deg, #ef4444, #b91c1c)';
+                            emojiIcon = '🚨';
+                        } else if (req.prioridad === 'Alta') {
+                            bgGradient = 'linear-gradient(135deg, #f97316, #c2410c)';
+                            emojiIcon = '⚠️';
+                        } else {
+                            bgGradient = 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
+                            emojiIcon = req.atendido_por_id ? '📦' : '⚙️';
+                        }
+                    }
+
+                    let badgeHtml = '';
+
+                    // Burbuja para indicar encargado y su estado (Esquina inferior derecha)
+                    let asignadoBadgeHtml = '';
+                    // Ahora la burbuja se muestra en todos los estados excepto Cancelada (para saber siempre quién atendió)
+                    if (req.atendido_por_id && req.estado !== 'Cancelada') {
+                        let nombreCorto = '';
+                        if (window.todosLosEmpleadosData) {
+                            const empAt = window.todosLosEmpleadosData.find(e => String(e.id) === String(req.atendido_por_id));
+                            if (empAt && empAt.name) {
+                                nombreCorto = empAt.name.split(' ')[0]; // Extrae solo el primer nombre
+                            }
+                        }
+                        
+                        // Si ya está Entregada o Recibida, ponemos el Check Verde. Si no, la Mano Levantada.
+                        const emojiAtendedor = (req.estado === 'Entregada' || req.estado === 'Recibida') ? '✅' : '🙋‍♂️';
+                        
+                        asignadoBadgeHtml = `<div style="position:absolute; bottom:-6px; right:-10px; background:white; border-radius:12px; padding:0 6px; height:22px; display:flex; align-items:center; justify-content:center; gap:3px; font-size:0.7rem; font-weight:800; color:#0369a1; border:2px solid #bae6fd; box-shadow:0 2px 4px rgba(0,0,0,0.15); white-space:nowrap; z-index:2;" title="Atiende: ${nombreCorto}">${emojiAtendedor} ${nombreCorto}</div>`;
+                    }
+
+                                                                        // NUEVO: Burbuja para indicar días de espera (Esquina superior izquierda)
+                let diasBadgeHtml = '';
+                if (req.estado === 'Pendiente') {
+                    const fCreacion = new Date(req.created_at);
+                    fCreacion.setHours(0,0,0,0);
+                    const diaHoy = new Date();
+                    diaHoy.setHours(0,0,0,0);
+                    const diasEspera = Math.round((diaHoy.getTime() - fCreacion.getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    if (diasEspera > 0) {
+                        let colorFondoDias = '#64748b'; // Gris azulado (1-2 días)
+                        if (diasEspera >= 3) colorFondoDias = '#f59e0b'; // Naranja (3-4 días)
+                        if (diasEspera >= 5) colorFondoDias = '#ef4444'; // Rojo (5+ días)
+                        
+                        diasBadgeHtml = `<div style="position:absolute; top:-5px; left:-5px; background:${colorFondoDias}; color:white; border-radius:10px; padding:0 6px; height:20px; display:flex; align-items:center; justify-content:center; font-size:0.65rem; font-weight:bold; border:2px solid white; box-shadow:0 2px 4px rgba(0,0,0,0.15);" title="${diasEspera} días de espera">${diasEspera}d</div>`;
+                    }
+                }
+
+                html += `
+                    <div onclick='window.verDetallesRefaccion(${reqSeguro})' style="display:flex; flex-direction:column; align-items:center; width:75px; text-align:center; cursor:pointer; position:relative; transition:transform 0.15s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <div style="width:60px; height:60px; border-radius:14px; background:${bgGradient}; display:flex; align-items:center; justify-content:center; font-size:1.75rem; box-shadow:0 4px 10px rgba(0,0,0,0.12); position:relative;">
+                            ${emojiIcon}
+                            ${badgeHtml}
+                            ${asignadoBadgeHtml}
+                            ${diasBadgeHtml}
+                        </div>
+                        <div style="font-size:0.7rem; font-weight:600; color:#1e293b; margin-top:6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis; line-height:1.15; height:2.3em; max-width:72px;">
+                            ${req.nombre_refaccion}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+        };
+
+
+        // --- Carga Inicial ---
+        window.addEventListener('load', async () => {
+            const userLog = localStorage.getItem("usuarioLogueado");
+            if (!userLog) {
+                alert("Sesión expirada. Regresando al login.");
+                window.location.href = 'index.html';
+                return;
+            }
+
+            const tituloAdmin = document.getElementById('titulo-refacciones-admin');
+            if(tituloAdmin) {
+                tituloAdmin.onclick = () => {
+                    if(window.modoAdminActivo) {
+                        window.modoAdminActivo = false;
+                        tituloAdmin.style.color = '#0f172a';
+                        window.abrirStatsRefacciones();
+                    } else if(prompt("Contraseña Admin:") === window.PASSWORD_ADMIN) {
+                        window.modoAdminActivo = true;
+                        tituloAdmin.style.color = '#d32f2f';
+                        window.abrirStatsRefacciones();
+                    }
+                };
+            }
+
+            window.modoAdminActivo = sessionStorage.getItem("adminSostenido") === 'true';
+            if (window.modoAdminActivo && tituloAdmin) {
+                tituloAdmin.style.color = '#d32f2f';
+            }
+
+
+            // Forzamos la descarga ignorando el arreglo vacío de 1-config.js
+            try {
+                const { data, error } = await sb.from('employees').select('id, employee_id, name, department, puesto, supervisor_id, is_active, avatar_url');
+                if (!error && data) {
+                    window.todosLosEmpleadosData = []; // Limpiamos el caché
+                    
+                    data.forEach(d => {
+                                            const baseData = {
+                                                name: d.name,
+                                                dept: d.department,
+                                                puesto: d.puesto,
+                                                supId: d.supervisor_id,
+                                                isActive: d.is_active !== false,
+                                                avatar: d.avatar_url,
+                                                id_numerico: String(d.id).trim()
+                                            };
+                        
+                        // Registramos al empleado con su ID numérico
+                        if (d.id) {
+                            window.todosLosEmpleadosData.push({ id: String(d.id).trim(), ...baseData });
+                        }
+                        // Lo registramos también con su employee_id de texto
+                        if (d.employee_id) {
+                            window.todosLosEmpleadosData.push({ id: String(d.employee_id).trim(), ...baseData });
+                        }
+                    });
+                }
+            } catch(e) {
+                console.error("Error forzando inicialización de personal:", e);
+            }
+
+
+            const userDataParsed = JSON.parse(userLog);
+            const userNameDisplay = document.getElementById('user-name-display');
+            const userRoleDisplay = document.getElementById('user-role-display');
+            const userAvatarContainer = document.getElementById('user-avatar-container');
+            
+            if (userNameDisplay) userNameDisplay.innerText = userDataParsed.name.split(' ').slice(0, 2).join(' ');
+            if (userRoleDisplay) userRoleDisplay.innerText = userDataParsed.puesto || 'Colaborador';
+
+            if (window.todosLosEmpleadosData && userAvatarContainer) {
+                const miData = window.todosLosEmpleadosData.find(e => String(e.id) === String(userDataParsed.id));
+                if (miData && miData.avatar) {
+                    const safeUrl = window.procesarUrlImagen ? window.procesarUrlImagen(miData.avatar) : miData.avatar;
+                    userAvatarContainer.innerHTML = `<img src="${safeUrl}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                    userAvatarContainer.style.background = 'white';
+                    userAvatarContainer.style.border = '1px solid #e2e8f0';
+                }
+            }
+
+            window.abrirStatsRefacciones();
+        });
+        
+        
+        window.procesarYSubirImagen = async (idRefaccion, input) => {
+            const file = input.files[0];
+            if (!file) return;
+
+            const statusDiv = document.getElementById(`status-foto-${idRefaccion}`);
+            statusDiv.innerText = "Optimizando y subiendo...";
+
+            try {
+                const blob = await window.optimizarImagen(file);
+                
+                const extension = blob.type === 'image/jpeg' ? 'jpg' : 'webp';
+                const fileName = `ref-${idRefaccion}-${Date.now()}.${extension}`;
+                
+                const { error: uploadError } = await sb.storage
+                    .from('fotos-refacciones')
+                    .upload(fileName, blob, {
+                        contentType: blob.type,
+                        upsert: true
+                    });
+
+                if (uploadError) throw uploadError;
+
+                const { data: publicUrlData } = sb.storage.from('fotos-refacciones').getPublicUrl(fileName);
+                
+                // Actualizar base de datos
+                const { error: dbError } = await sb.from('refacciones')
+                    .update({ foto_url: publicUrlData.publicUrl })
+                    .eq('id', idRefaccion);
+
+                if (dbError) throw dbError;
+
+                statusDiv.innerHTML = "✅ Imagen guardada.";
+                window.abrirStatsRefacciones();
+            } catch (err) {
+                console.error("Error subiendo desde detalle:", err);
+                statusDiv.innerText = "❌ Error al subir: " + (err.message || "No se pudo completar.");
+            }
+        };
+        
+        
+        window.optimizarImagen = async (file) => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        // 1. Limitar basándonos en el lado más largo (ancho o alto)
+                        const MAX_DIMENSION = 800;
+                        let scaleSize = 1;
+                        
+                        if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
+                            if (img.width > img.height) {
+                                scaleSize = MAX_DIMENSION / img.width;
+                            } else {
+                                scaleSize = MAX_DIMENSION / img.height;
+                            }
+                        }
+                        
+                        let currentWidth = img.width * scaleSize;
+                        let currentHeight = img.height * scaleSize;
+                        
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        
+                        let quality = 0.7; // Calidad inicial
+                        const MAX_BYTES = 1048576; // 1 MB exacto
+
+                        // Función auxiliar para redibujar y comprimir
+                        const intentarCompresion = (w, h, q, formato) => {
+                            return new Promise(res => {
+                                canvas.width = w;
+                                canvas.height = h;
+                                ctx.clearRect(0, 0, w, h);
+                                ctx.drawImage(img, 0, 0, w, h);
+                                canvas.toBlob(b => res(b), formato, q);
+                            });
+                        };
+
+                        const procesar = async () => {
+                            let formato = 'image/webp';
+                            let blob = await intentarCompresion(currentWidth, currentHeight, quality, formato);
+
+                            // Fallback a JPEG si WebP falla en iOS
+                            if (!blob) {
+                                formato = 'image/jpeg';
+                                blob = await intentarCompresion(currentWidth, currentHeight, quality, formato);
+                            }
+
+                            if (!blob) {
+                                return reject(new Error("Tu navegador no permitió procesar la imagen."));
+                            }
+
+                            // 2. Ciclo de compresión extrema: bajamos calidad Y dimensiones
+                            while (blob.size > MAX_BYTES && quality > 0.1) {
+                                quality -= 0.15; // Bajamos calidad rápidamente
+                                
+                                // Reducimos la resolución un 20% en cada intento
+                                currentWidth *= 0.8;
+                                currentHeight *= 0.8;
+                                
+                                if (quality < 0.1) quality = 0.1; // Límite para que no quede irreconocible
+
+                                blob = await intentarCompresion(currentWidth, currentHeight, quality, formato);
+                            }
+
+                            if (blob.size > MAX_BYTES) {
+                                return reject(new Error(`No se pudo comprimir lo suficiente. Tamaño final: ${(blob.size / 1024 / 1024).toFixed(2)} MB.`));
+                            }
+
+                            resolve(blob);
+                        };
+
+                        procesar();
+                    };
+                    img.onerror = () => reject(new Error("El formato del archivo no es soportado."));
+                    img.src = e.target.result;
+                };
+                
+                reader.onerror = () => reject(new Error("Hubo un problema al leer el archivo en tu dispositivo."));
+                reader.readAsDataURL(file);
+            });
+        };
+        
+        
+        
+    </script>
+    
+    <div id="modal-detalle-indicadores" style="display:none; position:fixed; z-index:5000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+                <div class="form-content" style="max-width: 450px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow: hidden; padding: 0; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); max-height: 80vh;">
+                    <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+                        <h3 id="titulo-modal-indicador" style="margin:0; color:#0f172a; font-size:1.1rem; display:flex; align-items:center; gap:8px;">📊 Detalles</h3>
+                        <button onclick="document.getElementById('modal-detalle-indicadores').style.display='none'" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
+                    </div>
+                    <div id="contenido-modal-indicador" style="padding: 20px; overflow-y: auto; background: white;">
+                        </div>
+                </div>
+            </div>
+
+        <div id="modal-editar-equipo-filtro" style="display:none; position:fixed; z-index:5000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+            <div style="max-width: 400px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+                
+                <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+                    <h3 style="margin:0; color:#0f172a; font-size:1.1rem; display:flex; align-items:center; gap:8px;">✏️ Editar Equipo</h3>
+                    <button onclick="document.getElementById('modal-editar-equipo-filtro').style.display='none'" style="border:none; background:transparent; cursor:pointer; font-size:1.2rem; color:#64748b; padding:0;">✕</button>
+                </div>
+                
+                <div style="padding: 20px; display:flex; flex-direction:column; gap:15px;">
+                    <input type="hidden" id="edit-filtro-equipo-original">
+                    <input type="hidden" id="edit-filtro-ids-unicos">
+                    
+                    <div>
+                        <label style="display:block; font-weight:bold; color:#334155; margin-bottom:5px;">Nombre del Equipo:</label>
+                        <input type="text" id="edit-filtro-nombre" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; outline:none; font-family:inherit; box-sizing:border-box;">
+                    </div>
+                    
+                    <div>
+                        <label style="display:block; font-weight:bold; color:#334155; margin-bottom:5px;">ID / Código Interno (Opcional):</label>
+                        <input type="text" id="edit-filtro-id-interno" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:8px; outline:none; font-family:inherit; box-sizing:border-box;">
+                    </div>
+                    
+                    <button id="btn-guardar-edicion-filtro" onclick="window.guardarEdicionEquipoFiltro()" style="margin-top:10px; background:#0ea5e9; color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; font-size:1rem;">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+        
+    </body>
+    </html>

@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mapa de Activos</title>
+    
+    <link rel="stylesheet" href="estilos.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+
+    <style>
+        html, body {
+            background-color: #f8fafc;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            height: 100%;
+            overflow: hidden;
+            overscroll-behavior-y: none;
+        }
+
+        #panel-independiente-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+            width: 100%;
+            background: white;
+            overflow: hidden;
+        }
+
+        #header {
+            padding: 15px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        #d3-container {
+            flex: 1;
+            width: 100%;
+            position: relative;
+            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
+            background-color: #f8fafc;
+            cursor: grab;
+            touch-action: none;
+        }
+
+        #d3-container:active {
+            cursor: grabbing;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.95);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            white-space: nowrap;
+            border: 1px solid #334155;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="panel-independiente-container">
+            <div id="header">
+                <h2 style="margin:0; color:#0f172a; font-size:1.4rem; display:flex; align-items:center; gap:8px;">🕸️ Red de Activos</h2>
+                
+                <button onclick="window.location.href='10-refacciones.html'" style="border:none; background:#fef2f2; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#ef4444; font-weight:bold; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #fecdd3;" title="Volver a Refacciones">✕</button>
+            </div>
+
+            <div id="controles-simulacion" style="padding: 10px 20px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; display: flex; gap: 25px; flex-wrap: wrap; align-items: center; font-size: 0.85rem; z-index: 10;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label for="inp-repulsion" style="font-weight: bold; color: #334155;">Fuerza de Repulsión:</label>
+                            <input type="range" id="inp-repulsion" min="-100" max="0" value="-50" step="1" style="accent-color: #0ea5e9; cursor: pointer;">
+                            <span id="val-repulsion" style="color: #0369a1; font-weight: bold; width: 45px;">-50</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label for="inp-distancia" style="font-weight: bold; color: #334155;">Distancia de Conexión:</label>
+                            <input type="range" id="inp-distancia" min="5" max="300" value="50" step="5" style="accent-color: #0ea5e9; cursor: pointer;">
+                            <span id="val-distancia" style="color: #0369a1; font-weight: bold; width: 35px;">50</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label for="inp-area" style="font-weight: bold; color: #334155;">Tamaño del Área:</label>
+                            <input type="range" id="inp-area" min="50" max="1500" value="300" step="10" style="accent-color: #0ea5e9; cursor: pointer;">
+                            <span id="val-area" style="color: #0369a1; font-weight: bold; width: 45px;">300</span>
+                        </div>
+                    </div>
+            
+            <div id="d3-container"></div>
+                    <div id="tooltip" class="tooltip"></div>
+
+                    <div id="panel-edicion-equipo" style="display:none; position:fixed; top:80px; right:20px; width:300px; background:white; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.15); border:1px solid #e2e8f0; z-index:200; flex-direction:column; overflow:hidden;">
+                        <div style="background:#f8fafc; padding:15px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="margin:0; font-size:1rem; color:#0f172a;">✏️ Editar Equipo</h3>
+                            <button onclick="document.getElementById('panel-edicion-equipo').style.display='none'" style="border:none; background:transparent; cursor:pointer; font-size:1.2rem; color:#64748b; padding:0;">✕</button>
+                        </div>
+                        <div style="padding:15px; display:flex; flex-direction:column; gap:12px;">
+                            <input type="hidden" id="edit-equipo-id">
+                            <div>
+                                <label style="display:block; font-size:0.8rem; font-weight:bold; color:#475569; margin-bottom:4px;">Nombre del Equipo:</label>
+                                <input type="text" id="edit-equipo-nombre" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; box-sizing:border-box; outline:none;">
+                            </div>
+                            <div>
+                                <label style="display:block; font-size:0.8rem; font-weight:bold; color:#475569; margin-bottom:4px;">ID / Código Interno:</label>
+                                <input type="text" id="edit-equipo-id-interno" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; box-sizing:border-box; outline:none;">
+                            </div>
+                            <button id="btn-guardar-edicion-eq" style="margin-top:5px; background:#0ea5e9; color:white; border:none; padding:10px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:0.9rem;">Guardar Cambios</button>
+                        </div>
+                    </div>
+                </div>
+
+    <script src="1-config.js"></script>
+    
+    <script>
+        window.addEventListener('load', async () => {
+            const container = document.getElementById('d3-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            const tooltip = d3.select("#tooltip");
+
+            // Configurar SVG principal con Zoom y Paneo
+            const svg = d3.select("#d3-container")
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .call(d3.zoom()
+                    .scaleExtent([0.1, 4])
+                    .on("zoom", (event) => {
+                        g.attr("transform", event.transform);
+                    }))
+                .append("g");
+
+            const g = svg.append("g");
+
+            let nodes = [];
+            let links = [];
+            const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+            // Mostrar estado de carga
+            g.append("text")
+                .attr("id", "loading-text")
+                .attr("x", width / 2)
+                .attr("y", height / 2)
+                .attr("text-anchor", "middle")
+                .text("Calculando relaciones físicas...")
+                .attr("font-family", "sans-serif")
+                .attr("font-weight", "bold")
+                .attr("fill", "#64748b");
+
+            try {
+                // Consultas simultáneas para mayor velocidad
+                                const [resLineas, resEquipos] = await Promise.all([
+                                    sb.from('lineas').select('id, nombre'),
+                                    sb.from('equipos').select('id, nombre, linea_id, id_interno').eq('activo', true)
+                                ]);
+
+                                if (resLineas.error) throw resLineas.error;
+                                if (resEquipos.error) throw resEquipos.error;
+
+                                const lineasData = resLineas.data;
+                                const equiposData = resEquipos.data;
+
+                                d3.select("#loading-text").remove();
+
+                                // 1. Transformar datos de Líneas a Nodos
+                                lineasData.forEach(linea => {
+                                    nodes.push({
+                                        id: `L-${linea.id}`,
+                                        dbId: linea.id,
+                                        nombre: linea.nombre,
+                                        tipo: 'linea',
+                                        radius: 30, // Nodos centrales más grandes
+                                        color: colorScale(linea.id)
+                                    });
+                                });
+
+                                // 2. Transformar datos de Equipos a Nodos y crear los Enlaces (Links)
+                                equiposData.forEach(equipo => {
+                                    const nodeId = `E-${equipo.id}`;
+                                    const targetId = `L-${equipo.linea_id}`;
+                                    
+                                    // Solo enlazamos si la línea existe en el arreglo
+                                    if (lineasData.find(l => `L-${l.id}` === targetId)) {
+                                        nodes.push({
+                                            id: nodeId,
+                                            dbId: equipo.id,
+                                            nombre: equipo.nombre,
+                                            id_interno: equipo.id_interno,
+                                            tipo: 'equipo',
+                                            radius: 12, // Equipos periféricos más pequeños
+                                            color: '#cbd5e1' // Color gris para contraste
+                                        });
+                                        
+                                        links.push({
+                                            source: nodeId,
+                                            target: targetId
+                                        });
+                                    }
+                                });
+
+                if (nodes.length === 0) {
+                    g.append("text").attr("x", width / 2).attr("y", height / 2).attr("text-anchor", "middle").text("No hay equipos ni líneas para graficar.").attr("fill", "#64748b");
+                    return;
+                }
+
+                // Obtener referencias de los inputs
+                                const inpRepulsion = document.getElementById('inp-repulsion');
+                                const valRepulsion = document.getElementById('val-repulsion');
+                                const inpDistancia = document.getElementById('inp-distancia');
+                                const valDistancia = document.getElementById('val-distancia');
+
+                                // Fuerzas dinámicas guardadas en variables para poder modificarlas
+                                const forceLink = d3.forceLink(links).id(d => d.id).distance(parseInt(inpDistancia.value));
+                                const forceCharge = d3.forceManyBody().strength(parseInt(inpRepulsion.value));
+
+                                const simulation = d3.forceSimulation(nodes)
+                                    .force("link", forceLink)
+                                    .force("charge", forceCharge)
+                                    .force("center", d3.forceCenter(width / 2, height / 2))
+                                    // Reduce el + 15 a + 2 para que los nodos puedan casi tocarse
+                                    .force("collide", d3.forceCollide().radius(d => d.radius + 2).iterations(2));
+
+                                // Escuchadores de eventos para los sliders
+                                inpRepulsion.addEventListener('input', (e) => {
+                                    const nuevoValor = +e.target.value;
+                                    valRepulsion.innerText = nuevoValor;
+                                    forceCharge.strength(nuevoValor); // Actualiza la repulsión
+                                    simulation.alpha(0.3).restart(); // "Calienta" la simulación para que se muevan suavemente
+                                });
+
+                                inpDistancia.addEventListener('input', (e) => {
+                                    const nuevoValor = +e.target.value;
+                                    valDistancia.innerText = nuevoValor;
+                                    forceLink.distance(nuevoValor); // Actualiza el largo del cable
+                                    simulation.alpha(0.3).restart();
+                                });
+
+                                // Dibujar líneas de conexión
+                const link = g.append("g")
+                    .attr("stroke", "#94a3b8")
+                    .attr("stroke-opacity", 0.6)
+                    .selectAll("line")
+                    .data(links)
+                    .join("line")
+                    .attr("stroke-width", 2);
+
+                    // Dibujar puntos
+                                    const node = g.append("g")
+                                        .selectAll("circle")
+                                        .data(nodes)
+                                        .join("circle")
+                                        .attr("r", d => d.radius)
+                                        .attr("fill", d => d.color)
+                                        .attr("stroke", d => d.tipo === 'linea' ? "#fff" : "#94a3b8")
+                                        .attr("stroke-width", 2)
+                                        .style("cursor", d => d.tipo === 'equipo' ? "pointer" : "grab")
+                                        .on("click", (event, d) => {
+                                            // Evitar que un arrastre suelto active el clic accidentalmente
+                                            if (event.defaultPrevented) return;
+                                            
+                                            if (d.tipo === 'equipo') {
+                                                document.getElementById('edit-equipo-id').value = d.dbId;
+                                                document.getElementById('edit-equipo-nombre').value = d.nombre || '';
+                                                document.getElementById('edit-equipo-id-interno').value = d.id_interno || '';
+                                                document.getElementById('panel-edicion-equipo').style.display = 'flex';
+                                            }
+                                        })
+                                        .call(drag(simulation));
+
+                                        // Dibujar nombres
+                                                        const labels = g.append("g")
+                                                            .selectAll("text")
+                                                            .data(nodes)
+                                                            .join("text")
+                                                            .text(d => (d.tipo === 'equipo' && d.id_interno) ? `[${d.id_interno}] ${d.nombre}` : d.nombre)
+                                                            .attr("font-family", "sans-serif")
+                                                            .attr("font-size", d => d.tipo === 'linea' ? "12px" : "10px")
+                                                            .attr("font-weight", d => d.tipo === 'linea' ? "bold" : "600")
+                                                            .attr("fill", "#1e293b")
+                                                            .attr("text-anchor", "middle")
+                                                            .attr("dy", d => d.radius + 15)
+                                                            .style("pointer-events", "none"); // Para no interferir con el drag o tooltip
+
+                                    // Lógica para guardar la edición del panel
+                                    document.getElementById('btn-guardar-edicion-eq').onclick = async () => {
+                                        const idObj = document.getElementById('edit-equipo-id').value;
+                                        const nuevoNombre = document.getElementById('edit-equipo-nombre').value.trim();
+                                        const nuevoIdInterno = document.getElementById('edit-equipo-id-interno').value.trim();
+                                        const btn = document.getElementById('btn-guardar-edicion-eq');
+
+                                        if (!nuevoNombre) {
+                                            alert("El nombre del equipo no puede quedar vacío.");
+                                            return;
+                                        }
+
+                                        const originalText = btn.innerText;
+                                        btn.innerText = "Guardando...";
+                                        btn.disabled = true;
+
+                                        try {
+                                            const payload = {
+                                                nombre: nuevoNombre,
+                                                id_interno: nuevoIdInterno === "" ? null : nuevoIdInterno
+                                            };
+
+                                            const { error } = await sb.from('equipos').update(payload).eq('id', idObj);
+                                            if (error) throw error;
+
+                                            // Actualizar la caché local del grafo en tiempo real para no recargar la página
+                                                                    const nodo = nodes.find(n => String(n.dbId) === String(idObj) && n.tipo === 'equipo');
+                                                                    if (nodo) {
+                                                                        nodo.nombre = nuevoNombre;
+                                                                        nodo.id_interno = nuevoIdInterno;
+                                                                    }
+
+                                                                    // Forzar a D3 a repintar los nombres
+                                                                    labels.text(d => (d.tipo === 'equipo' && d.id_interno) ? `[${d.id_interno}] ${d.nombre}` : d.nombre);
+
+                                                                    document.getElementById('panel-edicion-equipo').style.display = 'none';
+                                            
+                                        } catch (error) {
+                                            console.error("Error actualizando equipo:", error);
+                                            alert("Hubo un error de conexión al intentar guardar.");
+                                        } finally {
+                                            btn.innerText = originalText;
+                                            btn.disabled = false;
+                                        }
+                                    };
+
+                // Lógica de Tooltip y Resaltado
+                node.on("mouseover", (event, d) => {
+                    // Resaltar los enlaces que tocan a este nodo
+                    link.attr("stroke", l => (l.source.id === d.id || l.target.id === d.id) ? "#0ea5e9" : "#e2e8f0")
+                        .attr("stroke-opacity", l => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.1)
+                        .attr("stroke-width", l => (l.source.id === d.id || l.target.id === d.id) ? 3 : 1);
+                        
+                    // Opacar los nodos que no están conectados directamente
+                    node.attr("opacity", n => {
+                        if (n.id === d.id) return 1;
+                        const isConnected = links.some(l =>
+                            (l.source.id === d.id && l.target.id === n.id) ||
+                            (l.target.id === d.id && l.source.id === n.id)
+                        );
+                        return isConnected ? 1 : 0.1;
+                    });
+
+                    labels.attr("opacity", n => {
+                        if (n.id === d.id) return 1;
+                        const isConnected = links.some(l =>
+                            (l.source.id === d.id && l.target.id === n.id) ||
+                            (l.target.id === d.id && l.source.id === n.id)
+                        );
+                        return isConnected ? 1 : 0.1;
+                    });
+
+                    const numConexiones = links.filter(l => l.source.id === d.id || l.target.id === d.id).length;
+                                        const tipoTxt = d.tipo === 'linea' ? '⚙️ Línea de Producción' : '🏭 Equipo Periférico';
+                                        const idInternoHtml = (d.tipo === 'equipo' && d.id_interno) ? `<div style="color:#e2e8f0; font-size:0.8rem; margin-bottom:8px;">🆔 ID: ${d.id_interno}</div>` : '';
+                                        
+                                        tooltip.html(`
+                                            <div style="font-weight:900; font-size:1.1rem; margin-bottom:4px;">${d.nombre}</div>
+                                            <div style="color:#94a3b8; font-size:0.75rem; margin-bottom:2px; text-transform:uppercase; letter-spacing:0.5px;">${tipoTxt}</div>
+                                            ${idInternoHtml}
+                                            <div style="color:#7dd3fc; font-weight:bold;">🔗 ${numConexiones} conexiones activas</div>
+                                            ${d.tipo === 'equipo' ? '<div style="color:#fcd34d; font-size:0.7rem; margin-top:8px;">👆 Clic para editar</div>' : ''}
+                                        `)
+                    .style("left", (event.pageX + 20) + "px")
+                    .style("top", (event.pageY - 20) + "px")
+                    .style("opacity", 1);
+                })
+                .on("mouseout", () => {
+                    // Restaurar todo a la normalidad al quitar el mouse
+                    link.attr("stroke", "#94a3b8").attr("stroke-opacity", 0.6).attr("stroke-width", 2);
+                    node.attr("opacity", 1);
+                    labels.attr("opacity", 1);
+                    tooltip.style("opacity", 0);
+                });
+
+                // 1. Convertimos el radio en una variable dinámica (let)
+                                let radioLimite = Math.min(width, height) / 2 - 40;
+                                const centroX = width / 2;
+                                const centroY = height / 2;
+
+                                // 2. Conectamos el control de la interfaz
+                                const inpArea = document.getElementById('inp-area');
+                                const valArea = document.getElementById('val-area');
+
+                                // Ajustamos el slider para que inicie con el tamaño perfecto calculado para la pantalla actual
+                                inpArea.value = Math.floor(radioLimite);
+                                valArea.innerText = Math.floor(radioLimite);
+
+                                // 3. Escuchamos los cambios del usuario
+                                inpArea.addEventListener('input', (e) => {
+                                    radioLimite = +e.target.value;
+                                    valArea.innerText = radioLimite;
+                                    simulation.alpha(0.3).restart(); // Le damos energía a la simulación para que se reacomode
+                                });
+
+                                // Actualizar la posición de SVG en cada fotograma de la física
+                                simulation.on("tick", () => {
+                                    
+                                    // Lógica del Círculo Invisible interactivo
+                                    nodes.forEach(d => {
+                                        // Calculamos la distancia desde el nodo hasta el centro de la pantalla
+                                        const dx = d.x - centroX;
+                                        const dy = d.y - centroY;
+                                        const distancia = Math.sqrt(dx * dx + dy * dy);
+
+                                        // Si la distancia supera nuestro límite dinámico, ajustamos las coordenadas al borde
+                                        if (distancia > radioLimite) {
+                                            d.x = centroX + (dx / distancia) * radioLimite;
+                                            d.y = centroY + (dy / distancia) * radioLimite;
+                                        }
+                                    });
+
+                                    // Dibujar las conexiones con las coordenadas ya limitadas
+                                    link
+                                        .attr("x1", d => d.source.x)
+                                        .attr("y1", d => d.source.y)
+                                        .attr("x2", d => d.target.x)
+                                        .attr("y2", d => d.target.y);
+
+                                    // Dibujar los puntos
+                                    node
+                                        .attr("cx", d => d.x)
+                                        .attr("cy", d => d.y);
+
+                                    // Dibujar los textos
+                                    labels
+                                        .attr("x", d => d.x)
+                                        .attr("y", d => d.y);
+                                });
+
+            } catch (error) {
+                console.error("Error cargando grafo D3:", error);
+                d3.select("#loading-text").text("Ocurrió un error al cargar la base de datos.").attr("fill", "#ef4444");
+            }
+
+            // Motor para arrastrar los puntos con el mouse/dedo
+            function drag(simulation) {
+                function dragstarted(event) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    event.subject.fx = event.subject.x;
+                    event.subject.fy = event.subject.y;
+                }
+                
+                function dragged(event) {
+                    event.subject.fx = event.x;
+                    event.subject.fy = event.y;
+                }
+                
+                function dragended(event) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    event.subject.fx = null;
+                    event.subject.fy = null;
+                }
+                
+                return d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended);
+            }
+        });
+    </script>
+</body>
+</html>
