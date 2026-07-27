@@ -2426,13 +2426,19 @@
 
                     try {
                         // Actualizar en la base de datos (forzamos Number para la columna id)
+                        // Se agrega .select() para poder verificar si la fila realmente se actualizó:
+                        // si hay un problema de permisos (RLS) en Supabase, el update no lanza error
+                        // pero tampoco modifica ninguna fila, y sin .select() eso pasaría desapercibido.
                         for (let idEq of idsUnicos) {
-                            const { error } = await sb.from('equipos').update({
+                            const { data, error } = await sb.from('equipos').update({
                                 nombre: equipoNuevoNombre,
                                 id_interno: equipoNuevoId
-                            }).eq('id', Number(idEq));
-                            
+                            }).eq('id', Number(idEq)).select();
+
                             if (error) throw error;
+                            if (!data || data.length === 0) {
+                                throw new Error(`No se pudo actualizar el equipo (id ${idEq}). Verifica los permisos (RLS) de la tabla "equipos" en Supabase.`);
+                            }
                         }
                         
                         const nuevoEquipoNomGrd = equipoNuevoId ? `[${equipoNuevoId}] ${equipoNuevoNombre}` : equipoNuevoNombre;
@@ -2473,7 +2479,7 @@
                         
                     } catch (error) {
                         console.error("Error al editar equipo:", error);
-                        alert("Ocurrió un error de red al intentar actualizar el equipo.");
+                        alert(`⚠️ No se guardaron los cambios: ${error && error.message ? error.message : 'Ocurrió un error de red al intentar actualizar el equipo.'}`);
                     } finally {
                         btn.innerText = txtOriginal;
                         btn.disabled = false;
