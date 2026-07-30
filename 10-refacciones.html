@@ -444,8 +444,11 @@
     </div>
 
     <div id="modal-refacciones" class="hoja-overlay" style="z-index:4500;">
-        <div class="form-content hoja-contenido" style="max-width: 600px; overflow-y: auto; padding: 12px 25px calc(25px + env(safe-area-inset-bottom)); touch-action: pan-y; -webkit-overflow-scrolling: touch;">
-            <h2 id="titulo-modal-refacciones" style="margin-top:0; color:#0f172a; font-size:1.2rem; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">⚙️ Solicitar Refacciones</h2>
+        <div class="form-content hoja-contenido" style="max-width: 600px; overflow-y: auto; padding: 12px 25px 25px; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom:15px;">
+                <h2 id="titulo-modal-refacciones" style="margin:0; color:#0f172a; font-size:1.2rem;">⚙️ Solicitar Refacciones</h2>
+                <button onclick="window.cerrarModalRefacciones()" aria-label="Cerrar" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold; font-size:0.9rem; flex-shrink:0;">✕</button>
+            </div>
             
             <div class="form-group">
                 <label class="ref-label">Nombre de la Refacción</label>
@@ -530,14 +533,13 @@
             </div>
 
                         <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:6px;">
-                            <button onclick="window.cerrarModalRefacciones()" style="padding:10px 20px; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer; color:#475569; font-weight:600;">Cancelar</button>
                 <button id="btn-guardar-refaccion" onclick="window.enviarSolicitudRefaccion()" style="padding:10px 20px; background:#f59e0b; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Enviar Solicitud</button>
             </div>
         </div>
     </div>
 
     <div id="modal-nuevo-equipo" class="hoja-overlay" style="z-index:4600;">
-        <div class="form-content hoja-contenido" style="max-width: 400px; overflow-y: auto; padding: 12px 25px calc(25px + env(safe-area-inset-bottom));">
+        <div class="form-content hoja-contenido" style="max-width: 400px; overflow-y: auto; padding: 12px 25px 25px;">
             <h3 style="margin-top:0; color:#0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">➕ Agregar Nuevo Equipo</h3>
                         <div class="form-group" style="margin-bottom: 15px; margin-top: 15px;">
                             <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Nombre del Equipo/Máquina:</label>
@@ -569,8 +571,8 @@
     </div>
 
     <div id="modal-detalle-refaccion" class="hoja-overlay" style="z-index:4700;">
-        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 calc(8px + env(safe-area-inset-bottom));">
-            <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 0;">
+            <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
                 <h3 style="margin:0; color:#0f172a; font-size:1.1rem;">📄 Detalles de Solicitud</h3>
                 <button onclick="window.cerrarDetallesRefaccion()" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
             </div>
@@ -580,7 +582,7 @@
     </div>
 
     <div id="modal-config-refacciones" class="hoja-overlay" style="z-index:4800;">
-        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 25px calc(25px + env(safe-area-inset-bottom));">
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 25px 25px;">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
                 <h3 style="margin:0; color:#0f172a; font-size:1.2rem;">⚙️ Configurar Permisos</h3>
                 <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" style="border:none; background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
@@ -2067,8 +2069,8 @@
                         }
 
                         modalPrevio.innerHTML = `
-                            <div class="hoja-contenido" style="max-width:850px; overflow:hidden; padding:12px 0 calc(8px + env(safe-area-inset-bottom));">
-                                <div style="padding:15px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
+                            <div class="hoja-contenido" style="max-width:850px; overflow:hidden; padding:12px 0 0;">
+                                <div style="padding:15px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
                                     <h3 style="margin:0; color:#0f172a; display:flex; align-items:center; gap:8px;">👀 Vista Previa del Reporte</h3>
                                     <button onclick="document.getElementById('modal-preview-reporte').style.display='none'" style="border:none; background:#e2e8f0; width:30px; height:30px; border-radius:50%; cursor:pointer; font-weight:bold; color:#475569; display:flex; align-items:center; justify-content:center;">✕</button>
                                 </div>
@@ -3295,8 +3297,8 @@
     </script>
     
     <div id="modal-detalle-indicadores" class="hoja-overlay" style="z-index:5000;">
-                <div class="form-content hoja-contenido" style="max-width: 450px; overflow: hidden; padding: 12px 0 calc(8px + env(safe-area-inset-bottom));">
-                    <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+                <div class="form-content hoja-contenido" style="max-width: 450px; overflow: hidden; padding: 12px 0 0;">
+                    <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
                         <h3 id="titulo-modal-indicador" style="margin:0; color:#0f172a; font-size:1.1rem; display:flex; align-items:center; gap:8px;">📊 Detalles</h3>
                         <button onclick="document.getElementById('modal-detalle-indicadores').style.display='none'" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
                     </div>
@@ -3306,9 +3308,9 @@
             </div>
 
         <div id="modal-editar-equipo-filtro" class="hoja-overlay" style="z-index:5000;">
-            <div class="hoja-contenido" style="max-width: 400px; overflow: hidden; padding: 12px 0 calc(8px + env(safe-area-inset-bottom));">
+            <div class="hoja-contenido" style="max-width: 400px; overflow: hidden; padding: 12px 0 0;">
                 
-                <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
+                <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin:0; color:#0f172a; font-size:1.1rem; display:flex; align-items:center; gap:8px;">✏️ Editar Equipo</h3>
                     <button onclick="document.getElementById('modal-editar-equipo-filtro').style.display='none'" style="border:none; background:transparent; cursor:pointer; font-size:1.2rem; color:#64748b; padding:0;">✕</button>
                 </div>
