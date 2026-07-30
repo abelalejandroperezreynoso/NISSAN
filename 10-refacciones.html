@@ -31,16 +31,17 @@
             overflow: hidden;
 
             /* Con viewport-fit=cover la pagina llega hasta el borde fisico.
-               El padding aparta el encabezado de la barra de estado y la
-               lista del indicador de inicio; como es padding y no margen,
-               el blanco del contenedor sigue cubriendo esas zonas. */
+               El padding superior aparta el encabezado de la barra de estado.
+               Abajo NO lleva padding a proposito: recortaria el area visible
+               de la lista y dejaria una franja muerta antes del borde. El
+               indicador de inicio se aparta desde el padding de la propia
+               lista, para que su contenido pueda desplazarse hasta el final. */
             box-sizing: border-box;
             padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
         }
 
         #lista-refacciones-container {
-            padding: 20px;
+            padding: 20px 20px calc(20px + env(safe-area-inset-bottom));
             overflow-y: auto;
             flex: 1;
             background: white;
