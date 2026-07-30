@@ -1032,34 +1032,16 @@
                         });
                     }
                     window.renderizarEtiquetasFormulario();
-                    
+
+                    // Limpiamos el equipo antes de recargarlo, para no arrastrar la
+                    // selección previa si el equipo original ya no está activo.
+                    document.getElementById('inp-refaccion-maquina-search').value = '';
+                    document.getElementById('inp-refaccion-maquina-id').value = '';
+                    document.getElementById('lista-sugerencias-equipos').style.display = 'none';
+
                     document.getElementById('modal-refacciones').style.display = 'flex';
                     window.cargarListaEquipos(req.equipo_id);
                 };
-
-        window.duplicarSolicitudRefaccion = (req) => {
-            // MUY IMPORTANTE: Lo dejamos en null para que cree un registro NUEVO
-            window.refaccionEditandoId = null;
-            
-            document.getElementById('titulo-modal-refacciones').innerHTML = "🔁 Volver a Solicitar";
-            document.getElementById('btn-guardar-refaccion').innerText = "Enviar Nueva Solicitud";
-            
-            document.getElementById('inp-refaccion-nombre').value = req.nombre_refaccion;
-            document.getElementById('inp-refaccion-cantidad').value = req.cantidad;
-            document.getElementById('inp-refaccion-notas').value = req.notas || '';
-            document.getElementById('inp-refaccion-modelo').value = req.modelo || '';
-            document.getElementById('inp-refaccion-grupo').value = req.grupo || '';
-            document.getElementById('inp-refaccion-prioridad').value = req.prioridad || 'Normal';
-            document.getElementById('inp-refaccion-unidad').value = req.unidad || 'Pzas';
-            
-            // --> Limpieza de la imagen para que no se arrastre de la solicitud anterior <--
-            document.getElementById('inp-foto-nueva-solicitud').value = '';
-            
-            document.getElementById('modal-refacciones').style.display = 'flex';
-            
-            // Carga la lista y preselecciona la máquina destino
-            window.cargarListaEquipos(req.equipo_id);
-        };
 
                     window.crearNuevaPlanta = async () => {
             const nueva = prompt("Ingresa el nombre de la nueva Planta:");
