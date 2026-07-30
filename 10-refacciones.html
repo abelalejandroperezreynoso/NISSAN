@@ -1540,6 +1540,56 @@
             }
         };
 
+
+        // department y puesto son columnas de texto libre: no existen tablas
+        // que las respalden, como sí ocurre con areas. La lista se arma con
+        // los valores que ya hay en employees, el mismo criterio que usa la
+        // pantalla de permisos para enumerar los puestos. Lo que se escribe
+        // aquí no se da de alta en ningún catálogo: viaja en la propia fila
+        // del empleado.
+        window.valoresNuevosCampo = { department: [], puesto: [] };
+
+        const escaparHtml = (t) => String(t)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        window.opcionesDeCampo = (campo, valorActual) => {
+            const valores = new Set();
+            (window.empleadosAdminCache || []).forEach(e => {
+                const v = (e[campo] || '').trim();
+                if (v) valores.add(v);
+            });
+            // El valor que ya tiene el empleado se incluye aunque nadie más lo
+            // use, para que abrir su ficha no se lo borre sin querer.
+            if (valorActual && valorActual.trim()) valores.add(valorActual.trim());
+            (window.valoresNuevosCampo[campo] || []).forEach(v => valores.add(v));
+            return Array.from(valores).sort((a, b) => a.localeCompare(b, 'es'));
+        };
+
+        window.renderizarSelectorCampo = (idSelect, campo, seleccionado) => {
+            const sel = document.getElementById(idSelect);
+            if (!sel) return;
+            const vacio = campo === 'puesto' ? 'Sin puesto' : 'Sin departamento';
+            const actual = (seleccionado || '').trim();
+            let html = `<option value="">${vacio}</option>`;
+            window.opcionesDeCampo(campo, actual).forEach(v => {
+                html += `<option value="${escaparHtml(v)}"${v === actual ? ' selected' : ''}>${escaparHtml(v)}</option>`;
+            });
+            sel.innerHTML = html;
+        };
+
+        window.crearValorCampo = (campo, idSelect) => {
+            const etiqueta = campo === 'puesto' ? 'puesto' : 'departamento';
+            const nombre = prompt(`Nombre del nuevo ${etiqueta}:`);
+            if (!nombre || nombre.trim() === '') return;
+
+            const limpio = nombre.trim();
+            if (!window.valoresNuevosCampo[campo].includes(limpio)) {
+                window.valoresNuevosCampo[campo].push(limpio);
+            }
+            window.renderizarSelectorCampo(idSelect, campo, limpio);
+        };
+
         window.abrirAdminEmpleados = async () => {
             if (!window.modoAdminActivo) return;
 
@@ -1672,8 +1722,8 @@
             document.getElementById('titulo-form-empleado').innerText = emp ? 'Editar empleado' : 'Nuevo empleado';
             document.getElementById('inp-emp-nombre').value = emp ? (emp.name || '') : '';
             document.getElementById('inp-emp-numero').value = emp ? (emp.employee_id || '') : '';
-            document.getElementById('inp-emp-puesto').value = emp ? (emp.puesto || '') : '';
-            document.getElementById('inp-emp-departamento').value = emp ? (emp.department || '') : '';
+            window.renderizarSelectorCampo('inp-emp-puesto', 'puesto', emp ? emp.puesto : '');
+            window.renderizarSelectorCampo('inp-emp-departamento', 'department', emp ? emp.department : '');
             document.getElementById('inp-emp-ingreso').value = emp ? (emp.hiring_date || '') : '';
             document.getElementById('inp-emp-activo').checked = emp ? emp.is_active !== false : true;
 
@@ -3781,14 +3831,19 @@
                 <input type="text" id="inp-emp-numero" placeholder="Ej. 10452">
             </div>
 
-            <div class="form-group" style="display:flex; gap:12px;">
-                <div style="flex:1; min-width:0;">
-                    <label class="ref-label">Puesto <span class="ref-opcional">opcional</span></label>
-                    <input type="text" id="inp-emp-puesto" placeholder="Ej. Técnico">
+            <div class="form-group">
+                <label class="ref-label">Puesto <span class="ref-opcional">opcional</span></label>
+                <div style="display:flex; gap:8px;">
+                    <select id="inp-emp-puesto" style="flex:1; min-width:0; background:white;"></select>
+                    <button type="button" class="ref-btn-add" onclick="window.crearValorCampo('puesto', 'inp-emp-puesto')" title="Crear puesto">+</button>
                 </div>
-                <div style="flex:1; min-width:0;">
-                    <label class="ref-label">Departamento <span class="ref-opcional">opcional</span></label>
-                    <input type="text" id="inp-emp-departamento" placeholder="Ej. Mantenimiento">
+            </div>
+
+            <div class="form-group">
+                <label class="ref-label">Departamento <span class="ref-opcional">opcional</span></label>
+                <div style="display:flex; gap:8px;">
+                    <select id="inp-emp-departamento" style="flex:1; min-width:0; background:white;"></select>
+                    <button type="button" class="ref-btn-add" onclick="window.crearValorCampo('department', 'inp-emp-departamento')" title="Crear departamento">+</button>
                 </div>
             </div>
 
