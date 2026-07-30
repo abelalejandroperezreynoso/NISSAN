@@ -116,97 +116,111 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         return `Hace ${anios} año${anios > 1 ? 's' : ''}`;
     };
 
-    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia) => {
-        const resps = respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [];
-        
-        if (resps.length === 0) return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'nunca', ultimaFecha: null };
-        
-        resps.sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
-        const ultima = resps[0].submitted_at;
-        
-        if (resps[0].review_status === 'Mal Revisada') return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'mal_revisada', ultimaFecha: ultima };
+    // Días antes del cierre del periodo a partir de los cuales una encuesta sin
+    // contestar deja de ser un aviso informativo y pasa a "por vencer".
+    const AVISO_CIERRE = {
+        weekly: 2, biweekly: 3, monthly: 7, quarterly: 15,
+        semiannual: 30, yearly: 45, biennial: 60
+    };
 
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth();
-        
-        const subDate = new Date(ultima);
-        const subYear = subDate.getFullYear();
-        const subMonth = subDate.getMonth();
+    // Devuelve el periodo natural vigente para una frecuencia: desde cuándo
+    // corre, cuándo cierra y cómo se le llama en la interfaz. El fin es
+    // exclusivo (el instante en que arranca el periodo siguiente).
+    window.periodoVigente = (frecuencia, referencia) => {
+        const inicio = new Date(referencia);
+        inicio.setHours(0,0,0,0);
 
-        let faltaEnPeriodoActual = false;
-        let nombrePeriodo = 'este periodo';
-
-        if (frecuencia !== 'once') {
-            switch (frecuencia) {
-                case 'weekly':
-                    const diaSemanaActual = now.getDay() || 7;
-                    const inicioSemana = new Date(now);
-                    inicioSemana.setHours(0,0,0,0);
-                    inicioSemana.setDate(now.getDate() - diaSemanaActual + 1);
-                    faltaEnPeriodoActual = subDate < inicioSemana;
-                    nombrePeriodo = 'esta semana';
-                    break;
-                case 'biweekly':
-                    const quincenaActual = now.getDate() <= 15 ? 1 : 2;
-                    const subQuincena = subDate.getDate() <= 15 ? 1 : 2;
-                    faltaEnPeriodoActual = (currentYear !== subYear) || (currentMonth !== subMonth) || (quincenaActual !== subQuincena);
-                    nombrePeriodo = 'esta quincena';
-                    break;
-                case 'monthly':
-                    faltaEnPeriodoActual = (currentYear !== subYear) || (currentMonth !== subMonth);
-                    nombrePeriodo = 'este mes';
-                    break;
-                case 'quarterly':
-                    const subQuarter = Math.floor(subMonth / 3);
-                    const currentQuarter = Math.floor(currentMonth / 3);
-                    faltaEnPeriodoActual = (currentYear !== subYear) || (currentQuarter !== subQuarter);
-                    nombrePeriodo = 'este trimestre';
-                    break;
-                case 'semiannual':
-                    const subHalf = Math.floor(subMonth / 6);
-                    const currentHalf = Math.floor(currentMonth / 6);
-                    faltaEnPeriodoActual = (currentYear !== subYear) || (currentHalf !== subHalf);
-                    nombrePeriodo = 'este semestre';
-                    break;
-                case 'yearly':
-                    faltaEnPeriodoActual = (currentYear !== subYear);
-                    nombrePeriodo = 'este año';
-                    break;
-                case 'biennial':
-                    faltaEnPeriodoActual = (currentYear - subYear) >= 2;
-                    nombrePeriodo = 'este periodo bienal';
-                    break;
+        switch (frecuencia) {
+            case 'weekly': {
+                const diaSemana = referencia.getDay() || 7; // lunes = 1 … domingo = 7
+                inicio.setDate(referencia.getDate() - diaSemana + 1);
+                const fin = new Date(inicio);
+                fin.setDate(inicio.getDate() + 7);
+                return { inicio, fin, nombre: 'esta semana' };
+            }
+            case 'biweekly': {
+                const primeraQuincena = referencia.getDate() <= 15;
+                inicio.setDate(primeraQuincena ? 1 : 16);
+                const fin = new Date(inicio);
+                if (primeraQuincena) fin.setDate(16);
+                else fin.setMonth(inicio.getMonth() + 1, 1);
+                return { inicio, fin, nombre: 'esta quincena' };
+            }
+            case 'monthly': {
+                inicio.setMonth(referencia.getMonth(), 1);
+                const fin = new Date(inicio);
+                fin.setMonth(inicio.getMonth() + 1, 1);
+                return { inicio, fin, nombre: 'este mes' };
+            }
+            case 'quarterly': {
+                const trimestre = Math.floor(referencia.getMonth() / 3);
+                inicio.setMonth(trimestre * 3, 1);
+                const fin = new Date(inicio);
+                fin.setMonth(trimestre * 3 + 3, 1);
+                return { inicio, fin, nombre: 'este trimestre' };
+            }
+            case 'semiannual': {
+                const semestre = Math.floor(referencia.getMonth() / 6);
+                inicio.setMonth(semestre * 6, 1);
+                const fin = new Date(inicio);
+                fin.setMonth(semestre * 6 + 6, 1);
+                return { inicio, fin, nombre: 'este semestre' };
+            }
+            case 'yearly': {
+                inicio.setMonth(0, 1);
+                const fin = new Date(inicio);
+                fin.setFullYear(inicio.getFullYear() + 1, 0, 1);
+                return { inicio, fin, nombre: 'este año' };
+            }
+            case 'biennial': {
+                // Se vuelve a pedir cuando han pasado dos años naturales completos,
+                // así que el periodo vigente abarca el año anterior y el actual.
+                inicio.setFullYear(referencia.getFullYear() - 1, 0, 1);
+                const fin = new Date(inicio);
+                fin.setFullYear(referencia.getFullYear() + 1, 0, 1);
+                return { inicio, fin, nombre: 'este periodo bienal' };
             }
         }
+        return null;
+    };
 
-        const diasTranscurridos = (now - subDate) / 86400000;
-        let cicloTotal = 0;
-        let anticipacion = 0;
-        
-        switch (frecuencia) {
-            case 'weekly':     cicloTotal = 7;   anticipacion = 2; break;
-            case 'biweekly':   cicloTotal = 14;  anticipacion = 7; break;
-            case 'monthly':    cicloTotal = 30;  anticipacion = 14; break;
-            case 'quarterly':  cicloTotal = 90;  anticipacion = 30; break;
-            case 'semiannual': cicloTotal = 180; anticipacion = 60; break;
-            case 'yearly':     cicloTotal = 365; anticipacion = 90; break;
-            case 'biennial':   cicloTotal = 730; anticipacion = 120; break;
+    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia) => {
+        const resps = respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [];
+
+        if (resps.length === 0) return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'nunca', ultimaFecha: null };
+
+        resps.sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
+        const ultima = resps[0].submitted_at;
+
+        if (resps[0].review_status === 'Mal Revisada') return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'mal_revisada', ultimaFecha: ultima };
+
+        // Sin frecuencia repetitiva ('once', o sin dato) basta con haberla
+        // contestado una vez para que deje de aparecer.
+        const now = new Date();
+        const periodo = AVISO_CIERRE.hasOwnProperty(frecuencia) ? window.periodoVigente(frecuencia, now) : null;
+        if (!periodo) return { mostrar: false };
+
+        const subDate = new Date(ultima);
+
+        // El periodo natural es la única referencia: si ya la contestó dentro del
+        // periodo vigente no se le vuelve a pedir, hayan pasado los días que hayan
+        // pasado desde entonces.
+        if (subDate >= periodo.inicio) return { mostrar: false };
+
+        // Si la última respuesta ni siquiera cae en el periodo anterior, se saltó
+        // un periodo completo: eso sí está vencido.
+        const periodoAnterior = window.periodoVigente(frecuencia, new Date(periodo.inicio.getTime() - 1));
+        if (periodoAnterior && subDate < periodoAnterior.inicio) {
+            return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'vencida', ultimaFecha: ultima };
         }
-        
-        const diasRestantes = Math.ceil(cicloTotal - diasTranscurridos);
-        
-        if (frecuencia !== 'once' && diasRestantes <= 0) {
-            return { mostrar: true, diasFaltantes: diasRestantes, vencida: true, tipoAviso: 'vencida', ultimaFecha: ultima };
-        }
-        else if (faltaEnPeriodoActual) {
-            return { mostrar: true, diasFaltantes: diasRestantes, vencida: false, tipoAviso: 'falta_periodo', nombrePeriodo: nombrePeriodo, ultimaFecha: ultima };
-        }
-        else if (frecuencia !== 'once' && diasRestantes <= anticipacion) {
+
+        const diasRestantes = Math.ceil((periodo.fin - now) / 86400000);
+
+        if (diasRestantes <= AVISO_CIERRE[frecuencia]) {
             return { mostrar: true, diasFaltantes: diasRestantes, vencida: false, tipoAviso: 'por_vencer', ultimaFecha: ultima };
         }
-        
-        return { mostrar: false };
+
+        return { mostrar: true, diasFaltantes: diasRestantes, vencida: false, tipoAviso: 'falta_periodo', nombrePeriodo: periodo.nombre, ultimaFecha: ultima };
     };
 
     window.cargarVistaPendientes = async (modo = 'PROPIOS') => {
