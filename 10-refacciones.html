@@ -50,6 +50,75 @@
         }
 
         /* ==========================================
+           Paneles como hoja inferior (estilo iOS)
+           ==========================================
+           Los paneles ya no flotan al centro sobre una capa oscura: nacen
+           del borde inferior y se estiran hacia arriba. Al desaparecer el
+           atenuado a pantalla completa, desaparece también el corte contra
+           la franja de la barra de estado, que iOS deja fuera del viewport
+           y que ningún overlay puede alcanzar. */
+
+        .hoja-overlay {
+            display: none;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            align-items: flex-end;
+            justify-content: center;
+            box-sizing: border-box;
+            padding: 0;
+
+            /* Sin color de fondo. El desenfoque basta para separar la hoja
+               del contenido y, a diferencia del gris, no genera ningún borde
+               visible contra la barra de estado. */
+            background: transparent;
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+        }
+
+        .hoja-contenido {
+            position: relative;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 20px 20px 0 0;
+            box-shadow: 0 -6px 30px rgba(15, 23, 42, 0.18);
+            max-height: 92vh;
+            max-height: 92dvh;
+            animation: hoja-subir 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+        }
+
+        /* Tirador. Va sticky para que siga a la vista en los paneles cuyo
+           contenido se desplaza. */
+        .hoja-contenido::before {
+            content: '';
+            position: sticky;
+            top: 0;
+            align-self: center;
+            flex-shrink: 0;
+            width: 36px;
+            height: 5px;
+            margin-bottom: 10px;
+            border-radius: 3px;
+            background: #cbd5e1;
+            z-index: 3;
+        }
+
+        @keyframes hoja-subir {
+            from { transform: translateY(100%); }
+            to   { transform: translateY(0); }
+        }
+
+        /* Esta pantalla ya no atenúa el fondo, así que se anula el gris que
+           1-config.js aplica a la franja de la barra de estado. */
+        html.modal-abierto {
+            background-color: #f8fafc;
+        }
+
+        /* ==========================================
            Modal "Solicitar Refacciones": layout compacto
            ========================================== */
 
@@ -347,8 +416,8 @@
         </div>
     </div>
 
-    <div id="modal-refacciones" style="display:none; position:fixed; z-index:4500; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; box-sizing: border-box; padding:20px;">
-        <div class="form-content" style="max-width: 600px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow-y: auto; max-height: 90vh; padding: 25px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); touch-action: pan-y; -webkit-overflow-scrolling: touch;">
+    <div id="modal-refacciones" class="hoja-overlay" style="z-index:4500;">
+        <div class="form-content hoja-contenido" style="max-width: 600px; overflow-y: auto; padding: 12px 25px calc(25px + env(safe-area-inset-bottom)); touch-action: pan-y; -webkit-overflow-scrolling: touch;">
             <h2 id="titulo-modal-refacciones" style="margin-top:0; color:#0f172a; font-size:1.2rem; border-bottom:1px solid #e2e8f0; padding-bottom:10px;">⚙️ Solicitar Refacciones</h2>
             
             <div class="form-group">
@@ -440,8 +509,8 @@
         </div>
     </div>
 
-    <div id="modal-nuevo-equipo" style="display:none; position:fixed; z-index:4600; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-        <div class="form-content" style="max-width: 400px; width: 100%; background: white; border-radius: 16px; padding: 25px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+    <div id="modal-nuevo-equipo" class="hoja-overlay" style="z-index:4600;">
+        <div class="form-content hoja-contenido" style="max-width: 400px; overflow-y: auto; padding: 12px 25px calc(25px + env(safe-area-inset-bottom));">
             <h3 style="margin-top:0; color:#0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">➕ Agregar Nuevo Equipo</h3>
                         <div class="form-group" style="margin-bottom: 15px; margin-top: 15px;">
                             <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Nombre del Equipo/Máquina:</label>
@@ -472,8 +541,8 @@
         </div>
     </div>
 
-    <div id="modal-detalle-refaccion" style="display:none; position:fixed; z-index:4700; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-        <div class="form-content" style="max-width: 500px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow: hidden; padding: 0; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+    <div id="modal-detalle-refaccion" class="hoja-overlay" style="z-index:4700;">
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 env(safe-area-inset-bottom);">
             <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
                 <h3 style="margin:0; color:#0f172a; font-size:1.1rem;">📄 Detalles de Solicitud</h3>
                 <button onclick="window.cerrarDetallesRefaccion()" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
@@ -483,8 +552,8 @@
         </div>
     </div>
 
-    <div id="modal-config-refacciones" style="display:none; position:fixed; z-index:4800; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; box-sizing: border-box; padding:20px;">
-        <div class="form-content" style="max-width: 500px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow: hidden; padding: 25px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+    <div id="modal-config-refacciones" class="hoja-overlay" style="z-index:4800;">
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 25px calc(25px + env(safe-area-inset-bottom));">
             <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
                 <h3 style="margin:0; color:#0f172a; font-size:1.2rem;">⚙️ Configurar Permisos</h3>
                 <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" style="border:none; background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
@@ -1965,12 +2034,13 @@
                         if (!modalPrevio) {
                             modalPrevio = document.createElement('div');
                             modalPrevio.id = 'modal-preview-reporte';
-                            modalPrevio.style.cssText = 'position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box;';
+                            modalPrevio.className = 'hoja-overlay';
+                            modalPrevio.style.cssText = 'z-index:9999;';
                             document.body.appendChild(modalPrevio);
                         }
 
                         modalPrevio.innerHTML = `
-                            <div style="background:white; border-radius:16px; max-width:850px; width:100%; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); overflow:hidden;">
+                            <div class="hoja-contenido" style="max-width:850px; overflow:hidden; padding:12px 0 env(safe-area-inset-bottom);">
                                 <div style="padding:15px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
                                     <h3 style="margin:0; color:#0f172a; display:flex; align-items:center; gap:8px;">👀 Vista Previa del Reporte</h3>
                                     <button onclick="document.getElementById('modal-preview-reporte').style.display='none'" style="border:none; background:#e2e8f0; width:30px; height:30px; border-radius:50%; cursor:pointer; font-weight:bold; color:#475569; display:flex; align-items:center; justify-content:center;">✕</button>
@@ -3197,8 +3267,8 @@
         
     </script>
     
-    <div id="modal-detalle-indicadores" style="display:none; position:fixed; z-index:5000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-                <div class="form-content" style="max-width: 450px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow: hidden; padding: 0; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); max-height: 80vh;">
+    <div id="modal-detalle-indicadores" class="hoja-overlay" style="z-index:5000;">
+                <div class="form-content hoja-contenido" style="max-width: 450px; overflow: hidden; padding: 12px 0 env(safe-area-inset-bottom);">
                     <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
                         <h3 id="titulo-modal-indicador" style="margin:0; color:#0f172a; font-size:1.1rem; display:flex; align-items:center; gap:8px;">📊 Detalles</h3>
                         <button onclick="document.getElementById('modal-detalle-indicadores').style.display='none'" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
@@ -3208,8 +3278,8 @@
                 </div>
             </div>
 
-        <div id="modal-editar-equipo-filtro" style="display:none; position:fixed; z-index:5000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-            <div style="max-width: 400px; width: 100%; display: flex; flex-direction: column; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);">
+        <div id="modal-editar-equipo-filtro" class="hoja-overlay" style="z-index:5000;">
+            <div class="hoja-contenido" style="max-width: 400px; overflow: hidden; padding: 12px 0 env(safe-area-inset-bottom);">
                 
                 <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #f8fafc;">
                     <h3 style="margin:0; color:#0f172a; font-size:1.1rem; display:flex; align-items:center; gap:8px;">✏️ Editar Equipo</h3>

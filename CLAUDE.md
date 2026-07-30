@@ -70,8 +70,13 @@ cargan `1-config.js` por su cuenta y llevan su propio `<script>` inline.
 - **La franja de la barra de estado no es alcanzable por CSS.** Con la app
   instalada en la pantalla de inicio, iOS deja esa franja fuera del viewport
   y la pinta con el color de fondo de `<html>`. Ningún overlay puede cubrirla,
-  por muy `position:fixed` que sea. Para que acompañe al fondo atenuado de los
-  modales, un observador en `1-config.js` marca `<html>` con la clase
+  por muy `position:fixed` que sea. El panel de refacciones esquiva el
+  problema presentando sus paneles como hoja inferior (`.hoja-overlay` /
+  `.hoja-contenido`, definidos en el `<style>` de `10-refacciones.html`): al
+  no haber capa oscura a pantalla completa, no hay corte que disimular. Es el
+  patrón a seguir para paneles nuevos. En `index.html`, que aún usa modales
+  centrados sobre fondo atenuado, un observador en `1-config.js` marca
+  `<html>` con la clase
   `modal-abierto` mientras haya algún overlay visible, y `estilos.css` le
   aplica el gris del atenuado. Los modales nuevos funcionan solos siempre que
   su id empiece por `modal-` y sean `position:fixed`.

@@ -1786,7 +1786,7 @@ textarea:focus {
    elementos internos del modal de calendario (6-calendario.js) y no
    overlays. Si se crean nuevos elementos internos, conviene no nombrarlos
    con el prefijo modal-. */
-[id^="modal-"]:not(#modal-cal-title):not(#modal-cal-content) {
+[id^="modal-"]:not(#modal-cal-title):not(#modal-cal-content):not(.hoja-overlay) {
     padding-top: calc(20px + env(safe-area-inset-top)) !important;
     padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
 }
