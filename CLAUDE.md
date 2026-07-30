@@ -67,6 +67,14 @@ cargan `1-config.js` por su cuenta y llevan su propio `<script>` inline.
   indicador de inicio con `env(safe-area-inset-*)`; las reglas viven al final
   de `estilos.css`. Si se añade una pantalla nueva a pantalla completa, hay
   que darle ese padding o su encabezado quedará bajo el reloj.
+- **La franja de la barra de estado no es alcanzable por CSS.** Con la app
+  instalada en la pantalla de inicio, iOS deja esa franja fuera del viewport
+  y la pinta con el color de fondo de `<html>`. Ningún overlay puede cubrirla,
+  por muy `position:fixed` que sea. Para que acompañe al fondo atenuado de los
+  modales, un observador en `1-config.js` marca `<html>` con la clase
+  `modal-abierto` mientras haya algún overlay visible, y `estilos.css` le
+  aplica el gris del atenuado. Los modales nuevos funcionan solos siempre que
+  su id empiece por `modal-` y sean `position:fixed`.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con

@@ -1790,3 +1790,33 @@ textarea:focus {
     padding-top: calc(20px + env(safe-area-inset-top)) !important;
     padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
 }
+
+/* =========================================
+   FRANJA DE LA BARRA DE ESTADO (iOS instalado)
+   =========================================
+   Cuando la app corre instalada en la pantalla de inicio, iOS deja la franja
+   de la barra de estado FUERA del viewport y la pinta con el color de fondo
+   del documento. Ningún overlay puede alcanzarla, así que al abrir un modal
+   esa franja se quedaba clara y el corte contra el fondo atenuado saltaba a
+   la vista.
+
+   La solución es oscurecer el fondo del documento mientras haya un modal
+   abierto: la franja acompaña al atenuado en lugar de recortarlo. La clase
+   la pone y la quita el observador de 1-config.js.
+
+   #7c7d7e es justo el resultado de rgba(0,0,0,0.5) sobre #f8fafc, el mismo
+   gris que produce el overlay. El reloj del sistema sigue en negro y
+   conserva 5.09:1 de contraste sobre ese gris.
+
+   Importante: el color va en <html>, no en <body>. Al declararlo aquí, el
+   fondo de <body> deja de propagarse al lienzo y pasa a pintar sólo su
+   propia caja, que cubre el viewport. Así el cambio se ve únicamente en la
+   franja y el interior de la página queda intacto. */
+
+html {
+    transition: background-color 0.25s ease;
+}
+
+html.modal-abierto {
+    background-color: #7c7d7e;
+}

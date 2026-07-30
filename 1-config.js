@@ -187,3 +187,57 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
     }
 
 })();
+
+// ==========================================
+// FRANJA DE LA BARRA DE ESTADO AL ABRIR UN MODAL
+// ==========================================
+// Con la app instalada en la pantalla de inicio, iOS reserva la franja de la
+// barra de estado fuera del viewport y la pinta con el color de fondo del
+// documento. Ningún overlay llega hasta ahí, así que al abrir un modal esa
+// franja se quedaba clara y el corte contra el fondo atenuado se notaba.
+//
+// Aquí se marca <html> con la clase 'modal-abierto' mientras haya algún
+// overlay visible; el color lo aplica estilos.css. Se hace con un observador
+// en lugar de tocar cada función que abre un modal, para que valga también
+// para los modales que se crean sobre la marcha.
+(() => {
+    const esOverlayVisible = (el) => {
+        const estilo = getComputedStyle(el);
+        return estilo.position === 'fixed' && estilo.display !== 'none';
+    };
+
+    const revisar = () => {
+        // Se excluyen los elementos internos que comparten el prefijo pero no
+        // son overlays; el filtro por position:fixed ya los descarta.
+        const hayModal = Array.from(document.querySelectorAll('[id^="modal-"]')).some(esOverlayVisible);
+        document.documentElement.classList.toggle('modal-abierto', hayModal);
+    };
+
+    // Estas páginas repintan listas completas con innerHTML, así que las
+    // mutaciones llegan en ráfagas. Se agrupan en un solo repaso por frame.
+    let pendiente = false;
+    const programarRevision = () => {
+        if (pendiente) return;
+        pendiente = true;
+        requestAnimationFrame(() => {
+            pendiente = false;
+            revisar();
+        });
+    };
+
+    const iniciar = () => {
+        revisar();
+        new MutationObserver(programarRevision).observe(document.body, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            attributeFilter: ['style', 'class']
+        });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', iniciar);
+    } else {
+        iniciar();
+    }
+})();
