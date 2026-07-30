@@ -278,6 +278,9 @@ window.renderizarCronologia = () => {
 
 window.renderizarListaRespuestas = () => {
     const listContainer = document.getElementById('lista-respuestas-historial');
+    // La lista no existe si el administrador llegó desde el expediente por
+    // empleado; sin esta guarda el redibujado revienta con TypeError.
+    if (!listContainer) return;
     const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
     
     const searchInput = document.getElementById('buscador-historial');
@@ -1056,12 +1059,375 @@ window.cambiarEstadoRespuesta = async (id, nuevoEstado) => {
         document.body.style.overflow = '';
         if (window.renderizarListaRespuestas) window.renderizarListaRespuestas();
         if (window.renderizarCronologia) window.renderizarCronologia();
-        
+        // Si el cambio salió de una ficha abierta desde el expediente por
+        // empleado, hay que repintar esa pantalla y no la lista de la evaluación.
+        if (window.expedienteActual && window.renderizarExpedienteEmpleado) window.renderizarExpedienteEmpleado();
+
     } catch (e) {
         alert("Ocurrió un error al cambiar el estado: " + e.message);
     }
 };
 window.cambiarEstadoFalso = window.cambiarEstadoRespuesta; // Compatibilidad
+
+// --- 2B. EXPEDIENTE POR EMPLEADO (REVISIÓN EN LOTE) ---
+// Acceso rápido del administrador: busca a una persona y trabaja todas sus
+// respuestas de una sola vez, en lugar de entrar evaluación por evaluación.
+
+window.expedienteActual = null;
+
+// Reglas de qué estado admite cada respuesta. Son exactamente las mismas que
+// ofrece la ficha individual, para que el lote no pueda hacer nada que no se
+// pudiera hacer una por una.
+window.motivoNoAplicable = (resp, nuevoEstado) => {
+    const estado = resp.review_status;
+    if (nuevoEstado === 'Certificada') {
+        if (estado === 'Certificada') return 'ya está certificada';
+        if (window.calcularScoreRespuesta(resp) < 80) return 'califica por debajo de 80%';
+        return null;
+    }
+    if (nuevoEstado === 'Mal Revisada') return estado === 'Mal Revisada' ? 'ya está marcada así' : null;
+    if (nuevoEstado === 'Falsa') return estado === 'Falsa' ? 'ya está anulada' : null;
+    if (nuevoEstado === 'Revisado') {
+        return ['Falsa', 'Certificada', 'Mal Revisada'].includes(estado) ? null : 'no está anulada ni certificada';
+    }
+    return 'estado desconocido';
+};
+
+window.abrirRevisionPorEmpleado = async () => {
+    const container = document.getElementById('contenido-modal-evaluaciones');
+    if (!container) return;
+
+    // El expediente cruza a todos los empleados, así que es solo para admin.
+    if (!window.modoAdminActivo) {
+        alert("Esta vista está reservada para el modo administrador.");
+        return;
+    }
+
+    container.scrollTop = 0;
+    container.style.display = 'block';
+    container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner" style="margin: 0 auto 15px auto;"></div>Contando respuestas por empleado...</div>';
+
+    if (!window.todosLosEmpleadosData || window.todosLosEmpleadosData.length === 0) {
+        if (window.cargarDatosEmpleados) await window.cargarDatosEmpleados();
+    }
+
+    // Conteo ligero: solo el empleado y el estado de cada respuesta.
+    const { data: resumen } = await sb.from('evaluation_responses').select('employee_id, review_status');
+
+    const conteos = {};
+    (resumen || []).forEach(r => {
+        const id = String(r.employee_id);
+        if (!conteos[id]) conteos[id] = { total: 0, porCertificar: 0, sinCalificar: 0 };
+        conteos[id].total++;
+        if (r.review_status === 'Revisado') conteos[id].porCertificar++;
+        else if (r.review_status !== 'Certificada' && r.review_status !== 'Falsa' && r.review_status !== 'Mal Revisada') conteos[id].sinCalificar++;
+    });
+    window.conteosRevisionEmpleado = conteos;
+
+    const conRespuestas = Object.values(conteos).reduce((a, c) => a + c.total, 0);
+
+    container.innerHTML = `
+        <div style="display:flex; align-items:center; margin-bottom:20px; flex-wrap: wrap; gap: 10px;">
+            <button onclick="window.expedienteActual=null; window.cargarVistaEvaluaciones()" style="background:#f1f5f9; border:none; color:#334155; font-weight:bold; cursor:pointer; font-size:1.2rem; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;" title="Volver a la lista">←</button>
+            <div>
+                <h2 style="margin:0; font-size:1.2rem; color:#0d9488;">🔎 Revisión por Empleado</h2>
+                <div style="font-size:0.85rem; color:#64748b;">Busca a una persona y resuelve todas sus evaluaciones juntas</div>
+            </div>
+        </div>
+
+        <input type="text" id="buscador-empleado-revision" placeholder="🔍 Escribe el nombre del empleado..." oninput="window.renderizarListaEmpleadosRevision()"
+               style="width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white; margin-bottom:15px;">
+
+        <div style="font-size:0.8rem; color:#94a3b8; margin-bottom:10px;">${conRespuestas} respuestas registradas en total</div>
+        <div id="lista-empleados-revision"></div>
+    `;
+
+    window.renderizarListaEmpleadosRevision();
+    const buscador = document.getElementById('buscador-empleado-revision');
+    if (buscador) buscador.focus();
+};
+
+window.renderizarListaEmpleadosRevision = () => {
+    const lista = document.getElementById('lista-empleados-revision');
+    if (!lista) return;
+
+    const input = document.getElementById('buscador-empleado-revision');
+    const termino = input ? input.value.toLowerCase().trim() : '';
+    const conteos = window.conteosRevisionEmpleado || {};
+
+    let empleados = (window.todosLosEmpleadosData || []).filter(e => (conteos[String(e.id)] || {}).total);
+
+    if (termino) {
+        empleados = empleados.filter(e =>
+            (e.name || '').toLowerCase().includes(termino) ||
+            (e.puesto || '').toLowerCase().includes(termino) ||
+            (e.dept || '').toLowerCase().includes(termino)
+        );
+    }
+
+    // Primero quien tiene trabajo pendiente para el administrador.
+    empleados.sort((a, b) => {
+        const ca = conteos[String(a.id)] || {}, cb = conteos[String(b.id)] || {};
+        if ((cb.porCertificar || 0) !== (ca.porCertificar || 0)) return (cb.porCertificar || 0) - (ca.porCertificar || 0);
+        return (a.name || '').localeCompare(b.name || '');
+    });
+
+    if (empleados.length === 0) {
+        lista.innerHTML = `<div style="padding:30px; text-align:center; color:#94a3b8;">${termino ? 'Ningún empleado coincide con la búsqueda.' : 'Todavía no hay respuestas registradas.'}</div>`;
+        return;
+    }
+
+    lista.innerHTML = empleados.slice(0, 50).map(e => {
+        const c = conteos[String(e.id)] || { total: 0, porCertificar: 0, sinCalificar: 0 };
+        const inactivo = e.isActive === false ? ` <span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:6px; font-size:0.7rem; margin-left:6px;">Inactivo</span>` : '';
+        const chipCertificar = c.porCertificar > 0 ? `<span style="background:#dcfce7; color:#166534; padding:2px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">${c.porCertificar} por certificar</span>` : '';
+        const chipSinCalificar = c.sinCalificar > 0 ? `<span style="background:#fff7ed; color:#c2410c; padding:2px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">${c.sinCalificar} sin calificar</span>` : '';
+
+        return `
+        <div class="incident-card" style="border-left:5px solid #0d9488; padding:14px; cursor:pointer; margin-bottom:10px;" onclick="window.abrirExpedienteEmpleado('${e.id}')">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <div style="min-width:0;">
+                    <div style="color:#0f172a; font-weight:700; font-size:1rem;">${e.name}${inactivo}</div>
+                    <div style="color:#64748b; font-size:0.8rem; margin-top:2px;">${e.puesto || 'Sin puesto'} · ${e.dept || 'General'}</div>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+                        <span style="background:#f1f5f9; color:#475569; padding:2px 8px; border-radius:8px; font-size:0.75rem; font-weight:700;">${c.total} en total</span>
+                        ${chipCertificar}
+                        ${chipSinCalificar}
+                    </div>
+                </div>
+                <div style="color:#64748b; font-size:1.2rem; flex-shrink:0;">👉</div>
+            </div>
+        </div>`;
+    }).join('') + (empleados.length > 50 ? `<div style="padding:12px; text-align:center; color:#94a3b8; font-size:0.85rem;">Se muestran los primeros 50. Afina la búsqueda para ver el resto.</div>` : '');
+};
+
+window.abrirExpedienteEmpleado = async (empId) => {
+    const container = document.getElementById('contenido-modal-evaluaciones');
+    if (!container) return;
+
+    container.scrollTop = 0;
+    container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner" style="margin: 0 auto 15px auto;"></div>Abriendo expediente...</div>';
+
+    const empleado = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(empId));
+
+    const { data: respuestas } = await sb.from('evaluation_responses')
+        .select('*')
+        .eq('employee_id', empId)
+        .order('submitted_at', { ascending: false });
+
+    // Los títulos se consultan aquí porque evalCache se invalida cada vez que
+    // cambia un estado, y sin ellos las filas quedarían sin nombre.
+    const { data: evaluaciones } = await sb.from('evaluations').select('id, title');
+    const titulos = {};
+    (evaluaciones || []).forEach(ev => { titulos[String(ev.id)] = ev.title; });
+
+    window.expedienteActual = {
+        empleado: empleado || { id: empId, name: (window.employeeNameMap || {})[empId] || `ID: ${empId}` },
+        respuestas: respuestas || [],
+        titulos: titulos,
+        seleccion: []
+    };
+    // La ficha individual y cambiarEstadoRespuesta trabajan sobre esta caché.
+    window.respuestasCacheActual = window.expedienteActual.respuestas;
+
+    window.renderizarExpedienteEmpleado();
+};
+
+window.alternarSeleccionRespuesta = (id) => {
+    const exp = window.expedienteActual;
+    if (!exp) return;
+    const i = exp.seleccion.indexOf(id);
+    if (i === -1) exp.seleccion.push(id); else exp.seleccion.splice(i, 1);
+    window.renderizarExpedienteEmpleado();
+};
+
+window.seleccionarGrupoRespuestas = (ids, marcar) => {
+    const exp = window.expedienteActual;
+    if (!exp) return;
+    const lista = String(ids).split(',').filter(Boolean);
+    lista.forEach(id => {
+        const i = exp.seleccion.indexOf(id);
+        if (marcar && i === -1) exp.seleccion.push(id);
+        if (!marcar && i !== -1) exp.seleccion.splice(i, 1);
+    });
+    window.renderizarExpedienteEmpleado();
+};
+
+window.limpiarSeleccionExpediente = () => {
+    if (!window.expedienteActual) return;
+    window.expedienteActual.seleccion = [];
+    window.renderizarExpedienteEmpleado();
+};
+
+window.verDetalleDesdeExpediente = (id) => {
+    const exp = window.expedienteActual;
+    if (!exp) return;
+    const resp = exp.respuestas.find(r => String(r.id) === String(id));
+    if (resp) window.verDetalleRespuesta(resp);
+};
+
+window.renderizarExpedienteEmpleado = () => {
+    const container = document.getElementById('contenido-modal-evaluaciones');
+    const exp = window.expedienteActual;
+    if (!container || !exp) return;
+
+    const { empleado, respuestas, titulos, seleccion } = exp;
+
+    const grupos = [
+        { clave: 'porCertificar', titulo: '⭐ Calificadas, listas para certificar', color: '#166534', fondo: '#dcfce7',
+          filtro: r => r.review_status === 'Revisado' },
+        { clave: 'sinCalificar', titulo: '⏳ Sin calificar todavía', color: '#c2410c', fondo: '#fff7ed',
+          filtro: r => !['Revisado', 'Certificada', 'Falsa', 'Mal Revisada'].includes(r.review_status) },
+        { clave: 'certificadas', titulo: '✅ Certificadas', color: '#1d4ed8', fondo: '#eff6ff',
+          filtro: r => r.review_status === 'Certificada' },
+        { clave: 'rechazadas', titulo: '🚫 Rechazadas o anuladas', color: '#7e22ce', fondo: '#faf5ff',
+          filtro: r => r.review_status === 'Mal Revisada' || r.review_status === 'Falsa' }
+    ];
+
+    const filaHtml = (r) => {
+        const marcada = seleccion.includes(String(r.id));
+        const fecha = new Date(r.submitted_at).toLocaleDateString();
+        const titulo = titulos[String(r.evaluation_id)] || 'Evaluación';
+        const calificada = ['Revisado', 'Certificada', 'Falsa', 'Mal Revisada'].includes(r.review_status);
+        const score = calificada ? window.calcularScoreRespuesta(r) : null;
+        const colorScore = score === null ? '#94a3b8' : (score >= 80 ? '#166534' : (score >= 60 ? '#b45309' : '#991b1b'));
+        const fondoScore = score === null ? '#f1f5f9' : (score >= 80 ? '#dcfce7' : (score >= 60 ? '#fef3c7' : '#fee2e2'));
+        const badgeScore = score === null ? '' : `<span style="color:${colorScore}; background:${fondoScore}; padding:2px 8px; border-radius:8px; font-size:0.8rem; font-weight:700;">${score}%</span>`;
+
+        return `
+        <div style="display:flex; align-items:center; gap:10px; background:${marcada ? '#f0fdfa' : 'white'}; border:1px solid ${marcada ? '#5eead4' : '#e2e8f0'}; border-radius:10px; padding:10px 12px; margin-bottom:8px;">
+            <input type="checkbox" ${marcada ? 'checked' : ''} onclick="event.stopPropagation(); window.alternarSeleccionRespuesta('${r.id}')"
+                   style="width:20px; height:20px; flex-shrink:0; accent-color:#0d9488; cursor:pointer;">
+            <div style="flex:1; min-width:0; cursor:pointer;" onclick="window.verDetalleDesdeExpediente('${r.id}')">
+                <div style="color:#0f172a; font-weight:600; font-size:0.92rem;">${titulo}</div>
+                <div style="color:#64748b; font-size:0.78rem; margin-top:3px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                    <span>${fecha}</span> ${badgeScore}
+                </div>
+            </div>
+            <button onclick="window.verDetalleDesdeExpediente('${r.id}')" style="flex-shrink:0; background:#f1f5f9; border:none; color:#475569; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;">Abrir</button>
+        </div>`;
+    };
+
+    let cuerpo = '';
+    grupos.forEach(g => {
+        const filas = respuestas.filter(g.filtro);
+        if (filas.length === 0) return;
+
+        const ids = filas.map(r => String(r.id));
+        const todasMarcadas = ids.every(id => seleccion.includes(id));
+
+        cuerpo += `
+        <div style="margin-top:18px;">
+            <div class="cabecera-grupo-expediente" data-grupo="${g.clave}" style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:${g.fondo}; color:${g.color}; padding:8px 12px; border-radius:8px; font-weight:700; font-size:0.85rem; margin-bottom:10px;">
+                <span>${g.titulo} (${filas.length})</span>
+                <button onclick="window.seleccionarGrupoRespuestas('${ids.join(',')}', ${todasMarcadas ? 'false' : 'true'})"
+                        style="background:white; border:1px solid ${g.color}; color:${g.color}; padding:4px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; flex-shrink:0;">
+                    ${todasMarcadas ? 'Quitar todas' : 'Marcar todas'}
+                </button>
+            </div>
+            ${filas.map(filaHtml).join('')}
+        </div>`;
+    });
+
+    if (respuestas.length === 0) {
+        cuerpo = `<div style="padding:40px; text-align:center; color:#94a3b8;">Esta persona no tiene respuestas registradas.</div>`;
+    }
+
+    // Barra de acciones: solo aparece con algo seleccionado.
+    let barraHtml = '';
+    if (seleccion.length > 0) {
+        const btn = (estado, texto, fondo, borde, color) =>
+            `<button onclick="window.aplicarEstadoEnLote('${estado}')" style="flex:1 1 45%; background:${fondo}; color:${color}; border:1px solid ${borde}; padding:10px 8px; border-radius:10px; font-size:0.82rem; font-weight:700; cursor:pointer;">${texto}</button>`;
+
+        barraHtml = `
+        <div style="position:sticky; bottom:0; margin-top:20px; background:white; border:1px solid #e2e8f0; border-radius:12px; padding:12px; box-shadow:0 -4px 12px rgba(0,0,0,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="font-weight:700; color:#0f172a; font-size:0.9rem;">${seleccion.length} seleccionada${seleccion.length === 1 ? '' : 's'}</span>
+                <button onclick="window.limpiarSeleccionExpediente()" style="background:none; border:none; color:#64748b; font-size:0.8rem; font-weight:700; cursor:pointer; text-decoration:underline;">Limpiar</button>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                ${btn('Certificada', '⭐ Certificar', '#eff6ff', '#3b82f6', '#1d4ed8')}
+                ${btn('Mal Revisada', '⚠️ Mal revisada', '#f3e8ff', '#a855f7', '#7e22ce')}
+                ${btn('Falsa', '🚫 Anular', '#fee2e2', '#ef4444', '#991b1b')}
+                ${btn('Revisado', '↩️ Restaurar', '#dcfce7', '#22c55e', '#166534')}
+            </div>
+        </div>`;
+    }
+
+    const puesto = empleado.puesto ? `${empleado.puesto} · ${empleado.dept || 'General'}` : '';
+
+    container.innerHTML = `
+        <div style="display:flex; align-items:center; margin-bottom:16px; flex-wrap: wrap; gap: 10px;">
+            <button onclick="window.abrirRevisionPorEmpleado()" style="background:#f1f5f9; border:none; color:#334155; font-weight:bold; cursor:pointer; font-size:1.2rem; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;" title="Volver a la búsqueda">←</button>
+            <div style="min-width:0;">
+                <h2 style="margin:0; font-size:1.15rem; color:#0d9488;">${empleado.name}</h2>
+                <div style="font-size:0.82rem; color:#64748b;">${puesto}${puesto ? ' · ' : ''}${respuestas.length} respuesta${respuestas.length === 1 ? '' : 's'}</div>
+            </div>
+        </div>
+        <div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
+            Marca las que quieras y aplica el cambio a todas juntas. Toca el nombre de una evaluación para abrirla completa.
+        </div>
+        ${cuerpo}
+        ${barraHtml}
+    `;
+};
+
+window.aplicarEstadoEnLote = async (nuevoEstado) => {
+    const exp = window.expedienteActual;
+    if (!exp || exp.seleccion.length === 0) return;
+    if (!window.modoAdminActivo) { alert("Solo el modo administrador puede cambiar el estado de las respuestas."); return; }
+
+    const elegidas = exp.respuestas.filter(r => exp.seleccion.includes(String(r.id)));
+    const aplicables = [];
+    const descartadas = [];
+
+    elegidas.forEach(r => {
+        const motivo = window.motivoNoAplicable(r, nuevoEstado);
+        if (motivo) descartadas.push({ resp: r, motivo: motivo });
+        else aplicables.push(r);
+    });
+
+    if (aplicables.length === 0) {
+        alert(`Ninguna de las ${elegidas.length} respuestas seleccionadas puede pasar a "${nuevoEstado}".\n\nMotivo: ${descartadas[0] ? descartadas[0].motivo : 'no aplica'}.`);
+        return;
+    }
+
+    let msg = `Se van a marcar como "${nuevoEstado}" ${aplicables.length} respuesta(s) de ${exp.empleado.name}.`;
+    if (descartadas.length > 0) {
+        const detalle = descartadas.slice(0, 5)
+            .map(d => `  • ${exp.titulos[String(d.resp.evaluation_id)] || 'Evaluación'}: ${d.motivo}`)
+            .join('\n');
+        msg += `\n\nSe omitirán ${descartadas.length}:\n${detalle}`;
+        if (descartadas.length > 5) msg += `\n  • …y ${descartadas.length - 5} más`;
+    }
+    if (nuevoEstado === 'Mal Revisada') msg += `\n\nLas marcadas volverán a la bandeja de pendientes del supervisor.`;
+    if (nuevoEstado === 'Falsa') msg += `\n\nLas anuladas se conservan como evidencia pero dejan de sumar a las estadísticas.`;
+    msg += `\n\n¿Confirmas?`;
+
+    if (!confirm(msg)) return;
+
+    try {
+        const ids = aplicables.map(r => r.id);
+        const { error } = await sb.from('evaluation_responses')
+            .update({ review_status: nuevoEstado })
+            .in('id', ids);
+
+        if (error) throw error;
+
+        aplicables.forEach(r => { r.review_status = nuevoEstado; });
+        exp.seleccion = [];
+
+        window.evalCache = null;
+        if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+
+        alert(`Listo: ${aplicables.length} respuesta(s) marcada(s) como ${nuevoEstado}.`);
+        window.renderizarExpedienteEmpleado();
+
+    } catch (e) {
+        alert("Ocurrió un error al aplicar el cambio en lote: " + e.message);
+    }
+};
+
 // --- 3. CREAR Y EDITAR EVALUACIONES ---
 
 window.renderConfiguracionEscala = () => {

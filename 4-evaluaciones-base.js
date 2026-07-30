@@ -332,12 +332,21 @@ window.cargarVistaEvaluaciones = async () => {
    container.innerHTML = '';
     
     let adminBadge = window.modoAdminActivo ? `<span style="background:#f1f5f9; color:#ef4444; padding:4px 8px; border-radius:6px; font-size:0.8rem; border:1px solid #fecaca; font-weight:bold;">⚙️ Modo Admin Activo</span>` : '';
-    
+
+    // Acceso rápido del administrador para trabajar por persona en vez de por evaluación.
+    let botonPorEmpleado = window.modoAdminActivo ? `
+            <button onclick="if(window.abrirRevisionPorEmpleado) window.abrirRevisionPorEmpleado(); else alert('Módulo en actualización');" style="background:#ccfbf1; color:#0f766e; padding:8px 16px; border-radius:8px; border:1px solid #5eead4; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(13, 148, 136, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#99f6e4'" onmouseout="this.style.background='#ccfbf1'">
+                🔎 Revisar por Empleado
+            </button>` : '';
+
     container.insertAdjacentHTML('beforeend', `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
-            <button onclick="if(window.abrirHistorialGlobal) window.abrirHistorialGlobal(); else alert('Módulo en actualización');" style="background:#f3e8ff; color:#7e22ce; padding:8px 16px; border-radius:8px; border:1px solid #d8b4fe; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(126, 34, 206, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#e9d5ff'" onmouseout="this.style.background='#f3e8ff'">
-                🗂️ Ver Historial Global (Todas)
-            </button>
+            <div style="display:flex; flex-wrap:wrap; gap:10px;">
+                <button onclick="if(window.abrirHistorialGlobal) window.abrirHistorialGlobal(); else alert('Módulo en actualización');" style="background:#f3e8ff; color:#7e22ce; padding:8px 16px; border-radius:8px; border:1px solid #d8b4fe; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(126, 34, 206, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#e9d5ff'" onmouseout="this.style.background='#f3e8ff'">
+                    🗂️ Ver Historial Global (Todas)
+                </button>
+                ${botonPorEmpleado}
+            </div>
             ${adminBadge}
         </div>
     `);
