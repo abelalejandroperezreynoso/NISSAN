@@ -184,20 +184,64 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         return null;
     };
 
-    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia) => {
+    // Cómo se nombra cada periodo al contar la racha de omisiones.
+    const NOMBRE_OMISION = {
+        weekly:     ['semana', 'semanas'],
+        biweekly:   ['quincena', 'quincenas'],
+        monthly:    ['mes', 'meses'],
+        quarterly:  ['trimestre', 'trimestres'],
+        semiannual: ['semestre', 'semestres'],
+        yearly:     ['año', 'años'],
+        biennial:   ['periodo', 'periodos']
+    };
+
+    // Cuenta cuántos periodos completos cerraron sin respuesta entre 'desde' y el
+    // periodo vigente. Quedan fuera de la cuenta el periodo en curso, que todavía
+    // está a tiempo, y el periodo de origen (aquel donde cae 'desde'), porque solo
+    // corrió en parte. La cuenta se queda corta antes que exagerar el atraso.
+    window.periodosOmitidos = (frecuencia, desde, periodoActual) => {
+        if (!desde || !periodoActual || isNaN(desde)) return 0;
+
+        let omitidos = 0;
+        let cursor = periodoActual.inicio;
+
+        // Tope de seguridad: más allá de esto el número ya no aporta nada.
+        while (omitidos < 60) {
+            const anterior = window.periodoVigente(frecuencia, new Date(cursor.getTime() - 1));
+            if (!anterior || desde >= anterior.inicio) break;
+            omitidos++;
+            cursor = anterior.inicio;
+        }
+        return omitidos;
+    };
+
+    window.textoOmisiones = (frecuencia, cantidad) => {
+        const nombres = NOMBRE_OMISION[frecuencia];
+        if (!nombres || !cantidad) return '';
+        return `${cantidad} ${cantidad === 1 ? nombres[0] : nombres[1]} sin contestar`;
+    };
+
+    // 'fechaAlta' (el created_at de la encuesta) sirve de origen para contar la
+    // racha cuando el empleado no la ha contestado nunca.
+    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia, fechaAlta) => {
         const resps = respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [];
 
-        if (resps.length === 0) return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'nunca', ultimaFecha: null };
+        // Sin frecuencia repetitiva ('once', o sin dato) no hay periodos que contar.
+        const now = new Date();
+        const periodo = AVISO_CIERRE.hasOwnProperty(frecuencia) ? window.periodoVigente(frecuencia, now) : null;
+
+        if (resps.length === 0) {
+            // Nunca contestada: la racha corre desde que se dio de alta la encuesta.
+            const omitidos = (periodo && fechaAlta) ? window.periodosOmitidos(frecuencia, new Date(fechaAlta), periodo) : 0;
+            return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'nunca', ultimaFecha: null, periodosOmitidos: omitidos, frecuencia: frecuencia };
+        }
 
         resps.sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
         const ultima = resps[0].submitted_at;
 
-        if (resps[0].review_status === 'Mal Revisada') return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'mal_revisada', ultimaFecha: ultima };
+        if (resps[0].review_status === 'Mal Revisada') return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'mal_revisada', ultimaFecha: ultima, periodosOmitidos: 0, frecuencia: frecuencia };
 
-        // Sin frecuencia repetitiva ('once', o sin dato) basta con haberla
-        // contestado una vez para que deje de aparecer.
-        const now = new Date();
-        const periodo = AVISO_CIERRE.hasOwnProperty(frecuencia) ? window.periodoVigente(frecuencia, now) : null;
+        // Contestada al menos una vez y sin frecuencia repetitiva: no se pide más.
         if (!periodo) return { mostrar: false };
 
         const subDate = new Date(ultima);
@@ -207,20 +251,20 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         // pasado desde entonces.
         if (subDate >= periodo.inicio) return { mostrar: false };
 
-        // Si la última respuesta ni siquiera cae en el periodo anterior, se saltó
-        // un periodo completo: eso sí está vencido.
-        const periodoAnterior = window.periodoVigente(frecuencia, new Date(periodo.inicio.getTime() - 1));
-        if (periodoAnterior && subDate < periodoAnterior.inicio) {
-            return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'vencida', ultimaFecha: ultima };
+        const omitidos = window.periodosOmitidos(frecuencia, subDate, periodo);
+
+        // Si dejó cerrar al menos un periodo completo sin contestar, está vencida.
+        if (omitidos > 0) {
+            return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'vencida', ultimaFecha: ultima, periodosOmitidos: omitidos, frecuencia: frecuencia };
         }
 
         const diasRestantes = Math.ceil((periodo.fin - now) / 86400000);
 
         if (diasRestantes <= AVISO_CIERRE[frecuencia]) {
-            return { mostrar: true, diasFaltantes: diasRestantes, vencida: false, tipoAviso: 'por_vencer', ultimaFecha: ultima };
+            return { mostrar: true, diasFaltantes: diasRestantes, vencida: false, tipoAviso: 'por_vencer', ultimaFecha: ultima, periodosOmitidos: 0, frecuencia: frecuencia };
         }
 
-        return { mostrar: true, diasFaltantes: diasRestantes, vencida: false, tipoAviso: 'falta_periodo', nombrePeriodo: periodo.nombre, ultimaFecha: ultima };
+        return { mostrar: true, diasFaltantes: diasRestantes, vencida: false, tipoAviso: 'falta_periodo', nombrePeriodo: periodo.nombre, ultimaFecha: ultima, periodosOmitidos: 0, frecuencia: frecuencia };
     };
 
     window.cargarVistaPendientes = async (modo = 'PROPIOS') => {
@@ -372,7 +416,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                 // Solo agregamos la encuesta si hace match
                                                 if (esObligatoria && esParaMi) {
-                                                    const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency);
+                                                    const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, ev.created_at);
                                     if (requiereRespuesta.mostrar) {
     if (ev.mode === 'boss') {
         // Generamos un item especial para indicar que el usuario está esperando a su jefe
@@ -460,7 +504,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                                    if (aplicaSub) {
                                                     const subResps = teamResponsesEvals ? teamResponsesEvals.filter(r => String(r.employee_id) === String(sub.id)) : [];
-                                                                       const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency);
+                                                                       const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at);
                                                     
                                                     if (requiresResponse.mostrar) {
                                                         if (ev.mode === 'boss') {
@@ -591,7 +635,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                                                 if (aplicaSub) {
                                                             const subResps = teamResponses ? teamResponses.filter(r => String(r.employee_id) === String(sub.id)) : [];
-                                                                                    const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency);
+                                                                                    const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at);
                                                             
                                                             if (requiresResponse.mostrar) {
                                                                 items.push({
@@ -642,9 +686,20 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
             let txtEstado = "¡Pendiente!";
             let colorEstado = "#ea580c";
             
+            // Racha de periodos que cerraron sin respuesta. Se muestra aparte del
+            // estado para que el atraso acumulado quede a la vista.
+            let badgeOmisionesHtml = '';
+            if (item.vencimiento && item.vencimiento.periodosOmitidos > 0) {
+                const textoRacha = window.textoOmisiones(item.vencimiento.frecuencia, item.vencimiento.periodosOmitidos);
+                if (textoRacha) {
+                    badgeOmisionesHtml = `<span style="background:#fef2f2; color:#991b1b; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #fca5a5;">📉 ${textoRacha}</span>`;
+                }
+            }
+
             if (item.vencimiento) {
                 if (item.vencimiento.vencida) {
-                    badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">🚨 Vencida</span>`;
+                    const etiquetaVencida = item.vencimiento.tipoAviso === 'nunca' ? 'Nunca contestada' : 'Vencida';
+                    badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">🚨 ${etiquetaVencida}</span>`;
                     txtEstado = "¡Vencida!";
                     colorEstado = "#b91c1c";
                 } else if (item.vencimiento.tipoAviso === 'falta_periodo') {
@@ -696,6 +751,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                 <span class="badge-type" style="background-color:#ef4444">Falta Contestar</span>
                                 ${badgeFreqHtml}
                                 ${badgeTiempoHtml}
+                                ${badgeOmisionesHtml}
                             </div>
                             
                             <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
@@ -749,6 +805,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                 <span style="color:#ea580c; font-weight:bold; font-size:0.8rem;">¡Falta evaluar!</span>
                                 ${badgeFreqHtml}
                                 ${badgeTiempoHtml}
+                                ${badgeOmisionesHtml}
                             </div>
                             
                             <div style="background:#fdf2f8; border:1px solid #fce7f3; border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
@@ -901,6 +958,7 @@ if (item.virtual_type === 'waiting_boss') {
                                 <span style="color:${colorEstado}; font-weight:bold; font-size:0.8rem;">${txtEstado}</span>
                                 ${badgeFreqHtml}
                                 ${badgeTiempoHtml}
+                                ${badgeOmisionesHtml}
                             </div>
                             
                             <div style="background:#eff6ff; border:1px solid #dbeafe; border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
