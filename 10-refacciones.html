@@ -1503,6 +1503,7 @@
         // criterio para no romper la cadena de mando.
 
         window.empleadosAdminCache = [];
+        window.areasAdminCache = [];
         window.empleadoEditandoId = null;
 
         // Rellena window.todosLosEmpleadosData. Se llama al cargar la página y
@@ -1549,15 +1550,65 @@
 
             try {
                 const { data, error } = await sb.from('employees')
-                    .select('id, employee_id, name, department, puesto, supervisor_id, hiring_date, is_active, avatar_url')
+                    .select('id, employee_id, name, department, puesto, supervisor_id, hiring_date, is_active, avatar_url, area_id')
                     .order('name');
                 if (error) throw error;
                 window.empleadosAdminCache = data || [];
+
+                await window.cargarAreas();
                 window.renderizarListaEmpleados();
             } catch (e) {
                 console.error("Error al consultar empleados:", e);
                 lista.innerHTML = '<div style="text-align:center; color:#ff3b30; padding:24px; font-size:0.9rem;">No se pudo cargar la lista de empleados.</div>';
             }
+        };
+
+        // Solo se ofrecen las áreas activas: 'activa' viene con default true,
+        // así que se descartan únicamente las marcadas expresamente como false.
+        window.cargarAreas = async () => {
+            try {
+                const { data, error } = await sb.from('areas').select('id, nombre, activa').order('nombre');
+                if (error) throw error;
+                window.areasAdminCache = (data || []).filter(a => a.activa !== false);
+            } catch (e) {
+                console.error("Error al cargar áreas:", e);
+                window.areasAdminCache = [];
+            }
+        };
+
+        window.crearNuevaArea = async () => {
+            const nombre = prompt("Nombre de la nueva área:");
+            if (!nombre || nombre.trim() === '') return;
+
+            try {
+                const { error } = await sb.from('areas').insert([{ nombre: nombre.trim() }]);
+                if (error) throw error;
+
+                await window.cargarAreas();
+                // Se localiza por nombre en la caché ya recargada en vez de
+                // fiarse de la fila que devuelva el insert: la columna nombre
+                // es única, así que la coincidencia es inequívoca.
+                const nueva = window.areasAdminCache.find(a => a.nombre === nombre.trim());
+                window.renderizarSelectorAreas(nueva ? nueva.id : '');
+            } catch (e) {
+                console.error("Error al crear el área:", e);
+                if (e && (e.code === '23505' || String(e.message || '').includes('duplicate'))) {
+                    alert(`Ya existe un área llamada "${nombre.trim()}".`);
+                } else {
+                    alert("No se pudo crear el área: " + (e.message || JSON.stringify(e)));
+                }
+            }
+        };
+
+        window.renderizarSelectorAreas = (idSeleccionada) => {
+            const sel = document.getElementById('inp-emp-area');
+            if (!sel) return;
+            let opciones = '<option value="">Sin área</option>';
+            window.areasAdminCache.forEach(a => {
+                const marcado = String(a.id) === String(idSeleccionada) ? ' selected' : '';
+                opciones += `<option value="${a.id}"${marcado}>${a.nombre}</option>`;
+            });
+            sel.innerHTML = opciones;
         };
 
         window.cerrarAdminEmpleados = () => {
@@ -1638,6 +1689,8 @@
                 });
             selSup.innerHTML = opciones;
 
+            window.renderizarSelectorAreas(emp ? emp.area_id : '');
+
             document.getElementById('modal-empleado-form').style.display = 'flex';
         };
 
@@ -1663,6 +1716,7 @@
                 department: document.getElementById('inp-emp-departamento').value.trim() || null,
                 supervisor_id: document.getElementById('inp-emp-supervisor').value || null,
                 hiring_date: document.getElementById('inp-emp-ingreso').value || null,
+                area_id: document.getElementById('inp-emp-area').value || null,
                 is_active: document.getElementById('inp-emp-activo').checked
             };
 
@@ -3741,6 +3795,14 @@
             <div class="form-group">
                 <label class="ref-label">Supervisor <span class="ref-opcional">opcional</span></label>
                 <select id="inp-emp-supervisor" style="width:100%; background:white;"></select>
+            </div>
+
+            <div class="form-group">
+                <label class="ref-label">Área <span class="ref-opcional">opcional</span></label>
+                <div style="display:flex; gap:8px;">
+                    <select id="inp-emp-area" style="flex:1; min-width:0; background:white;"></select>
+                    <button type="button" class="ref-btn-add" onclick="window.crearNuevaArea()" title="Crear área">+</button>
+                </div>
             </div>
 
             <div class="form-group">
