@@ -61,6 +61,12 @@ cargan `1-config.js` por su cuenta y llevan su propio `<script>` inline.
   `textarea` con fuente menor a 16px provoca zoom automático al enfocarlo.
   Para compactar un formulario hay que reducir padding y márgenes, nunca el
   tamaño de la fuente de los campos.
+- **Safe area del iPhone.** Las páginas llevan `viewport-fit=cover` en el meta
+  viewport para que fondos y overlays lleguen al borde físico de la pantalla.
+  Como contrapartida, el contenido debe apartarse de la barra de estado y del
+  indicador de inicio con `env(safe-area-inset-*)`; las reglas viven al final
+  de `estilos.css`. Si se añade una pantalla nueva a pantalla completa, hay
+  que darle ese padding o su encabezado quedará bajo el reloj.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con

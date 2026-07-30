@@ -1754,3 +1754,39 @@ textarea:focus {
 .bg-objetivos { background: linear-gradient(135deg, #5eead4, #0f766e); }
 .bg-stats-dif { background: linear-gradient(135deg, #c4b5fd, #8b5cf6); }
 .bg-stats-enc { background: linear-gradient(135deg, #7dd3fc, #0ea5e9); }
+/* =========================================
+   SAFE AREA (iPhone con notch / isla dinámica)
+   =========================================
+   El meta viewport de las páginas lleva viewport-fit=cover, para que los
+   fondos y los overlays lleguen hasta el borde físico de la pantalla en
+   lugar de detenerse en la barra de estado. A cambio hay que apartar el
+   contenido de esa barra y del indicador de inicio, que es lo que hacen
+   estas reglas. En pantallas sin notch env() vale 0 y no cambia nada; en
+   navegadores sin soporte la declaración es inválida y se ignora, así que
+   el diseño anterior se mantiene intacto. */
+
+.main-container {
+    padding-top: env(safe-area-inset-top);
+}
+
+.login-view {
+    box-sizing: border-box;
+    padding-top: calc(60px + env(safe-area-inset-top));
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Los overlays SÍ deben cubrir la pantalla completa, incluida el área de la
+   barra de estado: es justo lo que hace que el fondo atenuado llegue hasta
+   arriba. Lo que se aparta es su contenido.
+
+   Lleva !important porque el padding de estos modales viene en atributos
+   style inline, y una declaración importante gana sobre el inline.
+
+   Se excluyen modal-cal-title y modal-cal-content que, pese al prefijo, son
+   elementos internos del modal de calendario (6-calendario.js) y no
+   overlays. Si se crean nuevos elementos internos, conviene no nombrarlos
+   con el prefijo modal-. */
+[id^="modal-"]:not(#modal-cal-title):not(#modal-cal-content) {
+    padding-top: calc(20px + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
+}
