@@ -98,8 +98,11 @@
             background: white;
 
             /* Radio en las cuatro esquinas, como las hojas separadas del
-               borde en iOS. 35px es el valor medido en ellas. */
-            border-radius: 35px;
+               borde en iOS. Va por encima del radio de pantalla del iPhone
+               (39pt) porque iOS dibuja esquinas continuas, que a igual
+               valor se ven más redondeadas que el border-radius circular
+               de CSS. */
+            border-radius: 44px;
             box-shadow: 0 10px 40px rgba(15, 23, 42, 0.25);
 
             /* Tope calculado contra el viewport y no en porcentaje: dentro de
