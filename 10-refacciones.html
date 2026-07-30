@@ -291,7 +291,7 @@
                quedaría cinco veces más ancho que el lateral. Arriba sí se
                suma, para que una hoja alta no se meta bajo la barra de
                estado. */
-            padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+            padding: calc(8px + env(safe-area-inset-top)) 8px calc(8px + var(--alto-teclado, 0px));
 
             /* Sin color de fondo. El desenfoque basta para separar la hoja
                del contenido y, a diferencia del gris, no genera ningún borde
@@ -324,8 +324,8 @@
                un contenedor flex el porcentaje dejaba medio píxel de holgura
                y la hoja rebasaba el margen superior. El min-height en 0 evita
                que, siendo elemento flex, se niegue a encogerse. */
-            max-height: calc(100vh - 16px - env(safe-area-inset-top));
-            max-height: calc(100dvh - 16px - env(safe-area-inset-top));
+            max-height: calc(100vh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
+            max-height: calc(100dvh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
             min-height: 0;
             animation: hoja-subir 0.34s cubic-bezier(0.32, 0.72, 0, 1);
         }
@@ -1799,6 +1799,53 @@
                 btn.disabled = false;
             }
         };
+
+
+        // ==========================================
+        // TECLADO EN iOS
+        // ==========================================
+        // Safari no encoge la ventana al abrir el teclado: encoge el viewport
+        // visual y desplaza el documento entero para revelar el campo
+        // enfocado. Como el panel mide justo el alto de la pantalla y hace su
+        // propio scroll interno, ese desplazamiento solo saca el encabezado
+        // por arriba.
+        //
+        // Aquí se mide el teclado con visualViewport y se publica su altura en
+        // --alto-teclado. Las hojas la suman a su margen inferior, así que se
+        // apoyan sobre el teclado en vez de esconderse detrás, y ya no hace
+        // falta que el documento se mueva: se devuelve a cero.
+        (() => {
+            const raiz = document.documentElement;
+
+            const ajustar = () => {
+                const vv = window.visualViewport;
+                if (!vv) return;
+
+                // innerHeight es el viewport de maquetación, que no cambia con
+                // el teclado; vv.height sí. La diferencia es lo que ocupa.
+                const alto = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+                raiz.style.setProperty('--alto-teclado', alto + 'px');
+
+                // El documento se mantiene fijo: el desplazamiento que hace
+                // iOS ya no es necesario ahora que la hoja sube sola.
+                if (window.scrollY !== 0) window.scrollTo(0, 0);
+            };
+
+            if (window.visualViewport) {
+                window.visualViewport.addEventListener('resize', ajustar);
+                window.visualViewport.addEventListener('scroll', ajustar);
+            }
+
+            // El scroll del documento (no el de los contenedores internos, que
+            // no burbujea hasta window) siempre vuelve al origen.
+            window.addEventListener('scroll', () => {
+                if (window.scrollY !== 0) window.scrollTo(0, 0);
+            }, { passive: true });
+
+            // Al cerrar el teclado, Safari tarda un instante en devolver las
+            // medidas definitivas.
+            document.addEventListener('focusout', () => setTimeout(ajustar, 100));
+        })();
 
         window.abrirModalRefacciones = () => {
                     window.refaccionEditandoId = null;
