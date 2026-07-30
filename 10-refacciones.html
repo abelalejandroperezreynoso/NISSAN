@@ -65,12 +65,13 @@
             border-bottom: 0.5px solid rgba(60, 60, 67, 0.22);
         }
 
+        /* La barra queda solo con las acciones, alineadas a la derecha:
+           la identidad baja debajo del titulo. */
         .ios-barra {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            min-height: 38px;
+            justify-content: flex-end;
+            min-height: 34px;
         }
 
         .ios-perfil {
@@ -78,6 +79,7 @@
             align-items: center;
             gap: 9px;
             min-width: 0;
+            margin-top: 10px;
         }
 
         .ios-avatar {
@@ -129,22 +131,33 @@
            barra son un circulo gris plano. */
         .ios-boton-icono {
             border: none;
-            background: #f2f2f7;
-            width: 34px;
-            height: 34px;
+            /* Relleno secundario de iOS, el mismo de los botones
+               circulares de barra en Fotos o Safari. */
+            background: rgba(120, 120, 128, 0.12);
+            color: #007aff;
+            width: 32px;
+            height: 32px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            font-size: 1rem;
             padding: 0;
             transition: background 0.15s, transform 0.1s;
         }
 
+        .ios-boton-icono svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .ios-boton-icono--destructivo {
+            color: #ff3b30;
+        }
+
         .ios-boton-icono:active {
-            background: #e5e5ea;
-            transform: scale(0.94);
+            background: rgba(120, 120, 128, 0.2);
+            transform: scale(0.92);
         }
 
         /* Titulo grande, el patron de navegacion de iOS */
@@ -495,26 +508,26 @@
         <div class="ios-encabezado">
 
             <div class="ios-barra">
-                <div id="user-profile-header" class="ios-perfil">
-                    <div id="user-avatar-container" class="ios-avatar">
-                        <span style="font-size: 1.1rem;">👤</span>
-                    </div>
-                    <div class="ios-perfil-texto">
-                        <span id="user-name-display">Cargando...</span>
-                        <span id="user-role-display"></span>
-                    </div>
-                </div>
-
                 <div class="ios-acciones">
-                <button id="btn-exportar-refacciones" class="ios-boton-icono" onclick="window.copiarReporteCorreo()" title="Generar Reporte para Correo">📋</button>
-                <button id="btn-toggle-filtros" class="ios-boton-icono" onclick="window.toggleFiltrosRefacciones()" title="Mostrar/Ocultar Filtros">🔎</button>
-                <button class="ios-boton-icono" onclick="window.location.href='11-mapa-activos.html'" title="Ver Mapa de Activos">🕸️</button>
-                <button id="btn-config-refacciones" class="ios-boton-icono" style="display:none;" onclick="window.abrirConfigRefacciones()" title="Configurar Permisos">⚙️</button>
-                <button class="ios-boton-icono" style="background:#ffe5e5; color:#ff3b30;" onclick="window.location.href='index.html'" title="Cerrar y Volver al Inicio">✕</button>
+                    <button id="btn-exportar-refacciones" class="ios-boton-icono" onclick="window.copiarReporteCorreo()" title="Generar Reporte para Correo" aria-label="Generar Reporte para Correo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
+                    <button id="btn-toggle-filtros" class="ios-boton-icono" onclick="window.toggleFiltrosRefacciones()" title="Mostrar/Ocultar Filtros" aria-label="Mostrar/Ocultar Filtros"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M7 12h10"/><path d="M10 17h4"/></svg></button>
+                    <button class="ios-boton-icono" onclick="window.location.href='11-mapa-activos.html'" title="Ver Mapa de Activos" aria-label="Ver Mapa de Activos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5 9 4z"/><path d="M9 4v13"/><path d="M15 6.5v13"/></svg></button>
+                    <button id="btn-config-refacciones" class="ios-boton-icono" style="display:none;" onclick="window.abrirConfigRefacciones()" title="Configurar Permisos" aria-label="Configurar Permisos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+                    <button class="ios-boton-icono ios-boton-icono--destructivo" onclick="window.location.href='index.html'" title="Cerrar y Volver al Inicio" aria-label="Cerrar y Volver al Inicio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></svg></button>
                 </div>
             </div>
 
             <h1 id="titulo-refacciones-admin" class="ios-titulo-grande" title="Toca aquí para activar modo Admin">Historial de Refacciones</h1>
+
+            <div id="user-profile-header" class="ios-perfil">
+                <div id="user-avatar-container" class="ios-avatar">
+                    <span style="font-size: 1rem;">👤</span>
+                </div>
+                <div class="ios-perfil-texto">
+                    <span id="user-name-display">Cargando...</span>
+                    <span id="user-role-display"></span>
+                </div>
+            </div>
 
             <button onclick="window.abrirModalRefacciones()" class="ios-boton-principal">＋ Nueva Solicitud</button>
         </div>
