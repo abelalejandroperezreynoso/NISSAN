@@ -432,24 +432,11 @@
         </div>
     </div>
 
-    <!-- No es una hoja: 4-evaluaciones-base.js y 4-evaluaciones-admin.js
-         reemplazan este contenedor entero por una pantalla completa (cssText
-         propio + innerHTML nuevo), así que el marcado de aquí dentro nunca
-         llega a verse. -->
-    <div id="modal-responder-eval" style="display:none;">
-        <div class="form-content" style="max-width: 500px;">
-            <h2 id="responder-eval-title" style="color:#1e40af; margin-top:0;">Responder</h2>
-            <p id="responder-subtitle" style="color:#64748b; font-size:0.9rem;">Por favor responde con honestidad.</p>
-            <div id="responder-questions-list" style="max-height: 60vh; overflow-y: auto; margin-bottom:20px;"></div>
-            <div id="admin-grading-actions" style="display:none; text-align:right; border-top:1px solid #e2e8f0; padding-top:10px; margin-bottom:10px;">
-                <button id="btn-save-grades" onclick="guardarCalificacionAdmin()" style="background:#22c55e; color:white; padding:10px 20px; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Guardar Revisión</button>
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:10px;">
-                <button onclick="document.getElementById('modal-responder-eval').style.display='none'" style="padding:10px; background:white; border:none; cursor:pointer; color:#64748b;">Cerrar</button>
-                <button id="btn-enviar-respuestas" onclick="enviarRespuestasEval()" style="padding:10px 20px; background:#2563eb; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Enviar Respuestas</button>
-            </div>
-        </div>
-    </div>
+    <!-- Contenedor vacío a propósito: 4-evaluaciones-base.js (responder) y
+         4-evaluaciones-admin.js (calificar) lo llenan con su propia
+         .hoja-contenido y lo vacían al cerrar. La clase .hoja-overlay se
+         declara aquí para no repetirla en los dos módulos. -->
+    <div id="modal-responder-eval" class="hoja-overlay" style="z-index:999999;"></div>
 
     <div id="modal-stats-empleado" class="hoja-overlay" style="z-index:3000;">
             <div class="hoja-contenido" style="max-width:500px; overflow-y: auto; overflow-x: hidden; padding: 12px 0 0;">

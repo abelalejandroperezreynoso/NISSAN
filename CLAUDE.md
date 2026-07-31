@@ -96,10 +96,16 @@ cargan `1-config.js` por su cuenta y llevan su propio `<script>` inline.
   encima en vez de esconderse detrás, y ancla el documento mientras haya una
   hoja abierta.
 
-  Quedan a pantalla completa, y a propósito, el visor de imágenes
-  (`#modal-visor`) y los paneles de responder/calificar evaluaciones, que
-  `4-evaluaciones-base.js` y `4-evaluaciones-admin.js` construyen sobre
-  `#modal-responder-eval` reemplazando su `cssText` y su `innerHTML`.
+  Los paneles de responder y calificar encuestas son un caso aparte: el
+  contenedor `#modal-responder-eval` de `index.html` va vacío y lleva sólo la
+  clase; `4-evaluaciones-base.js` y `4-evaluaciones-admin.js` le meten su
+  propia `.hoja-contenido` con `innerHTML` y lo vacían al cerrar. Si se toca
+  ese marcado hay que mantener el `<div class="hoja-contenido">` envolviendo
+  a `#simple-form-container`, o la hoja pierde tirador, esquinas y tope de
+  altura.
+
+  Queda a pantalla completa, y a propósito, sólo el visor de imágenes
+  (`#modal-visor`).
 
   Un observador en `1-config.js` marca `<html>` con la clase `modal-abierto`
   mientras haya algún overlay visible (id que empiece por `modal-` y

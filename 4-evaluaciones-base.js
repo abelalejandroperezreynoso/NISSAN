@@ -861,7 +861,10 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         const panelEvaluaciones = document.getElementById('modal-evaluaciones-flotante');
         if (panelEvaluaciones) panelEvaluaciones.style.display = 'none';
 
-        modal.style.cssText = `display: block !important; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #f8fafc; z-index: 999999; overflow-y: auto; padding: 0; margin: 0;`;
+        // El contenedor ya trae la clase .hoja-overlay desde index.html; aquí
+        // sólo se enciende. Nada de cssText a pantalla completa: el aspecto lo
+        // pone la clase.
+        modal.style.cssText = 'display:flex; z-index:999999;';
         
         let headerTitle = title;
     let subTitle = currentDesc ? currentDesc : "Responde las siguientes preguntas:";
@@ -873,8 +876,11 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         headerStyle = "color:#334155; border-left: 4px solid #be185d; padding-left: 10px;";
     }
 
+    // El fondo gris de la hoja deja que las tarjetas blancas de cada pregunta
+    // se sigan leyendo como tarjetas.
     modal.innerHTML = `
-        <div id="simple-form-container" style="max-width: 800px; margin: 0 auto; padding: 20px 15px 100px 15px; box-sizing: border-box;">
+        <div class="hoja-contenido" style="max-width:800px; background:#f8fafc; overflow:hidden; padding:12px 0 0;">
+        <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 8px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
             <button onclick="cancelarRespuesta('main')" style="background:none; border:none; color:#64748b; font-weight:bold; cursor:pointer; font-size:1.1rem; margin-bottom:20px; display:inline-flex; align-items:center; gap:5px; padding:0;">Volver al listado</button>
             <div style="margin-bottom:30px; ${headerStyle}">
                 <h1 style="margin:0 0 5px 0; font-size:1.5rem; line-height:1.2;">${headerTitle}</h1>
@@ -884,6 +890,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             </div>
             <div id="dynamic-questions-root"></div>
             <button id="btn-enviar-respuestas" onclick="enviarRespuestasEval()" style="width:100%; background:#2563eb; color:white; padding:15px; border:none; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px -1px rgba(37, 99, 235, 0.3); margin-top:20px; transition: transform 0.1s;">Enviar Respuestas</button>
+        </div>
         </div>
     `;
 

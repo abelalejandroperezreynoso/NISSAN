@@ -385,12 +385,14 @@ window.verDetalleRespuesta = async (resp) => {
 
     if (modal.parentElement !== document.body) document.body.appendChild(modal);
     document.body.style.overflow = 'hidden';
-    modal.style.cssText = `display: block !important; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #f8fafc; z-index: 999999; overflow-y: auto; padding: 0; margin: 0;`;
+    // Igual que al responder: la clase .hoja-overlay viene de index.html y
+    // aquí sólo se enciende la hoja.
+    modal.style.cssText = 'display:flex; z-index:999999;';
     
     let saveButton = '', dateInputHtml = '', deleteButton = '', invalidarButton = '';
 
     if(puedeCalificar) {
-        saveButton = `<button onclick="guardarCalificacionAdmin()" style="width:100%; background:#22c55e; color:white; padding:15px; border:none; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px -1px rgba(34, 197, 94, 0.3); margin-top:30px; transition: transform 0.1s;">Guardar Revisión</button>`;
+        saveButton = `<button id="btn-save-grades" onclick="guardarCalificacionAdmin()" style="width:100%; background:#22c55e; color:white; padding:15px; border:none; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px -1px rgba(34, 197, 94, 0.3); margin-top:30px; transition: transform 0.1s;">Guardar Revisión</button>`;
         const d = new Date(resp.submitted_at); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
         const dateDisabledAttr = esAdminTotal ? '' : 'disabled';
         dateInputHtml = `<div style="margin-top:10px;"><label style="font-size:0.85rem; color:#64748b; display:block; margin-bottom:4px;">Fecha de Realización:</label><input type="date" id="admin-edit-date" value="${d.toISOString().slice(0,10)}" ${dateDisabledAttr} style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;"></div>`;
@@ -499,7 +501,8 @@ window.verDetalleRespuesta = async (resp) => {
         }
 
         modal.innerHTML = `
-            <div id="simple-form-container" style="max-width: 900px; margin: 0 auto; padding: 20px 15px 100px 15px; box-sizing: border-box;">
+            <div class="hoja-contenido" style="max-width:900px; background:#f8fafc; overflow:hidden; padding:12px 0 0;">
+            <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 8px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
                 <button onclick="cancelarRespuesta('history')" style="background:none; border:none; color:#64748b; font-weight:bold; cursor:pointer; font-size:1.1rem; margin-bottom:20px; display:inline-flex; align-items:center; gap:5px; padding:0;">Volver</button>
                 <div style="margin-bottom:20px;">
                     <h1 style="color:#1e293b; margin:0 0 5px 0; font-size:1.6rem; line-height:1.2; display:flex; align-items:center;">
@@ -512,6 +515,7 @@ window.verDetalleRespuesta = async (resp) => {
                 ${descHtml}
                 <div id="responder-questions-list"></div>
                 ${saveButton}${invalidarButton}${deleteButton}
+            </div>
             </div>
         `;
     
