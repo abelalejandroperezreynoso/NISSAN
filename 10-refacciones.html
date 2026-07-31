@@ -1440,24 +1440,27 @@
         // de nuevo cada vez que se guarda un empleado, para que el resto de
         // las pantallas vea los cambios sin recargar.
         // La columna encargos se añade con un SQL aparte (ver
-        // sql/encargos-empleados.sql). Si la base todavía no lo tiene,
-        // PostgREST responde 42703 y la consulta entera se cae: se reintenta
-        // sin esa columna para que la pantalla siga funcionando.
-        window.consultarEmpleados = async (columnas, ordenarPor) => {
-            const consultar = (cols) => {
-                const q = sb.from('employees').select(cols);
-                return ordenarPor ? q.order(ordenarPor) : q;
-            };
+        // sql/. Si la base todavía no las tiene, PostgREST responde 42703 y la
+        // consulta entera se cae: se repite sin la columna de la que se queja
+        // para que la pantalla siga funcionando mientras el script no se corre.
+        window.COLUMNAS_OPCIONALES_EMPLEADO = ['encargos', 'linea_id'];
 
-            let res = await consultar(columnas);
-            if (res.error && String(res.error.message || '').includes('encargos')) {
-                const sinEncargos = columnas.split(',')
-                    .map(c => c.trim())
-                    .filter(c => c !== 'encargos')
-                    .join(', ');
-                res = await consultar(sinEncargos);
+        window.consultarEmpleados = async (columnas, ordenarPor) => {
+            let cols = columnas.split(',').map(c => c.trim()).filter(c => c !== '');
+
+            for (let intento = 0; intento <= window.COLUMNAS_OPCIONALES_EMPLEADO.length; intento++) {
+                const q = sb.from('employees').select(cols.join(', '));
+                const res = await (ordenarPor ? q.order(ordenarPor) : q);
+                if (!res.error) return res;
+
+                const mensaje = String(res.error.message || '');
+                const culpable = cols.find(c =>
+                    window.COLUMNAS_OPCIONALES_EMPLEADO.includes(c) && mensaje.includes(c));
+                if (!culpable) return res;
+
+                cols = cols.filter(c => c !== culpable);
             }
-            return res;
+            return { data: null, error: { message: 'No se pudo consultar la tabla de empleados.' } };
         };
 
         // Un empleado puede tener varios encargos. La columna es text[], pero
@@ -1472,7 +1475,7 @@
         window.cargarEmpleadosEnCache = async () => {
             try {
                 const { data, error } = await window.consultarEmpleados(
-                    'id, employee_id, name, department, puesto, encargos, supervisor_id, is_active, avatar_url');
+                    'id, employee_id, name, department, puesto, encargos, linea_id, supervisor_id, is_active, avatar_url');
                 if (error || !data) return;
 
                 window.todosLosEmpleadosData = [];
@@ -1482,6 +1485,7 @@
                         dept: d.department,
                         puesto: d.puesto,
                         encargos: window.normalizarEncargos(d.encargos),
+                        lineaId: d.linea_id || null,
                         supId: d.supervisor_id,
                         isActive: d.is_active !== false,
                         avatar: d.avatar_url,
@@ -1764,12 +1768,13 @@
 
             try {
                 const { data, error } = await window.consultarEmpleados(
-                    'id, employee_id, name, department, puesto, encargos, supervisor_id, hiring_date, is_active, avatar_url, area_id',
+                    'id, employee_id, name, department, puesto, encargos, linea_id, supervisor_id, hiring_date, is_active, avatar_url, area_id',
                     'name');
                 if (error) throw error;
                 window.empleadosAdminCache = data || [];
 
                 await window.cargarAreas();
+                await window.cargarLineas();
                 window.renderizarListaEmpleados();
             } catch (e) {
                 console.error("Error al consultar empleados:", e);
@@ -1787,6 +1792,106 @@
             } catch (e) {
                 console.error("Error al cargar áreas:", e);
                 window.areasAdminCache = [];
+            }
+        };
+
+        // --- Línea (y, de ahí, planta) ---
+        // El empleado guarda solo linea_id: la planta se deduce de
+        // lineas.planta_id. Así no pueden contradecirse una a la otra.
+        // No se usa el embebido lineas→plantas de PostgREST porque depende de
+        // que exista la clave foránea; se cruzan las dos tablas aquí.
+        window.lineasAdminCache = [];
+
+        window.cargarLineas = async () => {
+            try {
+                const [resLineas, resPlantas] = await Promise.all([
+                    sb.from('lineas').select('id, nombre, planta_id').order('nombre'),
+                    sb.from('plantas').select('id, nombre').order('nombre')
+                ]);
+
+                // Si las líneas todavía no apuntan a su planta, se listan igual:
+                // sirven para asignarlas, solo que sin planta que deducir.
+                let lineas = resLineas.data;
+                if (resLineas.error) {
+                    console.warn("Las líneas no tienen planta asignada todavía:", resLineas.error.message);
+                    const soloLineas = await sb.from('lineas').select('id, nombre').order('nombre');
+                    lineas = soloLineas.data;
+                }
+
+                const plantas = resPlantas.data || [];
+                window.lineasAdminCache = (lineas || []).map(l => {
+                    const planta = plantas.find(p => String(p.id) === String(l.planta_id));
+                    return {
+                        id: l.id,
+                        nombre: l.nombre,
+                        plantaId: l.planta_id || null,
+                        planta: planta ? planta.nombre : ''
+                    };
+                });
+            } catch (e) {
+                console.error("Error al cargar líneas y plantas:", e);
+                window.lineasAdminCache = [];
+            }
+        };
+
+        window.lineaDeEmpleado = (emp) => {
+            if (!emp || !emp.linea_id) return null;
+            return window.lineasAdminCache.find(l => String(l.id) === String(emp.linea_id)) || null;
+        };
+
+        // Texto corto para la lista: "Planta A · Línea 3", o solo la línea si
+        // todavía no se sabe a qué planta pertenece.
+        window.ubicacionDeEmpleado = (emp) => {
+            const linea = window.lineaDeEmpleado(emp);
+            if (!linea) return '';
+            return linea.planta ? `${linea.planta} · ${linea.nombre}` : linea.nombre;
+        };
+
+        window.renderizarSelectorLineas = (idSeleccionada) => {
+            const sel = document.getElementById('inp-emp-linea');
+            if (!sel) return;
+
+            const actual = idSeleccionada || '';
+            const opcion = (l) =>
+                `<option value="${l.id}"${String(l.id) === String(actual) ? ' selected' : ''}>${escaparHtml(l.nombre)}</option>`;
+
+            let html = '<option value="">Sin línea</option>';
+
+            // Las líneas se agrupan por planta; si ninguna la tiene, se listan
+            // planas para no llenar el desplegable de "Sin planta".
+            if (window.lineasAdminCache.some(l => l.planta)) {
+                const grupos = new Map();
+                window.lineasAdminCache.forEach(l => {
+                    const clave = l.planta || 'Sin planta';
+                    if (!grupos.has(clave)) grupos.set(clave, []);
+                    grupos.get(clave).push(l);
+                });
+                Array.from(grupos.keys()).sort((a, b) => a.localeCompare(b, 'es')).forEach(planta => {
+                    html += `<optgroup label="${escaparHtml(planta)}">`;
+                    html += grupos.get(planta).map(opcion).join('');
+                    html += '</optgroup>';
+                });
+            } else {
+                html += window.lineasAdminCache.map(opcion).join('');
+            }
+
+            sel.innerHTML = html;
+            window.actualizarPlantaEmpleado();
+        };
+
+        // La planta no se elige: se muestra la de la línea seleccionada.
+        window.actualizarPlantaEmpleado = () => {
+            const sel = document.getElementById('inp-emp-linea');
+            const cartel = document.getElementById('emp-planta-derivada');
+            if (!sel || !cartel) return;
+
+            const linea = window.lineasAdminCache.find(l => String(l.id) === String(sel.value));
+            if (!linea) {
+                cartel.innerHTML = 'La planta se toma de la línea que elijas.';
+            } else if (linea.planta) {
+                cartel.innerHTML = `Planta: <b>${escaparHtml(linea.planta)}</b>`;
+            } else {
+                cartel.innerHTML = 'Esta línea todavía no tiene planta asignada.';
             }
         };
 
@@ -1837,8 +1942,10 @@
 
             const visibles = window.empleadosAdminCache.filter(e => {
                 if (!filtro) return true;
+                const linea = window.lineaDeEmpleado(e);
                 return [e.name, e.employee_id, e.puesto, e.department]
                     .concat(window.normalizarEncargos(e.encargos))
+                    .concat(linea ? [linea.nombre, linea.planta] : [])
                     .some(c => (c || '').toLowerCase().includes(filtro));
             });
 
@@ -1858,6 +1965,7 @@
                 const separador = i < visibles.length - 1
                     ? 'border-bottom:0.5px solid rgba(60,60,67,0.22);' : '';
 
+                const ubicacion = window.ubicacionDeEmpleado(e);
                 const encargos = window.normalizarEncargos(e.encargos);
                 const lineaEncargos = encargos.length
                     ? `<div style="font-size:0.72rem; color:#007aff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escaparHtml(encargos.join(' · '))}</div>`
@@ -1869,7 +1977,7 @@
                         <div style="flex:1; min-width:0;">
                             <div style="font-size:0.9rem; font-weight:500; color:#1c1c1e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${e.name}</div>
                             <div style="font-size:0.75rem; color:rgba(60,60,67,0.6); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                ${e.employee_id}${e.puesto ? ' · ' + e.puesto : ''}
+                                ${e.employee_id}${e.puesto ? ' · ' + e.puesto : ''}${ubicacion ? ' · ' + escaparHtml(ubicacion) : ''}
                             </div>
                             ${lineaEncargos}
                         </div>
@@ -1916,6 +2024,7 @@
                 });
             selSup.innerHTML = opciones;
 
+            window.renderizarSelectorLineas(emp ? emp.linea_id : '');
             window.renderizarSelectorAreas(emp ? emp.area_id : '');
 
             document.getElementById('modal-empleado-form').style.display = 'flex';
@@ -1945,6 +2054,8 @@
                 supervisor_id: document.getElementById('inp-emp-supervisor').value || null,
                 hiring_date: document.getElementById('inp-emp-ingreso').value || null,
                 area_id: document.getElementById('inp-emp-area').value || null,
+                // La planta no se guarda: se deduce de la línea.
+                linea_id: document.getElementById('inp-emp-linea').value || null,
                 is_active: document.getElementById('inp-emp-activo').checked
             };
 
@@ -1969,8 +2080,8 @@
                 // 23505 es la violación de la restricción única de employee_id
                 if (e && (e.code === '23505' || String(e.message || '').includes('duplicate'))) {
                     alert(`Ya existe un empleado con el número "${numero}".`);
-                } else if (String(e.message || '').includes('encargos')) {
-                    alert("La base de datos todavía no tiene la columna de encargos. Ejecuta sql/encargos-empleados.sql en Supabase y vuelve a guardar.");
+                } else if (window.COLUMNAS_OPCIONALES_EMPLEADO.some(c => String(e.message || '').includes(c))) {
+                    alert("A la base de datos le falta una columna nueva de la ficha del empleado. Ejecuta en Supabase los scripts de la carpeta sql/ y vuelve a guardar.");
                 } else {
                     alert("No se pudo guardar el empleado: " + (e.message || JSON.stringify(e)));
                 }
@@ -4041,6 +4152,12 @@
                     <select id="inp-emp-departamento" style="flex:1; min-width:0; background:white;"></select>
                     <button type="button" class="ref-btn-add" onclick="window.crearValorCampo('department', 'inp-emp-departamento')" title="Crear departamento">+</button>
                 </div>
+            </div>
+
+            <div class="form-group">
+                <label class="ref-label">Línea <span class="ref-opcional">opcional</span></label>
+                <select id="inp-emp-linea" onchange="window.actualizarPlantaEmpleado()" style="width:100%; background:white;"></select>
+                <div id="emp-planta-derivada" style="font-size:0.75rem; color:rgba(60,60,67,0.6); margin-top:4px;"></div>
             </div>
 
             <div class="form-group">
