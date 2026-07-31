@@ -26,17 +26,17 @@ select tablename, policyname, cmd, roles
 -- ------------------------------------------------------------------
 -- 2. Permiso de actualización sobre lineas
 -- ------------------------------------------------------------------
--- La aplicación entra siempre con la clave anónima (el inicio de sesión
--- se resuelve contra la tabla employees, no con Auth de Supabase), así
--- que el permiso tiene que dárselo al rol anon.
+-- La tabla ya tiene "Permitir insertar lineas" y "Permitir lectura
+-- lineas", ambas para el rol public, pero ninguna de update: por eso el
+-- botón Asignar no grababa nada. Esta sigue el mismo criterio.
 
 grant update on public.lineas to anon, authenticated;
 
-drop policy if exists "lineas_actualizar" on public.lineas;
+drop policy if exists "Permitir actualizar lineas" on public.lineas;
 
-create policy "lineas_actualizar" on public.lineas
+create policy "Permitir actualizar lineas" on public.lineas
     for update
-    to anon, authenticated
+    to public
     using (true)
     with check (true);
 
@@ -51,3 +51,21 @@ create policy "lineas_actualizar" on public.lineas
 
 -- Qué líneas siguen sin planta:
 -- select id, nombre from public.lineas where planta_id is null order by nombre;
+
+-- ------------------------------------------------------------------
+-- 4. Si la ficha del empleado tampoco guarda
+-- ------------------------------------------------------------------
+-- El mismo hueco puede existir en employees: se leería y se daría de alta
+-- sin problema, pero editar a alguien no cambiaría nada y sin aviso. Si el
+-- diagnóstico de arriba muestra RLS activo en employees sin política de
+-- update, es esta:
+--
+-- grant update on public.employees to anon, authenticated;
+--
+-- drop policy if exists "Permitir actualizar employees" on public.employees;
+--
+-- create policy "Permitir actualizar employees" on public.employees
+--     for update
+--     to public
+--     using (true)
+--     with check (true);
