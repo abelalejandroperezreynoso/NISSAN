@@ -732,13 +732,13 @@
                 <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
             
-            <p style="margin:0 0 15px 0; color:#64748b; font-size:0.9rem;">Selecciona los puestos que tendrán autorización para visualizar <b>todas</b> las solicitudes de la empresa (además de los administradores):</p>
-            
-            <div id="lista-puestos-refacciones" style="display:flex; flex-wrap:wrap; gap:10px; max-height:250px; overflow-y:auto; margin-bottom:20px; padding: 5px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;"></div>
-            
+            <p style="margin:0 0 15px 0; color:#64748b; font-size:0.9rem;">Selecciona los encargos extra que tendrán autorización para visualizar <b>todas</b> las solicitudes de la empresa (además de los administradores):</p>
+
+            <div id="lista-encargos-refacciones" style="display:flex; flex-wrap:wrap; gap:10px; max-height:250px; overflow-y:auto; margin-bottom:20px; padding: 5px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;"></div>
+
             <div style="display: flex; justify-content: flex-end; gap: 10px;">
                 <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" style="padding:10px 15px; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer; color:#475569; font-weight:600;">Cancelar</button>
-                <button onclick="window.guardarRolesRefacciones()" style="background:#0ea5e9; color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:bold; cursor:pointer; box-shadow: 0 4px 6px rgba(14, 165, 233, 0.2);">Guardar Permisos</button>
+                <button onclick="window.guardarEncargosRefacciones()" style="background:#0ea5e9; color:white; border:none; padding:10px 20px; border-radius:8px; font-weight:bold; cursor:pointer; box-shadow: 0 4px 6px rgba(14, 165, 233, 0.2);">Guardar Permisos</button>
             </div>
         </div>
     </div>
@@ -765,49 +765,48 @@
         // Función para abrir la configuración en su modal
                 window.abrirConfigRefacciones = async () => {
                     const modal = document.getElementById('modal-config-refacciones');
-                    const containerPuestos = document.getElementById('lista-puestos-refacciones');
+                    const containerEncargos = document.getElementById('lista-encargos-refacciones');
                     modal.style.display = 'flex';
-                    containerPuestos.innerHTML = '<div style="text-align:center; color:#64748b; padding:10px;">Consultando puestos en la base de datos...</div>';
+                    containerEncargos.innerHTML = '<div style="text-align:center; color:#64748b; padding:10px;">Consultando encargos en la base de datos...</div>';
 
-                    let rolesAutorizados = [];
-                    try {
-                        const { data: cfg } = await sb.from('system_config').select('texto').eq('key', 'roles_refacciones');
-                        if (cfg && cfg.length > 0 && cfg[0].texto) {
-                            rolesAutorizados = JSON.parse(cfg[0].texto).map(r => r.toUpperCase().trim());
-                        }
-                    } catch(e) { console.error("Error al cargar configuración", e); }
+                    const encargosAutorizados = await window.cargarEncargosAutorizados();
 
                     try {
-                        // Hacemos una consulta directa para asegurar que SIEMPRE traiga los puestos,
-                        // independientemente de si la carga inicial de la página falló o se demoró.
-                        const { data: empleados, error } = await sb.from('employees').select('puesto').not('is_active', 'eq', false);
-                        
+                        // Hacemos una consulta directa para asegurar que SIEMPRE traiga los
+                        // encargos, independientemente de si la carga inicial de la página
+                        // falló o se demoró.
+                        const { data: empleados, error } = await window.consultarEmpleados('encargos, is_active');
+
                         if (error) throw error;
 
-                        if (empleados && empleados.length > 0) {
-                            // Extraemos valores únicos, ignorando nulos y vacíos
-                            const puestos = [...new Set(empleados.map(e => (e.puesto || 'Sin Puesto').trim()))].filter(p => p !== '');
-                            
+                        // Solo los encargos del personal activo: los de una baja no deberían
+                        // seguir concediendo permisos.
+                        const encargos = new Set();
+                        (empleados || [])
+                            .filter(e => e.is_active !== false)
+                            .forEach(e => window.normalizarEncargos(e.encargos).forEach(v => encargos.add(v)));
+
+                        if (encargos.size > 0) {
                             let chkHtml = '';
-                            puestos.sort().forEach(p => {
-                                const isChecked = rolesAutorizados.includes(p.toUpperCase()) ? 'checked' : '';
+                            Array.from(encargos).sort((a, b) => a.localeCompare(b, 'es')).forEach(p => {
+                                const isChecked = encargosAutorizados.includes(p.toUpperCase()) ? 'checked' : '';
                                 chkHtml += `
                                     <label style="display:flex; align-items:center; gap:5px; background:white; padding:6px 12px; border-radius:8px; border:1px solid #bae6fd; font-size:0.85rem; cursor:pointer; color:#0f172a; transition: background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='white'">
-                                        <input type="checkbox" class="chk-puesto-refaccion" value="${p}" ${isChecked} style="accent-color:#0ea5e9; width:16px; height:16px; cursor:pointer;"> 
-                                        ${p}
+                                        <input type="checkbox" class="chk-encargo-refaccion" value="${escaparHtml(p)}" ${isChecked} style="accent-color:#0ea5e9; width:16px; height:16px; cursor:pointer;">
+                                        ${escaparHtml(p)}
                                     </label>
                                 `;
                             });
-                            
-                            containerPuestos.innerHTML = chkHtml || '<div style="color:#ef4444; font-size:0.85rem;">La base de datos no tiene puestos registrados.</div>';
+
+                            containerEncargos.innerHTML = chkHtml;
                         } else {
-                                                    containerPuestos.innerHTML = '<div style="color:#ef4444; font-size:0.85rem;">No se encontraron empleados registrados.</div>';
-                                                }
-                                            } catch (error) {
-                                                console.error("Error al consultar puestos:", error);
-                                                containerPuestos.innerHTML = '<div style="color:#ef4444; font-size:0.85rem;">Hubo un error de conexión al cargar los puestos.</div>';
-                                            }
-                                        };
+                            containerEncargos.innerHTML = '<div style="color:#64748b; font-size:0.85rem; padding:6px;">Todavía no hay encargos asignados. Ponlos en la ficha de cada empleado, en <b>Empleados › Encargos extra</b>.</div>';
+                        }
+                    } catch (error) {
+                        console.error("Error al consultar encargos:", error);
+                        containerEncargos.innerHTML = '<div style="color:#ef4444; font-size:0.85rem;">Hubo un error de conexión al cargar los encargos.</div>';
+                    }
+                };
 
                                 // NUEVA FUNCIÓN: Muestra u oculta el panel de filtros
                                 window.toggleFiltrosRefacciones = () => {
@@ -1637,6 +1636,56 @@
         };
 
 
+        // --- Permisos de refacciones por encargo ---
+        // Antes se autorizaba por puesto ('roles_refacciones'). Ahora se hace
+        // por encargo extra, con una clave nueva: la anterior se queda como
+        // estaba en system_config, así que hay que volver a marcar los
+        // permisos una vez desde Configurar permisos.
+
+        window.CLAVE_ENCARGOS_REFACCIONES = 'encargos_refacciones';
+
+        window.cargarEncargosAutorizados = async () => {
+            try {
+                const { data: cfg } = await sb.from('system_config')
+                    .select('texto').eq('key', window.CLAVE_ENCARGOS_REFACCIONES);
+                if (cfg && cfg.length > 0 && cfg[0].texto) {
+                    return JSON.parse(cfg[0].texto).map(r => String(r).toUpperCase().trim());
+                }
+            } catch (e) {
+                console.error("Error al cargar los permisos de refacciones:", e);
+            }
+            return [];
+        };
+
+        // Los encargos del usuario no se leen de localStorage: la sesión se
+        // guarda al iniciar y dura hasta treinta días, así que un encargo
+        // asignado después no aparecería ahí. Se resuelven contra la caché de
+        // empleados, que se rellena al cargar la pantalla.
+        window.encargosDelUsuario = async () => {
+            let userLog = null;
+            try { userLog = JSON.parse(localStorage.getItem("usuarioLogueado")); } catch (e) {}
+            if (!userLog) return [];
+
+            const buscarme = () => (window.todosLosEmpleadosData || [])
+                .find(e => String(e.id) === String(userLog.id));
+
+            let yo = buscarme();
+            if (!yo) {
+                await window.cargarEmpleadosEnCache();
+                yo = buscarme();
+            }
+
+            return window.normalizarEncargos(yo ? yo.encargos : []).map(v => v.toUpperCase());
+        };
+
+        window.tienePermisoPorEncargo = async () => {
+            const autorizados = await window.cargarEncargosAutorizados();
+            if (autorizados.length === 0) return false;
+            const mios = await window.encargosDelUsuario();
+            return mios.some(e => autorizados.includes(e));
+        };
+
+
         // ==========================================
         // ACCESO AL MODO ADMINISTRADOR
         // ==========================================
@@ -2108,17 +2157,7 @@
             selPlanta.innerHTML = '<option value="">Cargando...</option>';
             selLinea.innerHTML = '<option value="">Cargando...</option>';
 
-            let rolesAutorizados = [];
-            try {
-                const { data: cfg } = await sb.from('system_config').select('texto').eq('key', 'roles_refacciones');
-                if (cfg && cfg.length > 0 && cfg[0].texto) {
-                    rolesAutorizados = JSON.parse(cfg[0].texto).map(r => r.toUpperCase().trim());
-                }
-            } catch(e) {}
-
-            const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
-            const loggedUserPuesto = userLog ? (userLog.puesto || '').toUpperCase().trim() : '';
-            const tienePermisosEspeciales = window.modoAdminActivo || rolesAutorizados.includes(loggedUserPuesto);
+            const tienePermisosEspeciales = window.modoAdminActivo || await window.tienePermisoPorEncargo();
 
             if (tienePermisosEspeciales) {
                 btnCrearPlanta.style.display = 'block';
@@ -2480,20 +2519,20 @@
             }
         };
 
-        window.guardarRolesRefacciones = async () => {
-            const checkboxes = document.querySelectorAll('.chk-puesto-refaccion:checked');
-            const rolesSeleccionados = Array.from(checkboxes).map(cb => cb.value);
-            const jsonStr = JSON.stringify(rolesSeleccionados);
+        window.guardarEncargosRefacciones = async () => {
+            const checkboxes = document.querySelectorAll('.chk-encargo-refaccion:checked');
+            const encargosSeleccionados = Array.from(checkboxes).map(cb => cb.value);
+            const jsonStr = JSON.stringify(encargosSeleccionados);
 
             try {
-                const { data: configRows } = await sb.from('system_config').select('key').eq('key', 'roles_refacciones');
-                
+                const { data: configRows } = await sb.from('system_config').select('key').eq('key', window.CLAVE_ENCARGOS_REFACCIONES);
+
                 if (configRows && configRows.length > 0) {
-                    await sb.from('system_config').update({ texto: jsonStr }).eq('key', 'roles_refacciones');
+                    await sb.from('system_config').update({ texto: jsonStr }).eq('key', window.CLAVE_ENCARGOS_REFACCIONES);
                 } else {
-                    await sb.from('system_config').insert([{ key: 'roles_refacciones', texto: jsonStr }]);
+                    await sb.from('system_config').insert([{ key: window.CLAVE_ENCARGOS_REFACCIONES, texto: jsonStr }]);
                 }
-                
+
                 alert("✅ Permisos actualizados correctamente.");
                 document.getElementById('modal-config-refacciones').style.display = 'none';
                 window.abrirStatsRefacciones();
@@ -2805,19 +2844,10 @@
                 if (btnEmpleados) btnEmpleados.style.display = 'none';
             }
 
-            let rolesAutorizados = [];
-            try {
-                const { data: cfg } = await sb.from('system_config').select('texto').eq('key', 'roles_refacciones');
-                if (cfg && cfg.length > 0 && cfg[0].texto) {
-                    rolesAutorizados = JSON.parse(cfg[0].texto).map(r => r.toUpperCase().trim());
-                }
-            } catch(e) {}
-
             const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
             const loggedUserId = userLog ? String(userLog.id) : null;
-            const loggedUserPuesto = userLog ? (userLog.puesto || '').toUpperCase().trim() : '';
 
-            window.puedeVerTodoRefacciones = window.modoAdminActivo || rolesAutorizados.includes(loggedUserPuesto);
+            window.puedeVerTodoRefacciones = window.modoAdminActivo || await window.tienePermisoPorEncargo();
 
             try {
                 let query = sb.from('refacciones').select('*, equipos(nombre, id_interno, plantas(nombre), lineas(nombre))').order('created_at', { ascending: false });
