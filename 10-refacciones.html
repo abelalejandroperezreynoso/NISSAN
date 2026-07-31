@@ -141,6 +141,21 @@
             line-height: 1.2;
         }
 
+        /* Planta y línea del usuario; se muestra sólo si tiene alguna.
+           Como puede atender varias, se le permiten dos renglones antes de
+           recortar: con uno solo se comería la mitad del segundo destino. */
+        #user-linea-display {
+            font-size: 0.75rem;
+            margin-top: 1px;
+            color: rgba(60, 60, 67, 0.45);
+            line-height: 1.25;
+            white-space: normal;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
         .ios-acciones {
             display: flex;
             align-items: center;
@@ -507,6 +522,7 @@
                 <div class="ios-perfil-texto">
                     <span id="user-name-display">Cargando...</span>
                     <span id="user-role-display"></span>
+                    <span id="user-linea-display" style="display:none;"></span>
                 </div>
             </div>
 
@@ -1892,9 +1908,11 @@
             return lista.map(v => String(v).trim()).filter(v => v !== '');
         };
 
+        // Acepta tanto la fila cruda de la base (lineas_ids) como la de
+        // todosLosEmpleadosData, que la guarda ya normalizada en lineasIds.
         window.lineasDeEmpleado = (emp) => {
             if (!emp) return [];
-            return window.normalizarIdsLineas(emp.lineas_ids)
+            return window.normalizarIdsLineas(emp.lineas_ids || emp.lineasIds)
                 .map(id => window.lineasAdminCache.find(l => String(l.id) === String(id)))
                 .filter(l => l);
         };
@@ -1920,7 +1938,13 @@
             const lineas = window.lineasDeEmpleado(emp);
             if (lineas.length === 0) return '';
             return Array.from(window.agruparLineasPorPlanta(lineas).entries())
-                .map(([planta, suyas]) => `${planta}: ${suyas.map(l => l.nombre).join(', ')}`)
+                .map(([planta, suyas]) => {
+                    const nombres = suyas.map(l => l.nombre).join(', ');
+                    // Las líneas sin planta se enseñan a secas: el rótulo
+                    // "Sin planta" sólo estorba de corrido, y la ficha del
+                    // empleado ya avisa de ellas con detalle.
+                    return planta === 'Sin planta' ? nombres : `${planta}: ${nombres}`;
+                })
                 .join(' · ');
         };
 
@@ -4078,13 +4102,27 @@
             if (userNameDisplay) userNameDisplay.innerText = userDataParsed.name.split(' ').slice(0, 2).join(' ');
             if (userRoleDisplay) userRoleDisplay.innerText = userDataParsed.puesto || 'Colaborador';
 
-            if (window.todosLosEmpleadosData && userAvatarContainer) {
-                const miData = window.todosLosEmpleadosData.find(e => String(e.id) === String(userDataParsed.id));
-                if (miData && miData.avatar) {
-                    const safeUrl = window.procesarUrlImagen ? window.procesarUrlImagen(miData.avatar) : miData.avatar;
-                    userAvatarContainer.innerHTML = `<img src="${safeUrl}" style="width: 100%; height: 100%; object-fit: cover;">`;
-                    userAvatarContainer.style.background = 'white';
-                    userAvatarContainer.style.border = '1px solid #e2e8f0';
+            const miData = window.todosLosEmpleadosData
+                ? window.todosLosEmpleadosData.find(e => String(e.id) === String(userDataParsed.id))
+                : null;
+
+            if (miData && miData.avatar && userAvatarContainer) {
+                const safeUrl = window.procesarUrlImagen ? window.procesarUrlImagen(miData.avatar) : miData.avatar;
+                userAvatarContainer.innerHTML = `<img src="${safeUrl}" style="width: 100%; height: 100%; object-fit: cover;">`;
+                userAvatarContainer.style.background = 'white';
+                userAvatarContainer.style.border = '1px solid #e2e8f0';
+            }
+
+            // Planta y línea del usuario. El catálogo de líneas sólo se baja si
+            // tiene alguna asignada: si no, serían dos consultas para no
+            // enseñar nada.
+            const userLineaDisplay = document.getElementById('user-linea-display');
+            if (userLineaDisplay && miData && window.normalizarIdsLineas(miData.lineasIds).length > 0) {
+                await window.cargarLineas();
+                const ubicacion = window.ubicacionDeEmpleado(miData);
+                if (ubicacion) {
+                    userLineaDisplay.innerText = ubicacion;
+                    userLineaDisplay.style.display = '';
                 }
             }
 
