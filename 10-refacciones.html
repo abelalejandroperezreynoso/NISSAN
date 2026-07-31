@@ -2015,10 +2015,22 @@
             if (btn) { btn.disabled = true; btn.innerText = 'Asignando...'; }
 
             try {
-                const { error } = await sb.from('lineas')
+                // El .select() no es adorno: sin él PostgREST contesta "todo
+                // bien" aunque no haya tocado ninguna fila, que es lo que pasa
+                // cuando las políticas RLS de la tabla no permiten actualizar.
+                // Con la fila de vuelta se distingue el cambio real del que se
+                // perdió en silencio.
+                const { data, error } = await sb.from('lineas')
                     .update({ planta_id: sel.value })
-                    .eq('id', idLinea);
+                    .eq('id', idLinea)
+                    .select('id, planta_id');
                 if (error) throw error;
+
+                if (!data || data.length === 0) {
+                    alert("La base de datos no aplicó el cambio: la tabla de líneas no permite actualizarse con los permisos actuales.\n\nEjecuta sql/permisos-lineas.sql en Supabase y vuelve a intentarlo.");
+                    if (btn) { btn.disabled = false; btn.innerText = 'Asignar'; }
+                    return;
+                }
 
                 await window.cargarLineas();
                 window.renderizarLineas();
