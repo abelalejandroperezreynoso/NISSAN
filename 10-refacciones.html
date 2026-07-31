@@ -148,42 +148,12 @@
             flex-shrink: 0;
         }
 
-        /* Los iconos pierden el borde y la sombra: en iOS los botones de
-           barra son un circulo gris plano. */
-        .ios-boton-icono {
-            border: none;
-            /* Relleno secundario de iOS, el mismo de los botones
-               circulares de barra en Fotos o Safari. */
-            background: rgba(120, 120, 128, 0.12);
-            color: #007aff;
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            padding: 0;
-            transition: background 0.15s, transform 0.1s;
-        }
-
-        .ios-boton-icono svg {
-            width: 18px;
-            height: 18px;
-        }
+        /* .ios-boton-icono y sus variantes viven en estilos.css, compartidas
+           con el resto de la aplicación. */
 
         #btn-ver-clave svg {
             width: 20px;
             height: 20px;
-        }
-
-        .ios-boton-icono--destructivo {
-            color: #ff3b30;
-        }
-
-        .ios-boton-icono:active {
-            background: rgba(120, 120, 128, 0.2);
-            transform: scale(0.92);
         }
 
         /* Titulo grande, el patron de navegacion de iOS */
@@ -585,9 +555,9 @@
 
     <div id="modal-refacciones" class="hoja-overlay" style="z-index:4500;">
         <div class="form-content hoja-contenido" style="max-width: 600px; overflow-y: auto; padding: 12px 25px 25px; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom:15px;">
-                <h2 id="titulo-modal-refacciones" style="margin:0; color:#0f172a; font-size:1.2rem;">⚙️ Solicitar Refacciones</h2>
-                <button onclick="window.cerrarModalRefacciones()" aria-label="Cerrar" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold; font-size:0.9rem; flex-shrink:0;">✕</button>
+            <div class="hoja-encabezado">
+                <h3 id="titulo-modal-refacciones" class="hoja-titulo">Solicitar refacciones</h3>
+                <button onclick="window.cerrarModalRefacciones()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
             
             <div class="form-group">
@@ -680,7 +650,10 @@
 
     <div id="modal-nuevo-equipo" class="hoja-overlay" style="z-index:4600;">
         <div class="form-content hoja-contenido" style="max-width: 400px; overflow-y: auto; padding: 12px 25px 25px;">
-            <h3 style="margin-top:0; color:#0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">➕ Agregar Nuevo Equipo</h3>
+            <div class="hoja-encabezado">
+                <h3 class="hoja-titulo">Agregar nuevo equipo</h3>
+                <button onclick="document.getElementById('modal-nuevo-equipo').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+            </div>
                         <div class="form-group" style="margin-bottom: 15px; margin-top: 15px;">
                             <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Nombre del Equipo/Máquina:</label>
                             <input type="text" id="inp-nuevo-equipo-nombre" placeholder="Ej. Motor Principal" style="width:100%;">
@@ -712,9 +685,9 @@
 
     <div id="modal-detalle-refaccion" class="hoja-overlay" style="z-index:4700;">
         <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 0;">
-            <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-                <h3 style="margin:0; color:#0f172a; font-size:1.1rem;">📄 Detalles de Solicitud</h3>
-                <button onclick="window.cerrarDetallesRefaccion()" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
+            <div class="hoja-encabezado-lista">
+                <h3 class="hoja-titulo">Detalles de solicitud</h3>
+                <button onclick="window.cerrarDetallesRefaccion()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
             <div id="contenido-detalle-refaccion" style="padding: 20px; overflow-y: auto; max-height: 70vh;">
                 </div>
@@ -723,9 +696,9 @@
 
     <div id="modal-config-refacciones" class="hoja-overlay" style="z-index:4800;">
         <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 25px 25px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
-                <h3 style="margin:0; color:#0f172a; font-size:1.2rem;">⚙️ Configurar Permisos</h3>
-                <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" style="border:none; background:#f1f5f9; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
+            <div class="hoja-encabezado">
+                <h3 class="hoja-titulo">Configurar permisos</h3>
+                <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
             
             <p style="margin:0 0 15px 0; color:#64748b; font-size:0.9rem;">Selecciona los puestos que tendrán autorización para visualizar <b>todas</b> las solicitudes de la empresa (además de los administradores):</p>
@@ -2588,9 +2561,9 @@
 
                         modalPrevio.innerHTML = `
                             <div class="hoja-contenido" style="max-width:850px; overflow:hidden; padding:12px 0 0;">
-                                <div style="padding:15px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-                                    <h3 style="margin:0; color:#0f172a; display:flex; align-items:center; gap:8px;">👀 Vista Previa del Reporte</h3>
-                                    <button onclick="document.getElementById('modal-preview-reporte').style.display='none'" style="border:none; background:#e2e8f0; width:30px; height:30px; border-radius:50%; cursor:pointer; font-weight:bold; color:#475569; display:flex; align-items:center; justify-content:center;">✕</button>
+                                <div class="hoja-encabezado-lista">
+                                    <h3 class="hoja-titulo">Vista previa del reporte</h3>
+                                    <button onclick="document.getElementById('modal-preview-reporte').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                                 </div>
                                 
                                 <div id="contenedor-html-copiar" style="padding:20px; overflow-y:auto; flex:1; background:white;">
@@ -3791,11 +3764,9 @@
 
     <div id="modal-clave-admin" class="hoja-overlay" style="z-index:5300;">
         <div class="hoja-contenido" style="max-width: 420px; overflow: hidden; padding: 12px 20px 20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:0.5px solid rgba(60,60,67,0.22); padding-bottom:10px; margin-bottom:15px;">
-                <h3 style="margin:0; color:#1c1c1e; font-size:1.15rem; font-weight:700; letter-spacing:-0.02em;">Modo administrador</h3>
-                <button onclick="window.cerrarClaveAdmin()" class="ios-boton-icono" title="Cerrar" aria-label="Cerrar">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></svg>
-                </button>
+            <div class="hoja-encabezado">
+                <h3 class="hoja-titulo">Modo administrador</h3>
+                <button onclick="window.cerrarClaveAdmin()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
 
             <div class="form-group">
@@ -3819,15 +3790,13 @@
     </div>
     <div id="modal-empleados" class="hoja-overlay" style="z-index:5100;">
         <div class="hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 0;">
-            <div style="padding: 8px 16px 12px; border-bottom: 0.5px solid rgba(60,60,67,0.22); display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                <h3 style="margin:0; color:#1c1c1e; font-size:1.15rem; font-weight:700; letter-spacing:-0.02em;">Empleados</h3>
-                <div style="display:flex; align-items:center; gap:8px;">
+            <div class="hoja-encabezado-lista">
+                <h3 class="hoja-titulo">Empleados</h3>
+                <div class="hoja-acciones">
                     <button onclick="window.abrirFormEmpleado(null)" class="ios-boton-icono" title="Nuevo empleado" aria-label="Nuevo empleado">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
                     </button>
-                    <button onclick="window.cerrarAdminEmpleados()" class="ios-boton-icono" title="Cerrar" aria-label="Cerrar">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></svg>
-                    </button>
+                    <button onclick="window.cerrarAdminEmpleados()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                 </div>
             </div>
 
@@ -3842,11 +3811,9 @@
 
     <div id="modal-empleado-form" class="hoja-overlay" style="z-index:5200;">
         <div class="form-content hoja-contenido" style="max-width: 500px; overflow-y: auto; padding: 12px 20px 20px; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:0.5px solid rgba(60,60,67,0.22); padding-bottom:10px; margin-bottom:15px;">
-                <h3 id="titulo-form-empleado" style="margin:0; color:#1c1c1e; font-size:1.15rem; font-weight:700; letter-spacing:-0.02em;">Nuevo empleado</h3>
-                <button onclick="window.cerrarFormEmpleado()" class="ios-boton-icono" title="Cerrar" aria-label="Cerrar">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></svg>
-                </button>
+            <div class="hoja-encabezado">
+                <h3 id="titulo-form-empleado" class="hoja-titulo">Nuevo empleado</h3>
+                <button onclick="window.cerrarFormEmpleado()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
 
             <div class="form-group">
@@ -3910,9 +3877,9 @@
     </div>
     <div id="modal-detalle-indicadores" class="hoja-overlay" style="z-index:5000;">
                 <div class="form-content hoja-contenido" style="max-width: 450px; overflow: hidden; padding: 12px 0 0;">
-                    <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-                        <h3 id="titulo-modal-indicador" style="margin:0; color:#0f172a; font-size:1.1rem; display:flex; align-items:center; gap:8px;">📊 Detalles</h3>
-                        <button onclick="document.getElementById('modal-detalle-indicadores').style.display='none'" style="border:none; background:#e2e8f0; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold;">✕</button>
+                    <div class="hoja-encabezado-lista">
+                        <h3 id="titulo-modal-indicador" class="hoja-titulo">Detalles</h3>
+                        <button onclick="document.getElementById('modal-detalle-indicadores').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                     </div>
                     <div id="contenido-modal-indicador" style="padding: 20px; overflow-y: auto; background: white;">
                         </div>
@@ -3922,9 +3889,9 @@
         <div id="modal-editar-equipo-filtro" class="hoja-overlay" style="z-index:5000;">
             <div class="hoja-contenido" style="max-width: 400px; overflow: hidden; padding: 12px 0 0;">
                 
-                <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-                    <h3 style="margin:0; color:#0f172a; font-size:1.1rem; display:flex; align-items:center; gap:8px;">✏️ Editar Equipo</h3>
-                    <button onclick="document.getElementById('modal-editar-equipo-filtro').style.display='none'" style="border:none; background:transparent; cursor:pointer; font-size:1.2rem; color:#64748b; padding:0;">✕</button>
+                <div class="hoja-encabezado-lista">
+                    <h3 class="hoja-titulo">Editar equipo</h3>
+                    <button onclick="document.getElementById('modal-editar-equipo-filtro').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                 </div>
                 
                 <div style="padding: 20px; display:flex; flex-direction:column; gap:15px;">

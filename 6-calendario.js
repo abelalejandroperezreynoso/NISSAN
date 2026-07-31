@@ -424,9 +424,9 @@ window.renderCalendarList = (containerId, year, allEvents) => {
 window.crearModalDetalleHtml = () => `
     <div id="modal-cal-detalle" class="hoja-overlay" style="z-index:3000;">
         <div class="hoja-contenido" style="max-width:400px; padding:12px 20px 20px; overflow:hidden;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
-                <h3 id="modal-cal-title" style="margin:0; color:#1e293b; font-size:1.1rem;">Detalle</h3>
-                <button onclick="document.getElementById('modal-cal-detalle').style.display='none'" style="border:none; background:#f1f5f9; width:30px; height:30px; border-radius:50%; cursor:pointer; color:#64748b;">✕</button>
+            <div class="hoja-encabezado">
+                <h3 id="modal-cal-title" class="hoja-titulo">Detalle</h3>
+                <button onclick="document.getElementById('modal-cal-detalle').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
             <div id="modal-cal-content" style="max-height:60vh; overflow-y:auto;"></div>
         </div>
@@ -601,7 +601,10 @@ window.abrirModalProgramar = async (dateStr) => {
 
     div.innerHTML = `
         <div class="hoja-contenido" style="max-width:400px; padding:12px 25px 25px; overflow:hidden;">
-            <h3 style="margin:0 0 15px 0; color:#1e293b;">📅 Programar Evaluación</h3>
+            <div class="hoja-encabezado">
+                <h3 class="hoja-titulo">Programar evaluación</h3>
+                <button onclick="document.getElementById('modal-programar-form').remove()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+            </div>
             <div style="border:1px solid #cbd5e1; border-radius:8px; margin-bottom:15px; background:#f8fafc; overflow:hidden;">
                 <div style="padding:8px; background:#eff6ff; border-bottom:1px solid #bfdbfe;"><label style="font-weight:bold; color:#1e40af; font-size:0.85rem;"><input type="checkbox" onchange="document.querySelectorAll('.prog-emp-checkbox').forEach(c=>c.checked=this.checked)"> Todos</label></div>
                 <div style="max-height:150px; overflow-y:auto; background:white;">${empCheckboxes}</div>

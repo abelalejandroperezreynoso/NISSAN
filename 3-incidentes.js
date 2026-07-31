@@ -199,9 +199,9 @@ window.abrirDetalleIndependiente = async (id) => {
             const modalHTML = `
             <div id="modal-detalle-independiente" class="hoja-overlay" style="z-index:2500;">
                 <div class="form-content hoja-contenido" style="max-width: 600px; background: #f8fafc; overflow: hidden; padding: 12px 0 0;">
-                    <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
-                        <h3 id="titulo-modal-detalle" style="margin:0; color:#0f172a; font-size:1.15rem; line-height: 1.3;">Detalles del Registro</h3>
-                        <button onclick="document.getElementById('modal-detalle-independiente').style.display='none'" style="border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold; font-size: 1rem; flex-shrink: 0; margin-left:10px;">✕</button>
+                    <div class="hoja-encabezado-lista">
+                        <h3 id="titulo-modal-detalle" class="hoja-titulo">Detalles del registro</h3>
+                        <button onclick="document.getElementById('modal-detalle-independiente').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                     </div>
                     <div id="contenido-modal-detalle" style="flex:1; overflow-y: auto; padding: 20px;"></div>
                 </div>

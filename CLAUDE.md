@@ -90,6 +90,32 @@ cargan `1-config.js` por su cuenta y llevan su propio `<script>` inline.
   `class="form-content hoja-contenido"` con `overflow-y:auto` y padding
   `12px 25px 25px`; para una lista a sangre, `padding: 12px 0 0` con
   `overflow:hidden`.
+- **Todas las hojas llevan el mismo encabezado**: título a la izquierda,
+  botón de cerrar a la derecha y una línea fina de separación. Las clases
+  están en `estilos.css` y no se estilan a mano:
+
+  ```html
+  <div class="hoja-encabezado-lista">
+      <div style="min-width:0;">
+          <h3 class="hoja-titulo">Empleados</h3>
+          <div class="hoja-subtitulo">Modo administrador</div>
+      </div>
+      <button onclick="cerrar()" class="ios-boton-cerrar ios-boton-icono"
+              title="Cerrar" aria-label="Cerrar"></button>
+  </div>
+  ```
+
+  `.hoja-encabezado-lista` es para las hojas a sangre (`padding: 12px 0 0`):
+  pone su propio relleno lateral y el separador cruza la hoja entera.
+  `.hoja-encabezado` es para las de formulario, que ya traen relleno lateral.
+  El `<div>` que envuelve título y subtítulo sólo hace falta si hay
+  subtítulo, y necesita `min-width:0` para que un título largo se recorte en
+  lugar de empujar al botón fuera de la hoja. Si a la derecha va más de un
+  control, se agrupan en un `<div class="hoja-acciones">`.
+
+  El botón de cerrar va **vacío**: la cruz la dibuja `.ios-boton-cerrar` con
+  pseudoelementos, así que no lleva `✕` ni SVG, pero sí `aria-label`. Para
+  otros iconos está `.ios-boton-icono` a secas, con un `<svg>` dentro.
 
   El teclado de iOS lo resuelve `1-config.js`: publica su altura en
   `--alto-teclado`, que las hojas suman a su margen inferior para apoyarse

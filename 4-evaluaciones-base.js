@@ -231,9 +231,9 @@ window.cargarVistaEvaluaciones = async () => {
         const modalHTML = `
         <div id="modal-evaluaciones-flotante" class="hoja-overlay" style="z-index:2000;">
             <div class="form-content hoja-contenido" style="max-width: 800px; background: #f8fafc; overflow: hidden; padding: 12px 0 0;">
-                <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
-                    <h2 style="margin:0; color:#1e293b; font-size:1.2rem; display:flex; align-items:center; gap:8px;">📝 Evaluaciones y Encuestas</h2>
-                    <button onclick="window.cerrarModalEvaluaciones()" style="border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold; font-size: 1rem; flex-shrink: 0;">✕</button>
+                <div class="hoja-encabezado-lista">
+                    <h2 class="hoja-titulo">Evaluaciones y encuestas</h2>
+                    <button onclick="window.cerrarModalEvaluaciones()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                 </div>
                 <div id="contenido-modal-evaluaciones" style="flex:1; overflow-y: auto; padding: 20px; background: #f8fafc;"></div>
             </div>
@@ -695,12 +695,12 @@ window.renderizarCronologiaGlobal = (respuestas, evaluaciones) => {
 
     div.innerHTML = `
         <div class="hoja-contenido" style="max-width:400px; overflow:hidden; padding:12px 0 0;">
-            <div style="padding:15px; background:#fff; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <h3 style="margin:0; font-size:1rem; color:#1e293b;">Evaluar a Colaborador</h3>
-                    <div style="font-size:0.75rem; color:#64748b;">Selecciona quién recibirá la calificación</div>
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h3 class="hoja-titulo">Evaluar a colaborador</h3>
+                    <div class="hoja-subtitulo">Selecciona quién recibirá la calificación</div>
                 </div>
-                <button onclick="document.getElementById('modal-select-sub').remove()" style="border:none; background:#f1f5f9; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#64748b; font-weight:bold;">✕</button>
+                <button onclick="document.getElementById('modal-select-sub').remove()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
             <div style="max-height:60vh; overflow-y:auto; background:#f8fafc;">${listHtml}</div>
         </div>
@@ -880,11 +880,15 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
     // se sigan leyendo como tarjetas.
     modal.innerHTML = `
         <div class="hoja-contenido" style="max-width:800px; background:#f8fafc; overflow:hidden; padding:12px 0 0;">
-        <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 8px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
-            <button onclick="cancelarRespuesta('main')" style="background:none; border:none; color:#64748b; font-weight:bold; cursor:pointer; font-size:1.1rem; margin-bottom:20px; display:inline-flex; align-items:center; gap:5px; padding:0;">Volver al listado</button>
-            <div style="margin-bottom:30px; ${headerStyle}">
-                <h1 style="margin:0 0 5px 0; font-size:1.5rem; line-height:1.2;">${headerTitle}</h1>
-                <div style="font-size:0.8rem; color:#64748b; font-weight:600; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">${freqText}</div>
+        <div class="hoja-encabezado-lista">
+            <div style="min-width:0;">
+                <h2 class="hoja-titulo">${headerTitle}</h2>
+                <div class="hoja-subtitulo">${freqText}</div>
+            </div>
+            <button onclick="cancelarRespuesta('main')" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+        </div>
+        <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
+            <div style="margin-bottom:25px; ${headerStyle}">
                 <p style="color:#64748b; margin:0; font-size:0.95rem;">${subTitle}</p>
                 ${areaBadgeHtml} 
             </div>

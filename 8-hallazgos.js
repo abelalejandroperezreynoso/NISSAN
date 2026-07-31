@@ -23,7 +23,10 @@ window.inicializarModuloHallazgos = () => {
     const modalHtml = `
     <div id="modal-hallazgo" class="hoja-overlay" style="z-index:4000;">
         <div class="form-content hoja-contenido" style="overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
-            <h2 id="titulo-modal-hallazgo" style="margin-top:0; color:#b45309; border-bottom:1px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">Nuevo Hallazgo</h2>
+            <div class="hoja-encabezado">
+                <h2 id="titulo-modal-hallazgo" class="hoja-titulo">Nuevo hallazgo</h2>
+                <button onclick="window.cerrarModalHallazgo()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+            </div>
             
             <div class="form-group">
                 <label>Título / Observación breve:</label>

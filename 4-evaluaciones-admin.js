@@ -494,22 +494,26 @@ window.verDetalleRespuesta = async (resp) => {
             if (resp.review_status === 'Falsa') bgBadge = '#64748b'; // Gris si fue anulada
             if (resp.review_status === 'Mal Revisada') bgBadge = '#a855f7'; // Morado si fue mal revisada
             
-            badgeCalificacionHtml = `<span style="background:${bgBadge}; color:white; padding:4px 12px; border-radius:12px; font-size:1.1rem; font-weight:bold; margin-left:15px; vertical-align: middle; box-shadow: 0 2px 4px rgba(0,0,0,0.1); letter-spacing:-0.5px;">${scoreActual}%</span>`;
+            badgeCalificacionHtml = `<span style="background:${bgBadge}; color:white; padding:4px 12px; border-radius:12px; font-size:1rem; font-weight:bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); letter-spacing:-0.5px; white-space:nowrap;">${scoreActual}%</span>`;
         } else {
             // Mostrar pendiente si se está calificando
-            badgeCalificacionHtml = `<span style="background:#f1f5f9; color:#64748b; border: 1px solid #cbd5e1; padding:4px 12px; border-radius:12px; font-size:0.9rem; font-weight:bold; margin-left:15px; vertical-align: middle;">Calificando...</span>`;
+            badgeCalificacionHtml = `<span style="background:#f1f5f9; color:#64748b; border: 1px solid #cbd5e1; padding:4px 12px; border-radius:12px; font-size:0.85rem; font-weight:bold; white-space:nowrap;">Calificando...</span>`;
         }
 
         modal.innerHTML = `
             <div class="hoja-contenido" style="max-width:900px; background:#f8fafc; overflow:hidden; padding:12px 0 0;">
-            <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 8px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
-                <button onclick="cancelarRespuesta('history')" style="background:none; border:none; color:#64748b; font-weight:bold; cursor:pointer; font-size:1.1rem; margin-bottom:20px; display:inline-flex; align-items:center; gap:5px; padding:0;">Volver</button>
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h2 class="hoja-titulo">Detalle de respuesta</h2>
+                    <div class="hoja-subtitulo">Empleado: <b>${window.employeeNameMap[resp.employee_id] || resp.employee_id}</b> ${areaInfoHtml}</div>
+                </div>
+                <div class="hoja-acciones">
+                    ${badgeCalificacionHtml}
+                    <button onclick="cancelarRespuesta('history')" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                </div>
+            </div>
+            <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
                 <div style="margin-bottom:20px;">
-                    <h1 style="color:#1e293b; margin:0 0 5px 0; font-size:1.6rem; line-height:1.2; display:flex; align-items:center;">
-                        Detalle de Respuesta 
-                        ${badgeCalificacionHtml}
-                    </h1>
-                    <p style="color:#64748b; margin:0; font-size:1rem; display:flex; align-items:center;">Empleado: <b style="margin-left:4px;">${window.employeeNameMap[resp.employee_id] || resp.employee_id}</b> ${areaInfoHtml}</p>
                     ${dateInputHtml}
                 </div>
                 ${descHtml}

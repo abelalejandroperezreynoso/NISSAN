@@ -9,9 +9,9 @@ window.mostrarModalFirmaPendiente = async (id) => {
             const modalHTML = `
             <div id="modal-detalle-independiente" class="hoja-overlay" style="z-index:2500;">
                 <div class="form-content hoja-contenido" style="max-width: 600px; background: #f8fafc; overflow: hidden; padding: 12px 0 0;">
-                    <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
-                        <h3 id="titulo-modal-detalle" style="margin:0; color:#0f172a; font-size:1.15rem; line-height: 1.3;">Detalles de la Evidencia</h3>
-                        <button onclick="document.getElementById('modal-detalle-independiente').style.display='none'" style="border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold; font-size: 1rem; flex-shrink: 0; margin-left:10px;">✕</button>
+                    <div class="hoja-encabezado-lista">
+                        <h3 id="titulo-modal-detalle" class="hoja-titulo">Detalles de la evidencia</h3>
+                        <button onclick="document.getElementById('modal-detalle-independiente').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                     </div>
                     <div id="contenido-modal-detalle" style="flex:1; overflow-y: auto; padding: 20px;"></div>
                 </div>
@@ -324,7 +324,7 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
 
         tituloContenedor.innerHTML = `
             <div style="display:flex; flex-direction:column; gap:10px; width: 100%;">
-                <h2 style='margin:0; color:${colorTheme}; font-size:1.2rem;'>${tituloTexto}</h2>
+                <h2 class="hoja-titulo">${tituloTexto}</h2>
                 <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:0.85rem;">
                     <span id="badge-total" style="background:${bgTheme}; color:${colorTheme}; padding: 4px 12px; border-radius: 12px; font-weight: 700; border: 1px solid ${borderTheme};">Total: ...</span>
                     <span id="badge-vencidos" style="background:#fee2e2; color:#b91c1c; padding: 4px 12px; border-radius: 12px; font-weight: 700; border: 1px solid #fecaca; display:none;">Vencidos / Urgentes: ...</span>

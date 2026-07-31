@@ -420,7 +420,10 @@ window.abrirModalObjetivo = async () => {
         const modalHtml = `
         <div id="modal-nuevo-objetivo" class="hoja-overlay" style="z-index:2000;">
             <div class="form-content hoja-contenido" style="max-width:450px; overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
-                <h2 style="color:#0f766e; margin-top:0;">Nuevo Objetivo</h2>
+                <div class="hoja-encabezado">
+                    <h2 class="hoja-titulo">Nuevo objetivo</h2>
+                    <button onclick="document.getElementById('modal-nuevo-objetivo').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                </div>
                 <div id="aviso-anio-creacion" style="background:#f0fdf4; border:1px dashed #16a34a; padding:10px; border-radius:8px; margin-bottom:15px; font-size:0.85rem; color:#166534;"></div>
                 
                 <div class="form-group"><label>Título:</label><input type="text" id="obj-titulo" placeholder="Ej. Accidentes laborales"></div>
@@ -512,17 +515,19 @@ window.abrirModalAvance = (obj) => {
         <div id="modal-update-avance" class="hoja-overlay" style="z-index:2000;">
             <div class="form-content hoja-contenido" style="max-width:550px; overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
                 
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom:15px;">
-                    <div>
-                        <h3 style="color:#0f766e; margin:0;" id="avance-titulo-obj">Actualizar Progreso</h3>
-                        <div style="display:flex; gap:10px; margin-top:5px; font-size:0.8rem; color:#64748b;">
-                            <span>Meta Base: <b id="avance-target-display"></b></span>
-                            <span>Comp Base: <b id="avance-commit-display"></b></span>
+                <div class="hoja-encabezado">
+                    <div style="min-width:0;">
+                        <h3 class="hoja-titulo" id="avance-titulo-obj">Actualizar progreso</h3>
+                        <div class="hoja-subtitulo">
+                            Meta base: <b id="avance-target-display"></b> · Comp. base: <b id="avance-commit-display"></b>
                         </div>
                     </div>
-                    <button id="btn-edit-inside-modal" style="background:white; border:1px solid #cbd5e1; border-radius:6px; padding:6px 10px; font-size:0.8rem; cursor:pointer; color:#475569; display:flex; align-items:center; gap:5px;">
-                        ✏️ Editar General
-                    </button>
+                    <div class="hoja-acciones">
+                        <button id="btn-edit-inside-modal" class="ios-boton-icono" title="Editar objetivo" aria-label="Editar objetivo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                        </button>
+                        <button onclick="document.getElementById('modal-update-avance').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                    </div>
                 </div>
 
                 <input type="hidden" id="avance-obj-id">
@@ -608,7 +613,10 @@ window.abrirModalEditar = async (obj) => {
         const modalHtml = `
         <div id="modal-editar-objetivo" class="hoja-overlay" style="z-index:2000;">
             <div class="form-content hoja-contenido" style="max-width:450px; overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
-                <h2 style="color:#0f766e; margin-top:0;">Editar Objetivo</h2>
+                <div class="hoja-encabezado">
+                    <h2 class="hoja-titulo">Editar objetivo</h2>
+                    <button onclick="document.getElementById('modal-editar-objetivo').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                </div>
                 <input type="hidden" id="edit-obj-id">
                 <div class="form-group"><label>Título:</label><input type="text" id="edit-obj-titulo"></div>
                 <div class="form-group">
