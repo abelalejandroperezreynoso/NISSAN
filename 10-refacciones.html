@@ -635,7 +635,11 @@
                                             <div id="contenedor-filtros-equipos" class="scroll-pastillas">
                                             </div>
                                         </div>
-                            </div> <div id="lista-refacciones-container">
+                            </div>
+
+        <div id="aviso-filtro-lineas" style="display:none;"></div>
+
+        <div id="lista-refacciones-container">
                                 
             <div id="loading-refacciones" style="text-align:center; color:#64748b; padding:20px;">Cargando solicitudes...</div>
         </div>
@@ -3173,6 +3177,11 @@
                                     selFiltro.value = valFiltro;
                                 }
                                 
+                                // Sin permiso de ver toda la empresa, se arranca
+                                // acotado a las líneas propias. Va antes de pintar
+                                // las pastillas para que salgan ya marcadas.
+                                await window.aplicarFiltroInicialPorLineas();
+
                                 // Renderizamos las pastillas de líneas para los filtros
                                                                 window.renderizarFiltroLineas();
 
@@ -3501,6 +3510,67 @@
 
         window.lineasFiltroSeleccionadas = new Set();
 
+        // Quien no tiene permiso para ver toda la empresa entra viendo las
+        // solicitudes de sus líneas. No es un candado —los datos son los
+        // mismos y el filtro se quita de un toque—, sino el punto de partida
+        // razonable: lo suyo primero. Se hace con el filtro de líneas que ya
+        // existía, así que "ver más" es jugar con las pastillas de siempre.
+        window.filtroLineasInicializado = false;
+        window.filtroLineasPorDefecto = false;
+
+        window.misLineasDeTrabajo = () => {
+            let userLog = null;
+            try { userLog = JSON.parse(localStorage.getItem("usuarioLogueado")); } catch (e) {}
+            if (!userLog || !window.todosLosEmpleadosData) return [];
+
+            const miData = window.todosLosEmpleadosData.find(e => String(e.id) === String(userLog.id));
+            return window.lineasDeEmpleado(miData).map(l => l.nombre);
+        };
+
+        window.aplicarFiltroInicialPorLineas = async () => {
+            if (window.filtroLineasInicializado) return;
+            window.filtroLineasInicializado = true;
+
+            // Al que puede ver todo no se le estorba: mirar la empresa entera
+            // es justo lo que le toca.
+            if (window.puedeVerTodoRefacciones) return;
+
+            // El catálogo de líneas puede no haberse pedido todavía si la
+            // tarjeta de usuario no lo necesitó.
+            if (window.lineasAdminCache.length === 0) await window.cargarLineas();
+
+            const mias = window.misLineasDeTrabajo();
+            // Sin líneas asignadas no hay nada que acotar: se queda viendo
+            // todo, como antes.
+            if (mias.length === 0) return;
+
+            window.lineasFiltroSeleccionadas = new Set(mias);
+            window.filtroLineasPorDefecto = true;
+        };
+
+        // Aviso sobre la lista para que nadie crea que faltan solicitudes.
+        window.renderizarAvisoFiltroLineas = () => {
+            const aviso = document.getElementById('aviso-filtro-lineas');
+            if (!aviso) return;
+
+            if (!window.filtroLineasPorDefecto) {
+                aviso.style.display = 'none';
+                aviso.innerHTML = '';
+                return;
+            }
+
+            const mias = Array.from(window.lineasFiltroSeleccionadas).join(', ');
+            aviso.innerHTML = `
+                <div style="display:flex; align-items:center; gap:10px; margin:10px 16px 0; padding:9px 12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:10px;">
+                    <div style="flex:1; min-width:0; font-size:0.78rem; color:#0369a1; line-height:1.3;">
+                        Viendo solo <b>${escaparHtml(mias)}</b>, tus líneas asignadas.
+                    </div>
+                    <button onclick="window.seleccionarFiltroLinea('Todos')" style="flex-shrink:0; padding:6px 12px; background:#0ea5e9; color:white; border:none; border-radius:8px; font-family:inherit; font-size:0.78rem; font-weight:600; cursor:pointer;">Ver todas</button>
+                </div>
+            `;
+            aviso.style.display = 'block';
+        };
+
         window.renderizarFiltroLineas = () => {
             const container = document.getElementById('contenedor-filtros-lineas');
             if (!container) return;
@@ -3558,6 +3628,10 @@
         };
 
         window.seleccionarFiltroLinea = (linea) => {
+            // En cuanto el usuario toca las pastillas, el filtro deja de ser
+            // el de arranque y el aviso sobra.
+            window.filtroLineasPorDefecto = false;
+
             if (linea === 'Todos') {
                 window.lineasFiltroSeleccionadas.clear();
             } else {
@@ -3907,6 +3981,8 @@
 
                         // GUARDAMOS LOS DATOS FILTRADOS EN UNA VARIABLE GLOBAL PARA EL REPORTE
                         window.refaccionesFiltradasCache = dataFiltrada;
+
+                        window.renderizarAvisoFiltroLineas();
 
                         const pendientesFiltradas = dataFiltrada.filter(r => r.estado === 'Pendiente');
                         const totalActual = dataFiltrada.length;
