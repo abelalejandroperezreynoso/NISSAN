@@ -7,8 +7,8 @@ window.mostrarModalFirmaPendiente = async (id) => {
         let modal = document.getElementById('modal-detalle-independiente');
         if (!modal) {
             const modalHTML = `
-            <div id="modal-detalle-independiente" style="display:none; position:fixed; z-index:2500; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-                <div class="form-content" style="max-width: 600px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 90vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: #f8fafc; border-radius: 16px; padding:0; overflow:hidden;">
+            <div id="modal-detalle-independiente" class="hoja-overlay" style="z-index:2500;">
+                <div class="form-content hoja-contenido" style="max-width: 600px; background: #f8fafc; overflow: hidden; padding: 12px 0 0;">
                     <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
                         <h3 id="titulo-modal-detalle" style="margin:0; color:#0f172a; font-size:1.15rem; line-height: 1.3;">Detalles de la Evidencia</h3>
                         <button onclick="document.getElementById('modal-detalle-independiente').style.display='none'" style="border:none; background:#f1f5f9; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#475569; font-weight:bold; font-size: 1rem; flex-shrink: 0; margin-left:10px;">✕</button>

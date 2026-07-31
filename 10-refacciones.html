@@ -288,94 +288,13 @@
         /* ==========================================
            Paneles como hoja inferior (estilo iOS)
            ==========================================
-           Los paneles ya no flotan al centro sobre una capa oscura: nacen
-           del borde inferior y se estiran hacia arriba. Al desaparecer el
-           atenuado a pantalla completa, desaparece también el corte contra
-           la franja de la barra de estado, que iOS deja fuera del viewport
-           y que ningún overlay puede alcanzar. */
+           Las clases .hoja-overlay y .hoja-contenido nacieron aquí y ya viven
+           en estilos.css, compartidas con el resto de la aplicación. Lo que
+           queda en este archivo son sólo los ajustes propios de esta
+           pantalla. */
 
-        .hoja-overlay {
-            display: none;
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            align-items: flex-end;
-            justify-content: center;
-            box-sizing: border-box;
-
-            /* La hoja no toca los bordes: 8px de margen por igual a los lados
-               y abajo, medidos sobre las hojas del propio iOS. El indicador
-               de inicio NO se aparta aquí, sino con el padding interno de
-               cada hoja; si se sumara a este margen, el hueco inferior
-               quedaría cinco veces más ancho que el lateral. Arriba sí se
-               suma, para que una hoja alta no se meta bajo la barra de
-               estado. */
-            padding: calc(8px + env(safe-area-inset-top)) 8px calc(8px + var(--alto-teclado, 0px));
-
-            /* Sin color de fondo. El desenfoque basta para separar la hoja
-               del contenido y, a diferencia del gris, no genera ningún borde
-               visible contra la barra de estado. */
-            background: transparent;
-            backdrop-filter: blur(3px);
-            -webkit-backdrop-filter: blur(3px);
-        }
-
-        .hoja-contenido {
-            position: relative;
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-
-            /* Sin esto el tope de altura se mediría sin contar el padding
-               propio de cada hoja, y la hoja alta rebasaba el margen. */
-            box-sizing: border-box;
-            background: white;
-
-            /* Radio en las cuatro esquinas, como las hojas separadas del
-               borde en iOS. Va por encima del radio de pantalla del iPhone
-               (39pt) porque iOS dibuja esquinas continuas, que a igual
-               valor se ven más redondeadas que el border-radius circular
-               de CSS. */
-            border-radius: 44px;
-            box-shadow: 0 10px 40px rgba(15, 23, 42, 0.25);
-
-            /* Tope calculado contra el viewport y no en porcentaje: dentro de
-               un contenedor flex el porcentaje dejaba medio píxel de holgura
-               y la hoja rebasaba el margen superior. El min-height en 0 evita
-               que, siendo elemento flex, se niegue a encogerse. */
-            max-height: calc(100vh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
-            max-height: calc(100dvh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
-            min-height: 0;
-            animation: hoja-subir 0.34s cubic-bezier(0.32, 0.72, 0, 1);
-        }
-
-        /* Tirador. Va sticky para que siga a la vista en los paneles cuyo
-           contenido se desplaza. */
-        .hoja-contenido::before {
-            content: '';
-            position: sticky;
-            top: 0;
-            align-self: center;
-            flex-shrink: 0;
-            width: 36px;
-            height: 5px;
-            margin-bottom: 10px;
-            border-radius: 3px;
-            background: #cbd5e1;
-            z-index: 3;
-        }
-
-        @keyframes hoja-subir {
-            /* El extra compensa el margen inferior, para que arranque
-               completamente fuera de la pantalla. */
-            from { transform: translateY(calc(100% + 16px)); }
-            to   { transform: translateY(0); }
-        }
-
-        /* Esta pantalla ya no atenúa el fondo, así que se anula el gris que
-           1-config.js aplica a la franja de la barra de estado. */
+        /* La franja de la barra de estado sigue el fondo de esta pantalla y
+           no el de estilos.css, que es el del panel principal. */
         html.modal-abierto {
             background-color: #f2f2f7;
         }
@@ -402,20 +321,6 @@
             font-weight: 500;
             font-size: 0.72rem;
             color: #94a3b8;
-        }
-
-        /* OJO: la fuente se mantiene en 16px a proposito. Con valores
-           menores iOS hace zoom automatico al enfocar el campo, porque
-           Safari ignora el user-scalable=no del viewport. La reduccion
-           de altura viene del padding y de los margenes. */
-        .hoja-contenido input[type="text"],
-        .hoja-contenido input[type="number"],
-        .hoja-contenido input[type="date"],
-        .hoja-contenido select,
-        .hoja-contenido textarea {
-            padding: 8px 10px;
-            font-size: 16px;
-            border-radius: 9px;
         }
 
         .ref-btn-add {
@@ -1892,51 +1797,9 @@
         };
 
 
-        // ==========================================
-        // TECLADO EN iOS
-        // ==========================================
-        // Safari no encoge la ventana al abrir el teclado: encoge el viewport
-        // visual y desplaza el documento entero para revelar el campo
-        // enfocado. Como el panel mide justo el alto de la pantalla y hace su
-        // propio scroll interno, ese desplazamiento solo saca el encabezado
-        // por arriba.
-        //
-        // Aquí se mide el teclado con visualViewport y se publica su altura en
-        // --alto-teclado. Las hojas la suman a su margen inferior, así que se
-        // apoyan sobre el teclado en vez de esconderse detrás, y ya no hace
-        // falta que el documento se mueva: se devuelve a cero.
-        (() => {
-            const raiz = document.documentElement;
+        // El ajuste del teclado en iOS (--alto-teclado) vive ahora en
+        // 1-config.js, compartido con el resto de las pantallas.
 
-            const ajustar = () => {
-                const vv = window.visualViewport;
-                if (!vv) return;
-
-                // innerHeight es el viewport de maquetación, que no cambia con
-                // el teclado; vv.height sí. La diferencia es lo que ocupa.
-                const alto = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-                raiz.style.setProperty('--alto-teclado', alto + 'px');
-
-                // El documento se mantiene fijo: el desplazamiento que hace
-                // iOS ya no es necesario ahora que la hoja sube sola.
-                if (window.scrollY !== 0) window.scrollTo(0, 0);
-            };
-
-            if (window.visualViewport) {
-                window.visualViewport.addEventListener('resize', ajustar);
-                window.visualViewport.addEventListener('scroll', ajustar);
-            }
-
-            // El scroll del documento (no el de los contenedores internos, que
-            // no burbujea hasta window) siempre vuelve al origen.
-            window.addEventListener('scroll', () => {
-                if (window.scrollY !== 0) window.scrollTo(0, 0);
-            }, { passive: true });
-
-            // Al cerrar el teclado, Safari tarda un instante en devolver las
-            // medidas definitivas.
-            document.addEventListener('focusout', () => setTimeout(ajustar, 100));
-        })();
 
         window.abrirModalRefacciones = () => {
                     window.refaccionEditandoId = null;

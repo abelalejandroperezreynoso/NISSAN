@@ -422,8 +422,8 @@ window.renderCalendarList = (containerId, year, allEvents) => {
 // --- 5. DETALLES Y MODALES ---
 
 window.crearModalDetalleHtml = () => `
-    <div id="modal-cal-detalle" style="display:none; position:fixed; z-index:3000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(3px); align-items:center; justify-content:center;">
-        <div style="background:white; width:90%; max-width:400px; border-radius:16px; padding:20px; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1); animation: scaleUp 0.2s;">
+    <div id="modal-cal-detalle" class="hoja-overlay" style="z-index:3000;">
+        <div class="hoja-contenido" style="max-width:400px; padding:12px 20px 20px; overflow:hidden;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #f1f5f9; padding-bottom:10px;">
                 <h3 id="modal-cal-title" style="margin:0; color:#1e293b; font-size:1.1rem;">Detalle</h3>
                 <button onclick="document.getElementById('modal-cal-detalle').style.display='none'" style="border:none; background:#f1f5f9; width:30px; height:30px; border-radius:50%; cursor:pointer; color:#64748b;">✕</button>
@@ -588,7 +588,8 @@ window.abrirModalProgramar = async (dateStr) => {
 
     const div = document.createElement('div');
     div.id = 'modal-programar-form';
-    div.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(3px); z-index:3500; display:flex; align-items:center; justify-content:center;";
+    div.className = 'hoja-overlay';
+    div.style.cssText = "z-index:3500; display:flex;";
     
     let empCheckboxes = empleados.length > 0 ? empleados.map(e => `
         <label style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid #f1f5f9; cursor:pointer;">
@@ -599,7 +600,7 @@ window.abrirModalProgramar = async (dateStr) => {
     let evalOptions = evals ? evals.map(e => `<option value="${e.id}">${e.title}</option>`).join('') : '<option value="">Sin evaluaciones</option>';
 
     div.innerHTML = `
-        <div style="background:white; width:90%; max-width:400px; padding:25px; border-radius:16px; box-shadow:0 10px 25px rgba(0,0,0,0.2); animation: scaleUp 0.2s; display:flex; flex-direction:column; max-height:85vh;">
+        <div class="hoja-contenido" style="max-width:400px; padding:12px 25px 25px; overflow:hidden;">
             <h3 style="margin:0 0 15px 0; color:#1e293b;">📅 Programar Evaluación</h3>
             <div style="border:1px solid #cbd5e1; border-radius:8px; margin-bottom:15px; background:#f8fafc; overflow:hidden;">
                 <div style="padding:8px; background:#eff6ff; border-bottom:1px solid #bfdbfe;"><label style="font-weight:bold; color:#1e40af; font-size:0.85rem;"><input type="checkbox" onchange="document.querySelectorAll('.prog-emp-checkbox').forEach(c=>c.checked=this.checked)"> Todos</label></div>

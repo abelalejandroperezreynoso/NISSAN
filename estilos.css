@@ -765,23 +765,11 @@ button.btn-login:disabled {
 
 /* =========================================
    MODALES (Formularios y Firma)
-   ========================================= */
-#modal-firma,
-#modal-crear-eval,
-#modal-responder-eval,
-#modal-form {
-    display: none;
-    position: fixed;
-    z-index: 2000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(5px);
-    align-items: center;
-    justify-content: center;
-}
+   =========================================
+   Los paneles de firma, registro y evaluaciones ya no llevan reglas propias
+   de overlay: se presentan como hoja inferior con .hoja-overlay, al final de
+   este archivo. Aquí quedan sólo el visor de imágenes, que sí ocupa la
+   pantalla completa, y las cajas de contenido. */
 
 #modal-visor {
     display: none;
@@ -1754,6 +1742,122 @@ textarea:focus {
 .bg-objetivos { background: linear-gradient(135deg, #5eead4, #0f766e); }
 .bg-stats-dif { background: linear-gradient(135deg, #c4b5fd, #8b5cf6); }
 .bg-stats-enc { background: linear-gradient(135deg, #7dd3fc, #0ea5e9); }
+
+/* =========================================
+   PANELES COMO HOJA INFERIOR (estilo iOS)
+   =========================================
+   Los paneles ya no flotan al centro sobre una capa oscura: nacen del borde
+   inferior y se estiran hacia arriba. Al desaparecer el atenuado a pantalla
+   completa, desaparece también el corte contra la franja de la barra de
+   estado, que iOS deja fuera del viewport y que ningún overlay puede
+   alcanzar.
+
+   El bloque nació en el panel de refacciones y aquí vive ya compartido, para
+   que todas las pantallas usen la misma hoja. Va al final del archivo a
+   propósito: así gana sobre .form-content y .firma-content, que siguen
+   aportando el ancho máximo y el desplazamiento interno de cada panel. */
+
+.hoja-overlay {
+    display: none;
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    align-items: flex-end;
+    justify-content: center;
+    box-sizing: border-box;
+
+    /* La hoja no toca los bordes: 8px de margen por igual a los lados y
+       abajo, medidos sobre las hojas del propio iOS. El indicador de inicio
+       NO se aparta aquí, sino con el padding interno de cada hoja; si se
+       sumara a este margen, el hueco inferior quedaría cinco veces más ancho
+       que el lateral. Arriba sí se suma, para que una hoja alta no se meta
+       bajo la barra de estado. */
+    padding: calc(8px + env(safe-area-inset-top)) 8px calc(8px + var(--alto-teclado, 0px));
+
+    /* Sin color de fondo. El desenfoque basta para separar la hoja del
+       contenido y, a diferencia del gris, no genera ningún borde visible
+       contra la barra de estado. */
+    background: transparent;
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+}
+
+.hoja-contenido {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+
+    /* Sin esto el tope de altura se mediría sin contar el padding propio de
+       cada hoja, y la hoja alta rebasaba el margen. */
+    box-sizing: border-box;
+    background: white;
+
+    /* Radio en las cuatro esquinas, como las hojas separadas del borde en
+       iOS. Va por encima del radio de pantalla del iPhone (39pt) porque iOS
+       dibuja esquinas continuas, que a igual valor se ven más redondeadas
+       que el border-radius circular de CSS. */
+    border-radius: 44px;
+    box-shadow: 0 10px 40px rgba(15, 23, 42, 0.25);
+
+    /* Tope calculado contra el viewport y no en porcentaje: dentro de un
+       contenedor flex el porcentaje dejaba medio píxel de holgura y la hoja
+       rebasaba el margen superior. El min-height en 0 evita que, siendo
+       elemento flex, se niegue a encogerse. */
+    max-height: calc(100vh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
+    min-height: 0;
+    animation: hoja-subir 0.34s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Tirador. Va sticky para que siga a la vista en los paneles cuyo contenido
+   se desplaza. */
+.hoja-contenido::before {
+    content: '';
+    position: sticky;
+    top: 0;
+    align-self: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 5px;
+    margin-bottom: 10px;
+    border-radius: 3px;
+    background: #cbd5e1;
+    z-index: 3;
+}
+
+@keyframes hoja-subir {
+    /* El extra compensa el margen inferior, para que arranque completamente
+       fuera de la pantalla. */
+    from { transform: translateY(calc(100% + 16px)); }
+    to   { transform: translateY(0); }
+}
+
+/* Los paneles que ya traían .form-content o .firma-content conservan de esas
+   clases el ancho máximo y el scroll; lo que cambia es el relleno, porque el
+   tirador ocupa la franja superior. */
+.form-content.hoja-contenido,
+.firma-content.hoja-contenido {
+    padding: 12px 25px 25px;
+}
+
+/* OJO: la fuente se mantiene en 16px a propósito. Con valores menores iOS
+   hace zoom automático al enfocar el campo, porque Safari ignora el
+   user-scalable=no del viewport. La reducción de altura viene del padding y
+   de los márgenes. */
+.hoja-contenido input[type="text"],
+.hoja-contenido input[type="number"],
+.hoja-contenido input[type="date"],
+.hoja-contenido input[type="password"],
+.hoja-contenido select,
+.hoja-contenido textarea {
+    padding: 8px 10px;
+    font-size: 16px;
+    border-radius: 9px;
+}
+
 /* =========================================
    SAFE AREA (iPhone con notch / isla dinámica)
    =========================================
@@ -1800,13 +1904,16 @@ textarea:focus {
    esa franja se quedaba clara y el corte contra el fondo atenuado saltaba a
    la vista.
 
-   La solución es oscurecer el fondo del documento mientras haya un modal
-   abierto: la franja acompaña al atenuado en lugar de recortarlo. La clase
-   la pone y la quita el observador de 1-config.js.
+   La solución era oscurecer el fondo del documento mientras hubiera un modal
+   abierto: la franja acompañaba al atenuado en lugar de recortarlo. La clase
+   la sigue poniendo y quitando el observador de 1-config.js.
 
-   #7c7d7e es justo el resultado de rgba(0,0,0,0.5) sobre #f8fafc, el mismo
-   gris que produce el overlay. El reloj del sistema sigue en negro y
-   conserva 5.09:1 de contraste sobre ese gris.
+   Ahora que los paneles son hojas inferiores (.hoja-overlay) ya no hay
+   atenuado a pantalla completa, así que tampoco hay corte que disimular y el
+   fondo se deja igual que el de la página. La regla se conserva —en lugar de
+   borrarla junto con el observador— porque las pantallas a pantalla completa
+   que quedan (el visor de imágenes, los paneles de evaluaciones) siguen
+   marcando la clase, y así se documenta por qué el color no cambia.
 
    Importante: el color va en <html>, no en <body>. Al declararlo aquí, el
    fondo de <body> deja de propagarse al lienzo y pasa a pintar sólo su
@@ -1818,5 +1925,5 @@ html {
 }
 
 html.modal-abierto {
-    background-color: #7c7d7e;
+    background-color: #f0f2f5;
 }

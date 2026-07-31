@@ -418,8 +418,8 @@ window.renderizarListaObjetivos = async (userId, year) => {
 window.abrirModalObjetivo = async () => {
     if (!document.getElementById('modal-nuevo-objetivo')) {
         const modalHtml = `
-        <div id="modal-nuevo-objetivo" style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
-            <div class="form-content" style="max-width:450px; animation:scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+        <div id="modal-nuevo-objetivo" class="hoja-overlay" style="z-index:2000;">
+            <div class="form-content hoja-contenido" style="max-width:450px; overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
                 <h2 style="color:#0f766e; margin-top:0;">Nuevo Objetivo</h2>
                 <div id="aviso-anio-creacion" style="background:#f0fdf4; border:1px dashed #16a34a; padding:10px; border-radius:8px; margin-bottom:15px; font-size:0.85rem; color:#166534;"></div>
                 
@@ -509,8 +509,8 @@ window.guardarObjetivo = async () => {
 window.abrirModalAvance = (obj) => {
     if (!document.getElementById('modal-update-avance')) {
         const modalHtml = `
-        <div id="modal-update-avance" style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
-            <div class="form-content" style="max-width:550px; max-height:85vh; overflow-y:auto; animation:scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+        <div id="modal-update-avance" class="hoja-overlay" style="z-index:2000;">
+            <div class="form-content hoja-contenido" style="max-width:550px; overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
                 
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom:15px;">
                     <div>
@@ -606,8 +606,8 @@ window.abrirModalAvance = (obj) => {
 window.abrirModalEditar = async (obj) => {
     if (!document.getElementById('modal-editar-objetivo')) {
         const modalHtml = `
-        <div id="modal-editar-objetivo" style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
-            <div class="form-content" style="max-width:450px; animation:scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+        <div id="modal-editar-objetivo" class="hoja-overlay" style="z-index:2000;">
+            <div class="form-content hoja-contenido" style="max-width:450px; overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
                 <h2 style="color:#0f766e; margin-top:0;">Editar Objetivo</h2>
                 <input type="hidden" id="edit-obj-id">
                 <div class="form-group"><label>Título:</label><input type="text" id="edit-obj-titulo"></div>

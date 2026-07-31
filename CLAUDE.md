@@ -70,16 +70,42 @@ cargan `1-config.js` por su cuenta y llevan su propio `<script>` inline.
 - **La franja de la barra de estado no es alcanzable por CSS.** Con la app
   instalada en la pantalla de inicio, iOS deja esa franja fuera del viewport
   y la pinta con el color de fondo de `<html>`. Ningún overlay puede cubrirla,
-  por muy `position:fixed` que sea. El panel de refacciones esquiva el
-  problema presentando sus paneles como hoja inferior (`.hoja-overlay` /
-  `.hoja-contenido`, definidos en el `<style>` de `10-refacciones.html`): al
-  no haber capa oscura a pantalla completa, no hay corte que disimular. Es el
-  patrón a seguir para paneles nuevos. En `index.html`, que aún usa modales
-  centrados sobre fondo atenuado, un observador en `1-config.js` marca
-  `<html>` con la clase
-  `modal-abierto` mientras haya algún overlay visible, y `estilos.css` le
-  aplica el gris del atenuado. Los modales nuevos funcionan solos siempre que
-  su id empiece por `modal-` y sean `position:fixed`.
+  por muy `position:fixed` que sea. Por eso **todos** los paneles flotantes de
+  la aplicación se presentan como hoja inferior: al no haber capa oscura a
+  pantalla completa, no hay corte que disimular. Ver más abajo.
+- **Los paneles son hojas inferiores.** Las clases `.hoja-overlay` (la capa,
+  sin atenuado: sólo desenfoque) y `.hoja-contenido` (la hoja blanca, con
+  tirador y esquinas de 44px) viven al final de `estilos.css` y las comparten
+  todas las pantallas. Un panel nuevo se escribe así:
+
+  ```html
+  <div id="modal-ejemplo" class="hoja-overlay" style="z-index:2000;">
+      <div class="hoja-contenido" style="max-width:500px; overflow:hidden; padding:12px 0 0;">…</div>
+  </div>
+  ```
+
+  y se abre con `style.display = 'flex'`. Nada de `position:fixed`,
+  `background:rgba(0,0,0,…)`, `border-radius` ni `animation` propios: eso ya
+  lo pone la clase. Para un panel con formulario conviene
+  `class="form-content hoja-contenido"` con `overflow-y:auto` y padding
+  `12px 25px 25px`; para una lista a sangre, `padding: 12px 0 0` con
+  `overflow:hidden`.
+
+  El teclado de iOS lo resuelve `1-config.js`: publica su altura en
+  `--alto-teclado`, que las hojas suman a su margen inferior para apoyarse
+  encima en vez de esconderse detrás, y ancla el documento mientras haya una
+  hoja abierta.
+
+  Quedan a pantalla completa, y a propósito, el visor de imágenes
+  (`#modal-visor`) y los paneles de responder/calificar evaluaciones, que
+  `4-evaluaciones-base.js` y `4-evaluaciones-admin.js` construyen sobre
+  `#modal-responder-eval` reemplazando su `cssText` y su `innerHTML`.
+
+  Un observador en `1-config.js` marca `<html>` con la clase `modal-abierto`
+  mientras haya algún overlay visible (id que empiece por `modal-` y
+  `position:fixed`). Ya no sirve para atenuar nada —las hojas no atenúan—,
+  pero sigue disponible si una pantalla necesita teñir esa franja: es lo que
+  hace `10-refacciones.html`, cuyo fondo no es el del panel principal.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con

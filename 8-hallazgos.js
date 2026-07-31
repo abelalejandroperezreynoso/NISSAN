@@ -21,8 +21,8 @@ window.inicializarModuloHallazgos = () => {
 
     // 2. Inyectamos SOLAMENTE el modal oculto (quitamos la inyección de los botones viejos)
     const modalHtml = `
-    <div id="modal-hallazgo" style="display:none; position:fixed; z-index:4000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
-        <div class="form-content">
+    <div id="modal-hallazgo" class="hoja-overlay" style="z-index:4000;">
+        <div class="form-content hoja-contenido" style="overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
             <h2 id="titulo-modal-hallazgo" style="margin-top:0; color:#b45309; border-bottom:1px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">Nuevo Hallazgo</h2>
             
             <div class="form-group">

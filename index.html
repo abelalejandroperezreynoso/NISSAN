@@ -122,8 +122,8 @@
         </div>
         
         <!-- Modal Flotante para Stats Difusión -->
-                <div id="modal-stats-difusion" style="display:none; position:fixed; z-index:4000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-                    <div class="form-content" style="max-width: 800px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 90vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: white; border-radius: 16px; padding: 0; overflow: hidden;">
+                <div id="modal-stats-difusion" class="hoja-overlay" style="z-index:4000;">
+                    <div class="form-content hoja-contenido" style="max-width: 800px; overflow: hidden; padding: 12px 0 0;">
                         
                         <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
                             <div>
@@ -212,8 +212,8 @@
         <div id="container-evaluaciones" style="display:none;"></div>
         <div id="container-evaluaciones-historial" style="display:none;"></div>
 
-        <div id="modal-lista-incidentes" style="display:none; position:fixed; z-index:1800; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-            <div class="form-content" style="max-width: 600px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: #f0f2f5; border-radius: 16px; padding:0; overflow:hidden;">
+        <div id="modal-lista-incidentes" class="hoja-overlay" style="z-index:1800;">
+            <div class="form-content hoja-contenido" style="max-width: 600px; background: #f0f2f5; overflow: hidden; padding: 12px 0 0;">
                 
                 <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
                     <h2 id="titulo-modal-lista-incidentes" style="margin:0; color:#1e293b; font-size:1.2rem; display:flex; align-items:center; gap:8px;">Registros</h2>
@@ -246,8 +246,8 @@
         </div>
     </div>
 
-    <div id="modal-firma">
-        <div class="firma-content">
+    <div id="modal-firma" class="hoja-overlay" style="z-index:2000;">
+        <div class="firma-content hoja-contenido">
             <h3 style="margin:0; color:#1e293b; margin-bottom:5px;">Firmar de Conformidad</h3>
             <p style="font-size:0.8rem; color:#64748b; margin-bottom:15px;">Dibuja tu firma en el recuadro</p>
             <canvas id="signature-pad" width="300" height="150"></canvas>
@@ -259,8 +259,8 @@
         </div>
     </div>
 
-    <div id="modal-form">
-        <div class="form-content">
+    <div id="modal-form" class="hoja-overlay" style="z-index:2000;">
+        <div class="form-content hoja-contenido" style="overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
             <h2 id="form-title" style="margin-top:0; color:#1e40af; border-bottom:1px solid #e2e8f0; padding-bottom:15px; margin-bottom:20px;">Gestión de Registro</h2>
             <div class="form-group"><label>Tipo de Registro:</label>
                 <select id="inp-tipo" onchange="window.toggleGradoVisibility()"><option value="Incidente">Incidente</option><option value="Difusión">Difusión</option><option value="Capacitación">Capacitación</option></select>
@@ -306,8 +306,8 @@
         <div id="txt-cerrar">✕</div> <div id="visor-content"></div>
     </div>
 
-    <div id="modal-crear-eval">
-        <div class="form-content" style="max-width: 500px;">
+    <div id="modal-crear-eval" class="hoja-overlay" style="z-index:2000;">
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
             <h2 style="color:#7c3aed; margin-top:0;">Nueva Evaluación</h2>
             <div class="form-group"><label>Título de la Evaluación:</label><input type="text" id="eval-title-input" placeholder="Ej. Encuesta de Clima Laboral"></div>
             
@@ -432,7 +432,11 @@
         </div>
     </div>
 
-    <div id="modal-responder-eval">
+    <!-- No es una hoja: 4-evaluaciones-base.js y 4-evaluaciones-admin.js
+         reemplazan este contenedor entero por una pantalla completa (cssText
+         propio + innerHTML nuevo), así que el marcado de aquí dentro nunca
+         llega a verse. -->
+    <div id="modal-responder-eval" style="display:none;">
         <div class="form-content" style="max-width: 500px;">
             <h2 id="responder-eval-title" style="color:#1e40af; margin-top:0;">Responder</h2>
             <p id="responder-subtitle" style="color:#64748b; font-size:0.9rem;">Por favor responde con honestidad.</p>
@@ -447,8 +451,8 @@
         </div>
     </div>
 
-    <div id="modal-stats-empleado" style="display:none; position:fixed; z-index:3000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
-            <div style="background:white; padding:0; border-radius:24px; width:90%; max-width:500px; box-shadow:0 20px 50px rgba(0,0,0,0.25); position:relative; animation:scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); max-height: 90vh; overflow-y: auto; overflow-x: hidden;">
+    <div id="modal-stats-empleado" class="hoja-overlay" style="z-index:3000;">
+            <div class="hoja-contenido" style="max-width:500px; overflow-y: auto; overflow-x: hidden; padding: 12px 0 0;">
                 
                 <div style="padding: 25px 25px 10px 25px; display: flex; justify-content: space-between; align-items: flex-start;">
                     <div>
@@ -476,9 +480,9 @@
         </div>
     </div>
 
-    <div id="modal-reclamar-empleado" style="display:none; position:fixed; z-index:3500; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
+    <div id="modal-reclamar-empleado" class="hoja-overlay" style="z-index:3500;">
         
-        <div class="form-content" style="max-width: 420px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+        <div class="form-content hoja-contenido" style="max-width: 420px; overflow-y: auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
             
             <div style="text-align: center; margin-bottom: 20px;">
                 <div style="font-size: 3rem; margin-bottom: 10px;">🤝</div>
@@ -506,8 +510,8 @@
         </div>
     </div>
 
-    <div id="modal-todos-empleados" style="display:none; position:fixed; z-index:4000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-        <div class="form-content" style="max-width: 600px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: white; border-radius: 16px;">
+    <div id="modal-todos-empleados" class="hoja-overlay" style="z-index:4000;">
+        <div class="form-content hoja-contenido" style="max-width: 600px; overflow: hidden; padding: 12px 0 0;">
             <div style="padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h2 style="color:#0f172a; margin:0; font-size: 1.2rem;">👥 Todos los Colaboradores</h2>
@@ -531,8 +535,8 @@
         </div>
     </div>
 
-    <div id="modal-stats-encuestas" style="display:none; position:fixed; z-index:4000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-            <div class="form-content" style="max-width: 800px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 90vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: white; border-radius: 16px; padding: 0; overflow: hidden;">
+    <div id="modal-stats-encuestas" class="hoja-overlay" style="z-index:4000;">
+            <div class="form-content hoja-contenido" style="max-width: 800px; overflow: hidden; padding: 12px 0 0;">
                 
                 <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white; flex-wrap: wrap; gap: 10px;">
                     <div>
@@ -556,8 +560,8 @@
         </div>
     </div>
 
-    <div id="modal-pendientes" style="display:none; position:fixed; z-index:1900; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-        <div class="form-content" style="max-width: 600px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: #f0f2f5; border-radius: 16px; padding:0; overflow:hidden;">
+    <div id="modal-pendientes" class="hoja-overlay" style="z-index:1900;">
+        <div class="form-content hoja-contenido" style="max-width: 600px; background: #f0f2f5; overflow: hidden; padding: 12px 0 0;">
             
             <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
                 <div id="titulo-modal-pendientes" style="width:100%;">
@@ -570,8 +574,8 @@
         </div>
     </div>
 
-    <div id="modal-detalle-independiente" style="display:none; position:fixed; z-index:1950; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-        <div class="form-content" style="max-width: 600px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 90vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: #f8fafc; border-radius: 16px; padding:0; overflow:hidden;">
+    <div id="modal-detalle-independiente" class="hoja-overlay" style="z-index:1950;">
+        <div class="form-content hoja-contenido" style="max-width: 600px; background: #f8fafc; overflow: hidden; padding: 12px 0 0;">
             
             <div style="padding: 15px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: white;">
                 <h3 id="titulo-modal-detalle" style="margin:0; color:#0f172a; font-size:1.15rem; line-height: 1.3;">Detalles del Registro</h3>
@@ -583,8 +587,8 @@
         </div>
     </div>
 
-    <div id="modal-gestionar-accesos" style="display:none; position:fixed; z-index:4000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-        <div class="form-content" style="max-width: 500px; width: 100%; margin: auto; display: flex; flex-direction: column; max-height: 85vh; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); background: white; border-radius: 16px;">
+    <div id="modal-gestionar-accesos" class="hoja-overlay" style="z-index:4000;">
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 0;">
             <div style="padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <h2 style="color:#0f172a; margin:0; font-size: 1.2rem;">⭐ Accesos Directos</h2>
@@ -599,8 +603,8 @@
         </div>
     </div>
 
-    <div id="modal-pedir-area" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(15,23,42,0.8); backdrop-filter:blur(5px); align-items:center; justify-content:center; padding: 20px; box-sizing: border-box;">
-        <div class="form-content" style="max-width: 400px; width: 100%; margin: auto; text-align: center; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); background: white; border-radius: 20px; padding: 30px;">
+    <div id="modal-pedir-area" class="hoja-overlay" style="z-index:9999;">
+        <div class="form-content hoja-contenido" style="max-width: 400px; text-align: center; overflow-y: auto;">
             <div style="font-size: 3rem; margin-bottom: 10px;">📍</div>
             <h2 style="color:#0f172a; margin:0 0 10px 0;">Falta tu Área</h2>
             <p style="color:#64748b; font-size:0.95rem; margin-bottom: 25px;">

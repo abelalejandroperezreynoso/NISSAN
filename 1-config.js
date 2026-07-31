@@ -241,3 +241,60 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
         iniciar();
     }
 })();
+
+// ==========================================
+// TECLADO EN iOS Y HOJAS INFERIORES
+// ==========================================
+// Safari no encoge la ventana al abrir el teclado: encoge el viewport visual
+// y desplaza el documento entero para revelar el campo enfocado. Como las
+// hojas (.hoja-overlay) son position:fixed y hacen su propio scroll interno,
+// ese desplazamiento solo saca el encabezado de la hoja por arriba.
+//
+// Aquí se mide el teclado con visualViewport y se publica su altura en
+// --alto-teclado. Las hojas la suman a su margen inferior, así que se apoyan
+// sobre el teclado en vez de esconderse detrás, y ya no hace falta que el
+// documento se mueva: se devuelve a cero.
+//
+// El bloque nació en el panel de refacciones, cuya página no se desplaza
+// nunca (html, body con overflow:hidden). Aquí lo comparten pantallas que sí
+// se desplazan, como el panel principal, así que la vuelta a cero se limita
+// al rato en que hay una hoja abierta; el resto del tiempo la página se
+// desplaza con normalidad.
+(() => {
+    const raiz = document.documentElement;
+
+    const hayHojaAbierta = () => Array.from(document.querySelectorAll('.hoja-overlay'))
+        .some(el => getComputedStyle(el).display !== 'none');
+
+    const anclarDocumento = () => {
+        if (window.scrollY !== 0 && hayHojaAbierta()) window.scrollTo(0, 0);
+    };
+
+    const ajustar = () => {
+        const vv = window.visualViewport;
+        if (!vv) return;
+
+        // innerHeight es el viewport de maquetación, que no cambia con el
+        // teclado; vv.height sí. La diferencia es lo que ocupa.
+        const alto = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+        raiz.style.setProperty('--alto-teclado', alto + 'px');
+
+        anclarDocumento();
+    };
+
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', ajustar);
+        window.visualViewport.addEventListener('scroll', ajustar);
+        // Una medida inicial, para que la variable exista desde el arranque y
+        // no sólo a partir del primer teclado.
+        ajustar();
+    }
+
+    // El scroll del documento (no el de los contenedores internos, que no
+    // burbujea hasta window) vuelve al origen mientras haya una hoja abierta.
+    window.addEventListener('scroll', anclarDocumento, { passive: true });
+
+    // Al cerrar el teclado, Safari tarda un instante en devolver las medidas
+    // definitivas.
+    document.addEventListener('focusout', () => setTimeout(ajustar, 100));
+})();
