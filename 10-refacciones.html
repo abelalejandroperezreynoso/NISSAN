@@ -386,7 +386,8 @@
             overscroll-behavior: contain;
         }
 
-        .chip-encargo {
+        .chip-encargo,
+        .chip-linea {
             padding: 6px 12px;
             border-radius: 16px;
             font-size: 0.8rem;
@@ -398,11 +399,51 @@
             border: 1px solid #cbd5e1;
         }
 
-        .chip-encargo.activo {
+        .chip-encargo.activo,
+        .chip-linea.activo {
             background: #007aff;
             color: white;
             border-color: #007aff;
             box-shadow: 0 2px 4px rgba(0,122,255,0.3);
+        }
+
+        /* --- Líneas del empleado, agrupadas bajo su planta --- */
+
+        #contenedor-lineas-empleado {
+            max-height: 190px;
+            overflow-y: auto;
+            padding: 4px 2px;
+            overscroll-behavior: contain;
+        }
+
+        .grupo-lineas + .grupo-lineas {
+            margin-top: 10px;
+        }
+
+        .grupo-lineas-titulo {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #94a3b8;
+            margin-bottom: 5px;
+        }
+
+        .grupo-lineas-fichas {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        /* Arreglo en sitio: la línea marcada que no tiene planta */
+        .linea-sin-planta {
+            margin-top: 8px;
+            padding: 10px 12px;
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            color: #92400e;
         }
 
         /* --- Boton de foto en lugar del input nativo --- */
@@ -1443,7 +1484,7 @@
         // sql/. Si la base todavía no las tiene, PostgREST responde 42703 y la
         // consulta entera se cae: se repite sin la columna de la que se queja
         // para que la pantalla siga funcionando mientras el script no se corre.
-        window.COLUMNAS_OPCIONALES_EMPLEADO = ['encargos', 'linea_id'];
+        window.COLUMNAS_OPCIONALES_EMPLEADO = ['encargos', 'lineas_ids'];
 
         window.consultarEmpleados = async (columnas, ordenarPor) => {
             let cols = columnas.split(',').map(c => c.trim()).filter(c => c !== '');
@@ -1475,7 +1516,7 @@
         window.cargarEmpleadosEnCache = async () => {
             try {
                 const { data, error } = await window.consultarEmpleados(
-                    'id, employee_id, name, department, puesto, encargos, linea_id, supervisor_id, is_active, avatar_url');
+                    'id, employee_id, name, department, puesto, encargos, lineas_ids, supervisor_id, is_active, avatar_url');
                 if (error || !data) return;
 
                 window.todosLosEmpleadosData = [];
@@ -1485,7 +1526,7 @@
                         dept: d.department,
                         puesto: d.puesto,
                         encargos: window.normalizarEncargos(d.encargos),
-                        lineaId: d.linea_id || null,
+                        lineasIds: window.normalizarIdsLineas(d.lineas_ids),
                         supId: d.supervisor_id,
                         isActive: d.is_active !== false,
                         avatar: d.avatar_url,
@@ -1768,7 +1809,7 @@
 
             try {
                 const { data, error } = await window.consultarEmpleados(
-                    'id, employee_id, name, department, puesto, encargos, linea_id, supervisor_id, hiring_date, is_active, avatar_url, area_id',
+                    'id, employee_id, name, department, puesto, encargos, lineas_ids, supervisor_id, hiring_date, is_active, avatar_url, area_id',
                     'name');
                 if (error) throw error;
                 window.empleadosAdminCache = data || [];
@@ -1795,12 +1836,19 @@
             }
         };
 
-        // --- Línea (y, de ahí, planta) ---
-        // El empleado guarda solo linea_id: la planta se deduce de
-        // lineas.planta_id. Así no pueden contradecirse una a la otra.
+        // --- Líneas (y, de ahí, plantas) ---
+        // Un empleado puede atender varias líneas, así que guarda una lista de
+        // ids en employees.lineas_ids. Las plantas no se guardan: se deducen de
+        // lineas.planta_id, de modo que no pueden contradecirse y una línea que
+        // cambie de planta se lleva a su gente sin tocar nada más.
         // No se usa el embebido lineas→plantas de PostgREST porque depende de
         // que exista la clave foránea; se cruzan las dos tablas aquí.
         window.lineasAdminCache = [];
+        window.plantasAdminCache = [];
+        window.lineasSeleccionadas = new Set();
+        // Si la columna lineas.planta_id todavía no existe no tiene sentido
+        // ofrecer el arreglo de "asignar planta": fallaría al guardar.
+        window.lineasTienenPlanta = true;
 
         window.cargarLineas = async () => {
             try {
@@ -1812,15 +1860,16 @@
                 // Si las líneas todavía no apuntan a su planta, se listan igual:
                 // sirven para asignarlas, solo que sin planta que deducir.
                 let lineas = resLineas.data;
+                window.lineasTienenPlanta = !resLineas.error;
                 if (resLineas.error) {
-                    console.warn("Las líneas no tienen planta asignada todavía:", resLineas.error.message);
+                    console.warn("Las líneas no tienen columna de planta todavía:", resLineas.error.message);
                     const soloLineas = await sb.from('lineas').select('id, nombre').order('nombre');
                     lineas = soloLineas.data;
                 }
 
-                const plantas = resPlantas.data || [];
+                window.plantasAdminCache = resPlantas.data || [];
                 window.lineasAdminCache = (lineas || []).map(l => {
-                    const planta = plantas.find(p => String(p.id) === String(l.planta_id));
+                    const planta = window.plantasAdminCache.find(p => String(p.id) === String(l.planta_id));
                     return {
                         id: l.id,
                         nombre: l.nombre,
@@ -1831,67 +1880,158 @@
             } catch (e) {
                 console.error("Error al cargar líneas y plantas:", e);
                 window.lineasAdminCache = [];
+                window.plantasAdminCache = [];
             }
         };
 
-        window.lineaDeEmpleado = (emp) => {
-            if (!emp || !emp.linea_id) return null;
-            return window.lineasAdminCache.find(l => String(l.id) === String(emp.linea_id)) || null;
+        // lineas_ids es bigint[], pero se acepta una cadena separada por comas
+        // por si alguna fila se capturó a mano desde Supabase.
+        window.normalizarIdsLineas = (valor) => {
+            if (!valor) return [];
+            const lista = Array.isArray(valor) ? valor : String(valor).replace(/[{}]/g, '').split(',');
+            return lista.map(v => String(v).trim()).filter(v => v !== '');
         };
 
-        // Texto corto para la lista: "Planta A · Línea 3", o solo la línea si
-        // todavía no se sabe a qué planta pertenece.
+        window.lineasDeEmpleado = (emp) => {
+            if (!emp) return [];
+            return window.normalizarIdsLineas(emp.lineas_ids)
+                .map(id => window.lineasAdminCache.find(l => String(l.id) === String(id)))
+                .filter(l => l);
+        };
+
+        // Agrupa las líneas por planta para leerlas de un vistazo:
+        // "Planta CIVAC: Línea 1, Línea 2 · Planta AGS: Línea 3".
+        window.agruparLineasPorPlanta = (lineas) => {
+            const grupos = new Map();
+            lineas.forEach(l => {
+                const clave = l.planta || 'Sin planta';
+                if (!grupos.has(clave)) grupos.set(clave, []);
+                grupos.get(clave).push(l);
+            });
+            return new Map([...grupos.entries()].sort((a, b) => {
+                // "Sin planta" siempre al final
+                if (a[0] === 'Sin planta') return 1;
+                if (b[0] === 'Sin planta') return -1;
+                return a[0].localeCompare(b[0], 'es');
+            }));
+        };
+
         window.ubicacionDeEmpleado = (emp) => {
-            const linea = window.lineaDeEmpleado(emp);
-            if (!linea) return '';
-            return linea.planta ? `${linea.planta} · ${linea.nombre}` : linea.nombre;
+            const lineas = window.lineasDeEmpleado(emp);
+            if (lineas.length === 0) return '';
+            return Array.from(window.agruparLineasPorPlanta(lineas).entries())
+                .map(([planta, suyas]) => `${planta}: ${suyas.map(l => l.nombre).join(', ')}`)
+                .join(' · ');
         };
 
-        window.renderizarSelectorLineas = (idSeleccionada) => {
-            const sel = document.getElementById('inp-emp-linea');
-            if (!sel) return;
+        window.renderizarLineas = () => {
+            const contenedor = document.getElementById('contenedor-lineas-empleado');
+            if (!contenedor) return;
 
-            const actual = idSeleccionada || '';
-            const opcion = (l) =>
-                `<option value="${l.id}"${String(l.id) === String(actual) ? ' selected' : ''}>${escaparHtml(l.nombre)}</option>`;
-
-            let html = '<option value="">Sin línea</option>';
-
-            // Las líneas se agrupan por planta; si ninguna la tiene, se listan
-            // planas para no llenar el desplegable de "Sin planta".
-            if (window.lineasAdminCache.some(l => l.planta)) {
-                const grupos = new Map();
-                window.lineasAdminCache.forEach(l => {
-                    const clave = l.planta || 'Sin planta';
-                    if (!grupos.has(clave)) grupos.set(clave, []);
-                    grupos.get(clave).push(l);
-                });
-                Array.from(grupos.keys()).sort((a, b) => a.localeCompare(b, 'es')).forEach(planta => {
-                    html += `<optgroup label="${escaparHtml(planta)}">`;
-                    html += grupos.get(planta).map(opcion).join('');
-                    html += '</optgroup>';
-                });
-            } else {
-                html += window.lineasAdminCache.map(opcion).join('');
+            if (window.lineasAdminCache.length === 0) {
+                contenedor.innerHTML = '<span style="color:#94a3b8; font-size:0.8rem; font-style:italic;">No hay líneas registradas. Se dan de alta al crear un equipo.</span>';
+                window.actualizarPlantaEmpleado();
+                return;
             }
 
-            sel.innerHTML = html;
+            let html = '';
+            window.agruparLineasPorPlanta(window.lineasAdminCache).forEach((lineas, planta) => {
+                html += `<div class="grupo-lineas">
+                    <div class="grupo-lineas-titulo">${escaparHtml(planta)}</div>
+                    <div class="grupo-lineas-fichas">`;
+                lineas.forEach(l => {
+                    const activa = window.lineasSeleccionadas.has(String(l.id));
+                    html += `<span class="chip-linea${activa ? ' activo' : ''}" onclick="window.alternarLinea('${l.id}')">${escaparHtml(l.nombre)}${activa ? ' ✕' : ''}</span>`;
+                });
+                html += '</div></div>';
+            });
+
+            contenedor.innerHTML = html;
             window.actualizarPlantaEmpleado();
         };
 
-        // La planta no se elige: se muestra la de la línea seleccionada.
-        window.actualizarPlantaEmpleado = () => {
-            const sel = document.getElementById('inp-emp-linea');
-            const cartel = document.getElementById('emp-planta-derivada');
-            if (!sel || !cartel) return;
-
-            const linea = window.lineasAdminCache.find(l => String(l.id) === String(sel.value));
-            if (!linea) {
-                cartel.innerHTML = 'La planta se toma de la línea que elijas.';
-            } else if (linea.planta) {
-                cartel.innerHTML = `Planta: <b>${escaparHtml(linea.planta)}</b>`;
+        window.alternarLinea = (idLinea) => {
+            const id = String(idLinea);
+            if (window.lineasSeleccionadas.has(id)) {
+                window.lineasSeleccionadas.delete(id);
             } else {
-                cartel.innerHTML = 'Esta línea todavía no tiene planta asignada.';
+                window.lineasSeleccionadas.add(id);
+            }
+            window.renderizarLineas();
+        };
+
+        // Las plantas no se eligen: se muestran las de las líneas marcadas. Si
+        // alguna de esas líneas no tiene planta, se ofrece asignársela aquí
+        // mismo en vez de mandar al usuario a otra pantalla.
+        window.actualizarPlantaEmpleado = () => {
+            const cartel = document.getElementById('emp-planta-derivada');
+            const arreglo = document.getElementById('emp-lineas-sin-planta');
+            if (!cartel || !arreglo) return;
+
+            const suyas = window.lineasAdminCache.filter(l => window.lineasSeleccionadas.has(String(l.id)));
+            const plantas = [...new Set(suyas.map(l => l.planta).filter(p => p))]
+                .sort((a, b) => a.localeCompare(b, 'es'));
+
+            if (suyas.length === 0) {
+                cartel.innerHTML = 'La planta se toma de las líneas que marques.';
+            } else if (plantas.length === 0) {
+                cartel.innerHTML = 'Ninguna de sus líneas tiene planta asignada.';
+            } else {
+                cartel.innerHTML = (plantas.length === 1 ? 'Planta: ' : 'Plantas: ') +
+                    plantas.map(p => `<b>${escaparHtml(p)}</b>`).join(', ');
+            }
+
+            const huerfanas = suyas.filter(l => !l.planta);
+            if (huerfanas.length === 0 || !window.lineasTienenPlanta) {
+                arreglo.innerHTML = '';
+                return;
+            }
+
+            if (window.plantasAdminCache.length === 0) {
+                arreglo.innerHTML = '<div class="linea-sin-planta">No hay plantas registradas todavía; se dan de alta al crear un equipo.</div>';
+                return;
+            }
+
+            arreglo.innerHTML = huerfanas.map(l => `
+                <div class="linea-sin-planta">
+                    <div style="margin-bottom:6px;"><b>${escaparHtml(l.nombre)}</b> no tiene planta.</div>
+                    <div style="display:flex; gap:8px;">
+                        <select id="sel-planta-linea-${l.id}" style="flex:1; min-width:0; background:white;">
+                            ${window.plantasAdminCache.map(p => `<option value="${p.id}">${escaparHtml(p.nombre)}</option>`).join('')}
+                        </select>
+                        <button type="button" id="btn-planta-linea-${l.id}" class="ref-btn-add" style="font-size:0.85rem; font-weight:600; padding:0 12px;" onclick="window.asignarPlantaALinea('${l.id}')">Asignar</button>
+                    </div>
+                </div>
+            `).join('');
+        };
+
+        // Asigna la planta a la línea misma, no al empleado: queda arreglada
+        // para todos los que la comparten y para los equipos que cuelgan de ella.
+        window.asignarPlantaALinea = async (idLinea) => {
+            const sel = document.getElementById(`sel-planta-linea-${idLinea}`);
+            const btn = document.getElementById(`btn-planta-linea-${idLinea}`);
+            if (!sel || !sel.value) return;
+
+            if (btn) { btn.disabled = true; btn.innerText = 'Asignando...'; }
+
+            try {
+                const { error } = await sb.from('lineas')
+                    .update({ planta_id: sel.value })
+                    .eq('id', idLinea);
+                if (error) throw error;
+
+                await window.cargarLineas();
+                window.renderizarLineas();
+                // La lista de atrás también muestra la planta de cada quien.
+                window.renderizarListaEmpleados();
+            } catch (e) {
+                console.error("Error al asignar la planta a la línea:", e);
+                if (String(e.message || '').includes('planta_id')) {
+                    alert("La tabla de líneas todavía no tiene la columna de planta. Ejecuta sql/linea-empleados.sql en Supabase y vuelve a intentarlo.");
+                } else {
+                    alert("No se pudo asignar la planta: " + (e.message || JSON.stringify(e)));
+                }
+                if (btn) { btn.disabled = false; btn.innerText = 'Asignar'; }
             }
         };
 
@@ -1942,10 +2082,11 @@
 
             const visibles = window.empleadosAdminCache.filter(e => {
                 if (!filtro) return true;
-                const linea = window.lineaDeEmpleado(e);
+                const lineas = window.lineasDeEmpleado(e);
                 return [e.name, e.employee_id, e.puesto, e.department]
                     .concat(window.normalizarEncargos(e.encargos))
-                    .concat(linea ? [linea.nombre, linea.planta] : [])
+                    .concat(lineas.map(l => l.nombre))
+                    .concat(lineas.map(l => l.planta))
                     .some(c => (c || '').toLowerCase().includes(filtro));
             });
 
@@ -2024,7 +2165,9 @@
                 });
             selSup.innerHTML = opciones;
 
-            window.renderizarSelectorLineas(emp ? emp.linea_id : '');
+            window.lineasSeleccionadas = new Set(
+                emp ? window.normalizarIdsLineas(emp.lineas_ids).map(String) : []);
+            window.renderizarLineas();
             window.renderizarSelectorAreas(emp ? emp.area_id : '');
 
             document.getElementById('modal-empleado-form').style.display = 'flex';
@@ -2054,8 +2197,10 @@
                 supervisor_id: document.getElementById('inp-emp-supervisor').value || null,
                 hiring_date: document.getElementById('inp-emp-ingreso').value || null,
                 area_id: document.getElementById('inp-emp-area').value || null,
-                // La planta no se guarda: se deduce de la línea.
-                linea_id: document.getElementById('inp-emp-linea').value || null,
+                // Las plantas no se guardan: se deducen de las líneas. Los ids
+                // van como números porque la columna es bigint[].
+                lineas_ids: Array.from(window.lineasSeleccionadas)
+                    .map(Number).filter(n => !isNaN(n)),
                 is_active: document.getElementById('inp-emp-activo').checked
             };
 
@@ -4155,9 +4300,10 @@
             </div>
 
             <div class="form-group">
-                <label class="ref-label">Línea <span class="ref-opcional">opcional</span></label>
-                <select id="inp-emp-linea" onchange="window.actualizarPlantaEmpleado()" style="width:100%; background:white;"></select>
+                <label class="ref-label">Líneas <span class="ref-opcional">opcional</span></label>
+                <div id="contenedor-lineas-empleado"></div>
                 <div id="emp-planta-derivada" style="font-size:0.75rem; color:rgba(60,60,67,0.6); margin-top:4px;"></div>
+                <div id="emp-lineas-sin-planta"></div>
             </div>
 
             <div class="form-group">
