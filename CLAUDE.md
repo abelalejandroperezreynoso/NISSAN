@@ -43,6 +43,11 @@ Los mensajes de commit van en español.
 Las pantallas independientes (`10-refacciones.html`, `11-mapa-activos.html`)
 cargan `1-config.js` por su cuenta y llevan su propio `<script>` inline.
 
+La carpeta `sql/` guarda los scripts que hay que correr a mano en el editor SQL
+de Supabase cuando un cambio necesita una columna o una tabla nueva. La
+aplicación no los ejecuta: son un registro de lo que se le pidió a la base.
+Conviene que el código aguante mientras el script no se haya corrido todavía.
+
 ## Convenciones del código
 
 - Las funciones que se invocan desde atributos `onclick` del HTML se declaran
