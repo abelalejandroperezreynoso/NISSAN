@@ -66,6 +66,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `textarea` con fuente menor a 16px provoca zoom automático al enfocarlo.
   Para compactar un formulario hay que reducir padding y márgenes, nunca el
   tamaño de la fuente de los campos.
+- **Las metas de pantalla completa van en todas las páginas.** No hay
+  `manifest.json`, y sin manifiesto no hay `scope`: iOS decide documento por
+  documento si corre a pantalla completa. Una página a la que le falten
+  `apple-mobile-web-app-capable` y `apple-mobile-web-app-status-bar-style`
+  hace que la navegación se salga a Safari, aunque se haya entrado desde la
+  app instalada. Toda pantalla nueva las lleva. El valor `default` de la
+  barra de estado es el que mantiene esa franja fuera del viewport, que es
+  lo que suponen los estilos; cambiarlo a `black-translucent` metería el
+  contenido debajo del reloj.
 - **Safe area del iPhone.** Las páginas llevan `viewport-fit=cover` en el meta
   viewport para que fondos y overlays lleguen al borde físico de la pantalla.
   Como contrapartida, el contenido debe apartarse de la barra de estado y del

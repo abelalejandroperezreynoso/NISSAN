@@ -3,6 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- Instalada en la pantalla de inicio, la app corre a pantalla completa.
+         Estas metas van en TODAS las páginas: sin manifiesto no hay scope, y
+         iOS decide documento por documento; a la que le falten, la navegación
+         se sale a Safari. status-bar-style "default" mantiene la franja de la
+         barra de estado fuera del viewport, que es lo que suponen los estilos. -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Panel de Gestión de Refacciones</title>
     
     <link rel="stylesheet" href="estilos.css">
