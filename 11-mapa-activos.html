@@ -193,8 +193,9 @@
         }
 
         .cuadro-dato { font-weight: 700; line-height: 1.25; }
-        .cuadro-sub { color: #475569; line-height: 1.25; }
-        .cuadro-extra { color: #7f1d1d; font-weight: 700; line-height: 1.25; }
+        /* Gris oscuro y no medio: este renglón cae tanto sobre el blanco como
+           sobre el rojo, y sobre el rojo un gris claro se pierde. */
+        .cuadro-sub { color: #334155; line-height: 1.25; }
 
         #aviso-lienzo {
             position: absolute;
@@ -286,6 +287,7 @@
             position: relative;
             width: 10px;
             height: 34px;
+            border: 1px solid #e2e8f0;
             border-radius: 4px;
             overflow: hidden;
             flex-shrink: 0;
@@ -375,6 +377,22 @@
             const CERRADOS = ['Entregada', 'Recibida'];
             const SIN_PLANTA = 'sin-planta';
             const SIN_LINEA = 'sin-linea';
+
+            // Dos colores y nada más: rojo lo que sigue pendiente, blanco lo
+            // demás. El cuadro nace rojo y se va vaciando a blanco desde abajo
+            // conforme se entrega, así que la mancha roja que queda es, a
+            // simple vista, el trabajo por hacer.
+            //
+            // Un activo sin ninguna solicitud sale blanco, igual que uno con
+            // todo entregado: en los dos casos no hay nada pendiente. La
+            // diferencia la dicen los números del propio cuadro y el detalle.
+            //
+            // El texto es oscuro siempre, porque cae donde caiga: el mismo
+            // renglón puede quedar medio sobre el rojo y medio sobre el
+            // blanco, y con este oscuro se lee en los dos.
+            const COLOR_PENDIENTE = '#f87171';
+            const COLOR_ENTREGADO = '#ffffff';
+            const COLOR_TEXTO = '#0f172a';
 
             // Canvas suelto con el que se mide el texto de los cuadros. Se
             // declara aquí arriba porque el primer dibujo ocurre en cuanto
@@ -490,8 +508,8 @@
 
                 const pct = global.total ? Math.round((global.cerradas / global.total) * 100) : 0;
                 document.getElementById('resumen-global').innerHTML =
-                    `<span style="color:#dc2626;">●</span> ${global.pendientes} pendientes · ` +
-                    `<span style="color:#16a34a;">●</span> ${global.cerradas} entregadas · ${pct}% de ${global.total}`;
+                    `<span style="color:#f87171;">●</span> ${global.pendientes} pendientes · ` +
+                    `${global.cerradas} entregadas · ${pct}% de ${global.total}`;
             }
 
             function metricaDe(mapa, clave) {
@@ -575,23 +593,6 @@
             // ==========================================
             // Color
             // ==========================================
-            // Ya no hace falta una escala de intensidad: el reparto entre
-            // verde y rojo lo dice el propio relleno. Quedan dos colores, el
-            // de lo entregado y el de lo pendiente, más un gris para el activo
-            // que nunca ha pedido nada. Los tonos son claros a propósito,
-            // porque los números van escritos encima.
-            function colorDe(metrica) {
-                if (metrica.total === 0) return { fondo: '#e2e8f0', relleno: '#e2e8f0', texto: '#64748b' };
-                const p = metrica.cerradas / metrica.total;
-                return {
-                    fondo: '#fecaca',
-                    relleno: '#86efac',
-                    // Tonos oscuros: tienen que leerse tanto sobre el verde
-                    // como sobre el rojo, porque el texto cae donde caiga.
-                    texto: p >= 0.60 ? '#14532d' : (p >= 0.45 ? '#92400e' : '#7f1d1d')
-                };
-            }
-
             // ==========================================
             // Ajuste del título
             // ==========================================
@@ -670,7 +671,6 @@
                 const ancho = Math.max(hoja.x1 - hoja.x0, 0);
                 const alto = Math.max(hoja.y1 - hoja.y0, 0);
                 const area = ancho * alto;
-                const color = colorDe(m);
 
                 const proporcion = m.total ? m.cerradas / m.total : null;
                 const pct = proporcion === null ? null : Math.round(proporcion * 100);
@@ -681,14 +681,14 @@
                 el.style.top = hoja.y0 + 'px';
                 el.style.width = ancho + 'px';
                 el.style.height = alto + 'px';
-                el.style.background = color.fondo;
+                el.style.background = COLOR_PENDIENTE;
 
                 // El relleno lleva la proporción sin redondear: con el 99%
                 // redondeado a 100 el cuadro se vería lleno sin estarlo.
                 if (proporcion) {
                     const relleno = document.createElement('div');
                     relleno.className = 'cuadro-relleno';
-                    relleno.style.background = color.relleno;
+                    relleno.style.background = COLOR_ENTREGADO;
                     relleno.style.height = (proporcion * 100) + '%';
                     el.appendChild(relleno);
                 }
@@ -731,7 +731,7 @@
                     const dato = document.createElement('div');
                     dato.className = 'cuadro-dato';
                     dato.style.fontSize = Math.max(8, tamDato) + 'px';
-                    dato.style.color = color.texto;
+                    dato.style.color = COLOR_TEXTO;
                     dato.innerText = pct === null
                         ? 'Sin solicitudes'
                         : `${pct}% / ${m.pendientes} pend.`;
@@ -746,19 +746,16 @@
                     cuerpo.appendChild(sub);
                 }
 
-                if (area >= 13000 && alto >= 88) {
+                // El aviso de urgentes se quedó fuera del cuadro a propósito:
+                // el mapa responde dónde se acumula el trabajo, y el detalle
+                // de prioridades vive en la lista y en la hoja del equipo.
+                // Ese renglón es ahora para el nombre de la máquina.
+                if (area >= 13000 && alto >= 88 && nodo.subtitulo) {
                     const extra = document.createElement('div');
-                    if (m.urgentes > 0) {
-                        extra.className = 'cuadro-extra';
-                        extra.style.fontSize = Math.max(8, tamSub) + 'px';
-                        extra.innerText = `🚨 ${m.urgentes} urgente${m.urgentes === 1 ? '' : 's'}`;
-                        cuerpo.appendChild(extra);
-                    } else if (nodo.subtitulo) {
-                        extra.className = 'cuadro-sub';
-                        extra.style.fontSize = Math.max(8, tamSub * 0.9) + 'px';
-                        extra.innerText = nodo.subtitulo;
-                        cuerpo.appendChild(extra);
-                    }
+                    extra.className = 'cuadro-sub';
+                    extra.style.fontSize = Math.max(8, tamSub * 0.9) + 'px';
+                    extra.innerText = nodo.subtitulo;
+                    cuerpo.appendChild(extra);
                 }
 
                 el.appendChild(cuerpo);
@@ -855,7 +852,6 @@
 
                 nodos.forEach(nodo => {
                     const m = nodo.metrica;
-                    const color = colorDe(m);
                     const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
 
                     const fila = document.createElement('button');
@@ -863,11 +859,11 @@
 
                     const marca = document.createElement('div');
                     marca.className = 'marca';
-                    marca.style.background = color.fondo;
-                    if (pct !== null && m.cerradas > 0) {
+                    marca.style.background = COLOR_PENDIENTE;
+                    if (pct === null || m.cerradas > 0) {
                         const relleno = document.createElement('div');
-                        relleno.style.background = color.relleno;
-                        relleno.style.height = ((m.cerradas / m.total) * 100) + '%';
+                        relleno.style.background = COLOR_ENTREGADO;
+                        relleno.style.height = (pct === null ? 100 : (m.cerradas / m.total) * 100) + '%';
                         marca.appendChild(relleno);
                     }
 
@@ -885,7 +881,7 @@
                     textos.appendChild(detalle);
 
                     const cifra = document.createElement('div');
-                    cifra.style.cssText = `flex-shrink:0; font-weight:800; color:${color.texto};`;
+                    cifra.style.cssText = `flex-shrink:0; font-weight:800; color:${COLOR_TEXTO};`;
                     cifra.innerText = pct === null ? '—' : pct + '%';
 
                     fila.appendChild(marca);
@@ -914,7 +910,6 @@
 
                 const m = metricaDe(metricasPorEquipo, String(equipo.id));
                 const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
-                const color = colorDe(m);
 
                 // Lo que sigue abierto va primero, y dentro de eso lo urgente:
                 // una lista encabezada por diez entregadas no dice nada.
@@ -954,7 +949,7 @@
                 document.getElementById('detalle-cuerpo').innerHTML = `
                     <div style="display:flex; gap:8px; margin-bottom:14px;">
                         <div class="ficha-metrica">
-                            <div class="cifra" style="color:${color.texto};">${pct === null ? '—' : pct + '%'}</div>
+                            <div class="cifra" style="color:${COLOR_TEXTO};">${pct === null ? '—' : pct + '%'}</div>
                             <div class="rotulo">Entregadas</div>
                         </div>
                         <div class="ficha-metrica">
