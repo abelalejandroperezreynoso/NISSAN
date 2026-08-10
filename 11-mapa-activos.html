@@ -128,40 +128,43 @@
 
         /* Lienzo del treemap. Los cuadros se colocan en absoluto sobre él, con
            las coordenadas que calcula d3.treemap. */
+        /* El fondo del lienzo es lo que se ve entre cuadro y cuadro: la
+           rejilla de 1px que deja el treemap es toda la separación que hay. */
         #lienzo {
             flex: 1;
             position: relative;
             overflow: hidden;
-            background: #f8fafc;
+            background: #0f172a;
         }
 
+        /* Los cuadros se pegan unos a otros: no llevan borde propio ni
+           esquinas redondeadas, porque la línea negra que los separa es el
+           fondo del lienzo asomando por la rejilla. Un borde encima daría
+           dos píxeles entre vecinos y uno solo contra el marco. */
         .cuadro {
             position: absolute;
             box-sizing: border-box;
-            background: white;
-            border: 1px solid #0f172a;
-            border-radius: 3px;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
             cursor: pointer;
             touch-action: manipulation;
-            transition: transform 0.12s ease;
         }
 
-        .cuadro:active { transform: scale(0.97); }
+        .cuadro:active { filter: brightness(0.93); }
 
-        /* La banda superior es la que lleva el color. El cuadro se queda
-           blanco para que los números se lean sin pelear con el fondo, igual
-           que en los mapas de calor de cartera en los que se inspira. */
-        .cuadro-banda {
-            flex-shrink: 0;
-            width: 100%;
+        /* El cuadro es la pila de solicitudes del activo: su tamaño las
+           cuenta todas y el relleno sube desde abajo conforme se entregan,
+           así que lo que queda sin llenar es justo lo que sigue pendiente. */
+        .cuadro-relleno {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
         }
 
         .cuadro-cuerpo {
-            flex: 1;
-            min-height: 0;
+            position: relative;
+            height: 100%;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -186,7 +189,7 @@
 
         .cuadro-dato { font-weight: 700; line-height: 1.25; }
         .cuadro-sub { color: #475569; line-height: 1.25; }
-        .cuadro-extra { color: #b91c1c; font-weight: 700; line-height: 1.25; }
+        .cuadro-extra { color: #7f1d1d; font-weight: 700; line-height: 1.25; }
 
         #aviso-lienzo {
             position: absolute;
@@ -196,6 +199,7 @@
             justify-content: center;
             text-align: center;
             padding: 30px;
+            background: #f8fafc;
             color: #64748b;
             font-size: 0.95rem;
         }
@@ -271,11 +275,22 @@
 
         .renglon-nivel:active { background: #f1f5f9; }
 
+        /* La marca de la lista es el mismo cuadro en pequeño: se llena por
+           abajo en la misma proporción. */
         .renglon-nivel .marca {
+            position: relative;
             width: 10px;
             height: 34px;
             border-radius: 4px;
+            overflow: hidden;
             flex-shrink: 0;
+        }
+
+        .renglon-nivel .marca > div {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
         }
     </style>
 </head>
@@ -549,17 +564,21 @@
             // ==========================================
             // Color
             // ==========================================
-            // Rojo donde se acumulan pendientes, verde donde ya se entregó. El
-            // ámbar de en medio evita que un 50% se lea como si fuera bueno.
+            // Ya no hace falta una escala de intensidad: el reparto entre
+            // verde y rojo lo dice el propio relleno. Quedan dos colores, el
+            // de lo entregado y el de lo pendiente, más un gris para el activo
+            // que nunca ha pedido nada. Los tonos son claros a propósito,
+            // porque los números van escritos encima.
             function colorDe(metrica) {
-                if (metrica.total === 0) return { banda: '#e2e8f0', texto: '#94a3b8' };
+                if (metrica.total === 0) return { fondo: '#e2e8f0', relleno: '#e2e8f0', texto: '#64748b' };
                 const p = metrica.cerradas / metrica.total;
-                if (p >= 0.90) return { banda: '#16a34a', texto: '#15803d' };
-                if (p >= 0.75) return { banda: '#4ade80', texto: '#15803d' };
-                if (p >= 0.60) return { banda: '#bbf7d0', texto: '#15803d' };
-                if (p >= 0.45) return { banda: '#fed7aa', texto: '#b45309' };
-                if (p >= 0.25) return { banda: '#fca5a5', texto: '#b91c1c' };
-                return { banda: '#dc2626', texto: '#b91c1c' };
+                return {
+                    fondo: '#fecaca',
+                    relleno: '#86efac',
+                    // Tonos oscuros: tienen que leerse tanto sobre el verde
+                    // como sobre el rojo, porque el texto cae donde caiga.
+                    texto: p >= 0.60 ? '#14532d' : (p >= 0.45 ? '#92400e' : '#7f1d1d')
+                };
             }
 
             // ==========================================
@@ -589,10 +608,13 @@
                     .sum(d => (d.hijos ? 0 : Math.max(d.metrica.total, 0.35)))
                     .sort((a, b) => b.value - a.value);
 
+                // 1px de separación, ni más: es el ancho de la línea negra.
+                // paddingOuter cierra el marco contra el borde de la pantalla.
                 d3.treemap()
                     .tile(d3.treemapSquarify)
                     .size([ancho, alto])
-                    .paddingInner(3)
+                    .paddingInner(1)
+                    .paddingOuter(1)
                     .round(true)(raiz);
 
                 raiz.leaves().forEach(hoja => {
@@ -608,18 +630,26 @@
                 const area = ancho * alto;
                 const color = colorDe(m);
 
+                const proporcion = m.total ? m.cerradas / m.total : null;
+                const pct = proporcion === null ? null : Math.round(proporcion * 100);
+
                 const el = document.createElement('div');
                 el.className = 'cuadro';
                 el.style.left = hoja.x0 + 'px';
                 el.style.top = hoja.y0 + 'px';
                 el.style.width = ancho + 'px';
                 el.style.height = alto + 'px';
+                el.style.background = color.fondo;
 
-                const banda = document.createElement('div');
-                banda.className = 'cuadro-banda';
-                banda.style.background = color.banda;
-                banda.style.height = Math.max(4, Math.min(14, Math.round(alto * 0.09))) + 'px';
-                el.appendChild(banda);
+                // El relleno lleva la proporción sin redondear: con el 99%
+                // redondeado a 100 el cuadro se vería lleno sin estarlo.
+                if (proporcion) {
+                    const relleno = document.createElement('div');
+                    relleno.className = 'cuadro-relleno';
+                    relleno.style.background = color.relleno;
+                    relleno.style.height = (proporcion * 100) + '%';
+                    el.appendChild(relleno);
+                }
 
                 const cuerpo = document.createElement('div');
                 cuerpo.className = 'cuadro-cuerpo';
@@ -627,7 +657,6 @@
                 // El cuadro enseña tanto como quepa: primero el nombre, luego
                 // el porcentaje, y sólo en los grandes el desglose completo.
                 const tam = Math.max(9, Math.min(26, Math.sqrt(area) / 6.5));
-                const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
 
                 const titulo = document.createElement('div');
                 titulo.className = 'cuadro-titulo';
@@ -771,7 +800,13 @@
 
                     const marca = document.createElement('div');
                     marca.className = 'marca';
-                    marca.style.background = color.banda;
+                    marca.style.background = color.fondo;
+                    if (pct !== null && m.cerradas > 0) {
+                        const relleno = document.createElement('div');
+                        relleno.style.background = color.relleno;
+                        relleno.style.height = ((m.cerradas / m.total) * 100) + '%';
+                        marca.appendChild(relleno);
+                    }
 
                     const textos = document.createElement('div');
                     textos.style.cssText = 'flex:1; min-width:0;';
