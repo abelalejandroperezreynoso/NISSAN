@@ -902,6 +902,48 @@
             };
 
             // ==========================================
+            // Catálogo de IDs internos
+            // ==========================================
+            // El ID interno manda sobre el nombre: la misma máquina puede
+            // estar dada de alta varias veces (una por línea, normalmente) y
+            // todas esas filas tienen que llamarse igual. El catálogo recorre
+            // los equipos y deja cada ID una sola vez, con el nombre que ya
+            // llevan y cuántas filas lo usan; 'discrepa' marca los que hoy
+            // están mal, con el mismo ID y nombres distintos.
+            function catalogoIdsInternos() {
+                const catalogo = new Map();
+                equipos.forEach(e => {
+                    if (!e.id_interno) return;
+                    const clave = String(e.id_interno);
+                    if (!catalogo.has(clave)) {
+                        catalogo.set(clave, { nombre: e.nombre || '', cuantos: 0, discrepa: false });
+                    }
+                    const ficha = catalogo.get(clave);
+                    ficha.cuantos++;
+                    if ((e.nombre || '') !== ficha.nombre) ficha.discrepa = true;
+                });
+                return catalogo;
+            }
+
+            // Filas que comparten un ID interno, sin contar la que se edita.
+            function hermanosDe(idInterno, equipo) {
+                if (!idInterno) return [];
+                return equipos.filter(e => e.id_interno &&
+                    String(e.id_interno) === idInterno &&
+                    String(e.id) !== String(equipo.id));
+            }
+
+            // Lo que hay elegido ahora mismo en la hoja: o una opción del
+            // desplegable, o el texto del ID nuevo.
+            function idInternoElegido() {
+                const sel = document.getElementById('sel-detalle-id-interno');
+                if (!sel) return '';
+                return sel.value === '__nuevo__'
+                    ? document.getElementById('inp-detalle-id-nuevo').value.trim()
+                    : sel.value;
+            }
+
+            // ==========================================
             // Hoja de detalle del equipo
             // ==========================================
             function abrirDetalleEquipo(idEquipo) {
@@ -972,15 +1014,17 @@
                     </div>
 
                     <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px;">Editar equipo</div>
-                    <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">Nombre del equipo</label>
-                    <input type="text" id="inp-detalle-nombre" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-bottom:10px;">
                     <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">ID / Código interno</label>
-                    <input type="text" id="inp-detalle-id-interno" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-bottom:14px;">
+                    <select id="sel-detalle-id-interno" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none;"></select>
+                    <input type="text" id="inp-detalle-id-nuevo" placeholder="Escribe el ID nuevo" style="display:none; width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-top:8px;">
+                    <div id="nota-detalle-id" style="font-size:0.78rem; color:#64748b; margin:6px 0 12px;"></div>
+                    <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">Nombre del equipo</label>
+                    <input type="text" id="inp-detalle-nombre" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-bottom:14px;">
                     <button id="btn-guardar-equipo" style="width:100%; background:#0ea5e9; color:white; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer; font-size:0.95rem;">Guardar cambios</button>
                 `;
 
                 document.getElementById('inp-detalle-nombre').value = equipo.nombre || '';
-                document.getElementById('inp-detalle-id-interno').value = equipo.id_interno || '';
+                montarSelectorDeId(equipo);
                 document.getElementById('btn-guardar-equipo').onclick = () => guardarEquipo(equipo);
 
                 document.getElementById('modal-detalle-activo').style.display = 'flex';
@@ -990,14 +1034,98 @@
                 document.getElementById('modal-detalle-activo').style.display = 'none';
             };
 
+            // El ID se elige de los que ya existen, o se crea uno nuevo. Las
+            // opciones se arman con el DOM y no con innerHTML: un ID con
+            // comillas rompería el atributo value.
+            function montarSelectorDeId(equipo) {
+                const catalogo = catalogoIdsInternos();
+                const sel = document.getElementById('sel-detalle-id-interno');
+                const inpNuevo = document.getElementById('inp-detalle-id-nuevo');
+                const inpNombre = document.getElementById('inp-detalle-nombre');
+                const nota = document.getElementById('nota-detalle-id');
+
+                const agregar = (valor, texto) => {
+                    const opcion = document.createElement('option');
+                    opcion.value = valor;
+                    opcion.textContent = texto;
+                    sel.appendChild(opcion);
+                };
+
+                agregar('', '— Sin ID interno —');
+                Array.from(catalogo.keys()).sort((a, b) => a.localeCompare(b)).forEach(id => {
+                    const ficha = catalogo.get(id);
+                    agregar(id, ficha.nombre ? `${id} · ${ficha.nombre}` : id);
+                });
+                agregar('__nuevo__', '➕ Crear un ID nuevo…');
+
+                sel.value = equipo.id_interno ? String(equipo.id_interno) : '';
+
+                // Avisa de lo que va a pasar antes de guardar: a cuántos
+                // equipos alcanza el nombre y si el ID ya existía.
+                const refrescarNota = () => {
+                    const id = idInternoElegido();
+                    if (!id) {
+                        nota.innerText = sel.value === '__nuevo__'
+                            ? 'Escribe el ID nuevo.'
+                            : 'Sin ID interno: el nombre sólo afecta a este equipo.';
+                        return;
+                    }
+                    const ficha = catalogo.get(id);
+                    if (!ficha) {
+                        nota.innerText = `«${id}» es un ID nuevo.`;
+                        return;
+                    }
+                    let texto = ficha.cuantos === 1
+                        ? `«${id}» ya existe, en un equipo llamado «${ficha.nombre}».`
+                        : `«${id}» lo usan ${ficha.cuantos} equipos; el nombre se guardará en todos.`;
+                    if (ficha.discrepa) texto += ' Hoy no todos se llaman igual.';
+                    nota.innerText = texto;
+                };
+
+                sel.onchange = () => {
+                    const esNuevo = sel.value === '__nuevo__';
+                    inpNuevo.style.display = esNuevo ? 'block' : 'none';
+                    if (esNuevo) {
+                        inpNuevo.value = '';
+                        inpNuevo.focus();
+                    } else if (sel.value && catalogo.has(sel.value)) {
+                        // Elegir un ID que ya existe trae su nombre: es
+                        // justamente lo que significa que estén ligados.
+                        inpNombre.value = catalogo.get(sel.value).nombre;
+                    }
+                    refrescarNota();
+                };
+
+                inpNuevo.oninput = refrescarNota;
+                refrescarNota();
+            }
+
             async function guardarEquipo(equipo) {
                 const boton = document.getElementById('btn-guardar-equipo');
+                const seleccion = document.getElementById('sel-detalle-id-interno').value;
                 const nombre = document.getElementById('inp-detalle-nombre').value.trim();
-                const idInterno = document.getElementById('inp-detalle-id-interno').value.trim();
+                const idInterno = idInternoElegido();
+
+                if (seleccion === '__nuevo__' && !idInterno) {
+                    alert("Escribe el ID nuevo, o elige «Sin ID interno».");
+                    return;
+                }
 
                 if (!nombre) {
                     alert("El nombre del equipo no puede quedar vacío.");
                     return;
+                }
+
+                // El nombre va pegado al ID: si el ID lo comparten varias
+                // filas, todas acaban con el mismo nombre. Se avisa antes,
+                // porque el cambio sale de la pantalla que se está viendo.
+                const hermanos = hermanosDe(idInterno, equipo);
+                const alcanzaAOtros = hermanos.some(e => (e.nombre || '') !== nombre);
+
+                if (alcanzaAOtros) {
+                    const aviso = `El ID «${idInterno}» lo usan ${hermanos.length + 1} equipos.\n\n` +
+                        `Todos quedarán con el nombre «${nombre}».`;
+                    if (!confirm(aviso)) return;
                 }
 
                 const textoOriginal = boton.innerText;
@@ -1012,9 +1140,24 @@
 
                     if (error) throw error;
 
+                    // La fila propia ya lleva el ID nuevo, así que este segundo
+                    // update por id_interno alcanza también a las hermanas.
+                    if (alcanzaAOtros) {
+                        const { error: errorHermanos } = await sb.from('equipos')
+                            .update({ nombre: nombre })
+                            .eq('id_interno', idInterno);
+
+                        if (errorHermanos) throw errorHermanos;
+                    }
+
                     // Se actualiza la copia local para repintar sin recargar.
                     equipo.nombre = nombre;
                     equipo.id_interno = idInterno === "" ? null : idInterno;
+                    if (alcanzaAOtros) {
+                        equipos.forEach(e => {
+                            if (e.id_interno && String(e.id_interno) === idInterno) e.nombre = nombre;
+                        });
+                    }
 
                     window.cerrarDetalleActivo();
                     dibujar();

@@ -161,6 +161,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `position:fixed`). Ya no sirve para atenuar nada —las hojas no atenúan—,
   pero sigue disponible si una pantalla necesita teñir esa franja: es lo que
   hace `10-refacciones.html`, cuyo fondo no es el del panel principal.
+- **El `id_interno` identifica al equipo y el nombre va pegado a él.** La
+  misma máquina suele estar dada de alta varias veces en `equipos`, una fila
+  por línea, todas con el mismo `id_interno`. La base no tiene restricción de
+  unicidad: la regla la sostiene la aplicación, y quien la rompe deja el
+  catálogo con un mismo ID repartido en nombres distintos. Por eso el
+  renombrado del mapa de activos actualiza de golpe todas las filas que
+  comparten ese `id_interno`, igual que ya hacía el renombrado en lote de
+  `10-refacciones.html`. Cualquier código nuevo que escriba `equipos.nombre`
+  tiene que respetarlo.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con
