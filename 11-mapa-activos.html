@@ -247,6 +247,38 @@
 
         .renglon-solicitud:last-child { border-bottom: none; }
 
+        /* Sugerencias del buscador de ID. Van en el flujo y no flotando: una
+           capa absoluta se recortaría contra el borde de la hoja, que es la
+           que desplaza el contenido. */
+        #sugerencias-id {
+            display: none;
+            margin-top: 6px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            max-height: 190px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .sugerencia-id {
+            width: 100%;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 9px 12px;
+            border: none;
+            border-bottom: 1px solid #f1f5f9;
+            background: white;
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .sugerencia-id:last-child { border-bottom: none; }
+        .sugerencia-id:active { background: #f1f5f9; }
+
         .etiqueta-estado {
             flex-shrink: 0;
             font-size: 0.7rem;
@@ -995,14 +1027,20 @@
                     !propios.has(String(e.id)));
             }
 
-            // Lo que hay elegido ahora mismo en la hoja: o una opción del
-            // desplegable, o el texto del ID nuevo.
+            // Lo que hay escrito ahora mismo en el campo del ID.
             function idInternoElegido() {
-                const sel = document.getElementById('sel-detalle-id-interno');
-                if (!sel) return '';
-                return sel.value === '__nuevo__'
-                    ? document.getElementById('inp-detalle-id-nuevo').value.trim()
-                    : sel.value;
+                const campo = document.getElementById('inp-detalle-id');
+                return campo ? campo.value.trim() : '';
+            }
+
+            // Para buscar sin pelearse con los acentos ni las mayúsculas:
+            // escribiendo "reparacion" tiene que salir "Reparación".
+            function normalizarBusqueda(texto) {
+                return String(texto || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .trim()
+                    .toUpperCase();
             }
 
             // ==========================================
@@ -1089,8 +1127,8 @@
                     <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px;">Editar equipo</div>
                     ${filas.length > 1 ? `<div style="background:#f1f5f9; color:#475569; border-radius:10px; padding:8px 12px; font-size:0.8rem; margin-bottom:12px;">Esta máquina está dada de alta ${filas.length} veces en la línea. El cuadro las suma y lo que guardes aquí se escribe en todas.</div>` : ''}
                     <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">ID / Código interno</label>
-                    <select id="sel-detalle-id-interno" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none;"></select>
-                    <input type="text" id="inp-detalle-id-nuevo" placeholder="Escribe el ID nuevo" style="display:none; width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-top:8px;">
+                    <input type="text" id="inp-detalle-id" autocomplete="off" autocapitalize="characters" placeholder="Busca un ID o escribe uno nuevo" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none;">
+                    <div id="sugerencias-id"></div>
                     <div id="nota-detalle-id" style="font-size:0.78rem; color:#64748b; margin:6px 0 12px;"></div>
                     <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">Nombre del equipo</label>
                     <input type="text" id="inp-detalle-nombre" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-bottom:14px;">
@@ -1098,7 +1136,7 @@
                 `;
 
                 document.getElementById('inp-detalle-nombre').value = principal.nombre || '';
-                montarSelectorDeId(principal);
+                montarBuscadorDeId(principal);
                 document.getElementById('btn-guardar-equipo').onclick = () => guardarEquipo(filas);
 
                 document.getElementById('modal-detalle-activo').style.display = 'flex';
@@ -1108,45 +1146,55 @@
                 document.getElementById('modal-detalle-activo').style.display = 'none';
             };
 
-            // El ID se elige de los que ya existen, o se crea uno nuevo. Las
-            // opciones se arman con el DOM y no con innerHTML: un ID con
-            // comillas rompería el atributo value.
-            function montarSelectorDeId(equipo) {
+            // El ID se busca escribiendo: la lista de equipos es larga y un
+            // desplegable obliga a recorrerla entera. El mismo campo sirve
+            // para elegir uno que ya existe y para crear uno nuevo; lo que se
+            // escriba y no coincida con ninguno es un ID nuevo, y vaciarlo
+            // deja al equipo sin ID.
+            function montarBuscadorDeId(equipo) {
                 const catalogo = catalogoIdsInternos();
-                const sel = document.getElementById('sel-detalle-id-interno');
-                const inpNuevo = document.getElementById('inp-detalle-id-nuevo');
+                const fichas = Array.from(catalogo.values()).sort((a, b) => a.id.localeCompare(b.id));
+
+                const campo = document.getElementById('inp-detalle-id');
+                const lista = document.getElementById('sugerencias-id');
                 const inpNombre = document.getElementById('inp-detalle-nombre');
                 const nota = document.getElementById('nota-detalle-id');
 
-                const agregar = (valor, texto) => {
-                    const opcion = document.createElement('option');
-                    opcion.value = valor;
-                    opcion.textContent = texto;
-                    sel.appendChild(opcion);
+                const fichaActual = catalogo.get(claveDeId(equipo.id_interno));
+                campo.value = fichaActual ? fichaActual.id : (equipo.id_interno || '');
+
+                // Se busca por ID y también por nombre: quien conoce la
+                // máquina pero no su matrícula la encuentra igual.
+                const filtrar = (texto) => {
+                    const busca = normalizarBusqueda(texto);
+                    if (!busca) return fichas;
+                    return fichas
+                        .filter(f => normalizarBusqueda(f.id).includes(busca) ||
+                                     normalizarBusqueda(f.nombre).includes(busca))
+                        // Lo que empieza por lo escrito va primero: es lo que
+                        // se espera al teclear las primeras letras del ID.
+                        .sort((a, b) => {
+                            const pa = normalizarBusqueda(a.id).startsWith(busca) ? 0 : 1;
+                            const pb = normalizarBusqueda(b.id).startsWith(busca) ? 0 : 1;
+                            return pa - pb || a.id.localeCompare(b.id);
+                        });
                 };
 
-                agregar('', '— Sin ID interno —');
-                Array.from(catalogo.values())
-                    .sort((a, b) => a.id.localeCompare(b.id))
-                    .forEach(ficha => agregar(ficha.id, ficha.nombre ? `${ficha.id} · ${ficha.nombre}` : ficha.id));
-                agregar('__nuevo__', '➕ Crear un ID nuevo…');
-
-                const fichaActual = catalogo.get(claveDeId(equipo.id_interno));
-                sel.value = fichaActual ? fichaActual.id : '';
-
-                // Avisa de lo que va a pasar antes de guardar: a cuántos
-                // equipos alcanza el nombre y si el ID ya existía.
+                // Avisa de lo que va a pasar antes de guardar: a cuántas altas
+                // alcanza el nombre y si el ID escrito ya existía.
                 const refrescarNota = () => {
                     const id = idInternoElegido();
                     if (!id) {
-                        nota.innerText = sel.value === '__nuevo__'
-                            ? 'Escribe el ID nuevo.'
-                            : 'Sin ID interno: el nombre sólo afecta a este equipo.';
+                        nota.innerText = 'Sin ID interno: el nombre sólo afecta a este equipo.';
                         return;
                     }
                     const ficha = catalogo.get(claveDeId(id));
                     if (!ficha) {
-                        nota.innerText = `«${id}» es un ID nuevo.`;
+                        // Con sugerencias a la vista, decir sólo que es nuevo
+                        // despista: lo escrito puede ser una búsqueda a medias.
+                        nota.innerText = filtrar(id).length > 0
+                            ? `«${id}» es un ID nuevo; toca una sugerencia si buscabas uno de la lista.`
+                            : `«${id}» es un ID nuevo.`;
                         return;
                     }
                     let texto = ficha.cuantos === 1
@@ -1156,34 +1204,97 @@
                     nota.innerText = texto;
                 };
 
-                sel.onchange = () => {
-                    const esNuevo = sel.value === '__nuevo__';
-                    inpNuevo.style.display = esNuevo ? 'block' : 'none';
-                    if (esNuevo) {
-                        inpNuevo.value = '';
-                        inpNuevo.focus();
-                    } else if (sel.value && catalogo.has(claveDeId(sel.value))) {
-                        // Elegir un ID que ya existe trae su nombre: es
-                        // justamente lo que significa que estén ligados.
-                        inpNombre.value = catalogo.get(claveDeId(sel.value)).nombre;
+
+                const TOPE = 8;
+
+                // 'todas' se usa al enfocar: el campo llega con el ID puesto y
+                // filtrar por él dejaría a la vista sólo ese, que es justo el
+                // que se quiere cambiar.
+                const pintarSugerencias = (todas) => {
+                    const encontradas = todas ? fichas : filtrar(campo.value);
+                    lista.innerHTML = '';
+
+                    if (encontradas.length === 0) {
+                        const vacio = document.createElement('div');
+                        vacio.style.cssText = 'padding:10px 12px; color:#94a3b8; font-size:0.85rem;';
+                        vacio.innerText = 'Ningún ID coincide; al guardar se creará.';
+                        lista.appendChild(vacio);
+                        lista.style.display = 'block';
+                        return;
                     }
+
+                    encontradas.slice(0, TOPE).forEach(ficha => {
+                        const fila = document.createElement('button');
+                        fila.className = 'sugerencia-id';
+                        fila.type = 'button';
+
+                        const textos = document.createElement('div');
+                        textos.style.cssText = 'min-width:0;';
+                        const arriba = document.createElement('div');
+                        arriba.style.cssText = 'font-weight:700; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+                        arriba.innerText = ficha.id;
+                        const abajo = document.createElement('div');
+                        abajo.style.cssText = 'font-size:0.78rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+                        abajo.innerText = ficha.nombre || 'Sin nombre';
+                        textos.appendChild(arriba);
+                        textos.appendChild(abajo);
+
+                        const cuenta = document.createElement('div');
+                        cuenta.style.cssText = 'flex-shrink:0; font-size:0.75rem; color:#94a3b8;';
+                        cuenta.innerText = ficha.cuantos > 1 ? `${ficha.cuantos} altas` : '';
+
+                        fila.appendChild(textos);
+                        fila.appendChild(cuenta);
+
+                        fila.onclick = () => {
+                            campo.value = ficha.id;
+                            // Elegir un ID que ya existe trae su nombre: es
+                            // justamente lo que significa que estén ligados.
+                            inpNombre.value = ficha.nombre;
+                            lista.style.display = 'none';
+                            refrescarNota();
+                        };
+
+                        lista.appendChild(fila);
+                    });
+
+                    if (encontradas.length > TOPE) {
+                        const resto = document.createElement('div');
+                        resto.style.cssText = 'padding:8px 12px; color:#94a3b8; font-size:0.78rem;';
+                        resto.innerText = `y ${encontradas.length - TOPE} más; sigue escribiendo para acotar.`;
+                        lista.appendChild(resto);
+                    }
+
+                    lista.style.display = 'block';
+                };
+
+                // La lista no se cierra al perder el foco: está en el flujo y
+                // no tapa nada, y cerrarla en el blur se comería el toque
+                // sobre la propia sugerencia.
+                campo.onfocus = () => {
+                    // Se selecciona lo que hay para que la primera tecla lo
+                    // sustituya en vez de pegarse detrás y no encontrar nada.
+                    campo.select();
+                    pintarSugerencias(true);
+                };
+
+                campo.oninput = () => {
+                    pintarSugerencias(false);
                     refrescarNota();
                 };
 
-                inpNuevo.oninput = refrescarNota;
+                lista.style.display = 'none';
                 refrescarNota();
             }
 
             async function guardarEquipo(filas) {
                 const boton = document.getElementById('btn-guardar-equipo');
-                const seleccion = document.getElementById('sel-detalle-id-interno').value;
                 const nombre = document.getElementById('inp-detalle-nombre').value.trim();
-                const idInterno = idInternoElegido();
-
-                if (seleccion === '__nuevo__' && !idInterno) {
-                    alert("Escribe el ID nuevo, o elige «Sin ID interno».");
-                    return;
-                }
+                // El ID se guarda con la grafía que ya tenga en el catálogo,
+                // para no dejar dos variantes del mismo código.
+                const escrito = idInternoElegido();
+                const fichaEscrita = catalogoIdsInternos().get(claveDeId(escrito));
+                const idInterno = fichaEscrita ? fichaEscrita.id : escrito;
 
                 if (!nombre) {
                     alert("El nombre del equipo no puede quedar vacío.");
