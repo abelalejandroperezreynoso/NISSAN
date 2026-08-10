@@ -187,6 +187,11 @@
             line-height: 1.1;
         }
 
+        /* El segundo renglón del título, cuando el ID se parte para caber. */
+        .cuadro-titulo--seguido {
+            margin-top: -0.06em;
+        }
+
         .cuadro-dato { font-weight: 700; line-height: 1.25; }
         .cuadro-sub { color: #475569; line-height: 1.25; }
         .cuadro-extra { color: #7f1d1d; font-weight: 700; line-height: 1.25; }
@@ -370,6 +375,12 @@
             const CERRADOS = ['Entregada', 'Recibida'];
             const SIN_PLANTA = 'sin-planta';
             const SIN_LINEA = 'sin-linea';
+
+            // Canvas suelto con el que se mide el texto de los cuadros. Se
+            // declara aquí arriba porque el primer dibujo ocurre en cuanto
+            // responde la base, antes de llegar al resto del archivo.
+            const MEDIDOR = document.createElement('canvas').getContext('2d');
+            const FUENTE = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 
             // ==========================================
             // Carga
@@ -582,6 +593,37 @@
             }
 
             // ==========================================
+            // Ajuste del título
+            // ==========================================
+            // El ID del equipo es lo que identifica al cuadro, así que se
+            // muestra entero aunque el cuadro sea diminuto: en vez de
+            // recortarlo, se busca el tamaño de letra al que cabe. Medir con
+            // canvas da el ancho exacto de la fuente real sin escribir nada
+            // en la página; devuelve el ancho por cada píxel de tamaño, que
+            // es lo que hace falta para despejar el tamaño que cabe.
+            function anchoPorPixel(texto) {
+                MEDIDOR.font = '800 100px ' + FUENTE;
+                return Math.max(MEDIDOR.measureText(texto).width / 100, 0.01);
+            }
+
+            // Corte en dos renglones por el guion o el espacio más cercano al
+            // centro: "ATM-817" cabe al doble de tamaño partido en "ATM-" y
+            // "817", que es la diferencia entre leerlo y no leerlo.
+            function partirTitulo(texto) {
+                const cortes = [];
+                for (let i = 0; i < texto.length - 1; i++) {
+                    if (texto[i] === '-' || texto[i] === ' ') cortes.push(i + 1);
+                }
+                if (cortes.length === 0) return null;
+
+                const medio = texto.length / 2;
+                const corte = cortes.reduce((a, b) => Math.abs(b - medio) < Math.abs(a - medio) ? b : a);
+                const uno = texto.slice(0, corte).trim();
+                const dos = texto.slice(corte).trim();
+                return (uno && dos) ? [uno, dos] : null;
+            }
+
+            // ==========================================
             // Dibujo
             // ==========================================
             function dibujar() {
@@ -658,16 +700,37 @@
                 // el porcentaje, y sólo en los grandes el desglose completo.
                 const tam = Math.max(9, Math.min(26, Math.sqrt(area) / 6.5));
 
-                const titulo = document.createElement('div');
-                titulo.className = 'cuadro-titulo';
-                titulo.style.fontSize = tam + 'px';
-                titulo.innerText = nodo.titulo;
-                cuerpo.appendChild(titulo);
+                // Tamaño al que el título cabe entero, de una y de dos líneas.
+                // El de dos sólo se usa si de verdad gana espacio; partir un
+                // nombre que ya cabía sólo lo haría más difícil de leer.
+                const anchoUtil = Math.max(ancho - 9, 4);
+                const altoUtil = Math.max(alto - 6, 4);
+                const partes = partirTitulo(nodo.titulo);
+                const tamUnaLinea = anchoUtil / anchoPorPixel(nodo.titulo);
+                const tamDosLineas = partes
+                    ? Math.min(anchoUtil / Math.max(anchoPorPixel(partes[0]), anchoPorPixel(partes[1])),
+                               altoUtil / 2.2)
+                    : 0;
+                const parte = tamUnaLinea < tam && tamDosLineas > tamUnaLinea * 1.15;
+                const tamTitulo = Math.max(5, Math.min(tam, parte ? tamDosLineas : tamUnaLinea));
+
+                (parte ? partes : [nodo.titulo]).forEach((texto, i) => {
+                    const titulo = document.createElement('div');
+                    titulo.className = 'cuadro-titulo' + (i > 0 ? ' cuadro-titulo--seguido' : '');
+                    titulo.style.fontSize = tamTitulo + 'px';
+                    titulo.innerText = texto;
+                    cuerpo.appendChild(titulo);
+                });
+
+                // Los renglones de abajo no pasan del título: si el ID tuvo
+                // que encogerse para caber, el resto se encoge con él.
+                const tamDato = Math.min(tam * 0.62, tamTitulo * 0.9);
+                const tamSub = Math.min(tam * 0.55, tamTitulo * 0.8);
 
                 if (area >= 2600 && alto >= 44) {
                     const dato = document.createElement('div');
                     dato.className = 'cuadro-dato';
-                    dato.style.fontSize = Math.max(9, tam * 0.62) + 'px';
+                    dato.style.fontSize = Math.max(8, tamDato) + 'px';
                     dato.style.color = color.texto;
                     dato.innerText = pct === null
                         ? 'Sin solicitudes'
@@ -678,7 +741,7 @@
                 if (area >= 7000 && alto >= 64 && pct !== null) {
                     const sub = document.createElement('div');
                     sub.className = 'cuadro-sub';
-                    sub.style.fontSize = Math.max(9, tam * 0.55) + 'px';
+                    sub.style.fontSize = Math.max(8, tamSub) + 'px';
                     sub.innerText = `${m.cerradas}/${m.total} solicitudes`;
                     cuerpo.appendChild(sub);
                 }
@@ -687,12 +750,12 @@
                     const extra = document.createElement('div');
                     if (m.urgentes > 0) {
                         extra.className = 'cuadro-extra';
-                        extra.style.fontSize = Math.max(9, tam * 0.55) + 'px';
+                        extra.style.fontSize = Math.max(8, tamSub) + 'px';
                         extra.innerText = `🚨 ${m.urgentes} urgente${m.urgentes === 1 ? '' : 's'}`;
                         cuerpo.appendChild(extra);
                     } else if (nodo.subtitulo) {
                         extra.className = 'cuadro-sub';
-                        extra.style.fontSize = Math.max(9, tam * 0.5) + 'px';
+                        extra.style.fontSize = Math.max(8, tamSub * 0.9) + 'px';
                         extra.innerText = nodo.subtitulo;
                         cuerpo.appendChild(extra);
                     }
