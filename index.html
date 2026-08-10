@@ -4,10 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <!-- Instalada en la pantalla de inicio, la app corre a pantalla completa.
-         Estas metas van en TODAS las páginas: sin manifiesto no hay scope, y
-         iOS decide documento por documento; a la que le falten, la navegación
-         se sale a Safari. status-bar-style "default" mantiene la franja de la
-         barra de estado fuera del viewport, que es lo que suponen los estilos. -->
+         El manifiesto es quien declara el scope, y el scope es lo que mantiene
+         dentro de la app la navegación entre el panel, refacciones y el mapa:
+         sin él, iOS decide documento por documento y acaba saliéndose a Safari.
+         Va enlazado en TODAS las páginas, porque cualquiera de ellas puede ser
+         la que se añada a la pantalla de inicio. Las metas se quedan para las
+         instalaciones viejas, hechas antes de que existiera el manifiesto.
+         status-bar-style "default" mantiene la franja de la barra de estado
+         fuera del viewport, que es lo que suponen los estilos. -->
+    <link rel="manifest" href="manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">

@@ -39,6 +39,7 @@ Los mensajes de commit van en español.
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos |
 | `estilos.css` | Estilos compartidos |
+| `manifest.json` | Manifiesto PWA; su `scope` cubre las tres páginas |
 
 Las pantallas independientes (`10-refacciones.html`, `11-mapa-activos.html`)
 cargan `1-config.js` por su cuenta y llevan su propio `<script>` inline.
@@ -66,15 +67,23 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `textarea` con fuente menor a 16px provoca zoom automático al enfocarlo.
   Para compactar un formulario hay que reducir padding y márgenes, nunca el
   tamaño de la fuente de los campos.
-- **Las metas de pantalla completa van en todas las páginas.** No hay
-  `manifest.json`, y sin manifiesto no hay `scope`: iOS decide documento por
-  documento si corre a pantalla completa. Una página a la que le falten
-  `apple-mobile-web-app-capable` y `apple-mobile-web-app-status-bar-style`
-  hace que la navegación se salga a Safari, aunque se haya entrado desde la
-  app instalada. Toda pantalla nueva las lleva. El valor `default` de la
-  barra de estado es el que mantiene esa franja fuera del viewport, que es
-  lo que suponen los estilos; cambiarlo a `black-translucent` metería el
-  contenido debajo del reloj.
+- **El manifiesto y las metas de pantalla completa van en todas las páginas.**
+  `manifest.json` declara `"scope": "./"` y `"display": "standalone"`. El
+  scope es lo que mantiene dentro de la app instalada la navegación entre
+  `index.html`, `10-refacciones.html` y `11-mapa-activos.html`, que son
+  documentos distintos y no vistas de uno solo: sin scope iOS decide
+  documento por documento y acaba abriendo Safari. El `<link rel="manifest">`
+  va en las tres páginas porque cualquiera puede ser la que se añada a la
+  pantalla de inicio. Las metas `apple-mobile-web-app-capable` y
+  `apple-mobile-web-app-status-bar-style` se quedan y toda pantalla nueva las
+  lleva: son lo único que entienden las instalaciones hechas antes de que
+  existiera el manifiesto. El valor `default` de la barra de estado es el que
+  mantiene esa franja fuera del viewport, que es lo que suponen los estilos;
+  cambiarlo a `black-translucent` metería el contenido debajo del reloj. El
+  manifiesto no lleva `theme_color` a propósito: lo pintaría de un color fijo
+  en toda la app y esa franja se pinta hoy con el fondo de `<html>` de cada
+  documento. Un cambio en el manifiesto sólo se aplica reinstalando el icono
+  desde la pantalla de inicio; iOS congela el que había al añadirlo.
 - **Safe area del iPhone.** Las páginas llevan `viewport-fit=cover` en el meta
   viewport para que fondos y overlays lleguen al borde físico de la pantalla.
   Como contrapartida, el contenido debe apartarse de la barra de estado y del

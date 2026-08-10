@@ -1,0 +1,10 @@
+{
+    "name": "NISSAN — Panel de Mantenimiento",
+    "short_name": "Mantenimiento",
+    "description": "Panel de gestión de seguridad, evaluaciones y refacciones.",
+    "start_url": "./index.html",
+    "scope": "./",
+    "display": "standalone",
+    "background_color": "#f0f2f5",
+    "lang": "es"
+}
