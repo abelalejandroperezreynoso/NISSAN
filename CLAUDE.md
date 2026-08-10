@@ -169,7 +169,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   renombrado del mapa de activos actualiza de golpe todas las filas que
   comparten ese `id_interno`, igual que ya hacía el renombrado en lote de
   `10-refacciones.html`. Cualquier código nuevo que escriba `equipos.nombre`
-  tiene que respetarlo.
+  tiene que respetarlo. El mapa dibuja un cuadro por máquina y no por fila:
+  agrupa las altas de la línea por `id_interno` y, cuando falta, por nombre,
+  ambos normalizados sin espacios y en mayúsculas. Sin eso, una máquina dada
+  de alta dos veces en la misma línea partía su carga en dos cuadros.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con

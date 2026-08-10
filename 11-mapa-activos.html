@@ -572,19 +572,63 @@
                 return nodos;
             }
 
+            // Identidad de una fila de equipos: el ID interno si lo tiene y,
+            // si no, el nombre. Va normalizada (sin espacios sobrantes y en
+            // mayúsculas) porque estos dos campos se capturan a mano y "EPP",
+            // " EPP" y "epp" son la misma máquina.
+            function claveDeEquipo(equipo) {
+                const id = String(equipo.id_interno || '').trim();
+                if (id) return 'id:' + id.toUpperCase();
+                return 'nom:' + String(equipo.nombre || '').trim().toUpperCase();
+            }
+
+            function sumarMetricas(lista) {
+                return lista.reduce((suma, m) => {
+                    suma.total += m.total;
+                    suma.pendientes += m.pendientes;
+                    suma.cerradas += m.cerradas;
+                    suma.canceladas += m.canceladas;
+                    suma.urgentes += m.urgentes;
+                    return suma;
+                }, metricaVacia());
+            }
+
+            // Un cuadro por máquina, no por fila. La misma máquina puede estar
+            // dada de alta más de una vez dentro de la línea, y si cada alta
+            // saliera aparte su carga quedaría partida en dos cuadros que
+            // pesan la mitad de lo que les toca frente a los demás.
             function nodosEquipos(clavePlanta, claveLinea) {
-                return equipos
+                const grupos = new Map();
+
+                equipos
                     .filter(e => plantaDeEquipo(e) === clavePlanta && lineaDeEquipo(e) === claveLinea)
-                    .map(e => ({
-                        tipo: 'equipo',
-                        id: String(e.id),
-                        // El ID interno hace de matrícula: es corto y cabe en el
-                        // cuadro. El nombre completo baja al subtítulo.
-                        titulo: e.id_interno || e.nombre,
-                        subtitulo: e.id_interno ? e.nombre : '',
-                        inactivo: e.activo === false,
-                        metrica: metricaDe(metricasPorEquipo, String(e.id))
-                    }))
+                    .forEach(e => {
+                        const clave = claveDeEquipo(e);
+                        if (!grupos.has(clave)) grupos.set(clave, []);
+                        grupos.get(clave).push(e);
+                    });
+
+                return Array.from(grupos.values())
+                    .map(filas => {
+                        // Manda la primera fila que tenga cada dato: el ID
+                        // interno y el nombre pueden faltar en alguna de ellas.
+                        const conId = filas.find(e => String(e.id_interno || '').trim());
+                        const idInterno = conId ? String(conId.id_interno).trim() : '';
+                        const nombre = (filas.find(e => e.nombre) || filas[0]).nombre || '';
+
+                        return {
+                            tipo: 'equipo',
+                            id: String(filas[0].id),
+                            ids: filas.map(e => String(e.id)),
+                            registros: filas.length,
+                            // El ID interno hace de matrícula: es corto y cabe
+                            // en el cuadro. El nombre completo va al subtítulo.
+                            titulo: idInterno || nombre,
+                            subtitulo: idInterno ? nombre : '',
+                            inactivo: filas.every(e => e.activo === false),
+                            metrica: sumarMetricas(filas.map(e => metricaDe(metricasPorEquipo, String(e.id))))
+                        };
+                    })
                     // Un equipo dado de baja sólo estorba si además no dejó
                     // historial; con solicitudes encima se queda a la vista.
                     .filter(n => !n.inactivo || n.metrica.total > 0 || n.metrica.canceladas > 0);
@@ -772,7 +816,7 @@
                 } else if (nodo.tipo === 'linea') {
                     aplicarRuta([ruta[0], { tipo: 'linea', id: nodo.id, titulo: nodo.titulo }], true);
                 } else {
-                    abrirDetalleEquipo(nodo.id);
+                    abrirDetalleEquipo(nodo);
                 }
             }
 
@@ -874,9 +918,10 @@
                     nombre.innerText = nodo.subtitulo ? `${nodo.titulo} · ${nodo.subtitulo}` : nodo.titulo;
                     const detalle = document.createElement('div');
                     detalle.style.cssText = 'font-size:0.78rem; color:#64748b;';
-                    detalle.innerText = pct === null
+                    const registros = nodo.registros > 1 ? ` · ${nodo.registros} altas` : '';
+                    detalle.innerText = (pct === null
                         ? 'Sin solicitudes'
-                        : `${m.pendientes} pendientes de ${m.total}${m.urgentes ? ` · ${m.urgentes} urgentes` : ''}`;
+                        : `${m.pendientes} pendientes de ${m.total}${m.urgentes ? ` · ${m.urgentes} urgentes` : ''}`) + registros;
                     textos.appendChild(nombre);
                     textos.appendChild(detalle);
 
@@ -910,13 +955,27 @@
             // los equipos y deja cada ID una sola vez, con el nombre que ya
             // llevan y cuántas filas lo usan; 'discrepa' marca los que hoy
             // están mal, con el mismo ID y nombres distintos.
+            // Se normaliza igual que claveDeEquipo, porque el catálogo tiene
+            // que ver la misma identidad que el mapa: si no, el desplegable
+            // ofrecería dos veces un ID que en el mapa sale como un cuadro.
+            function claveDeId(texto) {
+                return String(texto || '').trim().toUpperCase();
+            }
+
             function catalogoIdsInternos() {
                 const catalogo = new Map();
                 equipos.forEach(e => {
-                    if (!e.id_interno) return;
-                    const clave = String(e.id_interno);
+                    const clave = claveDeId(e.id_interno);
+                    if (!clave) return;
                     if (!catalogo.has(clave)) {
-                        catalogo.set(clave, { nombre: e.nombre || '', cuantos: 0, discrepa: false });
+                        catalogo.set(clave, {
+                            // La primera grafía que aparece es la que se ofrece
+                            // y la que se guarda, para no dejar dos variantes.
+                            id: String(e.id_interno).trim(),
+                            nombre: e.nombre || '',
+                            cuantos: 0,
+                            discrepa: false
+                        });
                     }
                     const ficha = catalogo.get(clave);
                     ficha.cuantos++;
@@ -925,12 +984,15 @@
                 return catalogo;
             }
 
-            // Filas que comparten un ID interno, sin contar la que se edita.
-            function hermanosDe(idInterno, equipo) {
+            // Filas que comparten un ID interno fuera de las que se editan,
+            // que son las altas de la misma máquina en otras líneas.
+            function hermanosDe(idInterno, idsPropios) {
                 if (!idInterno) return [];
+                const buscado = idInterno.trim().toUpperCase();
+                const propios = new Set(idsPropios.map(String));
                 return equipos.filter(e => e.id_interno &&
-                    String(e.id_interno) === idInterno &&
-                    String(e.id) !== String(equipo.id));
+                    String(e.id_interno).trim().toUpperCase() === buscado &&
+                    !propios.has(String(e.id)));
             }
 
             // Lo que hay elegido ahora mismo en la hoja: o una opción del
@@ -946,11 +1008,17 @@
             // ==========================================
             // Hoja de detalle del equipo
             // ==========================================
-            function abrirDetalleEquipo(idEquipo) {
-                const equipo = equipos.find(e => String(e.id) === String(idEquipo));
-                if (!equipo) return;
+            // Recibe el nodo del mapa, no una fila: un cuadro puede reunir
+            // varias altas de la misma máquina y la hoja las trata como una.
+            function abrirDetalleEquipo(nodo) {
+                const filas = nodo.ids
+                    .map(id => equipos.find(e => String(e.id) === String(id)))
+                    .filter(Boolean);
 
-                const m = metricaDe(metricasPorEquipo, String(equipo.id));
+                if (filas.length === 0) return;
+
+                const principal = filas.find(e => String(e.id_interno || '').trim()) || filas[0];
+                const m = nodo.metrica;
                 const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
 
                 // Lo que sigue abierto va primero, y dentro de eso lo urgente:
@@ -960,12 +1028,17 @@
                     if (CERRADOS.includes(req.estado)) return 2;
                     return req.prioridad === 'Urgente' ? 0 : 1;
                 };
-                const solicitudes = (solicitudesPorEquipo.get(String(equipo.id)) || [])
-                    .slice().sort((a, b) => orden(a) - orden(b));
+                const solicitudes = filas
+                    .reduce((acc, f) => acc.concat(solicitudesPorEquipo.get(String(f.id)) || []), [])
+                    .sort((a, b) => orden(a) - orden(b));
 
-                document.getElementById('detalle-titulo').innerText = equipo.nombre;
+                const marcas = [];
+                if (filas.length > 1) marcas.push(`${filas.length} altas en esta línea`);
+                if (filas.every(e => e.activo === false)) marcas.push('Dado de baja');
+
+                document.getElementById('detalle-titulo').innerText = nodo.subtitulo || nodo.titulo;
                 document.getElementById('detalle-subtitulo').innerText =
-                    ruta.map(p => p.titulo).join(' › ') + (equipo.activo === false ? ' · Dado de baja' : '');
+                    [ruta.map(p => p.titulo).join(' › ')].concat(marcas).join(' · ');
 
                 const visibles = solicitudes.slice(0, 8);
                 const restantes = solicitudes.length - visibles.length;
@@ -1014,6 +1087,7 @@
                     </div>
 
                     <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px;">Editar equipo</div>
+                    ${filas.length > 1 ? `<div style="background:#f1f5f9; color:#475569; border-radius:10px; padding:8px 12px; font-size:0.8rem; margin-bottom:12px;">Esta máquina está dada de alta ${filas.length} veces en la línea. El cuadro las suma y lo que guardes aquí se escribe en todas.</div>` : ''}
                     <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">ID / Código interno</label>
                     <select id="sel-detalle-id-interno" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none;"></select>
                     <input type="text" id="inp-detalle-id-nuevo" placeholder="Escribe el ID nuevo" style="display:none; width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-top:8px;">
@@ -1023,9 +1097,9 @@
                     <button id="btn-guardar-equipo" style="width:100%; background:#0ea5e9; color:white; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer; font-size:0.95rem;">Guardar cambios</button>
                 `;
 
-                document.getElementById('inp-detalle-nombre').value = equipo.nombre || '';
-                montarSelectorDeId(equipo);
-                document.getElementById('btn-guardar-equipo').onclick = () => guardarEquipo(equipo);
+                document.getElementById('inp-detalle-nombre').value = principal.nombre || '';
+                montarSelectorDeId(principal);
+                document.getElementById('btn-guardar-equipo').onclick = () => guardarEquipo(filas);
 
                 document.getElementById('modal-detalle-activo').style.display = 'flex';
             }
@@ -1052,13 +1126,13 @@
                 };
 
                 agregar('', '— Sin ID interno —');
-                Array.from(catalogo.keys()).sort((a, b) => a.localeCompare(b)).forEach(id => {
-                    const ficha = catalogo.get(id);
-                    agregar(id, ficha.nombre ? `${id} · ${ficha.nombre}` : id);
-                });
+                Array.from(catalogo.values())
+                    .sort((a, b) => a.id.localeCompare(b.id))
+                    .forEach(ficha => agregar(ficha.id, ficha.nombre ? `${ficha.id} · ${ficha.nombre}` : ficha.id));
                 agregar('__nuevo__', '➕ Crear un ID nuevo…');
 
-                sel.value = equipo.id_interno ? String(equipo.id_interno) : '';
+                const fichaActual = catalogo.get(claveDeId(equipo.id_interno));
+                sel.value = fichaActual ? fichaActual.id : '';
 
                 // Avisa de lo que va a pasar antes de guardar: a cuántos
                 // equipos alcanza el nombre y si el ID ya existía.
@@ -1070,14 +1144,14 @@
                             : 'Sin ID interno: el nombre sólo afecta a este equipo.';
                         return;
                     }
-                    const ficha = catalogo.get(id);
+                    const ficha = catalogo.get(claveDeId(id));
                     if (!ficha) {
                         nota.innerText = `«${id}» es un ID nuevo.`;
                         return;
                     }
                     let texto = ficha.cuantos === 1
-                        ? `«${id}» ya existe, en un equipo llamado «${ficha.nombre}».`
-                        : `«${id}» lo usan ${ficha.cuantos} equipos; el nombre se guardará en todos.`;
+                        ? `«${ficha.id}» ya existe, en un equipo llamado «${ficha.nombre}».`
+                        : `«${ficha.id}» lo usan ${ficha.cuantos} altas de equipo; el nombre se guardará en todas.`;
                     if (ficha.discrepa) texto += ' Hoy no todos se llaman igual.';
                     nota.innerText = texto;
                 };
@@ -1088,10 +1162,10 @@
                     if (esNuevo) {
                         inpNuevo.value = '';
                         inpNuevo.focus();
-                    } else if (sel.value && catalogo.has(sel.value)) {
+                    } else if (sel.value && catalogo.has(claveDeId(sel.value))) {
                         // Elegir un ID que ya existe trae su nombre: es
                         // justamente lo que significa que estén ligados.
-                        inpNombre.value = catalogo.get(sel.value).nombre;
+                        inpNombre.value = catalogo.get(claveDeId(sel.value)).nombre;
                     }
                     refrescarNota();
                 };
@@ -1100,7 +1174,7 @@
                 refrescarNota();
             }
 
-            async function guardarEquipo(equipo) {
+            async function guardarEquipo(filas) {
                 const boton = document.getElementById('btn-guardar-equipo');
                 const seleccion = document.getElementById('sel-detalle-id-interno').value;
                 const nombre = document.getElementById('inp-detalle-nombre').value.trim();
@@ -1116,15 +1190,16 @@
                     return;
                 }
 
-                // El nombre va pegado al ID: si el ID lo comparten varias
-                // filas, todas acaban con el mismo nombre. Se avisa antes,
-                // porque el cambio sale de la pantalla que se está viendo.
-                const hermanos = hermanosDe(idInterno, equipo);
+                // El nombre va pegado al ID: si el ID lo comparten altas de
+                // otras líneas, todas acaban con el mismo nombre. Se avisa
+                // antes, porque el cambio sale de la pantalla que se ve.
+                const idsPropios = filas.map(f => f.id);
+                const hermanos = hermanosDe(idInterno, idsPropios);
                 const alcanzaAOtros = hermanos.some(e => (e.nombre || '') !== nombre);
 
                 if (alcanzaAOtros) {
-                    const aviso = `El ID «${idInterno}» lo usan ${hermanos.length + 1} equipos.\n\n` +
-                        `Todos quedarán con el nombre «${nombre}».`;
+                    const aviso = `El ID «${idInterno}» lo usan ${hermanos.length + filas.length} altas de equipo.\n\n` +
+                        `Todas quedarán con el nombre «${nombre}».`;
                     if (!confirm(aviso)) return;
                 }
 
@@ -1133,31 +1208,32 @@
                 boton.disabled = true;
 
                 try {
+                    // Las dos consultas filtran por id y no por id_interno:
+                    // así el ID puede cambiar de mayúsculas sin que el filtro
+                    // deje fuera justo las filas que hay que corregir.
                     const { error } = await sb.from('equipos').update({
                         nombre: nombre,
                         id_interno: idInterno === "" ? null : idInterno
-                    }).eq('id', equipo.id);
+                    }).in('id', idsPropios);
 
                     if (error) throw error;
 
-                    // La fila propia ya lleva el ID nuevo, así que este segundo
-                    // update por id_interno alcanza también a las hermanas.
+                    // A las altas de otras líneas sólo se les toca el nombre:
+                    // su ID ya era el mismo, que es por lo que salieron aquí.
                     if (alcanzaAOtros) {
                         const { error: errorHermanos } = await sb.from('equipos')
                             .update({ nombre: nombre })
-                            .eq('id_interno', idInterno);
+                            .in('id', hermanos.map(e => e.id));
 
                         if (errorHermanos) throw errorHermanos;
                     }
 
                     // Se actualiza la copia local para repintar sin recargar.
-                    equipo.nombre = nombre;
-                    equipo.id_interno = idInterno === "" ? null : idInterno;
-                    if (alcanzaAOtros) {
-                        equipos.forEach(e => {
-                            if (e.id_interno && String(e.id_interno) === idInterno) e.nombre = nombre;
-                        });
-                    }
+                    filas.forEach(f => {
+                        f.nombre = nombre;
+                        f.id_interno = idInterno === "" ? null : idInterno;
+                    });
+                    if (alcanzaAOtros) hermanos.forEach(e => { e.nombre = nombre; });
 
                     window.cerrarDetalleActivo();
                     dibujar();
