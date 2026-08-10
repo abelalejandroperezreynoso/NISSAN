@@ -17,9 +17,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Mapa de Activos</title>
-    
+
     <link rel="stylesheet" href="estilos.css">
-    
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
@@ -34,13 +34,19 @@
             overscroll-behavior-y: none;
         }
 
+        /* La franja de la barra de estado sigue el fondo de esta pantalla y
+           no el de estilos.css, que es el del panel principal. */
+        html.modal-abierto {
+            background-color: #f8fafc;
+        }
+
         #panel-independiente-container {
             display: flex;
             flex-direction: column;
             height: 100vh;
             height: 100dvh;
             width: 100%;
-            background: white;
+            background: #f8fafc;
             overflow: hidden;
 
             /* Con viewport-fit=cover la página llega hasta el borde físico:
@@ -52,450 +58,903 @@
             padding-bottom: env(safe-area-inset-bottom);
         }
 
-        #header {
-            padding: 15px 20px;
+        #encabezado {
+            padding: 12px 16px;
             border-bottom: 1px solid #e2e8f0;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 12px;
             background: white;
             flex-shrink: 0;
-            z-index: 10;
         }
 
-        #d3-container {
+        /* El resumen hace también de leyenda: los puntos de color son los
+           mismos con los que se pintan las bandas de los cuadros. */
+        #resumen-global {
+            font-size: 0.78rem;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        #barra-ruta {
+            padding: 6px 10px 6px 16px;
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.84rem;
+        }
+
+        #ruta {
             flex: 1;
-            width: 100%;
-            position: relative;
-            background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
-            background-size: 20px 20px;
-            background-color: #f8fafc;
-            cursor: grab;
-            touch-action: none;
-        }
-
-        #d3-container:active {
-            cursor: grabbing;
-        }
-
-        .tooltip {
-            position: absolute;
-            background: rgba(15, 23, 42, 0.95);
-            color: white;
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            min-width: 0;
+            overflow-x: auto;
             white-space: nowrap;
-            border: 1px solid #334155;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        #ruta::-webkit-scrollbar { display: none; }
+
+        .ruta-paso {
+            border: none;
+            background: transparent;
+            padding: 4px 5px;
+            border-radius: 7px;
+            font: inherit;
+            color: #0284c7;
+            font-weight: 700;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .ruta-paso:active { background: #e0f2fe; }
+
+        .ruta-paso[disabled] {
+            color: #0f172a;
+            cursor: default;
+        }
+
+        .ruta-flecha {
+            color: #cbd5e1;
+            flex-shrink: 0;
+        }
+
+        /* Lienzo del treemap. Los cuadros se colocan en absoluto sobre él, con
+           las coordenadas que calcula d3.treemap. */
+        #lienzo {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #f8fafc;
+        }
+
+        .cuadro {
+            position: absolute;
+            box-sizing: border-box;
+            background: white;
+            border: 1px solid #0f172a;
+            border-radius: 3px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            touch-action: manipulation;
+            transition: transform 0.12s ease;
+        }
+
+        .cuadro:active { transform: scale(0.97); }
+
+        /* La banda superior es la que lleva el color. El cuadro se queda
+           blanco para que los números se lean sin pelear con el fondo, igual
+           que en los mapas de calor de cartera en los que se inspira. */
+        .cuadro-banda {
+            flex-shrink: 0;
+            width: 100%;
+        }
+
+        .cuadro-cuerpo {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 3px 4px;
+            overflow: hidden;
+        }
+
+        .cuadro-cuerpo > div {
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .cuadro-titulo {
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.1;
+        }
+
+        .cuadro-dato { font-weight: 700; line-height: 1.25; }
+        .cuadro-sub { color: #475569; line-height: 1.25; }
+        .cuadro-extra { color: #b91c1c; font-weight: 700; line-height: 1.25; }
+
+        #aviso-lienzo {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 30px;
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+
+        /* Fichas del desglose dentro de la hoja de detalle. */
+        .ficha-metrica {
+            flex: 1;
+            min-width: 0;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 10px 8px;
+            text-align: center;
+        }
+
+        .ficha-metrica .cifra {
+            font-size: 1.35rem;
+            font-weight: 800;
+            line-height: 1.1;
+        }
+
+        .ficha-metrica .rotulo {
+            font-size: 0.7rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-top: 2px;
+        }
+
+        .renglon-solicitud {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.85rem;
+        }
+
+        .renglon-solicitud:last-child { border-bottom: none; }
+
+        .etiqueta-estado {
+            flex-shrink: 0;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 999px;
+        }
+
+        /* Lista del nivel: la forma de llegar a un cuadro demasiado pequeño
+           para tocarlo, que es lo que le pasa a un equipo sin solicitudes. */
+        #lista-nivel {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 0 0 calc(12px + env(safe-area-inset-bottom));
+        }
+
+        .renglon-nivel {
+            width: 100%;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 11px 25px;
+            border: none;
+            border-bottom: 1px solid #f1f5f9;
+            background: white;
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .renglon-nivel:active { background: #f1f5f9; }
+
+        .renglon-nivel .marca {
+            width: 10px;
+            height: 34px;
+            border-radius: 4px;
+            flex-shrink: 0;
         }
     </style>
 </head>
 <body>
 
     <div id="panel-independiente-container">
-            <div id="header">
-                <h2 style="margin:0; color:#0f172a; font-size:1.4rem; display:flex; align-items:center; gap:8px;">🕸️ Red de Activos</h2>
-                
-                <button onclick="window.location.href='10-refacciones.html'" style="border:none; background:#fef2f2; width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#ef4444; font-weight:bold; font-size: 1.1rem; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border: 1px solid #fecdd3;" title="Volver a Refacciones">✕</button>
+        <div id="encabezado">
+            <div style="min-width:0;">
+                <h2 style="margin:0; color:#0f172a; font-size:1.25rem; display:flex; align-items:center; gap:8px;">🗺️ Mapa de Activos</h2>
+                <div id="resumen-global">Cargando…</div>
             </div>
+            <button onclick="window.location.href='10-refacciones.html'" class="ios-boton-icono ios-boton-icono--destructivo" title="Volver a Refacciones" aria-label="Volver a Refacciones"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></svg></button>
+        </div>
 
-            <div id="controles-simulacion" style="padding: 10px 20px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; display: flex; gap: 25px; flex-wrap: wrap; align-items: center; font-size: 0.85rem; z-index: 10;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <label for="inp-repulsion" style="font-weight: bold; color: #334155;">Fuerza de Repulsión:</label>
-                            <input type="range" id="inp-repulsion" min="-100" max="0" value="-50" step="1" style="accent-color: #0ea5e9; cursor: pointer;">
-                            <span id="val-repulsion" style="color: #0369a1; font-weight: bold; width: 45px;">-50</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <label for="inp-distancia" style="font-weight: bold; color: #334155;">Distancia de Conexión:</label>
-                            <input type="range" id="inp-distancia" min="5" max="300" value="50" step="5" style="accent-color: #0ea5e9; cursor: pointer;">
-                            <span id="val-distancia" style="color: #0369a1; font-weight: bold; width: 35px;">50</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <label for="inp-area" style="font-weight: bold; color: #334155;">Tamaño del Área:</label>
-                            <input type="range" id="inp-area" min="50" max="1500" value="300" step="10" style="accent-color: #0ea5e9; cursor: pointer;">
-                            <span id="val-area" style="color: #0369a1; font-weight: bold; width: 45px;">300</span>
-                        </div>
-                    </div>
-            
-            <div id="d3-container"></div>
-                    <div id="tooltip" class="tooltip"></div>
+        <div id="barra-ruta">
+            <div id="ruta"></div>
+            <button id="btn-lista-nivel" class="ios-boton-icono" title="Ver en lista" aria-label="Ver en lista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></button>
+        </div>
 
-                    <div id="panel-edicion-equipo" style="display:none; position:fixed; top:80px; right:20px; width:300px; background:white; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.15); border:1px solid #e2e8f0; z-index:200; flex-direction:column; overflow:hidden;">
-                        <div style="background:#f8fafc; padding:15px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-                            <h3 style="margin:0; font-size:1rem; color:#0f172a;">✏️ Editar Equipo</h3>
-                            <button onclick="document.getElementById('panel-edicion-equipo').style.display='none'" style="border:none; background:transparent; cursor:pointer; font-size:1.2rem; color:#64748b; padding:0;">✕</button>
-                        </div>
-                        <div style="padding:15px; display:flex; flex-direction:column; gap:12px;">
-                            <input type="hidden" id="edit-equipo-id">
-                            <div>
-                                <label style="display:block; font-size:0.8rem; font-weight:bold; color:#475569; margin-bottom:4px;">Nombre del Equipo:</label>
-                                <input type="text" id="edit-equipo-nombre" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; box-sizing:border-box; outline:none;">
-                            </div>
-                            <div>
-                                <label style="display:block; font-size:0.8rem; font-weight:bold; color:#475569; margin-bottom:4px;">ID / Código Interno:</label>
-                                <input type="text" id="edit-equipo-id-interno" style="width:100%; padding:8px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; box-sizing:border-box; outline:none;">
-                            </div>
-                            <button id="btn-guardar-edicion-eq" style="margin-top:5px; background:#0ea5e9; color:white; border:none; padding:10px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:0.9rem;">Guardar Cambios</button>
-                        </div>
-                    </div>
+        <div id="lienzo">
+            <div id="aviso-lienzo">Cargando el mapa…</div>
+        </div>
+    </div>
+
+    <div id="modal-detalle-activo" class="hoja-overlay" style="z-index:2000;">
+        <div class="form-content hoja-contenido" style="max-width:520px; overflow-y:auto;">
+            <div class="hoja-encabezado">
+                <div style="min-width:0;">
+                    <h3 class="hoja-titulo" id="detalle-titulo">Detalle</h3>
+                    <div class="hoja-subtitulo" id="detalle-subtitulo"></div>
                 </div>
+                <button onclick="window.cerrarDetalleActivo()" class="ios-boton-cerrar ios-boton-icono"
+                        title="Cerrar" aria-label="Cerrar"></button>
+            </div>
+            <div id="detalle-cuerpo"></div>
+        </div>
+    </div>
+
+    <div id="modal-lista-nivel" class="hoja-overlay" style="z-index:2100;">
+        <div class="hoja-contenido" style="max-width:520px; overflow:hidden; padding:12px 0 0;">
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h3 class="hoja-titulo" id="lista-titulo">Lista</h3>
+                    <div class="hoja-subtitulo" id="lista-subtitulo"></div>
+                </div>
+                <button onclick="window.cerrarListaNivel()" class="ios-boton-cerrar ios-boton-icono"
+                        title="Cerrar" aria-label="Cerrar"></button>
+            </div>
+            <div id="lista-nivel"></div>
+        </div>
+    </div>
 
     <script src="1-config.js"></script>
-    
+
     <script>
         window.addEventListener('load', async () => {
-            const container = document.getElementById('d3-container');
-            const width = container.clientWidth;
-            const height = container.clientHeight;
-            const tooltip = d3.select("#tooltip");
+            const lienzo = document.getElementById('lienzo');
+            const aviso = document.getElementById('aviso-lienzo');
 
-            // Configurar SVG principal con Zoom y Paneo
-            const svg = d3.select("#d3-container")
-                .append("svg")
-                .attr("width", width)
-                .attr("height", height)
-                .call(d3.zoom()
-                    .scaleExtent([0.1, 4])
-                    .on("zoom", (event) => {
-                        g.attr("transform", event.transform);
-                    }))
-                .append("g");
+            // Catálogos y solicitudes en crudo, tal como llegan de la base.
+            let plantas = [];
+            let lineas = [];
+            let equipos = [];
+            let refacciones = [];
 
-            const g = svg.append("g");
+            // Métricas ya agregadas por nivel. Se recalculan sólo al cargar o
+            // al guardar un cambio, no en cada repintado.
+            let metricasPorEquipo = new Map();
+            let metricasPorLinea = new Map();
+            let metricasPorPlanta = new Map();
+            let solicitudesPorEquipo = new Map();
 
-            let nodes = [];
-            let links = [];
-            const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+            // Nivel que se está viendo: [] = plantas, [planta] = sus líneas,
+            // [planta, linea] = sus equipos.
+            let ruta = [];
 
-            // Mostrar estado de carga
-            g.append("text")
-                .attr("id", "loading-text")
-                .attr("x", width / 2)
-                .attr("y", height / 2)
-                .attr("text-anchor", "middle")
-                .text("Calculando relaciones físicas...")
-                .attr("font-family", "sans-serif")
-                .attr("font-weight", "bold")
-                .attr("fill", "#64748b");
+            const CERRADOS = ['Entregada', 'Recibida'];
+            const SIN_PLANTA = 'sin-planta';
+            const SIN_LINEA = 'sin-linea';
 
+            // ==========================================
+            // Carga
+            // ==========================================
             try {
-                // Consultas simultáneas para mayor velocidad
-                                const [resLineas, resEquipos] = await Promise.all([
-                                    sb.from('lineas').select('id, nombre'),
-                                    sb.from('equipos').select('id, nombre, linea_id, id_interno').eq('activo', true)
-                                ]);
+                const [resPlantas, resLineas, resEquipos, resRefacciones] = await Promise.all([
+                    sb.from('plantas').select('id, nombre').order('nombre'),
+                    sb.from('lineas').select('id, nombre, planta_id').order('nombre'),
+                    sb.from('equipos').select('id, nombre, id_interno, planta_id, linea_id, activo').order('nombre'),
+                    sb.from('refacciones').select('id, nombre_refaccion, estado, prioridad, cantidad, unidad, equipo_id, created_at').order('created_at', { ascending: false })
+                ]);
 
-                                if (resLineas.error) throw resLineas.error;
-                                if (resEquipos.error) throw resEquipos.error;
+                for (const res of [resPlantas, resLineas, resEquipos, resRefacciones]) {
+                    if (res.error) throw res.error;
+                }
 
-                                const lineasData = resLineas.data;
-                                const equiposData = resEquipos.data;
+                plantas = resPlantas.data || [];
+                lineas = resLineas.data || [];
+                equipos = resEquipos.data || [];
+                refacciones = resRefacciones.data || [];
 
-                                d3.select("#loading-text").remove();
+                agregarMetricas();
+                aplicarRuta([], false);
+            } catch (error) {
+                console.error("Error cargando el mapa de activos:", error);
+                aviso.style.display = 'flex';
+                aviso.style.color = '#ef4444';
+                aviso.innerText = "Ocurrió un error al cargar la base de datos.";
+                document.getElementById('resumen-global').innerText = "Sin datos";
+                return;
+            }
 
-                                // 1. Transformar datos de Líneas a Nodos
-                                lineasData.forEach(linea => {
-                                    nodes.push({
-                                        id: `L-${linea.id}`,
-                                        dbId: linea.id,
-                                        nombre: linea.nombre,
-                                        tipo: 'linea',
-                                        radius: 30, // Nodos centrales más grandes
-                                        color: colorScale(linea.id)
-                                    });
-                                });
+            // ==========================================
+            // Agregación
+            // ==========================================
 
-                                // 2. Transformar datos de Equipos a Nodos y crear los Enlaces (Links)
-                                equiposData.forEach(equipo => {
-                                    const nodeId = `E-${equipo.id}`;
-                                    const targetId = `L-${equipo.linea_id}`;
-                                    
-                                    // Solo enlazamos si la línea existe en el arreglo
-                                    if (lineasData.find(l => `L-${l.id}` === targetId)) {
-                                        nodes.push({
-                                            id: nodeId,
-                                            dbId: equipo.id,
-                                            nombre: equipo.nombre,
-                                            id_interno: equipo.id_interno,
-                                            tipo: 'equipo',
-                                            radius: 12, // Equipos periféricos más pequeños
-                                            color: '#cbd5e1' // Color gris para contraste
-                                        });
-                                        
-                                        links.push({
-                                            source: nodeId,
-                                            target: targetId
-                                        });
-                                    }
-                                });
+            // Cada solicitud cuelga de un equipo, y el equipo de una línea y
+            // una planta. La planta se toma primero del propio equipo y, si le
+            // falta, se deduce de su línea: así un equipo al que sólo se le
+            // puso la línea sigue apareciendo bajo la planta correcta.
+            function plantaDeEquipo(equipo) {
+                if (equipo.planta_id !== null && equipo.planta_id !== undefined) return String(equipo.planta_id);
+                const linea = lineas.find(l => String(l.id) === String(equipo.linea_id));
+                if (linea && linea.planta_id !== null && linea.planta_id !== undefined) return String(linea.planta_id);
+                return SIN_PLANTA;
+            }
 
-                if (nodes.length === 0) {
-                    g.append("text").attr("x", width / 2).attr("y", height / 2).attr("text-anchor", "middle").text("No hay equipos ni líneas para graficar.").attr("fill", "#64748b");
+            function lineaDeEquipo(equipo) {
+                return (equipo.linea_id === null || equipo.linea_id === undefined) ? SIN_LINEA : String(equipo.linea_id);
+            }
+
+            function metricaVacia() {
+                return { total: 0, pendientes: 0, cerradas: 0, canceladas: 0, urgentes: 0 };
+            }
+
+            // Las canceladas no cuentan ni para el tamaño ni para el color: no
+            // son carga pendiente ni trabajo resuelto. Se guardan aparte para
+            // poder mencionarlas en el detalle.
+            function sumarSolicitud(m, req) {
+                if (req.estado === 'Cancelada') {
+                    m.canceladas++;
+                    return;
+                }
+                m.total++;
+                if (CERRADOS.includes(req.estado)) {
+                    m.cerradas++;
+                } else {
+                    m.pendientes++;
+                    if (req.prioridad === 'Urgente') m.urgentes++;
+                }
+            }
+
+            function acumular(mapa, clave, req) {
+                if (!mapa.has(clave)) mapa.set(clave, metricaVacia());
+                sumarSolicitud(mapa.get(clave), req);
+            }
+
+            function agregarMetricas() {
+                metricasPorEquipo = new Map();
+                metricasPorLinea = new Map();
+                metricasPorPlanta = new Map();
+                solicitudesPorEquipo = new Map();
+
+                const indiceEquipos = new Map(equipos.map(e => [String(e.id), e]));
+                const global = metricaVacia();
+
+                refacciones.forEach(req => {
+                    const equipo = indiceEquipos.get(String(req.equipo_id));
+
+                    // Una solicitud sin equipo vivo (borrado, o nunca asignado)
+                    // no se pierde: cae en los cajones "sin planta / sin línea",
+                    // que sí se dibujan.
+                    const clavePlanta = equipo ? plantaDeEquipo(equipo) : SIN_PLANTA;
+                    const claveLinea = equipo ? lineaDeEquipo(equipo) : SIN_LINEA;
+
+                    acumular(metricasPorPlanta, clavePlanta, req);
+                    acumular(metricasPorLinea, clavePlanta + '|' + claveLinea, req);
+                    sumarSolicitud(global, req);
+
+                    if (equipo) {
+                        const claveEquipo = String(equipo.id);
+                        acumular(metricasPorEquipo, claveEquipo, req);
+                        if (!solicitudesPorEquipo.has(claveEquipo)) solicitudesPorEquipo.set(claveEquipo, []);
+                        solicitudesPorEquipo.get(claveEquipo).push(req);
+                    }
+                });
+
+                const pct = global.total ? Math.round((global.cerradas / global.total) * 100) : 0;
+                document.getElementById('resumen-global').innerHTML =
+                    `<span style="color:#dc2626;">●</span> ${global.pendientes} pendientes · ` +
+                    `<span style="color:#16a34a;">●</span> ${global.cerradas} entregadas · ${pct}% de ${global.total}`;
+            }
+
+            function metricaDe(mapa, clave) {
+                return mapa.get(clave) || metricaVacia();
+            }
+
+            // ==========================================
+            // Nodos del nivel visible
+            // ==========================================
+            function nodosDelNivel() {
+                if (ruta.length === 0) return nodosPlantas();
+                if (ruta.length === 1) return nodosLineas(ruta[0].id);
+                return nodosEquipos(ruta[0].id, ruta[1].id);
+            }
+
+            function nodosPlantas() {
+                const nodos = plantas.map(p => ({
+                    tipo: 'planta',
+                    id: String(p.id),
+                    titulo: p.nombre,
+                    metrica: metricaDe(metricasPorPlanta, String(p.id))
+                }));
+
+                if (metricasPorPlanta.has(SIN_PLANTA) || equipos.some(e => plantaDeEquipo(e) === SIN_PLANTA)) {
+                    nodos.push({
+                        tipo: 'planta',
+                        id: SIN_PLANTA,
+                        titulo: 'Sin planta',
+                        metrica: metricaDe(metricasPorPlanta, SIN_PLANTA)
+                    });
+                }
+                return nodos;
+            }
+
+            function nodosLineas(clavePlanta) {
+                const propias = lineas.filter(l => {
+                    if (clavePlanta === SIN_PLANTA) return l.planta_id === null || l.planta_id === undefined;
+                    return String(l.planta_id) === clavePlanta;
+                });
+
+                const nodos = propias.map(l => ({
+                    tipo: 'linea',
+                    id: String(l.id),
+                    titulo: l.nombre,
+                    metrica: metricaDe(metricasPorLinea, clavePlanta + '|' + String(l.id))
+                }));
+
+                // Equipos de esta planta a los que no se les puso línea.
+                const hayHuerfanos = metricasPorLinea.has(clavePlanta + '|' + SIN_LINEA) ||
+                    equipos.some(e => plantaDeEquipo(e) === clavePlanta && lineaDeEquipo(e) === SIN_LINEA);
+
+                if (hayHuerfanos) {
+                    nodos.push({
+                        tipo: 'linea',
+                        id: SIN_LINEA,
+                        titulo: 'Sin línea',
+                        metrica: metricaDe(metricasPorLinea, clavePlanta + '|' + SIN_LINEA)
+                    });
+                }
+                return nodos;
+            }
+
+            function nodosEquipos(clavePlanta, claveLinea) {
+                return equipos
+                    .filter(e => plantaDeEquipo(e) === clavePlanta && lineaDeEquipo(e) === claveLinea)
+                    .map(e => ({
+                        tipo: 'equipo',
+                        id: String(e.id),
+                        // El ID interno hace de matrícula: es corto y cabe en el
+                        // cuadro. El nombre completo baja al subtítulo.
+                        titulo: e.id_interno || e.nombre,
+                        subtitulo: e.id_interno ? e.nombre : '',
+                        inactivo: e.activo === false,
+                        metrica: metricaDe(metricasPorEquipo, String(e.id))
+                    }))
+                    // Un equipo dado de baja sólo estorba si además no dejó
+                    // historial; con solicitudes encima se queda a la vista.
+                    .filter(n => !n.inactivo || n.metrica.total > 0 || n.metrica.canceladas > 0);
+            }
+
+            // ==========================================
+            // Color
+            // ==========================================
+            // Rojo donde se acumulan pendientes, verde donde ya se entregó. El
+            // ámbar de en medio evita que un 50% se lea como si fuera bueno.
+            function colorDe(metrica) {
+                if (metrica.total === 0) return { banda: '#e2e8f0', texto: '#94a3b8' };
+                const p = metrica.cerradas / metrica.total;
+                if (p >= 0.90) return { banda: '#16a34a', texto: '#15803d' };
+                if (p >= 0.75) return { banda: '#4ade80', texto: '#15803d' };
+                if (p >= 0.60) return { banda: '#bbf7d0', texto: '#15803d' };
+                if (p >= 0.45) return { banda: '#fed7aa', texto: '#b45309' };
+                if (p >= 0.25) return { banda: '#fca5a5', texto: '#b91c1c' };
+                return { banda: '#dc2626', texto: '#b91c1c' };
+            }
+
+            // ==========================================
+            // Dibujo
+            // ==========================================
+            function dibujar() {
+                const ancho = lienzo.clientWidth;
+                const alto = lienzo.clientHeight;
+                lienzo.querySelectorAll('.cuadro').forEach(el => el.remove());
+
+                const nodos = nodosDelNivel();
+                if (nodos.length === 0 || ancho <= 0 || alto <= 0) {
+                    aviso.style.display = 'flex';
+                    aviso.style.color = '#64748b';
+                    aviso.innerText = ruta.length === 0
+                        ? "No hay plantas registradas todavía."
+                        : "Este nivel no tiene nada que mostrar.";
+                    return;
+                }
+                aviso.style.display = 'none';
+
+                // El tamaño es el número de solicitudes, pero un nodo en cero
+                // no puede desaparecer del todo: sin un peso mínimo, un equipo
+                // que nunca ha pedido nada no se podría ni abrir ni renombrar.
+                // Aun así queda diminuto, y para eso está la lista del nivel.
+                const raiz = d3.hierarchy({ hijos: nodos }, d => d.hijos)
+                    .sum(d => (d.hijos ? 0 : Math.max(d.metrica.total, 0.35)))
+                    .sort((a, b) => b.value - a.value);
+
+                d3.treemap()
+                    .tile(d3.treemapSquarify)
+                    .size([ancho, alto])
+                    .paddingInner(3)
+                    .round(true)(raiz);
+
+                raiz.leaves().forEach(hoja => {
+                    lienzo.appendChild(construirCuadro(hoja));
+                });
+            }
+
+            function construirCuadro(hoja) {
+                const nodo = hoja.data;
+                const m = nodo.metrica;
+                const ancho = Math.max(hoja.x1 - hoja.x0, 0);
+                const alto = Math.max(hoja.y1 - hoja.y0, 0);
+                const area = ancho * alto;
+                const color = colorDe(m);
+
+                const el = document.createElement('div');
+                el.className = 'cuadro';
+                el.style.left = hoja.x0 + 'px';
+                el.style.top = hoja.y0 + 'px';
+                el.style.width = ancho + 'px';
+                el.style.height = alto + 'px';
+
+                const banda = document.createElement('div');
+                banda.className = 'cuadro-banda';
+                banda.style.background = color.banda;
+                banda.style.height = Math.max(4, Math.min(14, Math.round(alto * 0.09))) + 'px';
+                el.appendChild(banda);
+
+                const cuerpo = document.createElement('div');
+                cuerpo.className = 'cuadro-cuerpo';
+
+                // El cuadro enseña tanto como quepa: primero el nombre, luego
+                // el porcentaje, y sólo en los grandes el desglose completo.
+                const tam = Math.max(9, Math.min(26, Math.sqrt(area) / 6.5));
+                const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
+
+                const titulo = document.createElement('div');
+                titulo.className = 'cuadro-titulo';
+                titulo.style.fontSize = tam + 'px';
+                titulo.innerText = nodo.titulo;
+                cuerpo.appendChild(titulo);
+
+                if (area >= 2600 && alto >= 44) {
+                    const dato = document.createElement('div');
+                    dato.className = 'cuadro-dato';
+                    dato.style.fontSize = Math.max(9, tam * 0.62) + 'px';
+                    dato.style.color = color.texto;
+                    dato.innerText = pct === null
+                        ? 'Sin solicitudes'
+                        : `${pct}% / ${m.pendientes} pend.`;
+                    cuerpo.appendChild(dato);
+                }
+
+                if (area >= 7000 && alto >= 64 && pct !== null) {
+                    const sub = document.createElement('div');
+                    sub.className = 'cuadro-sub';
+                    sub.style.fontSize = Math.max(9, tam * 0.55) + 'px';
+                    sub.innerText = `${m.cerradas}/${m.total} solicitudes`;
+                    cuerpo.appendChild(sub);
+                }
+
+                if (area >= 13000 && alto >= 88) {
+                    const extra = document.createElement('div');
+                    if (m.urgentes > 0) {
+                        extra.className = 'cuadro-extra';
+                        extra.style.fontSize = Math.max(9, tam * 0.55) + 'px';
+                        extra.innerText = `🚨 ${m.urgentes} urgente${m.urgentes === 1 ? '' : 's'}`;
+                        cuerpo.appendChild(extra);
+                    } else if (nodo.subtitulo) {
+                        extra.className = 'cuadro-sub';
+                        extra.style.fontSize = Math.max(9, tam * 0.5) + 'px';
+                        extra.innerText = nodo.subtitulo;
+                        cuerpo.appendChild(extra);
+                    }
+                }
+
+                el.appendChild(cuerpo);
+                el.onclick = () => alTocarCuadro(nodo);
+                return el;
+            }
+
+            // ==========================================
+            // Navegación entre niveles
+            // ==========================================
+            function alTocarCuadro(nodo) {
+                if (nodo.tipo === 'planta') {
+                    aplicarRuta([{ tipo: 'planta', id: nodo.id, titulo: nodo.titulo }], true);
+                } else if (nodo.tipo === 'linea') {
+                    aplicarRuta([ruta[0], { tipo: 'linea', id: nodo.id, titulo: nodo.titulo }], true);
+                } else {
+                    abrirDetalleEquipo(nodo.id);
+                }
+            }
+
+            // El gesto de volver de iOS sube un nivel en lugar de salirse de la
+            // pantalla, que es lo que espera quien viene bajando por el mapa.
+            function aplicarRuta(nuevaRuta, empujar) {
+                ruta = nuevaRuta;
+                if (empujar) {
+                    history.pushState({ ruta: nuevaRuta }, '');
+                } else {
+                    history.replaceState({ ruta: nuevaRuta }, '');
+                }
+                pintarRuta();
+                dibujar();
+            }
+
+            window.addEventListener('popstate', (evento) => {
+                ruta = (evento.state && evento.state.ruta) ? evento.state.ruta : [];
+                window.cerrarDetalleActivo();
+                window.cerrarListaNivel();
+                pintarRuta();
+                dibujar();
+            });
+
+            function pintarRuta() {
+                const contenedor = document.getElementById('ruta');
+                contenedor.innerHTML = '';
+
+                const pasos = [{ titulo: 'Plantas' }].concat(ruta);
+                pasos.forEach((paso, i) => {
+                    if (i > 0) {
+                        const flecha = document.createElement('span');
+                        flecha.className = 'ruta-flecha';
+                        flecha.innerText = '›';
+                        contenedor.appendChild(flecha);
+                    }
+
+                    const boton = document.createElement('button');
+                    boton.className = 'ruta-paso';
+                    boton.innerText = paso.titulo;
+                    if (i === pasos.length - 1) {
+                        boton.disabled = true;
+                    } else {
+                        boton.onclick = () => aplicarRuta(ruta.slice(0, i), true);
+                    }
+                    contenedor.appendChild(boton);
+                });
+
+                // En un teléfono la ruta completa no cabe; lo que importa ver
+                // es el nivel actual, así que se desplaza hasta el final.
+                contenedor.scrollLeft = contenedor.scrollWidth;
+            }
+
+            // ==========================================
+            // Lista del nivel
+            // ==========================================
+            document.getElementById('btn-lista-nivel').onclick = () => {
+                const nodos = nodosDelNivel().slice().sort((a, b) =>
+                    (b.metrica.pendientes - a.metrica.pendientes) ||
+                    (b.metrica.total - a.metrica.total) ||
+                    a.titulo.localeCompare(b.titulo));
+
+                const titulos = ['Plantas', 'Líneas', 'Equipos'];
+                document.getElementById('lista-titulo').innerText = titulos[ruta.length];
+                document.getElementById('lista-subtitulo').innerText =
+                    ruta.length === 0 ? 'Toda la empresa' : ruta.map(p => p.titulo).join(' › ');
+
+                const contenedor = document.getElementById('lista-nivel');
+                contenedor.innerHTML = '';
+
+                if (nodos.length === 0) {
+                    const vacio = document.createElement('div');
+                    vacio.style.cssText = 'padding:20px 25px; color:#94a3b8; font-style:italic;';
+                    vacio.innerText = 'Este nivel no tiene nada que mostrar.';
+                    contenedor.appendChild(vacio);
+                }
+
+                nodos.forEach(nodo => {
+                    const m = nodo.metrica;
+                    const color = colorDe(m);
+                    const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
+
+                    const fila = document.createElement('button');
+                    fila.className = 'renglon-nivel';
+
+                    const marca = document.createElement('div');
+                    marca.className = 'marca';
+                    marca.style.background = color.banda;
+
+                    const textos = document.createElement('div');
+                    textos.style.cssText = 'flex:1; min-width:0;';
+                    const nombre = document.createElement('div');
+                    nombre.style.cssText = 'font-weight:700; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+                    nombre.innerText = nodo.subtitulo ? `${nodo.titulo} · ${nodo.subtitulo}` : nodo.titulo;
+                    const detalle = document.createElement('div');
+                    detalle.style.cssText = 'font-size:0.78rem; color:#64748b;';
+                    detalle.innerText = pct === null
+                        ? 'Sin solicitudes'
+                        : `${m.pendientes} pendientes de ${m.total}${m.urgentes ? ` · ${m.urgentes} urgentes` : ''}`;
+                    textos.appendChild(nombre);
+                    textos.appendChild(detalle);
+
+                    const cifra = document.createElement('div');
+                    cifra.style.cssText = `flex-shrink:0; font-weight:800; color:${color.texto};`;
+                    cifra.innerText = pct === null ? '—' : pct + '%';
+
+                    fila.appendChild(marca);
+                    fila.appendChild(textos);
+                    fila.appendChild(cifra);
+                    fila.onclick = () => {
+                        window.cerrarListaNivel();
+                        alTocarCuadro(nodo);
+                    };
+                    contenedor.appendChild(fila);
+                });
+
+                document.getElementById('modal-lista-nivel').style.display = 'flex';
+            };
+
+            window.cerrarListaNivel = () => {
+                document.getElementById('modal-lista-nivel').style.display = 'none';
+            };
+
+            // ==========================================
+            // Hoja de detalle del equipo
+            // ==========================================
+            function abrirDetalleEquipo(idEquipo) {
+                const equipo = equipos.find(e => String(e.id) === String(idEquipo));
+                if (!equipo) return;
+
+                const m = metricaDe(metricasPorEquipo, String(equipo.id));
+                const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
+                const color = colorDe(m);
+
+                // Lo que sigue abierto va primero, y dentro de eso lo urgente:
+                // una lista encabezada por diez entregadas no dice nada.
+                const orden = (req) => {
+                    if (req.estado === 'Cancelada') return 3;
+                    if (CERRADOS.includes(req.estado)) return 2;
+                    return req.prioridad === 'Urgente' ? 0 : 1;
+                };
+                const solicitudes = (solicitudesPorEquipo.get(String(equipo.id)) || [])
+                    .slice().sort((a, b) => orden(a) - orden(b));
+
+                document.getElementById('detalle-titulo').innerText = equipo.nombre;
+                document.getElementById('detalle-subtitulo').innerText =
+                    ruta.map(p => p.titulo).join(' › ') + (equipo.activo === false ? ' · Dado de baja' : '');
+
+                const visibles = solicitudes.slice(0, 8);
+                const restantes = solicitudes.length - visibles.length;
+
+                const listaHtml = visibles.length === 0
+                    ? '<div style="color:#94a3b8; font-style:italic; font-size:0.85rem; padding:8px 0;">Este equipo todavía no tiene solicitudes.</div>'
+                    : visibles.map(req => {
+                        const colores = colorEstado(req.estado);
+                        const fecha = req.created_at
+                            ? new Date(req.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
+                            : '';
+                        const urgente = req.prioridad === 'Urgente' && !CERRADOS.includes(req.estado) && req.estado !== 'Cancelada';
+                        return `
+                            <div class="renglon-solicitud">
+                                <div style="min-width:0;">
+                                    <div style="font-weight:600; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${urgente ? '🚨 ' : ''}${escapar(req.nombre_refaccion || 'Sin nombre')}</div>
+                                    <div style="font-size:0.75rem; color:#94a3b8;">${escapar(String(req.cantidad || ''))} ${escapar(req.unidad || '')} · ${fecha}</div>
+                                </div>
+                                <span class="etiqueta-estado" style="background:${colores.fondo}; color:${colores.texto};">${escapar(req.estado || 'Pendiente')}</span>
+                            </div>`;
+                    }).join('');
+
+                document.getElementById('detalle-cuerpo').innerHTML = `
+                    <div style="display:flex; gap:8px; margin-bottom:14px;">
+                        <div class="ficha-metrica">
+                            <div class="cifra" style="color:${color.texto};">${pct === null ? '—' : pct + '%'}</div>
+                            <div class="rotulo">Entregadas</div>
+                        </div>
+                        <div class="ficha-metrica">
+                            <div class="cifra" style="color:#b45309;">${m.pendientes}</div>
+                            <div class="rotulo">Pendientes</div>
+                        </div>
+                        <div class="ficha-metrica">
+                            <div class="cifra" style="color:#0f172a;">${m.total}</div>
+                            <div class="rotulo">Solicitudes</div>
+                        </div>
+                    </div>
+
+                    ${m.urgentes > 0 ? `<div style="background:#fee2e2; color:#b91c1c; border-radius:10px; padding:8px 12px; font-size:0.85rem; font-weight:700; margin-bottom:14px;">🚨 ${m.urgentes} solicitud${m.urgentes === 1 ? '' : 'es'} urgente${m.urgentes === 1 ? '' : 's'} sin cerrar</div>` : ''}
+                    ${m.canceladas > 0 ? `<div style="font-size:0.78rem; color:#94a3b8; margin:-8px 0 14px;">${m.canceladas} cancelada${m.canceladas === 1 ? '' : 's'}, fuera del conteo.</div>` : ''}
+
+                    <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:6px;">Solicitudes</div>
+                    <div style="border:1px solid #e2e8f0; border-radius:12px; padding:2px 12px; margin-bottom:18px;">
+                        ${listaHtml}
+                        ${restantes > 0 ? `<div style="font-size:0.75rem; color:#94a3b8; padding:8px 0; border-top:1px solid #f1f5f9;">y ${restantes} más…</div>` : ''}
+                    </div>
+
+                    <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px;">Editar equipo</div>
+                    <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">Nombre del equipo</label>
+                    <input type="text" id="inp-detalle-nombre" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-bottom:10px;">
+                    <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">ID / Código interno</label>
+                    <input type="text" id="inp-detalle-id-interno" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-bottom:14px;">
+                    <button id="btn-guardar-equipo" style="width:100%; background:#0ea5e9; color:white; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer; font-size:0.95rem;">Guardar cambios</button>
+                `;
+
+                document.getElementById('inp-detalle-nombre').value = equipo.nombre || '';
+                document.getElementById('inp-detalle-id-interno').value = equipo.id_interno || '';
+                document.getElementById('btn-guardar-equipo').onclick = () => guardarEquipo(equipo);
+
+                document.getElementById('modal-detalle-activo').style.display = 'flex';
+            }
+
+            window.cerrarDetalleActivo = () => {
+                document.getElementById('modal-detalle-activo').style.display = 'none';
+            };
+
+            async function guardarEquipo(equipo) {
+                const boton = document.getElementById('btn-guardar-equipo');
+                const nombre = document.getElementById('inp-detalle-nombre').value.trim();
+                const idInterno = document.getElementById('inp-detalle-id-interno').value.trim();
+
+                if (!nombre) {
+                    alert("El nombre del equipo no puede quedar vacío.");
                     return;
                 }
 
-                // Obtener referencias de los inputs
-                                const inpRepulsion = document.getElementById('inp-repulsion');
-                                const valRepulsion = document.getElementById('val-repulsion');
-                                const inpDistancia = document.getElementById('inp-distancia');
-                                const valDistancia = document.getElementById('val-distancia');
+                const textoOriginal = boton.innerText;
+                boton.innerText = "Guardando…";
+                boton.disabled = true;
 
-                                // Fuerzas dinámicas guardadas en variables para poder modificarlas
-                                const forceLink = d3.forceLink(links).id(d => d.id).distance(parseInt(inpDistancia.value));
-                                const forceCharge = d3.forceManyBody().strength(parseInt(inpRepulsion.value));
+                try {
+                    const { error } = await sb.from('equipos').update({
+                        nombre: nombre,
+                        id_interno: idInterno === "" ? null : idInterno
+                    }).eq('id', equipo.id);
 
-                                const simulation = d3.forceSimulation(nodes)
-                                    .force("link", forceLink)
-                                    .force("charge", forceCharge)
-                                    .force("center", d3.forceCenter(width / 2, height / 2))
-                                    // Reduce el + 15 a + 2 para que los nodos puedan casi tocarse
-                                    .force("collide", d3.forceCollide().radius(d => d.radius + 2).iterations(2));
+                    if (error) throw error;
 
-                                // Escuchadores de eventos para los sliders
-                                inpRepulsion.addEventListener('input', (e) => {
-                                    const nuevoValor = +e.target.value;
-                                    valRepulsion.innerText = nuevoValor;
-                                    forceCharge.strength(nuevoValor); // Actualiza la repulsión
-                                    simulation.alpha(0.3).restart(); // "Calienta" la simulación para que se muevan suavemente
-                                });
+                    // Se actualiza la copia local para repintar sin recargar.
+                    equipo.nombre = nombre;
+                    equipo.id_interno = idInterno === "" ? null : idInterno;
 
-                                inpDistancia.addEventListener('input', (e) => {
-                                    const nuevoValor = +e.target.value;
-                                    valDistancia.innerText = nuevoValor;
-                                    forceLink.distance(nuevoValor); // Actualiza el largo del cable
-                                    simulation.alpha(0.3).restart();
-                                });
-
-                                // Dibujar líneas de conexión
-                const link = g.append("g")
-                    .attr("stroke", "#94a3b8")
-                    .attr("stroke-opacity", 0.6)
-                    .selectAll("line")
-                    .data(links)
-                    .join("line")
-                    .attr("stroke-width", 2);
-
-                    // Dibujar puntos
-                                    const node = g.append("g")
-                                        .selectAll("circle")
-                                        .data(nodes)
-                                        .join("circle")
-                                        .attr("r", d => d.radius)
-                                        .attr("fill", d => d.color)
-                                        .attr("stroke", d => d.tipo === 'linea' ? "#fff" : "#94a3b8")
-                                        .attr("stroke-width", 2)
-                                        .style("cursor", d => d.tipo === 'equipo' ? "pointer" : "grab")
-                                        .on("click", (event, d) => {
-                                            // Evitar que un arrastre suelto active el clic accidentalmente
-                                            if (event.defaultPrevented) return;
-                                            
-                                            if (d.tipo === 'equipo') {
-                                                document.getElementById('edit-equipo-id').value = d.dbId;
-                                                document.getElementById('edit-equipo-nombre').value = d.nombre || '';
-                                                document.getElementById('edit-equipo-id-interno').value = d.id_interno || '';
-                                                document.getElementById('panel-edicion-equipo').style.display = 'flex';
-                                            }
-                                        })
-                                        .call(drag(simulation));
-
-                                        // Dibujar nombres
-                                                        const labels = g.append("g")
-                                                            .selectAll("text")
-                                                            .data(nodes)
-                                                            .join("text")
-                                                            .text(d => (d.tipo === 'equipo' && d.id_interno) ? `[${d.id_interno}] ${d.nombre}` : d.nombre)
-                                                            .attr("font-family", "sans-serif")
-                                                            .attr("font-size", d => d.tipo === 'linea' ? "12px" : "10px")
-                                                            .attr("font-weight", d => d.tipo === 'linea' ? "bold" : "600")
-                                                            .attr("fill", "#1e293b")
-                                                            .attr("text-anchor", "middle")
-                                                            .attr("dy", d => d.radius + 15)
-                                                            .style("pointer-events", "none"); // Para no interferir con el drag o tooltip
-
-                                    // Lógica para guardar la edición del panel
-                                    document.getElementById('btn-guardar-edicion-eq').onclick = async () => {
-                                        const idObj = document.getElementById('edit-equipo-id').value;
-                                        const nuevoNombre = document.getElementById('edit-equipo-nombre').value.trim();
-                                        const nuevoIdInterno = document.getElementById('edit-equipo-id-interno').value.trim();
-                                        const btn = document.getElementById('btn-guardar-edicion-eq');
-
-                                        if (!nuevoNombre) {
-                                            alert("El nombre del equipo no puede quedar vacío.");
-                                            return;
-                                        }
-
-                                        const originalText = btn.innerText;
-                                        btn.innerText = "Guardando...";
-                                        btn.disabled = true;
-
-                                        try {
-                                            const payload = {
-                                                nombre: nuevoNombre,
-                                                id_interno: nuevoIdInterno === "" ? null : nuevoIdInterno
-                                            };
-
-                                            const { error } = await sb.from('equipos').update(payload).eq('id', idObj);
-                                            if (error) throw error;
-
-                                            // Actualizar la caché local del grafo en tiempo real para no recargar la página
-                                                                    const nodo = nodes.find(n => String(n.dbId) === String(idObj) && n.tipo === 'equipo');
-                                                                    if (nodo) {
-                                                                        nodo.nombre = nuevoNombre;
-                                                                        nodo.id_interno = nuevoIdInterno;
-                                                                    }
-
-                                                                    // Forzar a D3 a repintar los nombres
-                                                                    labels.text(d => (d.tipo === 'equipo' && d.id_interno) ? `[${d.id_interno}] ${d.nombre}` : d.nombre);
-
-                                                                    document.getElementById('panel-edicion-equipo').style.display = 'none';
-                                            
-                                        } catch (error) {
-                                            console.error("Error actualizando equipo:", error);
-                                            alert("Hubo un error de conexión al intentar guardar.");
-                                        } finally {
-                                            btn.innerText = originalText;
-                                            btn.disabled = false;
-                                        }
-                                    };
-
-                // Lógica de Tooltip y Resaltado
-                node.on("mouseover", (event, d) => {
-                    // Resaltar los enlaces que tocan a este nodo
-                    link.attr("stroke", l => (l.source.id === d.id || l.target.id === d.id) ? "#0ea5e9" : "#e2e8f0")
-                        .attr("stroke-opacity", l => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.1)
-                        .attr("stroke-width", l => (l.source.id === d.id || l.target.id === d.id) ? 3 : 1);
-                        
-                    // Opacar los nodos que no están conectados directamente
-                    node.attr("opacity", n => {
-                        if (n.id === d.id) return 1;
-                        const isConnected = links.some(l =>
-                            (l.source.id === d.id && l.target.id === n.id) ||
-                            (l.target.id === d.id && l.source.id === n.id)
-                        );
-                        return isConnected ? 1 : 0.1;
-                    });
-
-                    labels.attr("opacity", n => {
-                        if (n.id === d.id) return 1;
-                        const isConnected = links.some(l =>
-                            (l.source.id === d.id && l.target.id === n.id) ||
-                            (l.target.id === d.id && l.source.id === n.id)
-                        );
-                        return isConnected ? 1 : 0.1;
-                    });
-
-                    const numConexiones = links.filter(l => l.source.id === d.id || l.target.id === d.id).length;
-                                        const tipoTxt = d.tipo === 'linea' ? '⚙️ Línea de Producción' : '🏭 Equipo Periférico';
-                                        const idInternoHtml = (d.tipo === 'equipo' && d.id_interno) ? `<div style="color:#e2e8f0; font-size:0.8rem; margin-bottom:8px;">🆔 ID: ${d.id_interno}</div>` : '';
-                                        
-                                        tooltip.html(`
-                                            <div style="font-weight:900; font-size:1.1rem; margin-bottom:4px;">${d.nombre}</div>
-                                            <div style="color:#94a3b8; font-size:0.75rem; margin-bottom:2px; text-transform:uppercase; letter-spacing:0.5px;">${tipoTxt}</div>
-                                            ${idInternoHtml}
-                                            <div style="color:#7dd3fc; font-weight:bold;">🔗 ${numConexiones} conexiones activas</div>
-                                            ${d.tipo === 'equipo' ? '<div style="color:#fcd34d; font-size:0.7rem; margin-top:8px;">👆 Clic para editar</div>' : ''}
-                                        `)
-                    .style("left", (event.pageX + 20) + "px")
-                    .style("top", (event.pageY - 20) + "px")
-                    .style("opacity", 1);
-                })
-                .on("mouseout", () => {
-                    // Restaurar todo a la normalidad al quitar el mouse
-                    link.attr("stroke", "#94a3b8").attr("stroke-opacity", 0.6).attr("stroke-width", 2);
-                    node.attr("opacity", 1);
-                    labels.attr("opacity", 1);
-                    tooltip.style("opacity", 0);
-                });
-
-                // 1. Convertimos el radio en una variable dinámica (let)
-                                let radioLimite = Math.min(width, height) / 2 - 40;
-                                const centroX = width / 2;
-                                const centroY = height / 2;
-
-                                // 2. Conectamos el control de la interfaz
-                                const inpArea = document.getElementById('inp-area');
-                                const valArea = document.getElementById('val-area');
-
-                                // Ajustamos el slider para que inicie con el tamaño perfecto calculado para la pantalla actual
-                                inpArea.value = Math.floor(radioLimite);
-                                valArea.innerText = Math.floor(radioLimite);
-
-                                // 3. Escuchamos los cambios del usuario
-                                inpArea.addEventListener('input', (e) => {
-                                    radioLimite = +e.target.value;
-                                    valArea.innerText = radioLimite;
-                                    simulation.alpha(0.3).restart(); // Le damos energía a la simulación para que se reacomode
-                                });
-
-                                // Actualizar la posición de SVG en cada fotograma de la física
-                                simulation.on("tick", () => {
-                                    
-                                    // Lógica del Círculo Invisible interactivo
-                                    nodes.forEach(d => {
-                                        // Calculamos la distancia desde el nodo hasta el centro de la pantalla
-                                        const dx = d.x - centroX;
-                                        const dy = d.y - centroY;
-                                        const distancia = Math.sqrt(dx * dx + dy * dy);
-
-                                        // Si la distancia supera nuestro límite dinámico, ajustamos las coordenadas al borde
-                                        if (distancia > radioLimite) {
-                                            d.x = centroX + (dx / distancia) * radioLimite;
-                                            d.y = centroY + (dy / distancia) * radioLimite;
-                                        }
-                                    });
-
-                                    // Dibujar las conexiones con las coordenadas ya limitadas
-                                    link
-                                        .attr("x1", d => d.source.x)
-                                        .attr("y1", d => d.source.y)
-                                        .attr("x2", d => d.target.x)
-                                        .attr("y2", d => d.target.y);
-
-                                    // Dibujar los puntos
-                                    node
-                                        .attr("cx", d => d.x)
-                                        .attr("cy", d => d.y);
-
-                                    // Dibujar los textos
-                                    labels
-                                        .attr("x", d => d.x)
-                                        .attr("y", d => d.y);
-                                });
-
-            } catch (error) {
-                console.error("Error cargando grafo D3:", error);
-                d3.select("#loading-text").text("Ocurrió un error al cargar la base de datos.").attr("fill", "#ef4444");
+                    window.cerrarDetalleActivo();
+                    dibujar();
+                } catch (error) {
+                    console.error("Error actualizando equipo:", error);
+                    alert("Hubo un error de conexión al intentar guardar.");
+                } finally {
+                    boton.innerText = textoOriginal;
+                    boton.disabled = false;
+                }
             }
 
-            // Motor para arrastrar los puntos con el mouse/dedo
-            function drag(simulation) {
-                function dragstarted(event) {
-                    if (!event.active) simulation.alphaTarget(0.3).restart();
-                    event.subject.fx = event.subject.x;
-                    event.subject.fy = event.subject.y;
-                }
-                
-                function dragged(event) {
-                    event.subject.fx = event.x;
-                    event.subject.fy = event.y;
-                }
-                
-                function dragended(event) {
-                    if (!event.active) simulation.alphaTarget(0);
-                    event.subject.fx = null;
-                    event.subject.fy = null;
-                }
-                
-                return d3.drag()
-                    .on("start", dragstarted)
-                    .on("drag", dragged)
-                    .on("end", dragended);
+            function colorEstado(estado) {
+                if (estado === 'Entregada' || estado === 'Recibida') return { fondo: '#dcfce7', texto: '#15803d' };
+                if (estado === 'Cancelada') return { fondo: '#f1f5f9', texto: '#64748b' };
+                return { fondo: '#ffedd5', texto: '#c2410c' };
             }
+
+            function escapar(texto) {
+                const div = document.createElement('div');
+                div.innerText = texto === null || texto === undefined ? '' : String(texto);
+                return div.innerHTML;
+            }
+
+            // El treemap se calcula contra el tamaño del lienzo, así que hay
+            // que rehacerlo cuando el teléfono gira o cambia la ventana.
+            let temporizadorMedida = null;
+            const rehacer = () => {
+                clearTimeout(temporizadorMedida);
+                temporizadorMedida = setTimeout(dibujar, 120);
+            };
+            window.addEventListener('resize', rehacer);
+            window.addEventListener('orientationchange', rehacer);
         });
     </script>
 </body>
