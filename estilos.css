@@ -343,6 +343,41 @@ button.btn-login:disabled {
     outline: none;
 }
 
+/* Los dos filtros de estadísticas, uno junto al otro: la etiqueta encima y en
+   pequeño, que no es campo y puede encogerse. El desplegable no: a menos de
+   16px Safari hace zoom al abrirlo, así que se compacta con el relleno. */
+.stats-filtros {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.stats-filtro {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.stats-filtro-etiqueta {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stats-filtro .filter-select {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 10px;
+    font-size: 16px;
+}
+
 .filter-select:focus {
     border-color: #007AFF;
     color: #1e293b;
@@ -377,16 +412,32 @@ button.btn-login:disabled {
 .global-info {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-    font-size: 0.95rem;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
     color: #334155;
+}
+
+/* El título del registro abierto puede ser largo: se recorta antes que
+   empujar el porcentaje fuera de la hoja. */
+#global-label {
+    color: #64748b;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#global-text {
+    font-weight: bold;
+    flex-shrink: 0;
 }
 
 .global-track {
     background-color: #f1f5f9;
     border-radius: 12px;
-    height: 14px;
+    height: 10px;
     overflow: hidden;
     width: 100%;
 }
@@ -399,31 +450,39 @@ button.btn-login:disabled {
 }
 
 #dept-stats-container {
-    margin-top: 20px;
-    padding-top: 15px;
+    margin-top: 12px;
+    padding-top: 10px;
     border-top: 1px dashed #e2e8f0;
 }
 
 #stats-nav-header {
     display: none;
     align-items: center;
-    gap: 15px;
-    margin-top: 30px;
-    padding-top: 20px;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 12px;
     border-top: 1px solid #f1f5f9;
-    margin-bottom: 20px;
+    margin-bottom: 0;
     color: #1e40af;
     font-weight: bold;
-    font-size: 1rem;
+    font-size: 0.85rem;
+}
+
+/* La ruta se recorta en una línea: con dos se comía media pantalla. */
+#stats-nav-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .btn-back-small {
     background: white;
     border: 1px solid #cbd5e1;
     border-radius: 50px;
-    padding: 8px 20px;
+    padding: 5px 14px;
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #475569;
     font-weight: 700;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
@@ -431,6 +490,7 @@ button.btn-login:disabled {
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-shrink: 0;
 }
 
 .btn-back-small:hover {
@@ -447,10 +507,10 @@ button.btn-login:disabled {
 }
 
 .dept-row {
-    margin-bottom: 10px;
+    margin-bottom: 2px;
     cursor: pointer;
     transition: all 0.2s;
-    padding: 8px 10px;
+    padding: 6px 8px;
     border-radius: 8px;
     border: none;
 }
@@ -467,10 +527,75 @@ button.btn-login:disabled {
 .dept-header {
     display: flex;
     justify-content: space-between;
-    font-size: 0.85rem;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 0.82rem;
     color: #475569;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
     font-weight: 600;
+}
+
+/* Un nombre de departamento o un título largo se recorta; el porcentaje de la
+   derecha no se mueve de su sitio. */
+.dept-nombre {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* La barra y su conteo comparten línea: cada fila baja de tres líneas a dos. */
+.dept-pie {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dept-pie .dept-track {
+    flex: 1;
+}
+
+.dept-dato {
+    font-size: 0.68rem;
+    color: #94a3b8;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* Último nivel del desglose: una fila por colaborador. */
+.stats-fila-empleado {
+    background: white;
+    border-bottom: 1px solid #f1f5f9;
+    padding: 8px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+
+.stats-fila-empleado .stats-empleado-nombre {
+    font-weight: bold;
+    color: #334155;
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stats-fila-empleado .stats-empleado-puesto {
+    font-size: 0.7rem;
+    color: #64748b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stats-subtitulo {
+    color: #475569;
+    margin: 0 0 6px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .dept-track {

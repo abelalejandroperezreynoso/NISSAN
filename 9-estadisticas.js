@@ -295,9 +295,9 @@ window.verDetalleSupervisorStats = (supName) => {
         if(emp.total === 0) return;
         const color = colorPorcentaje(emp.pct);
         html += `
-        <div style="background:white; border-bottom:1px solid #f1f5f9; padding:12px; display:flex; justify-content:space-between; align-items:center;">
-            <div><div style="font-weight:bold; color:#334155;">${escaparHTML(emp.name)}</div><div style="font-size:0.8rem; color:#64748b;">${escaparHTML(emp.puesto || 'Colaborador')}</div></div>
-            <div style="text-align:right;"><div style="font-size:1.1rem; font-weight:bold; color:${color}">${emp.pct}%</div><div style="font-size:0.7rem; color:#94a3b8;">${emp.firmados}/${emp.total}</div></div>
+        <div class="stats-fila-empleado">
+            <div style="min-width:0;"><div class="stats-empleado-nombre">${escaparHTML(emp.name)}</div><div class="stats-empleado-puesto">${escaparHTML(emp.puesto || 'Colaborador')}</div></div>
+            <div style="text-align:right; flex-shrink:0;"><div style="font-size:0.95rem; font-weight:bold; color:${color}">${emp.pct}%</div><div class="dept-dato">${emp.firmados}/${emp.total}</div></div>
         </div>`;
     });
     container.innerHTML = html || '<div style="padding:20px; text-align:center;">Sin actividad obligatoria.</div>';
@@ -443,7 +443,7 @@ function pintarListaDeRegistros() {
 
     let esperadoAcumulado = 0, firmadoAcumulado = 0;
 
-    let html = `<h4 style="color:#475569; margin-bottom:10px; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px;">🗂️ Selecciona un Registro</h4>`;
+    let html = `<h4 class="stats-subtitulo">🗂️ Selecciona un registro</h4>`;
 
     registros.forEach(reg => {
         const avance = avanceDelRegistro(reg);
@@ -453,23 +453,24 @@ function pintarListaDeRegistros() {
         const pct = avance.total > 0 ? Math.round((avance.firmados / avance.total) * 100) : 0;
         const color = colorPorcentaje(pct);
         const icono = (reg.tipo === 'Difusión') ? '📢' : '🚨';
-        const detalle = avance.total > 0 ? `${avance.firmados}/${avance.total} firmas` : 'Sin personal esperado';
+        const detalle = avance.total > 0 ? `${avance.firmados}/${avance.total}` : 'sin personal';
 
         html += `
         <div class="dept-row" onclick="window.verDeptosPorRegistro('${paraOnclick(reg.id)}')">
             <div class="dept-header">
-                <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:10px;">${icono} ${escaparHTML(reg.title)}</span>
+                <span class="dept-nombre">${icono} ${escaparHTML(reg.title)}</span>
                 <span style="color:${color}; flex-shrink:0;">${pct}%</span>
             </div>
-            <div class="dept-track"><div class="dept-fill" style="width:${pct}%; background-color:${color}"></div></div>
-            <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:#94a3b8; margin-top:2px;">
-                <span>${escaparHTML(reg.date || 'Sin fecha')}</span><span>${detalle}</span>
+            <div class="dept-pie">
+                <span class="dept-dato">${escaparHTML(reg.date || 'Sin fecha')}</span>
+                <div class="dept-track"><div class="dept-fill" style="width:${pct}%; background-color:${color}"></div></div>
+                <span class="dept-dato">${detalle}</span>
             </div>
         </div>`;
     });
 
     if (window.statsRegistrosHayMas) {
-        html += `<div style="text-align:center; margin-top:15px;"><button id="btn-mas-registros" onclick="window.cargarMasRegistrosStats()" class="btn-back-small" style="margin:0 auto;">Cargar más registros</button></div>`;
+        html += `<div style="text-align:center; margin-top:12px;"><button id="btn-mas-registros" onclick="window.cargarMasRegistrosStats()" class="btn-back-small" style="margin:0 auto;">Cargar más registros</button></div>`;
     }
 
     container.innerHTML = html;
@@ -549,16 +550,16 @@ window.verEmpleadosPorRegistro = (supName) => {
 
     const pendientes = empleados.filter(e => !e.firmo).length;
 
-    let html = `<div style="font-size:0.8rem; color:#64748b; margin-bottom:10px;">${empleados.length - pendientes} de ${empleados.length} firmaron · ${pendientes} pendiente${pendientes === 1 ? '' : 's'}</div>`;
+    let html = `<div class="stats-subtitulo">${empleados.length - pendientes} de ${empleados.length} firmaron · ${pendientes} pendiente${pendientes === 1 ? '' : 's'}</div>`;
 
     empleados.forEach(emp => {
         const etiqueta = emp.firmo
-            ? `<span style="color:#16a34a; font-weight:bold; font-size:0.85rem;">✓ Firmado</span>`
-            : `<span style="color:#ea580c; font-weight:bold; font-size:0.85rem;">! Pendiente</span>`;
+            ? `<span style="color:#16a34a; font-weight:bold; font-size:0.8rem;">✓ Firmado</span>`
+            : `<span style="color:#ea580c; font-weight:bold; font-size:0.8rem;">! Pendiente</span>`;
         const baja = emp.activo ? '' : ` <span style="color:#94a3b8; font-weight:normal;">(Inactivo)</span>`;
         html += `
-        <div style="background:white; border-bottom:1px solid #f1f5f9; padding:12px; display:flex; justify-content:space-between; align-items:center;">
-            <div style="min-width:0;"><div style="font-weight:bold; color:#334155;">${escaparHTML(emp.name)}${baja}</div><div style="font-size:0.8rem; color:#64748b;">${escaparHTML(emp.puesto || 'Colaborador')}</div></div>
+        <div class="stats-fila-empleado">
+            <div style="min-width:0;"><div class="stats-empleado-nombre">${escaparHTML(emp.name)}${baja}</div><div class="stats-empleado-puesto">${escaparHTML(emp.puesto || 'Colaborador')}</div></div>
             <div style="text-align:right; flex-shrink:0;">${etiqueta}</div>
         </div>`;
     });
@@ -573,7 +574,7 @@ window.verEmpleadosPorRegistro = (supName) => {
 function crearTablaDesglose(titulo, mapData, onClickFunctionString) {
     const section = document.createElement('div');
     section.style.marginBottom = "25px";
-    let html = `<h4 style="color:#475569; margin-bottom:10px; font-size:0.9rem; text-transform:uppercase; letter-spacing:0.5px;">${escaparHTML(titulo)}</h4>`;
+    let html = `<h4 class="stats-subtitulo">${escaparHTML(titulo)}</h4>`;
     const keys = Object.keys(mapData).sort((a,b) => {
         const pa = mapData[a].total > 0 ? mapData[a].firmados/mapData[a].total : 0;
         const pb = mapData[b].total > 0 ? mapData[b].firmados/mapData[b].total : 0;
@@ -586,7 +587,7 @@ function crearTablaDesglose(titulo, mapData, onClickFunctionString) {
         const color = colorPorcentaje(pct);
         const clickAttr = onClickFunctionString ? `onclick="${onClickFunctionString}('${paraOnclick(k)}')"` : '';
         const clickClass = onClickFunctionString ? 'dept-row' : 'dept-row no-click';
-        html += `<div class="${clickClass}" ${clickAttr} style="cursor:pointer;"><div class="dept-header"><span>${escaparHTML(k)}</span><span style="color:${color}">${pct}%</span></div><div class="dept-track"><div class="dept-fill" style="width:${pct}%; background-color:${color}"></div></div><div style="text-align:right; font-size:0.75rem; color:#94a3b8; margin-top:2px;">${d.firmados}/${d.total} firmas</div></div>`;
+        html += `<div class="${clickClass}" ${clickAttr} style="cursor:pointer;"><div class="dept-header"><span class="dept-nombre">${escaparHTML(k)}</span><span style="color:${color}; flex-shrink:0;">${pct}%</span></div><div class="dept-pie"><div class="dept-track"><div class="dept-fill" style="width:${pct}%; background-color:${color}"></div></div><span class="dept-dato">${d.firmados}/${d.total}</span></div></div>`;
     });
     section.innerHTML = html;
     return section;
