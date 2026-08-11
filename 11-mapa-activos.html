@@ -291,6 +291,30 @@
 
         .alta-repetida:last-child { border-bottom: none; }
 
+        #lista-destinos {
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 0 0 calc(12px + env(safe-area-inset-bottom));
+            border-top: 1px solid #f1f5f9;
+        }
+
+        .destino-mover {
+            width: 100%;
+            box-sizing: border-box;
+            display: block;
+            padding: 10px 25px;
+            border: none;
+            border-bottom: 1px solid #f1f5f9;
+            background: white;
+            font: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .destino-mover:last-child { border-bottom: none; }
+        .destino-mover:active { background: #f1f5f9; }
+        .destino-mover[disabled] { cursor: default; opacity: 0.5; }
+
         .alta-repetida input {
             width: 20px;
             height: 20px;
@@ -385,6 +409,23 @@
                         title="Cerrar" aria-label="Cerrar"></button>
             </div>
             <div id="detalle-cuerpo"></div>
+        </div>
+    </div>
+
+    <div id="modal-mover-solicitud" class="hoja-overlay" style="z-index:2200;">
+        <div class="hoja-contenido" style="max-width:520px; overflow:hidden; padding:12px 0 0;">
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h3 class="hoja-titulo">Mover solicitud</h3>
+                    <div class="hoja-subtitulo" id="mover-subtitulo"></div>
+                </div>
+                <button onclick="window.cerrarMoverSolicitud()" class="ios-boton-cerrar ios-boton-icono"
+                        title="Cerrar" aria-label="Cerrar"></button>
+            </div>
+            <div style="padding:0 25px 10px;">
+                <input type="text" id="inp-buscar-destino" autocomplete="off" placeholder="Busca el equipo de destino" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none;">
+            </div>
+            <div id="lista-destinos"></div>
         </div>
     </div>
 
@@ -1068,12 +1109,47 @@
             // ==========================================
             // Recibe el nodo del mapa, no una fila: un cuadro puede reunir
             // varias altas de la misma máquina y la hoja las trata como una.
+            // La hoja se repinta sola cuando cambian los datos que enseña
+            // (al mover una solicitud, por ejemplo), así que hay que recordar
+            // de qué cuadro salió y si se pidió ver la lista completa.
+            let nodoDetalle = null;
+            let detalleVerTodas = false;
+
             function abrirDetalleEquipo(nodo) {
+                nodoDetalle = nodo;
+                detalleVerTodas = false;
+                if (!pintarDetalle()) return;
+                document.getElementById('modal-detalle-activo').style.display = 'flex';
+            }
+
+            // Vuelve a leer el nodo del nivel: después de mover una solicitud
+            // las métricas del que se guardó ya no valen.
+            function refrescarDetalle() {
+                if (!nodoDetalle) return;
+                const actualizado = nodosDelNivel().find(n =>
+                    n.tipo === 'equipo' && n.ids.some(id => nodoDetalle.ids.includes(id)));
+
+                if (!actualizado) {
+                    window.cerrarDetalleActivo();
+                    return;
+                }
+                nodoDetalle = actualizado;
+                pintarDetalle();
+            }
+
+            window.verTodasLasSolicitudes = () => {
+                detalleVerTodas = true;
+                pintarDetalle();
+            };
+
+            function pintarDetalle() {
+                const nodo = nodoDetalle;
+                if (!nodo) return false;
                 const filas = nodo.ids
                     .map(id => equipos.find(e => String(e.id) === String(id)))
                     .filter(Boolean);
 
-                if (filas.length === 0) return;
+                if (filas.length === 0) return false;
 
                 const principal = filas.find(e => String(e.id_interno || '').trim()) || filas[0];
                 const m = nodo.metrica;
@@ -1098,7 +1174,7 @@
                 document.getElementById('detalle-subtitulo').innerText =
                     [ruta.map(p => p.titulo).join(' › ')].concat(marcas).join(' · ');
 
-                const visibles = solicitudes.slice(0, 8);
+                const visibles = detalleVerTodas ? solicitudes : solicitudes.slice(0, 8);
                 const restantes = solicitudes.length - visibles.length;
 
                 const listaHtml = visibles.length === 0
@@ -1115,7 +1191,10 @@
                                     <div style="font-weight:600; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${urgente ? '🚨 ' : ''}${escapar(req.nombre_refaccion || 'Sin nombre')}</div>
                                     <div style="font-size:0.75rem; color:#94a3b8;">${escapar(String(req.cantidad || ''))} ${escapar(req.unidad || '')} · ${fecha}</div>
                                 </div>
-                                <span class="etiqueta-estado" style="background:${colores.fondo}; color:${colores.texto};">${escapar(req.estado || 'Pendiente')}</span>
+                                <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                                    <span class="etiqueta-estado" style="background:${colores.fondo}; color:${colores.texto};">${escapar(req.estado || 'Pendiente')}</span>
+                                    <button onclick="window.abrirMoverSolicitud('${escapar(String(req.id))}')" class="ios-boton-icono" title="Mover a otro equipo" aria-label="Mover a otro equipo" style="width:30px; height:30px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></button>
+                                </div>
                             </div>`;
                     }).join('');
 
@@ -1141,7 +1220,7 @@
                     <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:6px;">Solicitudes</div>
                     <div style="border:1px solid #e2e8f0; border-radius:12px; padding:2px 12px; margin-bottom:18px;">
                         ${listaHtml}
-                        ${restantes > 0 ? `<div style="font-size:0.75rem; color:#94a3b8; padding:8px 0; border-top:1px solid #f1f5f9;">y ${restantes} más…</div>` : ''}
+                        ${restantes > 0 ? `<button onclick="window.verTodasLasSolicitudes()" style="width:100%; font-size:0.78rem; color:#0284c7; font-weight:700; padding:9px 0; border:none; border-top:1px solid #f1f5f9; background:transparent; cursor:pointer; text-align:left;">Ver las ${restantes} restantes…</button>` : ''}
                     </div>
 
                     ${filas.length > 1 ? `
@@ -1170,12 +1249,151 @@
                 montarAltasRepetidas(filas);
                 document.getElementById('btn-guardar-equipo').onclick = () => guardarEquipo(filas);
 
-                document.getElementById('modal-detalle-activo').style.display = 'flex';
+                return true;
             }
 
             window.cerrarDetalleActivo = () => {
+                nodoDetalle = null;
                 document.getElementById('modal-detalle-activo').style.display = 'none';
             };
+
+            // ==========================================
+            // Mover una solicitud a otro equipo
+            // ==========================================
+            // Los destinos se agrupan igual que el mapa: uno por máquina y
+            // línea, no uno por fila. Si la máquina tiene varias altas, la
+            // solicitud va a la que más carga lleva, que es la que sobrevive
+            // cuando se unen.
+            function nombreDePlanta(clave) {
+                if (clave === SIN_PLANTA) return 'Sin planta';
+                const planta = plantas.find(p => String(p.id) === clave);
+                return planta ? planta.nombre : 'Sin planta';
+            }
+
+            function nombreDeLinea(clave) {
+                if (clave === SIN_LINEA) return 'Sin línea';
+                const linea = lineas.find(l => String(l.id) === clave);
+                return linea ? linea.nombre : 'Sin línea';
+            }
+
+            function destinosPosibles() {
+                const grupos = new Map();
+
+                equipos.forEach(e => {
+                    const clavePlanta = plantaDeEquipo(e);
+                    const claveLinea = lineaDeEquipo(e);
+                    const clave = clavePlanta + '|' + claveLinea + '|' + claveDeEquipo(e);
+                    if (!grupos.has(clave)) grupos.set(clave, { clavePlanta, claveLinea, filas: [] });
+                    grupos.get(clave).filas.push(e);
+                });
+
+                return Array.from(grupos.values()).map(grupo => {
+                    const filas = grupo.filas;
+                    const principal = filas.slice().sort((a, b) =>
+                        solicitudesDe(b).length - solicitudesDe(a).length || Number(a.id) - Number(b.id))[0];
+                    const conId = filas.find(e => String(e.id_interno || '').trim());
+                    const idInterno = conId ? String(conId.id_interno).trim() : '';
+                    const nombre = (filas.find(e => e.nombre) || filas[0]).nombre || 'Sin nombre';
+
+                    return {
+                        id: principal.id,
+                        ids: filas.map(f => String(f.id)),
+                        titulo: idInterno ? `${idInterno} · ${nombre}` : nombre,
+                        ubicacion: `${nombreDePlanta(grupo.clavePlanta)} › ${nombreDeLinea(grupo.claveLinea)}`
+                    };
+                }).sort((a, b) => a.titulo.localeCompare(b.titulo));
+            }
+
+            window.abrirMoverSolicitud = (idSolicitud) => {
+                const solicitud = refacciones.find(r => String(r.id) === String(idSolicitud));
+                if (!solicitud) return;
+
+                const destinos = destinosPosibles();
+                const campo = document.getElementById('inp-buscar-destino');
+                const lista = document.getElementById('lista-destinos');
+
+                document.getElementById('mover-subtitulo').innerText =
+                    solicitud.nombre_refaccion || 'Solicitud sin nombre';
+
+                const pintar = () => {
+                    const busca = normalizarBusqueda(campo.value);
+                    const encontrados = busca
+                        ? destinos.filter(d => normalizarBusqueda(d.titulo).includes(busca) ||
+                                               normalizarBusqueda(d.ubicacion).includes(busca))
+                        : destinos;
+
+                    lista.innerHTML = '';
+
+                    if (encontrados.length === 0) {
+                        const vacio = document.createElement('div');
+                        vacio.style.cssText = 'padding:16px 25px; color:#94a3b8; font-style:italic;';
+                        vacio.innerText = 'Ningún equipo coincide.';
+                        lista.appendChild(vacio);
+                        return;
+                    }
+
+                    encontrados.forEach(destino => {
+                        const esActual = destino.ids.includes(String(solicitud.equipo_id));
+
+                        const fila = document.createElement('button');
+                        fila.className = 'destino-mover';
+                        fila.type = 'button';
+                        fila.disabled = esActual;
+
+                        const arriba = document.createElement('div');
+                        arriba.style.cssText = 'font-weight:700; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+                        arriba.innerText = destino.titulo;
+                        const abajo = document.createElement('div');
+                        abajo.style.cssText = 'font-size:0.78rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+                        abajo.innerText = esActual ? `${destino.ubicacion} · donde está ahora` : destino.ubicacion;
+
+                        fila.appendChild(arriba);
+                        fila.appendChild(abajo);
+                        if (!esActual) fila.onclick = () => moverSolicitud(solicitud, destino);
+                        lista.appendChild(fila);
+                    });
+                };
+
+                campo.value = '';
+                campo.oninput = pintar;
+                pintar();
+
+                // El alto se limita aquí y no en el CSS porque la hoja crece
+                // con su contenido: sin tope, una lista larga la deja sin
+                // sitio para el buscador.
+                lista.style.maxHeight = Math.round(window.innerHeight * 0.5) + 'px';
+                document.getElementById('modal-mover-solicitud').style.display = 'flex';
+            };
+
+            window.cerrarMoverSolicitud = () => {
+                document.getElementById('modal-mover-solicitud').style.display = 'none';
+            };
+
+            async function moverSolicitud(solicitud, destino) {
+                const lista = document.getElementById('lista-destinos');
+                lista.style.pointerEvents = 'none';
+
+                try {
+                    const { error } = await sb.from('refacciones')
+                        .update({ equipo_id: destino.id })
+                        .eq('id', solicitud.id);
+
+                    if (error) throw error;
+
+                    solicitud.equipo_id = destino.id;
+                    agregarMetricas();
+                    window.cerrarMoverSolicitud();
+                    dibujar();
+                    // La hoja se queda abierta y con los números al día, para
+                    // poder mover varias solicitudes seguidas.
+                    refrescarDetalle();
+                } catch (error) {
+                    console.error("Error moviendo la solicitud:", error);
+                    alert("Hubo un error de conexión al intentar mover la solicitud.");
+                } finally {
+                    lista.style.pointerEvents = '';
+                }
+            }
 
             function solicitudesDe(fila) {
                 return solicitudesPorEquipo.get(String(fila.id)) || [];
