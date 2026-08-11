@@ -159,7 +159,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   guardaba al ir a elegir la línea. Es la razón de que esa hoja no tenga
   botonera inferior —ni «Cancelar», que sería otro blanco fácil y duplica lo
   que ya hace la cruz—: debajo del último campo no hay nada que pulsar.
-  «Solicitar refacciones» sigue el mismo patrón.
+  «Solicitar refacciones» y «Editar equipo» siguen el mismo patrón.
 
   Un botón de icono no tiene texto, así que lo que antes decía hay que
   repartirlo: **la etiqueta va al `aria-label` y al `title`** —en refacciones

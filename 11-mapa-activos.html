@@ -471,8 +471,12 @@
                     <h3 class="hoja-titulo">Editar equipo</h3>
                     <div class="hoja-subtitulo" id="editar-subtitulo"></div>
                 </div>
-                <button onclick="window.cerrarEdicionEquipo()" class="ios-boton-cerrar ios-boton-icono"
-                        title="Cerrar" aria-label="Cerrar"></button>
+                <div class="hoja-acciones">
+                    <button id="btn-guardar-equipo" onclick="window.guardarEdicionEquipo()" class="ios-boton-icono"
+                            title="Guardar cambios" aria-label="Guardar cambios"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5.5 5.5L20 7"/></svg></button>
+                    <button onclick="window.cerrarEdicionEquipo()" class="ios-boton-cerrar ios-boton-icono"
+                            title="Cerrar" aria-label="Cerrar"></button>
+                </div>
             </div>
             <div id="editar-cuerpo"></div>
         </div>
@@ -1322,14 +1326,27 @@
                     .filter(Boolean);
             }
 
+            // El botón de guardar es de icono y no tiene texto que cambiar a
+            // «Guardando…», así que el aviso va al subtítulo del encabezado,
+            // que el resto del tiempo enseña el nombre de la máquina, y el
+            // botón se apaga mientras tanto.
+            let nombreEnEdicion = '';
+
+            function estadoEdicionEquipo(texto) {
+                const boton = document.getElementById('btn-guardar-equipo');
+                document.getElementById('editar-subtitulo').innerText = texto || nombreEnEdicion;
+                boton.disabled = !!texto;
+                boton.style.opacity = texto ? '0.45' : '';
+            }
+
             window.abrirEdicionEquipo = () => {
                 const filas = filasDelDetalle();
                 if (filas.length === 0) return;
 
                 const principal = filas.find(e => String(e.id_interno || '').trim()) || filas[0];
 
-                document.getElementById('editar-subtitulo').innerText =
-                    principal.nombre || 'Sin nombre';
+                nombreEnEdicion = principal.nombre || 'Sin nombre';
+                estadoEdicionEquipo('');
 
                 document.getElementById('editar-cuerpo').innerHTML = `
                     <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin:14px 0 4px;">ID / Código interno</label>
@@ -1337,8 +1354,7 @@
                     <div id="sugerencias-id"></div>
                     <div id="nota-detalle-id" style="font-size:0.78rem; color:#64748b; margin:6px 0 12px;"></div>
                     <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">Nombre del equipo</label>
-                    <input type="text" id="inp-detalle-nombre" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none; margin-bottom:14px;">
-                    <button id="btn-guardar-equipo" style="width:100%; background:#0ea5e9; color:white; border:none; padding:12px; border-radius:10px; font-weight:700; cursor:pointer; font-size:0.95rem;">Guardar cambios</button>
+                    <input type="text" id="inp-detalle-nombre" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none;">
 
                     ${filas.length > 1 ? `
                     <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin:22px 0 6px;">Altas repetidas</div>
@@ -1355,14 +1371,22 @@
                 document.getElementById('inp-detalle-nombre').value = principal.nombre || '';
                 montarBuscadorDeId(principal);
                 montarAltasRepetidas(filas);
-                document.getElementById('btn-guardar-equipo').onclick = () => guardarEquipo(filas);
 
                 document.getElementById('modal-editar-equipo').style.display = 'flex';
+            };
+
+            // Guardar vive en el encabezado, en marcado fijo, así que no puede
+            // llevar las filas en un onclick que se rehaga al abrir: se vuelven
+            // a leer del detalle, que es de donde salieron.
+            window.guardarEdicionEquipo = () => {
+                const filas = filasDelDetalle();
+                if (filas.length > 0) guardarEquipo(filas);
             };
 
             window.cerrarEdicionEquipo = () => {
                 document.getElementById('modal-editar-equipo').style.display = 'none';
                 document.getElementById('editar-cuerpo').innerHTML = '';
+                estadoEdicionEquipo('');
             };
 
             // ==========================================
@@ -1785,7 +1809,6 @@
             }
 
             async function guardarEquipo(filas) {
-                const boton = document.getElementById('btn-guardar-equipo');
                 const nombre = document.getElementById('inp-detalle-nombre').value.trim();
                 // El ID se guarda con la grafía que ya tenga en el catálogo,
                 // para no dejar dos variantes del mismo código.
@@ -1811,9 +1834,7 @@
                     if (!confirm(aviso)) return;
                 }
 
-                const textoOriginal = boton.innerText;
-                boton.innerText = "Guardando…";
-                boton.disabled = true;
+                estadoEdicionEquipo("Guardando…");
 
                 try {
                     // Las dos consultas filtran por id y no por id_interno:
@@ -1853,8 +1874,7 @@
                     console.error("Error actualizando equipo:", error);
                     alert("Hubo un error de conexión al intentar guardar.");
                 } finally {
-                    boton.innerText = textoOriginal;
-                    boton.disabled = false;
+                    estadoEdicionEquipo('');
                 }
             }
 
