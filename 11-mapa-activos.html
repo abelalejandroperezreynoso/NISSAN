@@ -279,6 +279,26 @@
         .sugerencia-id:last-child { border-bottom: none; }
         .sugerencia-id:active { background: #f1f5f9; }
 
+        /* Altas repetidas de la misma máquina, para elegir cuál se queda. */
+        .alta-repetida {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 0;
+            border-bottom: 1px solid #e2e8f0;
+            cursor: pointer;
+        }
+
+        .alta-repetida:last-child { border-bottom: none; }
+
+        .alta-repetida input {
+            width: 20px;
+            height: 20px;
+            accent-color: #0ea5e9;
+            flex-shrink: 0;
+            margin: 0;
+        }
+
         .etiqueta-estado {
             flex-shrink: 0;
             font-size: 0.7rem;
@@ -1124,8 +1144,18 @@
                         ${restantes > 0 ? `<div style="font-size:0.75rem; color:#94a3b8; padding:8px 0; border-top:1px solid #f1f5f9;">y ${restantes} más…</div>` : ''}
                     </div>
 
+                    ${filas.length > 1 ? `
+                    <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:6px;">Altas repetidas</div>
+                    <div style="border:1px solid #e2e8f0; border-radius:12px; padding:12px; margin-bottom:18px;">
+                        <div style="font-size:0.82rem; color:#475569; margin-bottom:4px;">
+                            Esta máquina está dada de alta ${filas.length} veces en la línea y el cuadro las suma.
+                            Elige cuál se queda: las demás le ceden sus solicitudes y después se borran.
+                        </div>
+                        <div id="lista-altas"></div>
+                        <button id="btn-unir-altas" style="width:100%; margin-top:12px; background:#fff1f2; color:#be123c; border:1px solid #fecdd3; padding:10px; border-radius:10px; font-weight:700; cursor:pointer; font-size:0.9rem;">Unir en la seleccionada</button>
+                    </div>` : ''}
+
                     <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px;">Editar equipo</div>
-                    ${filas.length > 1 ? `<div style="background:#f1f5f9; color:#475569; border-radius:10px; padding:8px 12px; font-size:0.8rem; margin-bottom:12px;">Esta máquina está dada de alta ${filas.length} veces en la línea. El cuadro las suma y lo que guardes aquí se escribe en todas.</div>` : ''}
                     <label style="display:block; font-size:0.8rem; font-weight:600; color:#475569; margin-bottom:4px;">ID / Código interno</label>
                     <input type="text" id="inp-detalle-id" autocomplete="off" autocapitalize="characters" placeholder="Busca un ID o escribe uno nuevo" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none;">
                     <div id="sugerencias-id"></div>
@@ -1137,6 +1167,7 @@
 
                 document.getElementById('inp-detalle-nombre').value = principal.nombre || '';
                 montarBuscadorDeId(principal);
+                montarAltasRepetidas(filas);
                 document.getElementById('btn-guardar-equipo').onclick = () => guardarEquipo(filas);
 
                 document.getElementById('modal-detalle-activo').style.display = 'flex';
@@ -1145,6 +1176,127 @@
             window.cerrarDetalleActivo = () => {
                 document.getElementById('modal-detalle-activo').style.display = 'none';
             };
+
+            function solicitudesDe(fila) {
+                return solicitudesPorEquipo.get(String(fila.id)) || [];
+            }
+
+            // Las altas se ofrecen ordenadas por carga: la que más
+            // solicitudes tiene viene marcada, que es la que menos registros
+            // obliga a mover, pero la elección es de quien mira la pantalla.
+            function montarAltasRepetidas(filas) {
+                const contenedor = document.getElementById('lista-altas');
+                if (!contenedor) return;
+
+                const ordenadas = filas.slice().sort((a, b) =>
+                    solicitudesDe(b).length - solicitudesDe(a).length || Number(a.id) - Number(b.id));
+
+                ordenadas.forEach((fila, i) => {
+                    const etiqueta = document.createElement('label');
+                    etiqueta.className = 'alta-repetida';
+
+                    const radio = document.createElement('input');
+                    radio.type = 'radio';
+                    radio.name = 'alta-superviviente';
+                    radio.value = String(fila.id);
+                    radio.checked = i === 0;
+
+                    const textos = document.createElement('div');
+                    textos.style.cssText = 'min-width:0;';
+                    const arriba = document.createElement('div');
+                    arriba.style.cssText = 'font-weight:700; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+                    arriba.innerText = `${fila.id_interno || 'Sin ID'} · ${fila.nombre || 'Sin nombre'}`;
+                    const abajo = document.createElement('div');
+                    abajo.style.cssText = 'font-size:0.78rem; color:#64748b;';
+                    const cuantas = solicitudesDe(fila).length;
+                    abajo.innerText = `${cuantas === 0 ? 'Sin solicitudes' : cuantas + ' solicitudes'} · alta #${fila.id}`;
+                    textos.appendChild(arriba);
+                    textos.appendChild(abajo);
+
+                    etiqueta.appendChild(radio);
+                    etiqueta.appendChild(textos);
+                    contenedor.appendChild(etiqueta);
+                });
+
+                document.getElementById('btn-unir-altas').onclick = () => unirAltas(filas);
+            }
+
+            // Unir es destructivo, así que el orden importa: primero las
+            // solicitudes cambian de dueño, después se comprueba contra la
+            // base que no quedó ninguna colgando, y sólo entonces se borran
+            // las filas. Si el borrado falla, las solicitudes ya están a
+            // salvo en el alta que se queda y no se perdió nada.
+            async function unirAltas(filas) {
+                const boton = document.getElementById('btn-unir-altas');
+                const elegido = document.querySelector('input[name="alta-superviviente"]:checked');
+                if (!elegido) return;
+
+                const superviviente = filas.find(f => String(f.id) === elegido.value);
+                const sobrantes = filas.filter(f => String(f.id) !== elegido.value);
+                if (!superviviente || sobrantes.length === 0) return;
+
+                const porMover = sobrantes.reduce((n, f) => n + solicitudesDe(f).length, 0);
+                const aviso = `Se moverán ${porMover} solicitudes al alta #${superviviente.id} ` +
+                    `y se borrarán las otras ${sobrantes.length}.\n\nEsto no se puede deshacer.`;
+                if (!confirm(aviso)) return;
+
+                const idsSobrantes = sobrantes.map(f => f.id);
+                const textoOriginal = boton.innerText;
+                boton.innerText = "Uniendo…";
+                boton.disabled = true;
+
+                try {
+                    const { error: errorMover } = await sb.from('refacciones')
+                        .update({ equipo_id: superviviente.id })
+                        .in('equipo_id', idsSobrantes);
+
+                    if (errorMover) throw errorMover;
+
+                    // La comprobación va contra la base y no contra la copia
+                    // local: entre que se cargó la pantalla y ahora pudo
+                    // entrar una solicitud nueva en una de esas altas.
+                    const { data: rezagadas, error: errorRevisar } = await sb.from('refacciones')
+                        .select('id')
+                        .in('equipo_id', idsSobrantes);
+
+                    if (errorRevisar) throw errorRevisar;
+
+                    if (rezagadas && rezagadas.length > 0) {
+                        alert(`No se borró nada: siguen colgando ${rezagadas.length} solicitudes de las altas sobrantes. Inténtalo otra vez.`);
+                        return;
+                    }
+
+                    const { error: errorBorrar } = await sb.from('equipos')
+                        .delete()
+                        .in('id', idsSobrantes);
+
+                    // Se avisa y se sigue: las solicitudes ya están movidas y
+                    // esa parte no hay que deshacerla.
+                    if (errorBorrar) {
+                        console.error("Error borrando las altas sobrantes:", errorBorrar);
+                        alert("Las solicitudes ya quedaron en el alta elegida, pero no se pudieron borrar las filas sobrantes:\n\n" +
+                              (errorBorrar.message || errorBorrar) +
+                              "\n\nNo se perdió nada. Hay que quitarlas desde Supabase.");
+                    }
+
+                    // Copia local al día para repintar sin recargar.
+                    const sobra = new Set(idsSobrantes.map(String));
+                    refacciones.forEach(r => {
+                        if (sobra.has(String(r.equipo_id))) r.equipo_id = superviviente.id;
+                    });
+                    if (!errorBorrar) equipos = equipos.filter(e => !sobra.has(String(e.id)));
+
+                    agregarMetricas();
+                    window.cerrarDetalleActivo();
+                    dibujar();
+                } catch (error) {
+                    console.error("Error uniendo las altas:", error);
+                    alert("Hubo un error de conexión al intentar unir las altas.");
+                } finally {
+                    boton.innerText = textoOriginal;
+                    boton.disabled = false;
+                }
+            }
 
             // El ID se busca escribiendo: la lista de equipos es larga y un
             // desplegable obliga a recorrerla entera. El mismo campo sirve
