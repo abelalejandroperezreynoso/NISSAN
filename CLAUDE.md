@@ -152,6 +152,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   lugar de empujar al botón fuera de la hoja. Si a la derecha va más de un
   control, se agrupan en un `<div class="hoja-acciones">`.
 
+  **En una hoja con desplegables, la acción principal va en el encabezado**,
+  a la izquierda del botón de cerrar y con su mismo `.ios-boton-icono`. Al
+  pie del formulario queda debajo del último campo, y ahí es donde la rueda
+  de iOS la pone en el camino del dedo: así es como «Agregar nuevo equipo»
+  guardaba al ir a elegir la línea. Es la razón de que esa hoja no tenga
+  botonera inferior —ni «Cancelar», que sería otro blanco fácil y duplica lo
+  que ya hace la cruz—: debajo del último campo no hay nada que pulsar.
+
   El botón de cerrar va **vacío**: la cruz la dibuja `.ios-boton-cerrar` con
   pseudoelementos, así que no lleva `✕` ni SVG, pero sí `aria-label`. Para
   otros iconos está `.ios-boton-icono` a secas, con un `<svg>` dentro.

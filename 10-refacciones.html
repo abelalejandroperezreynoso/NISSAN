@@ -755,9 +755,17 @@
 
     <div id="modal-nuevo-equipo" class="hoja-overlay" style="z-index:4600;">
         <div class="form-content hoja-contenido" style="max-width: 400px; overflow-y: auto; padding: 12px 25px 25px;">
+            <!-- Guardar vive arriba y no al pie del formulario a propósito. Al
+                 pie caía justo debajo del desplegable de línea, y la rueda de
+                 iOS al cerrarse lo dejaba pasando por esa posición: el dedo
+                 que iba al desplegable acababa guardando. Arriba no hay nada
+                 debajo del último campo que se pueda pulsar sin querer. -->
             <div class="hoja-encabezado">
                 <h3 class="hoja-titulo">Agregar nuevo equipo</h3>
-                <button onclick="document.getElementById('modal-nuevo-equipo').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                <div class="hoja-acciones">
+                    <button id="btn-guardar-nuevo-equipo" onclick="window.guardarNuevoEquipo()" class="ios-boton-icono" title="Guardar equipo" aria-label="Guardar equipo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5.5 5.5L20 7"/></svg></button>
+                    <button onclick="document.getElementById('modal-nuevo-equipo').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                </div>
             </div>
                         <div class="form-group" style="margin-bottom: 15px; margin-top: 15px;">
                             <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Nombre del Equipo/Máquina:</label>
@@ -774,16 +782,12 @@
                     <button id="btn-crear-planta" onclick="window.crearNuevaPlanta()" style="background:#f0f9ff; color:#0ea5e9; border:1px solid #bae6fd; border-radius:8px; padding:0 15px; font-weight:bold; cursor:pointer;">+</button>
                 </div>
             </div>
-            <div class="form-group" style="margin-bottom: 25px;">
+            <div class="form-group">
                 <label style="display:block; margin-bottom:5px; font-weight:bold; color:#334155;">Línea:</label>
                 <div style="display:flex; gap:10px;">
                     <select id="inp-nuevo-equipo-linea" style="flex:1; background:white;"><option value="">Cargando...</option></select>
                     <button id="btn-crear-linea" onclick="window.crearNuevaLinea()" style="background:#f0f9ff; color:#0ea5e9; border:1px solid #bae6fd; border-radius:8px; padding:0 15px; font-weight:bold; cursor:pointer;">+</button>
                 </div>
-            </div>
-            <div style="display:flex; justify-content:flex-end; gap:10px;">
-                <button onclick="document.getElementById('modal-nuevo-equipo').style.display='none'" style="padding:10px 15px; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer; color:#475569; font-weight:600;">Cancelar</button>
-                <button onclick="window.guardarNuevoEquipo()" style="padding:10px 15px; background:#0ea5e9; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Guardar Equipo</button>
             </div>
         </div>
     </div>
@@ -2495,6 +2499,7 @@
         };
 
         window.guardarNuevoEquipo = async () => {
+                    const boton = document.getElementById('btn-guardar-nuevo-equipo');
                     const nombre = document.getElementById('inp-nuevo-equipo-nombre').value.trim();
                     const idInterno = document.getElementById('inp-nuevo-equipo-id-interno').value.trim();
                     const plantaId = document.getElementById('inp-nuevo-equipo-planta').value;
@@ -2504,6 +2509,15 @@
                         alert("Por favor, completa Nombre del Equipo, Planta y Línea.");
                         return;
                     }
+
+                    // Siendo un botón de icono no hay texto que cambiar a
+                    // "Guardando…", así que el aviso de que está trabajando es
+                    // el propio botón apagado. Y hace falta: dos toques dan de
+                    // alta la máquina dos veces, que es justo el enredo que
+                    // luego hay que deshacer uniendo altas repetidas.
+                    if (boton.disabled) return;
+                    boton.disabled = true;
+                    boton.style.opacity = '0.45';
 
                     try {
                         // Estructuramos los datos base
@@ -2537,6 +2551,9 @@
             } catch (error) {
                 console.error("Error al guardar equipo:", error);
                 alert("Hubo un error al agregar el equipo. Verifica tu conexión.");
+            } finally {
+                boton.disabled = false;
+                boton.style.opacity = '';
             }
         };
 
