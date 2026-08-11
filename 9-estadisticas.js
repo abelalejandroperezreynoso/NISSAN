@@ -3,6 +3,54 @@
 // VERSIÓN: 1.1 - EXCLUSIÓN DE MANAGERS
 // =========================================================
 
+// ---------------------------------------------------------
+// REINTENTOS DE LA CONSULTA
+// ---------------------------------------------------------
+// El primer intento de esta pantalla fallaba casi siempre: el reporte es
+// pesado y, con la conexión fría, la base se pasa del tiempo de espera y
+// PostgREST devuelve el error 57014 ("canceling statement due to statement
+// timeout"); el segundo intento ya encuentra el plan y los datos en caché del
+// servidor y responde. Como es un fallo pasajero, no tiene sentido enseñárselo
+// al usuario a la primera: se reintenta un par de veces antes de rendirse.
+const INTENTOS_STATS = 3;
+const ESPERA_REINTENTO_MS = [800, 2000];
+
+const esperar = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Errores que no mejoran por reintentar: la función no existe, el nombre del
+// parámetro no coincide o los permisos la rechazan. Ahí se muestra ya.
+const esErrorDefinitivo = (error) => {
+    const codigo = String((error && error.code) || '');
+    if (codigo.startsWith('PGRST2')) return true;          // función/parámetro inexistente
+    return ['42883', '42501', '28000', '28P01'].includes(codigo);
+};
+
+async function consultarEstadisticas(filtroTipo, avisarIntento) {
+    let ultimoError = null;
+
+    for (let intento = 1; intento <= INTENTOS_STATS; intento++) {
+        if (intento > 1 && avisarIntento) avisarIntento(intento);
+
+        let data = null, error = null;
+        try {
+            ({ data, error } = await sb.rpc('obtener_estadisticas_empleados', { tipo_filtro: filtroTipo }));
+        } catch (e) {
+            // Un fallo de red no llega como objeto de error, se lanza.
+            error = e;
+        }
+
+        if (!error) return { data: data };
+
+        ultimoError = error;
+        console.warn(`⚠️ Estadísticas: intento ${intento} de ${INTENTOS_STATS} fallido.`, error);
+
+        if (esErrorDefinitivo(error)) break;
+        if (intento < INTENTOS_STATS) await esperar(ESPERA_REINTENTO_MS[intento - 1] || 2000);
+    }
+
+    return { error: ultimoError };
+}
+
 window.calcularAvanceGlobal = async function(usarCache = false) {
     const statsContainer = document.getElementById('global-stats');
     if(statsContainer) {
@@ -17,19 +65,44 @@ window.calcularAvanceGlobal = async function(usarCache = false) {
     let filtroRaw = document.getElementById('stats-filter-type') ? document.getElementById('stats-filter-type').value : "Difusión";
     const filtroTipo = filtroRaw === "" ? null : filtroRaw;
 
+    // Cada llamada se numera: si el usuario cambia el filtro mientras una
+    // consulta sigue en el aire, la respuesta vieja ya no pinta nada.
+    const peticion = (window.statsPeticionActual || 0) + 1;
+    window.statsPeticionActual = peticion;
+    const vigente = () => window.statsPeticionActual === peticion;
+
     container.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">🔄 Consultando reporte optimizado...</div>';
 
     if(!window.todosLosEmpleadosData || window.todosLosEmpleadosData.length === 0) {
         await window.cargarDatosEmpleados();
+        if(!vigente()) return;
     }
-    
-    // Llamada al RPC de Supabase para obtener conteos base
-    const { data: statsData, error } = await sb.rpc('obtener_estadisticas_empleados', { tipo_filtro: filtroTipo });
 
-    if(error) {
-        console.error("❌ ERROR SQL STATS:", error);
-        container.innerHTML = `<div style='text-align:center; color:#ef4444; padding:20px; border:1px solid #fecaca; background:#fef2f2; border-radius:8px;'><strong>Error de Base de Datos:</strong><br>${error.message}</div>`;
-        return;
+    let statsData;
+
+    // Volver atrás desde el detalle no necesita otra consulta: los conteos ya
+    // están en memoria mientras no cambie el filtro.
+    if (usarCache && window.statsCacheRaw && window.statsCacheFiltro === filtroRaw) {
+        statsData = window.statsCacheRaw;
+    } else {
+        // Llamada al RPC de Supabase para obtener conteos base
+        const { data, error } = await consultarEstadisticas(filtroTipo, (intento) => {
+            if(!vigente()) return;
+            container.innerHTML = `<div style="text-align:center; padding:20px; color:#64748b;">🔄 La base tardó en responder. Reintentando (${intento}/${INTENTOS_STATS})...</div>`;
+        });
+
+        if(!vigente()) return;
+
+        if(error) {
+            console.error("❌ ERROR SQL STATS:", error);
+            const detalle = (error && error.message) ? error.message : String(error);
+            container.innerHTML = `<div style='text-align:center; color:#ef4444; padding:20px; border:1px solid #fecaca; background:#fef2f2; border-radius:8px;'><strong>Error de Base de Datos:</strong><br>${detalle}<br><button onclick="window.calcularAvanceGlobal(false)" class="btn-back-small" style="margin-top:12px;">Reintentar</button></div>`;
+            return;
+        }
+
+        statsData = data;
+        window.statsCacheRaw = statsData;
+        window.statsCacheFiltro = filtroRaw;
     }
 
     if (!statsData || statsData.length === 0) {
@@ -38,8 +111,6 @@ window.calcularAvanceGlobal = async function(usarCache = false) {
         globalText.innerText = "0%";
         return;
     }
-
-    window.statsCacheRaw = statsData;
 
     let totalEsperadoGlobal = 0, totalFirmadoGlobal = 0;
     const deptMap = {};
