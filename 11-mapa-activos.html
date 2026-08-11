@@ -169,6 +169,20 @@
                sigue calculándose sobre el rectángulo completo y son las
                esquinas las que se comen su pico. */
             border-radius: var(--radio-hoja);
+
+            /* El marco es un borde de verdad y no el fondo asomando por el
+               paddingOuter del treemap, que en las esquinas desaparecía: allí
+               la curva del recorte cae muy por dentro de ese píxel, así que
+               cortaba el cuadro y lo dejaba a ras del filo. Como borde, en
+               cambio, sigue la curva entera.
+
+               Los hijos en absoluto se colocan contra la caja de relleno, por
+               dentro del borde, y clientWidth/clientHeight —el tamaño que se
+               le pasa al treemap— ya lo descuentan; con border-box el alto
+               del elemento flexible lo cuenta también. Por eso el treemap va
+               con paddingOuter en cero: el marco lo pone esta línea. */
+            box-sizing: border-box;
+            border: 1px solid #0f172a;
         }
 
         /* Los cuadros se pegan unos a otros: no llevan borde propio ni
@@ -841,13 +855,14 @@
                     .sort((a, b) => b.value - a.value);
 
                 // 1px de separación, ni más: es el ancho de la línea negra.
-                // paddingOuter cierra el marco contra el borde del lienzo, que
-                // ya está separado de la pantalla por --hueco-lienzo.
+                // Fuera no lleva: el marco lo pone el borde del lienzo, que a
+                // diferencia de un paddingOuter sigue también la curva de las
+                // esquinas.
                 d3.treemap()
                     .tile(d3.treemapSquarify)
                     .size([ancho, alto])
                     .paddingInner(1)
-                    .paddingOuter(1)
+                    .paddingOuter(0)
                     .round(true)(raiz);
 
                 raiz.leaves().forEach(hoja => {
