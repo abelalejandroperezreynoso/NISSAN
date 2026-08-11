@@ -90,6 +90,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   indicador de inicio con `env(safe-area-inset-*)`; las reglas viven al final
   de `estilos.css`. Si se añade una pantalla nueva a pantalla completa, hay
   que darle ese padding o su encabezado quedará bajo el reloj.
+
+  Arriba sí; **abajo, en el contenedor de altura completa, no.** Un
+  `padding-bottom: env(safe-area-inset-bottom)` sobre un contenedor de
+  `100dvh` con `box-sizing:border-box` le resta 34pt de alto útil y deja una
+  franja muerta del color del fondo antes del borde, que es exactamente el
+  aspecto de un navegador con su barra. Ninguna de las tres pantallas lo
+  lleva: `10-refacciones.html` aparta el indicador desde el padding de su
+  lista, que además así puede desplazarse hasta el final, y
+  `11-mapa-activos.html` desde el margen del lienzo. El mapa lo llevó un
+  tiempo y por eso parecía que no se abría a pantalla completa.
+
+  Por lo mismo, el fondo de `<html>` de cada pantalla tiene que ser el del
+  elemento que queda pegado arriba —en el mapa, el blanco del encabezado—.
+  Instalada en la pantalla de inicio, iOS pinta con ese color la franja de
+  la barra de estado, y un tono distinto del que tiene debajo dibuja una
+  costura que se lee como el borde del navegador.
 - **La franja de la barra de estado no es alcanzable por CSS.** Con la app
   instalada en la pantalla de inicio, iOS deja esa franja fuera del viewport
   y la pinta con el color de fondo de `<html>`. Ningún overlay puede cubrirla,

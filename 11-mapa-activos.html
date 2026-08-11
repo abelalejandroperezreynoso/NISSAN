@@ -28,8 +28,14 @@
            inferiores, para que el mapa se despegue del borde igual que ellas. */
         :root { --hueco-lienzo: 8px; }
 
+        /* Blanco, el mismo del encabezado. Instalada en la pantalla de inicio,
+           la franja de la barra de estado queda fuera del viewport y iOS la
+           pinta con este color: si aquí hubiera un gris, esa franja saldría de
+           otro tono que el encabezado que tiene debajo y la unión se leería
+           como el borde de un navegador. En blanco, barra de estado y
+           encabezado son una sola superficie. */
         html, body {
-            background-color: #f8fafc;
+            background-color: #ffffff;
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -41,7 +47,7 @@
         /* La franja de la barra de estado sigue el fondo de esta pantalla y
            no el de estilos.css, que es el del panel principal. */
         html.modal-abierto {
-            background-color: #f8fafc;
+            background-color: #ffffff;
         }
 
         #panel-independiente-container {
@@ -50,16 +56,22 @@
             height: 100vh;
             height: 100dvh;
             width: 100%;
-            background: #f8fafc;
+            background: #ffffff;
             overflow: hidden;
 
-            /* Con viewport-fit=cover la página llega hasta el borde físico:
-               el padding superior aparta el encabezado de la barra de estado
-               y el inferior, el lienzo del indicador de inicio. Mismo criterio
-               que 10-refacciones.html. En pantallas sin notch env() vale 0. */
+            /* Con viewport-fit=cover la página llega hasta el borde físico. El
+               padding superior aparta el encabezado de la barra de estado
+               cuando la pantalla se abre en Safari; instalada en la pantalla
+               de inicio env() vale 0, porque iOS ya deja esa franja fuera del
+               viewport.
+
+               Abajo NO lleva padding, igual que en 10-refacciones.html: se
+               comía 34pt de alto del lienzo y dejaba una franja muerta antes
+               del borde, que es justo lo que hace que la pantalla parezca un
+               navegador en vez de una app. El indicador de inicio se aparta
+               con --hueco-lienzo, el mismo aire que los lados. */
             box-sizing: border-box;
             padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
         }
 
         #encabezado {
