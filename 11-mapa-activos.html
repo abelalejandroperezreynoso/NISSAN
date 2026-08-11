@@ -24,6 +24,10 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
     <style>
+        /* Aire alrededor del treemap. Mismo valor que el margen de las hojas
+           inferiores, para que el mapa se despegue del borde igual que ellas. */
+        :root { --hueco-lienzo: 8px; }
+
         html, body {
             background-color: #f8fafc;
             margin: 0;
@@ -130,11 +134,21 @@
            las coordenadas que calcula d3.treemap. */
         /* El fondo del lienzo es lo que se ve entre cuadro y cuadro: la
            rejilla de 1px que deja el treemap es toda la separación que hay. */
+        /* El hueco va en el margen y no en el relleno: los cuadros se colocan
+           en absoluto contra la caja de relleno, así que un padding no los
+           apartaría, y clientWidth/clientHeight —de donde sale el tamaño que
+           se le pasa al treemap— tampoco lo descontaría. Con margen, el
+           lienzo mide ya lo que le toca y el cálculo no cambia.
+
+           Van los lados y el pie, no la cabecera: el mapa cuelga de la barra
+           de ruta. El del pie se suma al hueco del indicador de inicio, que
+           lo pone el contenedor. */
         #lienzo {
             flex: 1;
             position: relative;
             overflow: hidden;
             background: #0f172a;
+            margin: 0 var(--hueco-lienzo) var(--hueco-lienzo);
         }
 
         /* Los cuadros se pegan unos a otros: no llevan borde propio ni
@@ -807,7 +821,8 @@
                     .sort((a, b) => b.value - a.value);
 
                 // 1px de separación, ni más: es el ancho de la línea negra.
-                // paddingOuter cierra el marco contra el borde de la pantalla.
+                // paddingOuter cierra el marco contra el borde del lienzo, que
+                // ya está separado de la pantalla por --hueco-lienzo.
                 d3.treemap()
                     .tile(d3.treemapSquarify)
                     .size([ancho, alto])
