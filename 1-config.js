@@ -260,8 +260,35 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
 // se desplazan, como el panel principal, así que la vuelta a cero se limita
 // al rato en que hay una hoja abierta; el resto del tiempo la página se
 // desplaza con normalidad.
+//
+// Ojo: sólo el teclado de texto justifica mover la hoja. La rueda de un
+// <select> (y la de los campos de fecha y hora) encoge el viewport visual
+// exactamente igual, pero iOS ya se encarga de dejar el campo enfocado a la
+// vista. Si además subimos la hoja, todo el formulario se recoloca mientras
+// la rueda está abierta y el toque que la cierra acaba cayendo sobre el
+// control que quedó en esa posición: en el panel de refacciones, elegir la
+// línea disparaba «Guardar Equipo». Por eso la altura se publica sólo
+// cuando el foco está en un campo que de verdad levanta teclado.
 (() => {
     const raiz = document.documentElement;
+
+    // Tipos de <input> que no abren teclado: unos no tienen campo de texto y
+    // otros (fecha, hora) abren su propia rueda, que es justo lo que hay que
+    // ignorar.
+    const TIPOS_SIN_TECLADO = new Set([
+        'button', 'checkbox', 'color', 'date', 'datetime-local', 'file',
+        'hidden', 'image', 'month', 'radio', 'range', 'reset', 'submit',
+        'time', 'week'
+    ]);
+
+    const hayTecladoDeTexto = () => {
+        const el = document.activeElement;
+        if (!el || el === document.body) return false;
+        if (el.isContentEditable) return true;
+        if (el.tagName === 'TEXTAREA') return true;
+        if (el.tagName !== 'INPUT') return false;
+        return !TIPOS_SIN_TECLADO.has(String(el.type || 'text').toLowerCase());
+    };
 
     const hayHojaAbierta = () => Array.from(document.querySelectorAll('.hoja-overlay'))
         .some(el => getComputedStyle(el).display !== 'none');
@@ -276,7 +303,9 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
 
         // innerHeight es el viewport de maquetación, que no cambia con el
         // teclado; vv.height sí. La diferencia es lo que ocupa.
-        const alto = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+        const alto = hayTecladoDeTexto()
+            ? Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
+            : 0;
         raiz.style.setProperty('--alto-teclado', alto + 'px');
 
         anclarDocumento();
@@ -294,7 +323,65 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
     // burbujea hasta window) vuelve al origen mientras haya una hoja abierta.
     window.addEventListener('scroll', anclarDocumento, { passive: true });
 
-    // Al cerrar el teclado, Safari tarda un instante en devolver las medidas
-    // definitivas.
+    // Pasar de un campo de texto a un <select> no siempre cambia la altura
+    // del viewport —el teclado y la rueda miden casi lo mismo—, así que el
+    // evento de resize puede no llegar. Se recalcula también al mover el
+    // foco. Al cerrar el teclado, además, Safari tarda un instante en
+    // devolver las medidas definitivas.
+    document.addEventListener('focusin', () => setTimeout(ajustar, 0));
     document.addEventListener('focusout', () => setTimeout(ajustar, 100));
+})();
+
+// ==========================================
+// TOQUE FANTASMA AL CERRAR UNA RUEDA DE iOS
+// ==========================================
+// La rueda de un <select> (o de un campo de fecha) es una vista nativa que
+// se dibuja encima de la página. El toque que la cierra no llega al
+// documento como pointerdown, pero iOS sí sintetiza después un click en esas
+// coordenadas, que caen sobre lo que haya quedado debajo. Si es un botón, se
+// dispara solo.
+//
+// Un toque de verdad siempre trae su pointerdown sobre el mismo botón. Aquí
+// se descarta el click que no lo tenga, y sólo durante el rato siguiente a
+// haber usado una rueda, para no estorbar a nada más. Se limita a <button>
+// a propósito: el click programático sobre un <input type="file"> escondido
+// tras una etiqueta tampoco trae pointerdown y tiene que seguir pasando.
+(() => {
+    const MARGEN_MS = 700;
+
+    const esControlDeRueda = (el) => {
+        if (!el) return false;
+        if (el.tagName === 'SELECT') return true;
+        if (el.tagName !== 'INPUT') return false;
+        return ['date', 'datetime-local', 'month', 'time', 'week']
+            .includes(String(el.type || '').toLowerCase());
+    };
+
+    let ultimaRueda = 0;
+    let ultimoPointerdown = null;
+
+    const marcarRueda = (e) => {
+        if (esControlDeRueda(e.target)) ultimaRueda = Date.now();
+    };
+    document.addEventListener('change', marcarRueda, true);
+    document.addEventListener('focusout', marcarRueda, true);
+
+    document.addEventListener('pointerdown', (e) => {
+        ultimoPointerdown = e.target;
+    }, true);
+
+    document.addEventListener('click', (e) => {
+        const boton = e.target && e.target.closest && e.target.closest('button');
+
+        // Cada pointerdown avala un solo click. Se consume aquí para que uno
+        // viejo no acabe avalando al fantasma que venga después.
+        const avalado = boton && ultimoPointerdown && boton.contains(ultimoPointerdown);
+        ultimoPointerdown = null;
+
+        if (!boton || avalado) return;
+        if (Date.now() - ultimaRueda > MARGEN_MS) return;
+
+        e.preventDefault();
+        e.stopImmediatePropagation();
+    }, true);
 })();

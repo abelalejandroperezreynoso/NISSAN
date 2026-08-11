@@ -145,6 +145,26 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   encima en vez de esconderse detrás, y ancla el documento mientras haya una
   hoja abierta.
 
+  Sólo cuenta el teclado de texto. La rueda de un `<select>` y la de los
+  campos de fecha y hora encogen el viewport visual exactamente igual, pero
+  ahí `--alto-teclado` se deja en cero a propósito: iOS ya deja el campo
+  enfocado a la vista, y si además subimos la hoja el formulario entero se
+  recoloca mientras la rueda está abierta. Al cerrarse, la hoja baja
+  animada y el dedo que iba al siguiente campo se encuentra el botón de
+  guardar pasando por esa posición. En una pantalla de 375×667, elegir la
+  planta en «Agregar nuevo equipo» movía la hoja 198 px y el botón
+  «Guardar Equipo» cruzaba justo por donde estaba el desplegable de línea.
+  Todo campo nuevo que abra una rueda en vez de un teclado va en la lista
+  `TIPOS_SIN_TECLADO` de `1-config.js`.
+
+  Como red de seguridad hay un segundo bloque en `1-config.js` que descarta
+  el *toque fantasma*: al cerrarse una rueda, iOS sintetiza un click en las
+  coordenadas del dedo sin el `pointerdown` que trae cualquier toque real.
+  Se filtran sólo los clicks sobre `<button>` y sólo en los 700 ms
+  siguientes a haber usado una rueda; el `.click()` programático sobre un
+  `<input type="file">` escondido tras una etiqueta tampoco trae
+  `pointerdown` y por eso el filtro no toca a los `input`.
+
   Los paneles de responder y calificar encuestas son un caso aparte: el
   contenedor `#modal-responder-eval` de `index.html` va vacío y lleva sólo la
   clase; `4-evaluaciones-base.js` y `4-evaluaciones-admin.js` le meten su
