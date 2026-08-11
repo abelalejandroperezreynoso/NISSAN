@@ -1484,9 +1484,18 @@
                         return;
                     }
 
-                    const { error: errorBorrar } = await sb.from('equipos')
+                    // El .select() no es decorativo: sin él no hay forma de
+                    // saber si el borrado ocurrió. Un delete que las políticas
+                    // de la base no permiten NO devuelve error, borra cero
+                    // filas y contesta con éxito, así que dar por bueno el
+                    // "sin error" hacía que la pantalla dijera que los
+                    // duplicados se habían ido y volvieran al recargar.
+                    const { data: borradas, error: errorBorrar } = await sb.from('equipos')
                         .delete()
-                        .in('id', idsSobrantes);
+                        .in('id', idsSobrantes)
+                        .select('id');
+
+                    const seFueron = new Set((borradas || []).map(b => String(b.id)));
 
                     // Se avisa y se sigue: las solicitudes ya están movidas y
                     // esa parte no hay que deshacerla.
@@ -1495,14 +1504,23 @@
                         alert("Las solicitudes ya quedaron en el alta elegida, pero no se pudieron borrar las filas sobrantes:\n\n" +
                               (errorBorrar.message || errorBorrar) +
                               "\n\nNo se perdió nada. Hay que quitarlas desde Supabase.");
+                    } else if (seFueron.size < idsSobrantes.length) {
+                        console.warn("El borrado no alcanzó a todas las altas sobrantes:", idsSobrantes, borradas);
+                        alert(`Las ${porMover} solicitudes ya quedaron en el alta #${superviviente.id}, pero la base no borró ` +
+                              `${idsSobrantes.length - seFueron.size} de las ${idsSobrantes.length} filas sobrantes.\n\n` +
+                              "No dio error: simplemente no borró nada, que es lo que pasa cuando a la tabla " +
+                              "equipos le falta permiso de borrado en Supabase.\n\n" +
+                              "No se perdió nada. El script sql/politica-borrado-equipos.sql lo arregla.");
                     }
 
-                    // Copia local al día para repintar sin recargar.
+                    // Copia local al día para repintar sin recargar. Sólo se
+                    // quitan las filas que la base confirmó haber borrado, o
+                    // la pantalla mentiría hasta la siguiente recarga.
                     const sobra = new Set(idsSobrantes.map(String));
                     refacciones.forEach(r => {
                         if (sobra.has(String(r.equipo_id))) r.equipo_id = superviviente.id;
                     });
-                    if (!errorBorrar) equipos = equipos.filter(e => !sobra.has(String(e.id)));
+                    equipos = equipos.filter(e => !seFueron.has(String(e.id)));
 
                     agregarMetricas();
                     window.cerrarDetalleActivo();

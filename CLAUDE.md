@@ -173,6 +173,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   agrupa las altas de la línea por `id_interno` y, cuando falta, por nombre,
   ambos normalizados sin espacios y en mayúsculas. Sin eso, una máquina dada
   de alta dos veces en la misma línea partía su carga en dos cuadros.
+- **Una escritura que la base no permite no da error.** PostgREST responde
+  con éxito a un `update` o un `delete` que las políticas de RLS rechazan:
+  simplemente afecta a cero filas. Comprobar `error` no basta, y el código
+  que da por hecho que la escritura ocurrió deja la pantalla mintiendo hasta
+  la siguiente recarga. Donde importe, hay que encadenar `.select()` a la
+  escritura y contar las filas que devuelve, que es lo que hace la unión de
+  altas repetidas del mapa de activos. Las políticas van por operación, así
+  que una tabla puede dejar actualizar y no borrar.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con
