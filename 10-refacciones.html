@@ -660,9 +660,21 @@
 
     <div id="modal-refacciones" class="hoja-overlay" style="z-index:4500;">
         <div class="form-content hoja-contenido" style="max-width: 600px; overflow-y: auto; padding: 12px 25px 25px; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
+            <!-- Enviar va arriba por lo mismo que en «Agregar nuevo equipo»:
+                 al pie del formulario es el blanco que se lleva el toque con
+                 el que se cierra una rueda de iOS. Siendo de icono no tiene
+                 texto que enseñe en qué modo está ni qué está haciendo, así
+                 que lo primero va en su aria-label y lo segundo en el
+                 subtítulo, que es donde sí se lee. -->
             <div class="hoja-encabezado">
-                <h3 id="titulo-modal-refacciones" class="hoja-titulo">Solicitar refacciones</h3>
-                <button onclick="window.cerrarModalRefacciones()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                <div style="min-width:0;">
+                    <h3 id="titulo-modal-refacciones" class="hoja-titulo">Solicitar refacciones</h3>
+                    <div class="hoja-subtitulo" id="ref-estado-envio"></div>
+                </div>
+                <div class="hoja-acciones">
+                    <button id="btn-guardar-refaccion" onclick="window.enviarSolicitudRefaccion()" class="ios-boton-icono" title="Enviar solicitud" aria-label="Enviar solicitud"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5.5 5.5L20 7"/></svg></button>
+                    <button onclick="window.cerrarModalRefacciones()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                </div>
             </div>
             
             <div class="form-group">
@@ -747,9 +759,6 @@
                 </div>
             </div>
 
-                        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:6px;">
-                <button id="btn-guardar-refaccion" onclick="window.enviarSolicitudRefaccion()" style="padding:10px 20px; background:#f59e0b; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Enviar Solicitud</button>
-            </div>
         </div>
     </div>
 
@@ -2298,10 +2307,31 @@
         // 1-config.js, compartido con el resto de las pantallas.
 
 
+        // El botón de enviar es de icono y la hoja sirve para tres cosas
+        // —solicitar, editar y volver a solicitar—, así que lo que antes
+        // decía su texto va ahora al aria-label y al title: lo que lee el
+        // lector de pantalla y lo que sale al mantenerlo pulsado.
+        window.etiquetarBotonEnviar = (texto) => {
+            const boton = document.getElementById('btn-guardar-refaccion');
+            boton.title = texto;
+            boton.setAttribute('aria-label', texto);
+        };
+
+        // Y lo que antes decía mientras trabajaba («Subiendo foto…») va al
+        // subtítulo del encabezado, que es el único sitio de la hoja donde
+        // se puede leer. Con texto, el botón queda apagado; sin él, vuelve.
+        window.estadoEnvioRefaccion = (texto) => {
+            const boton = document.getElementById('btn-guardar-refaccion');
+            document.getElementById('ref-estado-envio').innerText = texto || '';
+            boton.disabled = !!texto;
+            boton.style.opacity = texto ? '0.45' : '';
+        };
+
         window.abrirModalRefacciones = () => {
                     window.refaccionEditandoId = null;
                     document.getElementById('titulo-modal-refacciones').innerHTML = "⚙️ Solicitar Refacciones";
-                    document.getElementById('btn-guardar-refaccion').innerText = "Enviar Solicitud";
+                    window.etiquetarBotonEnviar("Enviar solicitud");
+                    window.estadoEnvioRefaccion('');
 
                     document.getElementById('modal-refacciones').style.display = 'flex';
                     
@@ -2353,7 +2383,8 @@
                     window.refaccionEditandoId = req.id;
                     
                     document.getElementById('titulo-modal-refacciones').innerHTML = "✏️ Editar Solicitud";
-                    document.getElementById('btn-guardar-refaccion').innerText = "Guardar Cambios";
+                    window.etiquetarBotonEnviar("Guardar cambios");
+                    window.estadoEnvioRefaccion('');
                     
                     document.getElementById('inp-refaccion-nombre').value = req.nombre_refaccion;
                     document.getElementById('inp-refaccion-cantidad').value = req.cantidad;
@@ -2384,7 +2415,8 @@
                     window.refaccionEditandoId = null;
                     
                     document.getElementById('titulo-modal-refacciones').innerHTML = "🔁 Volver a Solicitar";
-                    document.getElementById('btn-guardar-refaccion').innerText = "Enviar Nueva Solicitud";
+                    window.etiquetarBotonEnviar("Enviar nueva solicitud");
+                    window.estadoEnvioRefaccion('');
                     
                     document.getElementById('inp-refaccion-nombre').value = req.nombre_refaccion;
                     document.getElementById('inp-refaccion-cantidad').value = req.cantidad;
@@ -2593,13 +2625,18 @@
             const prioridad = document.getElementById('inp-refaccion-prioridad').value;
             const equipoStr = document.getElementById('inp-refaccion-maquina-search').value || '[Sin Equipo]';
 
-            const btnEnviar = document.getElementById('btn-guardar-refaccion');
             const fileInput = document.getElementById('inp-foto-nueva-solicitud');
 
             if (!nombre || !cantidad || !equipoId) {
                 alert("Por favor, completa Nombre, Cantidad y selecciona una Máquina de la lista.");
                 return;
             }
+
+            // El botón se apaga en cuanto empieza a subir la foto, pero antes
+            // hay un await para copiar al portapapeles: sin este cerrojo, dos
+            // toques seguidos mandan la solicitud dos veces.
+            if (document.getElementById('btn-guardar-refaccion').disabled) return;
+            window.estadoEnvioRefaccion("Enviando…");
 
             // ==========================================
             // 2. COPIAMOS AL PORTAPAPELES INMEDIATAMENTE
@@ -2624,8 +2661,7 @@
             // ==========================================
             let fotoUrl = null;
             if (fileInput.files && fileInput.files[0]) {
-                btnEnviar.innerText = "Subiendo foto...";
-                btnEnviar.disabled = true;
+                window.estadoEnvioRefaccion("Subiendo foto…");
                 try {
                     const blob = await window.optimizarImagen(fileInput.files[0]);
                     const extension = blob.type === 'image/jpeg' ? 'jpg' : 'webp';
@@ -2641,8 +2677,7 @@
                 } catch (e) {
                     console.error("Detalle del error de imagen:", e);
                     alert("Error al procesar la foto: " + (e.message || JSON.stringify(e)));
-                    btnEnviar.innerText = "Enviar Solicitud";
-                    btnEnviar.disabled = false;
+                    window.estadoEnvioRefaccion('');
                     return;
                 }
             }
@@ -2650,9 +2685,7 @@
             // ==========================================
             // 4. GUARDAMOS LA SOLICITUD EN BASE DE DATOS
             // ==========================================
-            const textoOriginal = btnEnviar.innerText;
-            btnEnviar.innerText = "Guardando...";
-            btnEnviar.disabled = true;
+            window.estadoEnvioRefaccion("Guardando…");
 
             try {
                 const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
@@ -2705,8 +2738,7 @@
                 console.error("Error al enviar solicitud:", error);
                 alert("Ocurrió un error al guardar la solicitud en el servidor.");
             } finally {
-                btnEnviar.innerText = textoOriginal;
-                btnEnviar.disabled = false;
+                window.estadoEnvioRefaccion('');
             }
         };
 

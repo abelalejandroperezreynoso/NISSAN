@@ -159,6 +159,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   guardaba al ir a elegir la línea. Es la razón de que esa hoja no tenga
   botonera inferior —ni «Cancelar», que sería otro blanco fácil y duplica lo
   que ya hace la cruz—: debajo del último campo no hay nada que pulsar.
+  «Solicitar refacciones» sigue el mismo patrón.
+
+  Un botón de icono no tiene texto, así que lo que antes decía hay que
+  repartirlo: **la etiqueta va al `aria-label` y al `title`** —en refacciones
+  cambia con el modo, que la hoja sirve para solicitar, editar y volver a
+  solicitar— y **el estado va al subtítulo del encabezado** («Subiendo
+  foto…»), con el botón apagado mientras tanto. Nunca con `innerText`: eso
+  borraría el `<svg>` de dentro.
 
   El botón de cerrar va **vacío**: la cruz la dibuja `.ios-boton-cerrar` con
   pseudoelementos, así que no lleva `✕` ni SVG, pero sí `aria-label`. Para
