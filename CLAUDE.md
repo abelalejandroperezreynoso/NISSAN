@@ -193,6 +193,16 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   agrupa las altas de la línea por `id_interno` y, cuando falta, por nombre,
   ambos normalizados sin espacios y en mayúsculas. Sin eso, una máquina dada
   de alta dos veces en la misma línea partía su carga en dos cuadros.
+
+  Lo que edita esa máquina —el ID interno, el nombre y la unión de altas
+  repetidas— vive en `#modal-editar-equipo`, una hoja aparte que se abre con
+  el lápiz del encabezado del detalle. El detalle (`#modal-detalle-activo`)
+  es sólo de consulta. El cuerpo de la hoja de edición se arma con
+  `innerHTML` al abrirla y se vacía al cerrarla, así que los ids de sus
+  campos (`inp-detalle-id`, `inp-detalle-nombre`, `lista-altas`…) existen
+  sólo mientras está a la vista; funciones como `idInternoElegido()` los
+  buscan por id y devuelven vacío si no están. `cerrarDetalleActivo()`
+  cierra también la de edición: la hija no puede sobrevivir a la madre.
 - **Una escritura que la base no permite no da error.** PostgREST responde
   con éxito a un `update` o un `delete` que las políticas de RLS rechazan:
   simplemente afecta a cero filas. Comprobar `error` no basta, y el código
