@@ -161,6 +161,14 @@
             overflow: hidden;
             background: #0f172a;
             margin: 0 var(--hueco-lienzo) var(--hueco-lienzo);
+
+            /* La misma esquina que las hojas inferiores: --radio-hoja vive en
+               estilos.css, con ellas, para que las dos no se separen. Los
+               cuadros van en absoluto dentro del lienzo y el overflow:hidden
+               de arriba los recorta contra este radio, así que el treemap
+               sigue calculándose sobre el rectángulo completo y son las
+               esquinas las que se comen su pico. */
+            border-radius: var(--radio-hoja);
         }
 
         /* Los cuadros se pegan unos a otros: no llevan borde propio ni

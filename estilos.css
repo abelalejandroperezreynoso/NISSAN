@@ -1757,6 +1757,13 @@ textarea:focus {
    propósito: así gana sobre .form-content y .firma-content, que siguen
    aportando el ancho máximo y el desplazamiento interno de cada panel. */
 
+/* El radio de las hojas, en variable porque hay fuera quien lo copia: el
+   lienzo del mapa de activos se redondea igual para que las dos superficies
+   grandes de la app tengan la misma esquina. Si cambia, cambian las dos. */
+:root {
+    --radio-hoja: 44px;
+}
+
 .hoja-overlay {
     display: none;
     position: fixed;
@@ -1799,7 +1806,7 @@ textarea:focus {
        iOS. Va por encima del radio de pantalla del iPhone (39pt) porque iOS
        dibuja esquinas continuas, que a igual valor se ven más redondeadas
        que el border-radius circular de CSS. */
-    border-radius: 44px;
+    border-radius: var(--radio-hoja);
     box-shadow: 0 10px 40px rgba(15, 23, 42, 0.25);
 
     /* Tope calculado contra el viewport y no en porcentaje: dentro de un
