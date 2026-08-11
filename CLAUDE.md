@@ -243,6 +243,26 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   escritura y contar las filas que devuelve, que es lo que hace la unión de
   altas repetidas del mapa de activos. Las políticas van por operación, así
   que una tabla puede dejar actualizar y no borrar.
+- **Quién debe firmar un registro.** No hay tabla que lo diga: la regla la
+  repite el código en cada pantalla que la necesita. Le toca firmar a todo
+  empleado dado de alta **en o antes** de la fecha del registro, salvo los
+  puestos exentos (`JR. MANAGER`, `SR MANAGER`, con y sin punto). Las
+  capacitaciones no se firman y quedan fuera de cualquier conteo de avance.
+  Vive en `2b-core-dashboard.js` (badges de pendientes), `3-incidentes.js`
+  (avance de la tarjeta), `7-pendientes.js` y `9-estadisticas.js`. Al tocar
+  una hay que mirar las otras: si se separan, dos pantallas dan porcentajes
+  distintos del mismo registro. Ojo con la fecha, que llega como
+  `'YYYY-MM-DD'` y hay que armarla a mano (`new Date(y, m-1, d)`) para que no
+  la corra la zona horaria un día hacia atrás.
+- **Las estadísticas tienen dos desgloses y dos orígenes.** Por
+  departamentos, los conteos vienen del reporte `obtener_estadisticas_empleados`,
+  que suma todos los registros del filtro en la base. Por registro, en cambio,
+  se traen los incidentes con sus firmas incrustadas
+  (`incidents … incident_signatures(employee_id)`, de 25 en 25) y el avance se
+  calcula en el navegador, así que bajar a departamento → supervisor →
+  colaborador no cuesta ninguna consulta más. Como uno lo calcula la base y el
+  otro el navegador, sus totales pueden discrepar un poco si la función SQL
+  no aplica exactamente la regla de arriba.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con
