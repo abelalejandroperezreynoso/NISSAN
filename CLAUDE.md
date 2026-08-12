@@ -37,7 +37,7 @@ Los mensajes de commit van en español.
 | `5-objetivos.js` … `9-estadisticas.js` | Objetivos, calendario, pendientes, hallazgos, estadísticas |
 | `10-refacciones.js` | Solo inyecta el botón; la pantalla vive aparte |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
-| `11-mapa-activos.html` | Mapa de activos: treemap de refacciones por planta → línea → equipo |
+| `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
 | `manifest.json` | Manifiesto PWA; su `scope` cubre las tres páginas |
 

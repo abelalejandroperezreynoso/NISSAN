@@ -93,6 +93,43 @@
             margin-top: 2px;
         }
 
+        /* Control segmentado de iOS: el fondo gris es la pista y el blanco con
+           sombra es la pestaña elegida. Va en su propio renglón, encima de la
+           ruta, porque la ruta cambia con la vista y se lee como su hija. */
+        #barra-vistas {
+            display: flex;
+            gap: 2px;
+            margin: 8px 16px 0;
+            padding: 2px;
+            background: #f2f2f7;
+            border-radius: 9px;
+            flex-shrink: 0;
+        }
+
+        .vista-opcion {
+            flex: 1;
+            min-width: 0;
+            border: none;
+            background: transparent;
+            border-radius: 7px;
+            padding: 6px 4px;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #3c3c43;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .vista-opcion[aria-selected="true"] {
+            background: white;
+            color: #0f172a;
+            font-weight: 700;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        }
+
         #barra-ruta {
             padding: 6px 10px 6px 16px;
             background: white;
@@ -436,6 +473,14 @@
             <button onclick="window.location.href='10-refacciones.html'" class="ios-boton-icono ios-boton-icono--destructivo" title="Volver a Refacciones" aria-label="Volver a Refacciones"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></svg></button>
         </div>
 
+        <!-- Punto de vista. El mapa reparte siempre las mismas solicitudes;
+             lo que cambia es en qué cajones las agrupa. -->
+        <div id="barra-vistas" role="tablist" aria-label="Punto de vista">
+            <button class="vista-opcion" data-vista="activos" role="tab">Activos</button>
+            <button class="vista-opcion" data-vista="solicitantes" role="tab">Solicitantes</button>
+            <button class="vista-opcion" data-vista="atendedores" role="tab">Atendedores</button>
+        </div>
+
         <div id="barra-ruta">
             <div id="ruta"></div>
             <button id="btn-lista-nivel" class="ios-boton-icono" title="Ver en lista" aria-label="Ver en lista"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg></button>
@@ -454,7 +499,9 @@
                     <div class="hoja-subtitulo" id="detalle-subtitulo"></div>
                 </div>
                 <div class="hoja-acciones">
-                    <button onclick="window.abrirEdicionEquipo()" class="ios-boton-icono"
+                    <!-- Sólo en la vista de activos: en la hoja de una persona
+                         no hay equipo que renombrar. Lo esconde pintarDetalle. -->
+                    <button id="btn-editar-equipo" onclick="window.abrirEdicionEquipo()" class="ios-boton-icono"
                             title="Editar equipo" aria-label="Editar equipo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
                     <button onclick="window.cerrarDetalleActivo()" class="ios-boton-cerrar ios-boton-icono"
                             title="Cerrar" aria-label="Cerrar"></button>
@@ -532,19 +579,41 @@
             let metricasPorLinea = new Map();
             let metricasPorPlanta = new Map();
             let solicitudesPorEquipo = new Map();
+            let equiposPorId = new Map();
 
-            // Nombre de cada empleado, para poner cara al solicitante en el
-            // detalle del equipo. Va indexado por las dos claves con las que
-            // una solicitud puede guardar a su autor.
-            let nombresEmpleados = new Map();
+            // Ficha de cada empleado, indexada por las dos claves con las que
+            // una solicitud puede guardar a una persona.
+            let empleadosPorClave = new Map();
 
-            // Nivel que se está viendo: [] = plantas, [planta] = sus líneas,
-            // [planta, linea] = sus equipos.
+            // Las dos vistas de personas, ya agregadas: cada entrada es una
+            // persona con su métrica y sus solicitudes. Se arman al cargar,
+            // igual que las de activos.
+            let solicitantes = new Map();
+            let atendedores = new Map();
+
+            // Punto de vista: en qué cajones se reparten las solicitudes.
+            // Las mismas solicitudes, agrupadas de otra manera.
+            let vista = 'activos';
+
+            // Nivel que se está viendo dentro de la vista. En activos,
+            // [] = plantas, [planta] = sus líneas, [planta, linea] = sus
+            // equipos; en solicitantes, [] = departamentos y [depto] = su
+            // gente; en atendedores no hay más nivel que el primero.
             let ruta = [];
+
+            // Cada vista dice de dónde cuelga su ruta, cómo se llama cada
+            // nivel en la hoja de lista y qué se ve al final del camino.
+            const VISTAS = {
+                activos: { raiz: 'Plantas', niveles: ['Plantas', 'Líneas', 'Equipos'] },
+                solicitantes: { raiz: 'Departamentos', niveles: ['Departamentos', 'Solicitantes'] },
+                atendedores: { raiz: 'Atendedores', niveles: ['Atendedores'] }
+            };
 
             const CERRADOS = ['Entregada', 'Recibida'];
             const SIN_PLANTA = 'sin-planta';
             const SIN_LINEA = 'sin-linea';
+            const SIN_PERSONA = 'sin-persona';
+            const SIN_DEPTO = 'sin-depto';
 
             // El cuadro se lee de abajo hacia arriba, del trabajo terminado al
             // que falta: blanco lo cerrado del todo, ámbar lo que ya se entregó
@@ -583,12 +652,13 @@
                     sb.from('plantas').select('id, nombre').order('nombre'),
                     sb.from('lineas').select('id, nombre, planta_id').order('nombre'),
                     sb.from('equipos').select('id, nombre, id_interno, planta_id, linea_id, activo').order('nombre'),
-                    sb.from('refacciones').select('id, nombre_refaccion, estado, prioridad, cantidad, unidad, equipo_id, solicitante_id, created_at').order('created_at', { ascending: false }),
-                    // Los nombres son un adorno del detalle, no el mapa: si esta
-                    // consulta falla, el renglón se queda sin nombre y todo lo
-                    // demás se dibuja igual. Por eso queda fuera del lazo que
-                    // aborta la carga, y por eso se atrapa aquí su rechazo.
-                    sb.from('employees').select('id, employee_id, name')
+                    sb.from('refacciones').select('id, nombre_refaccion, estado, prioridad, cantidad, unidad, equipo_id, solicitante_id, atendido_por_id, created_at').order('created_at', { ascending: false }),
+                    // La plantilla sostiene las vistas de personas y los nombres
+                    // del detalle, pero no el mapa de activos: si esta consulta
+                    // falla, ese mapa se dibuja igual y son las otras dos vistas
+                    // las que se quedan sin nadie. Por eso queda fuera del lazo
+                    // que aborta la carga, y por eso se atrapa aquí su rechazo.
+                    sb.from('employees').select('id, employee_id, name, department')
                         .then(r => r, e => ({ data: null, error: e }))
                 ]);
 
@@ -602,19 +672,27 @@
                 refacciones = resRefacciones.data || [];
 
                 if (resEmpleados.error) {
-                    console.error("No se pudieron cargar los nombres de los empleados:", resEmpleados.error);
+                    console.error("No se pudieron cargar los empleados:", resEmpleados.error);
                 } else {
                     // Una solicitud guarda a su autor con el id numérico o con
                     // el de texto según su antigüedad, así que el índice lleva
-                    // las dos claves apuntando al mismo nombre.
+                    // las dos claves apuntando a la misma ficha. La clave de la
+                    // ficha es siempre el id numérico: es lo que junta en una
+                    // sola persona las solicitudes guardadas de las dos formas.
                     (resEmpleados.data || []).forEach(e => {
                         if (!e.name) return;
-                        if (e.id) nombresEmpleados.set(String(e.id).trim(), e.name);
-                        if (e.employee_id) nombresEmpleados.set(String(e.employee_id).trim(), e.name);
+                        const ficha = {
+                            clave: String(e.id).trim(),
+                            nombre: e.name,
+                            depto: String(e.department || '').trim() || SIN_DEPTO
+                        };
+                        if (e.id) empleadosPorClave.set(String(e.id).trim(), ficha);
+                        if (e.employee_id) empleadosPorClave.set(String(e.employee_id).trim(), ficha);
                     });
                 }
 
                 agregarMetricas();
+                pintarVistas();
                 aplicarRuta([], false);
             } catch (error) {
                 console.error("Error cargando el mapa de activos:", error);
@@ -675,17 +753,46 @@
                 sumarSolicitud(mapa.get(clave), req);
             }
 
+            // La ficha de quien pidió o atendió una solicitud. El id llega en
+            // crudo de la base y puede ser el numérico, el de texto, o ninguno
+            // —una solicitud que nadie ha tomado no tiene atendedor—.
+            function personaDe(idCrudo) {
+                const bruto = String(idCrudo === null || idCrudo === undefined ? '' : idCrudo).trim();
+                if (!bruto) return { clave: SIN_PERSONA, nombre: '', depto: SIN_DEPTO };
+                // Un id que no está en la plantilla se queda como cajón propio:
+                // vale más un cuadro sin nombre que perder sus solicitudes.
+                return empleadosPorClave.get(bruto) ||
+                    { clave: 'otro:' + bruto, nombre: '', depto: SIN_DEPTO };
+            }
+
+            function acumularPersona(mapa, ficha, req) {
+                if (!mapa.has(ficha.clave)) {
+                    mapa.set(ficha.clave, {
+                        clave: ficha.clave,
+                        nombre: ficha.nombre,
+                        depto: ficha.depto,
+                        metrica: metricaVacia(),
+                        solicitudes: []
+                    });
+                }
+                const entrada = mapa.get(ficha.clave);
+                sumarSolicitud(entrada.metrica, req);
+                entrada.solicitudes.push(req);
+            }
+
             function agregarMetricas() {
                 metricasPorEquipo = new Map();
                 metricasPorLinea = new Map();
                 metricasPorPlanta = new Map();
                 solicitudesPorEquipo = new Map();
+                solicitantes = new Map();
+                atendedores = new Map();
 
-                const indiceEquipos = new Map(equipos.map(e => [String(e.id), e]));
+                equiposPorId = new Map(equipos.map(e => [String(e.id), e]));
                 const global = metricaVacia();
 
                 refacciones.forEach(req => {
-                    const equipo = indiceEquipos.get(String(req.equipo_id));
+                    const equipo = equiposPorId.get(String(req.equipo_id));
 
                     // Una solicitud sin equipo vivo (borrado, o nunca asignado)
                     // no se pierde: cae en los cajones "sin planta / sin línea",
@@ -696,6 +803,13 @@
                     acumular(metricasPorPlanta, clavePlanta, req);
                     acumular(metricasPorLinea, clavePlanta + '|' + claveLinea, req);
                     sumarSolicitud(global, req);
+
+                    // Las dos vistas de personas se llenan en la misma pasada.
+                    // Nadie se queda fuera: la solicitud sin solicitante
+                    // reconocible y la que nadie ha tomado tienen su cajón, que
+                    // en la de atendedores es justo el que hay que mirar.
+                    acumularPersona(solicitantes, personaDe(req.solicitante_id), req);
+                    acumularPersona(atendedores, personaDe(req.atendido_por_id), req);
 
                     if (equipo) {
                         const claveEquipo = String(equipo.id);
@@ -727,9 +841,66 @@
             // Nodos del nivel visible
             // ==========================================
             function nodosDelNivel() {
+                if (vista === 'solicitantes') {
+                    return ruta.length === 0
+                        ? nodosDepartamentos()
+                        : nodosPersonas(solicitantes, ruta[0].id);
+                }
+                if (vista === 'atendedores') return nodosPersonas(atendedores, null);
+
                 if (ruta.length === 0) return nodosPlantas();
                 if (ruta.length === 1) return nodosLineas(ruta[0].id);
                 return nodosEquipos(ruta[0].id, ruta[1].id);
+            }
+
+            // ------------------------------------------
+            // Vistas de personas
+            // ------------------------------------------
+            // El nombre completo no cabe en un cuadro: el treemap encoge la
+            // letra hasta que quepa entero y un nombre de cuatro palabras
+            // acabaría ilegible. Así que el cuadro lleva nombre y primer
+            // apellido, y el resto se guarda para el subtítulo.
+            function nombreCorto(nombre) {
+                const partes = String(nombre).trim().split(/\s+/);
+                return partes.slice(0, 2).join(' ');
+            }
+
+            function nodoDePersona(entrada) {
+                const corto = entrada.nombre ? nombreCorto(entrada.nombre) : '';
+                return {
+                    tipo: 'persona',
+                    id: entrada.clave,
+                    // Sin nombre hay dos casos distintos y conviene no
+                    // confundirlos: la que nadie ha tomado y la que apunta a
+                    // alguien que ya no está en la plantilla.
+                    titulo: corto || (entrada.clave === SIN_PERSONA ? 'Sin asignar' : 'Sin identificar'),
+                    subtitulo: entrada.nombre !== corto ? entrada.nombre : '',
+                    metrica: entrada.metrica
+                };
+            }
+
+            function nodosPersonas(mapa, depto) {
+                return Array.from(mapa.values())
+                    .filter(e => depto === null || e.depto === depto)
+                    .map(nodoDePersona);
+            }
+
+            // Los departamentos son los de la ficha del solicitante, no un
+            // catálogo aparte: department es texto libre en employees.
+            function nodosDepartamentos() {
+                const grupos = new Map();
+                solicitantes.forEach(e => {
+                    if (!grupos.has(e.depto)) grupos.set(e.depto, []);
+                    grupos.get(e.depto).push(e);
+                });
+
+                return Array.from(grupos.entries()).map(([depto, gente]) => ({
+                    tipo: 'depto',
+                    id: depto,
+                    titulo: depto === SIN_DEPTO ? 'Sin departamento' : depto,
+                    subtitulo: gente.length > 1 ? `${gente.length} personas` : '',
+                    metrica: sumarMetricas(gente.map(e => e.metrica))
+                }));
             }
 
             function nodosPlantas() {
@@ -888,9 +1059,11 @@
                 if (nodos.length === 0 || ancho <= 0 || alto <= 0) {
                     aviso.style.display = 'flex';
                     aviso.style.color = '#64748b';
-                    aviso.innerText = ruta.length === 0
-                        ? "No hay plantas registradas todavía."
-                        : "Este nivel no tiene nada que mostrar.";
+                    aviso.innerText = ruta.length > 0
+                        ? "Este nivel no tiene nada que mostrar."
+                        : (vista === 'activos'
+                            ? "No hay plantas registradas todavía."
+                            : "Todavía no hay solicitudes de las que colgar a nadie.");
                     return;
                 }
                 aviso.style.display = 'none';
@@ -1038,28 +1211,56 @@
                     aplicarRuta([{ tipo: 'planta', id: nodo.id, titulo: nodo.titulo }], true);
                 } else if (nodo.tipo === 'linea') {
                     aplicarRuta([ruta[0], { tipo: 'linea', id: nodo.id, titulo: nodo.titulo }], true);
+                } else if (nodo.tipo === 'depto') {
+                    aplicarRuta([{ tipo: 'depto', id: nodo.id, titulo: nodo.titulo }], true);
                 } else {
-                    abrirDetalleEquipo(nodo);
+                    abrirDetalle(nodo);
                 }
             }
 
             // El gesto de volver de iOS sube un nivel en lugar de salirse de la
             // pantalla, que es lo que espera quien viene bajando por el mapa.
+            // La vista viaja en el mismo estado que la ruta: volver desde el
+            // primer nivel de una vista devuelve a la anterior.
             function aplicarRuta(nuevaRuta, empujar) {
                 ruta = nuevaRuta;
                 if (empujar) {
-                    history.pushState({ ruta: nuevaRuta }, '');
+                    history.pushState({ vista, ruta: nuevaRuta }, '');
                 } else {
-                    history.replaceState({ ruta: nuevaRuta }, '');
+                    history.replaceState({ vista, ruta: nuevaRuta }, '');
                 }
                 pintarRuta();
                 dibujar();
             }
 
-            window.addEventListener('popstate', (evento) => {
-                ruta = (evento.state && evento.state.ruta) ? evento.state.ruta : [];
+            // Cambiar de vista es empezar de cero: los pasos de la ruta
+            // anterior no significan nada en los cajones de la nueva.
+            function cambiarVista(nueva) {
+                if (!VISTAS[nueva] || nueva === vista) return;
+                vista = nueva;
                 window.cerrarDetalleActivo();
                 window.cerrarListaNivel();
+                pintarVistas();
+                aplicarRuta([], true);
+            }
+
+            function pintarVistas() {
+                document.querySelectorAll('.vista-opcion').forEach(boton => {
+                    boton.setAttribute('aria-selected', String(boton.dataset.vista === vista));
+                });
+            }
+
+            document.querySelectorAll('.vista-opcion').forEach(boton => {
+                boton.onclick = () => cambiarVista(boton.dataset.vista);
+            });
+
+            window.addEventListener('popstate', (evento) => {
+                const estado = evento.state || {};
+                vista = VISTAS[estado.vista] ? estado.vista : 'activos';
+                ruta = estado.ruta || [];
+                window.cerrarDetalleActivo();
+                window.cerrarListaNivel();
+                pintarVistas();
                 pintarRuta();
                 dibujar();
             });
@@ -1068,7 +1269,7 @@
                 const contenedor = document.getElementById('ruta');
                 contenedor.innerHTML = '';
 
-                const pasos = [{ titulo: 'Plantas' }].concat(ruta);
+                const pasos = [{ titulo: VISTAS[vista].raiz }].concat(ruta);
                 pasos.forEach((paso, i) => {
                     if (i > 0) {
                         const flecha = document.createElement('span');
@@ -1103,8 +1304,9 @@
                     (b.metrica.total - a.metrica.total) ||
                     a.titulo.localeCompare(b.titulo));
 
-                const titulos = ['Plantas', 'Líneas', 'Equipos'];
-                document.getElementById('lista-titulo').innerText = titulos[ruta.length];
+                const niveles = VISTAS[vista].niveles;
+                document.getElementById('lista-titulo').innerText =
+                    niveles[Math.min(ruta.length, niveles.length - 1)];
                 document.getElementById('lista-subtitulo').innerText =
                     ruta.length === 0 ? 'Toda la empresa' : ruta.map(p => p.titulo).join(' › ');
 
@@ -1254,7 +1456,7 @@
             let nodoDetalle = null;
             let detalleVerTodas = false;
 
-            function abrirDetalleEquipo(nodo) {
+            function abrirDetalle(nodo) {
                 nodoDetalle = nodo;
                 detalleVerTodas = false;
                 if (!pintarDetalle()) return;
@@ -1262,9 +1464,15 @@
             }
 
             // Vuelve a leer el nodo del nivel: después de mover una solicitud
-            // las métricas del que se guardó ya no valen.
+            // las métricas del que se guardó ya no valen. Sólo se llega aquí
+            // desde la vista de activos, que es la única con hoja de equipo.
             function refrescarDetalle() {
                 if (!nodoDetalle) return;
+                if (nodoDetalle.tipo !== 'equipo') {
+                    pintarDetalle();
+                    return;
+                }
+
                 const actualizado = nodosDelNivel().find(n =>
                     n.tipo === 'equipo' && n.ids.some(id => nodoDetalle.ids.includes(id)));
 
@@ -1281,69 +1489,95 @@
                 pintarDetalle();
             };
 
+            // La hoja es la misma para las tres vistas; lo que cambia es de
+            // dónde salen sus solicitudes, qué dato lleva cada renglón y quién
+            // tiene que hacer algo con las que están sin confirmar.
             function pintarDetalle() {
-                const nodo = nodoDetalle;
-                if (!nodo) return false;
-                const filas = filasDelDetalle();
+                if (!nodoDetalle) return false;
+                return nodoDetalle.tipo === 'persona' ? pintarDetallePersona() : pintarDetalleEquipo();
+            }
 
-                if (filas.length === 0) return false;
-
-                const m = nodo.metrica;
-                const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
-
-                // Lo que sigue abierto va primero, y dentro de eso lo urgente:
-                // una lista encabezada por diez entregadas no dice nada. Las
-                // entregadas sin confirmar van antes que las ya confirmadas,
-                // porque son las únicas cerradas en las que queda algo que pedir.
+            // Lo que sigue abierto va primero, y dentro de eso lo urgente: una
+            // lista encabezada por diez entregadas no dice nada. Las entregadas
+            // sin confirmar van antes que las ya confirmadas, porque son las
+            // únicas cerradas en las que queda algo que pedir.
+            function ordenarSolicitudes(lista) {
                 const orden = (req) => {
                     if (req.estado === 'Cancelada') return 4;
                     if (req.estado === 'Recibida') return 3;
                     if (CERRADOS.includes(req.estado)) return 2;
                     return req.prioridad === 'Urgente' ? 0 : 1;
                 };
-                const solicitudes = filas
-                    .reduce((acc, f) => acc.concat(solicitudesPorEquipo.get(String(f.id)) || []), [])
-                    .sort((a, b) => orden(a) - orden(b));
+                return lista.slice().sort((a, b) => orden(a) - orden(b));
+            }
 
-                const marcas = [];
-                if (filas.length > 1) marcas.push(`${filas.length} altas en esta línea`);
-                if (filas.every(e => e.activo === false)) marcas.push('Dado de baja');
+            function nombreDeEquipo(idEquipo) {
+                const equipo = equiposPorId.get(String(idEquipo));
+                if (!equipo) return '';
+                return [String(equipo.id_interno || '').trim(), String(equipo.nombre || '').trim()]
+                    .filter(Boolean).join(' · ');
+            }
 
-                document.getElementById('detalle-titulo').innerText = nodo.subtitulo || nodo.titulo;
-                document.getElementById('detalle-subtitulo').innerText =
-                    [ruta.map(p => p.titulo).join(' › ')].concat(marcas).join(' · ');
+            // El renglón lleva un dato de contexto que nunca es el del propio
+            // cuadro: en la hoja de un equipo, quién lo pidió; en la de una
+            // persona, de qué máquina se trata. Repetir el nombre de la hoja en
+            // cada renglón no diría nada.
+            function contextoDeSolicitud(req, tipo) {
+                if (tipo === 'equipo' || vista === 'atendedores') {
+                    const nombre = personaDe(req.solicitante_id).nombre;
+                    return nombre ? '👤 ' + escapar(nombre) : '';
+                }
+                const equipo = nombreDeEquipo(req.equipo_id);
+                return equipo ? '⚙️ ' + escapar(equipo) : '';
+            }
 
+            // El bloque de solicitudes, con su tope de ocho y su «ver las
+            // restantes». El botón de mover es cosa de la vista de activos: en
+            // la hoja de una persona no se está mirando ningún equipo al que
+            // corregirle la solicitud.
+            function bloqueSolicitudes(solicitudes, tipo, textoVacio) {
                 const visibles = detalleVerTodas ? solicitudes : solicitudes.slice(0, 8);
                 const restantes = solicitudes.length - visibles.length;
 
                 const listaHtml = visibles.length === 0
-                    ? '<div style="color:#94a3b8; font-style:italic; font-size:0.85rem; padding:8px 0;">Este equipo todavía no tiene solicitudes.</div>'
+                    ? `<div style="color:#94a3b8; font-style:italic; font-size:0.85rem; padding:8px 0;">${textoVacio}</div>`
                     : visibles.map(req => {
                         const colores = colorEstado(req.estado);
                         const fecha = req.created_at
                             ? new Date(req.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
                             : '';
                         const urgente = req.prioridad === 'Urgente' && !CERRADOS.includes(req.estado) && req.estado !== 'Cancelada';
-                        // El solicitante va en su propio renglón y no pegado a la
-                        // cantidad: es a quien hay que ir a buscar cuando la
-                        // solicitud lleva días entregada sin confirmar, y ahí
+                        // El contexto va en su propio renglón y no pegado a la
+                        // cantidad: es el dato por el que se abre la hoja, y ahí
                         // detrás de la fecha se lo comían los puntos suspensivos.
-                        const solicitante = nombresEmpleados.get(String(req.solicitante_id || '').trim());
+                        const contexto = contextoDeSolicitud(req, tipo);
                         return `
                             <div class="renglon-solicitud">
                                 <div style="min-width:0;">
                                     <div style="font-weight:600; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${urgente ? '🚨 ' : ''}${escapar(req.nombre_refaccion || 'Sin nombre')}</div>
-                                    ${solicitante ? `<div style="font-size:0.75rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">👤 ${escapar(solicitante)}</div>` : ''}
+                                    ${contexto ? `<div style="font-size:0.75rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${contexto}</div>` : ''}
                                     <div style="font-size:0.75rem; color:#94a3b8;">${escapar(String(req.cantidad || ''))} ${escapar(req.unidad || '')} · ${fecha}</div>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
                                     <span class="etiqueta-estado" style="background:${colores.fondo}; color:${colores.texto};">${escapar(req.estado || 'Pendiente')}</span>
-                                    <button onclick="window.abrirMoverSolicitud('${escapar(String(req.id))}')" class="ios-boton-icono" title="Mover a otro equipo" aria-label="Mover a otro equipo" style="width:30px; height:30px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></button>
+                                    ${tipo === 'equipo' ? `<button onclick="window.abrirMoverSolicitud('${escapar(String(req.id))}')" class="ios-boton-icono" title="Mover a otro equipo" aria-label="Mover a otro equipo" style="width:30px; height:30px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></button>` : ''}
                                 </div>
                             </div>`;
                     }).join('');
 
-                document.getElementById('detalle-cuerpo').innerHTML = `
+                return `
+                    <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:6px;">Solicitudes</div>
+                    <div style="border:1px solid #e2e8f0; border-radius:12px; padding:2px 12px; margin-bottom:18px;">
+                        ${listaHtml}
+                        ${restantes > 0 ? `<button onclick="window.verTodasLasSolicitudes()" style="width:100%; font-size:0.78rem; color:#0284c7; font-weight:700; padding:9px 0; border:none; border-top:1px solid #f1f5f9; background:transparent; cursor:pointer; text-align:left;">Ver las ${restantes} restantes…</button>` : ''}
+                    </div>`;
+            }
+
+            // Las tres cifras y los avisos. El de "sin confirmar" cambia de
+            // texto según la hoja porque cambia a quién hay que reclamarle.
+            function bloqueResumen(m, avisoSinConfirmar) {
+                const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
+                return `
                     <div style="display:flex; gap:8px; margin-bottom:14px;">
                         <div class="ficha-metrica">
                             <div class="cifra" style="color:${COLOR_TEXTO};">${pct === null ? '—' : pct + '%'}</div>
@@ -1360,20 +1594,76 @@
                     </div>
 
                     ${m.urgentes > 0 ? `<div style="background:#fee2e2; color:#b91c1c; border-radius:10px; padding:8px 12px; font-size:0.85rem; font-weight:700; margin-bottom:14px;">🚨 ${m.urgentes} solicitud${m.urgentes === 1 ? '' : 'es'} urgente${m.urgentes === 1 ? '' : 's'} sin cerrar</div>` : ''}
-                    ${m.sinConfirmar > 0 ? `<div style="background:#fef3c7; color:#92400e; border-radius:10px; padding:8px 12px; font-size:0.85rem; margin-bottom:14px;"><b>📦 ${m.sinConfirmar} entregada${m.sinConfirmar === 1 ? '' : 's'} sin confirmar.</b> La refacción ya se entregó y falta que quien la pidió la marque como recibida.</div>` : ''}
-                    ${m.canceladas > 0 ? `<div style="font-size:0.78rem; color:#94a3b8; margin:-8px 0 14px;">${m.canceladas} cancelada${m.canceladas === 1 ? '' : 's'}, fuera del conteo.</div>` : ''}
+                    ${m.sinConfirmar > 0 ? `<div style="background:#fef3c7; color:#92400e; border-radius:10px; padding:8px 12px; font-size:0.85rem; margin-bottom:14px;"><b>📦 ${m.sinConfirmar} entregada${m.sinConfirmar === 1 ? '' : 's'} sin confirmar.</b> ${avisoSinConfirmar}</div>` : ''}
+                    ${m.canceladas > 0 ? `<div style="font-size:0.78rem; color:#94a3b8; margin:-8px 0 14px;">${m.canceladas} cancelada${m.canceladas === 1 ? '' : 's'}, fuera del conteo.</div>` : ''}`;
+            }
 
-                    <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:6px;">Solicitudes</div>
-                    <div style="border:1px solid #e2e8f0; border-radius:12px; padding:2px 12px; margin-bottom:18px;">
-                        ${listaHtml}
-                        ${restantes > 0 ? `<button onclick="window.verTodasLasSolicitudes()" style="width:100%; font-size:0.78rem; color:#0284c7; font-weight:700; padding:9px 0; border:none; border-top:1px solid #f1f5f9; background:transparent; cursor:pointer; text-align:left;">Ver las ${restantes} restantes…</button>` : ''}
-                    </div>
+            function pintarDetalleEquipo() {
+                const nodo = nodoDetalle;
+                const filas = filasDelDetalle();
+
+                if (filas.length === 0) return false;
+
+                const solicitudes = ordenarSolicitudes(filas
+                    .reduce((acc, f) => acc.concat(solicitudesPorEquipo.get(String(f.id)) || []), []));
+
+                const marcas = [];
+                if (filas.length > 1) marcas.push(`${filas.length} altas en esta línea`);
+                if (filas.every(e => e.activo === false)) marcas.push('Dado de baja');
+
+                document.getElementById('btn-editar-equipo').style.display = '';
+                document.getElementById('detalle-titulo').innerText = nodo.subtitulo || nodo.titulo;
+                document.getElementById('detalle-subtitulo').innerText =
+                    [ruta.map(p => p.titulo).join(' › ')].concat(marcas).join(' · ');
+
+                document.getElementById('detalle-cuerpo').innerHTML = `
+                    ${bloqueResumen(nodo.metrica, 'La refacción ya se entregó y falta que quien la pidió la marque como recibida.')}
+                    ${bloqueSolicitudes(solicitudes, 'equipo', 'Este equipo todavía no tiene solicitudes.')}
 
                     ${filas.length > 1 ? `
                     <div style="background:#fff7ed; color:#9a3412; border-radius:10px; padding:8px 12px; font-size:0.82rem;">
                         Esta máquina está dada de alta ${filas.length} veces en la línea y el cuadro las suma.
                         Se unen desde el botón de editar.
                     </div>` : ''}
+                `;
+
+                return true;
+            }
+
+            function pintarDetallePersona() {
+                const nodo = nodoDetalle;
+                const entrada = (vista === 'atendedores' ? atendedores : solicitantes).get(nodo.id);
+                if (!entrada) return false;
+
+                const esAtendedor = vista === 'atendedores';
+                const solicitudes = ordenarSolicitudes(entrada.solicitudes);
+
+                // Sin nombre la hoja no es de una persona sino de un cajón, y
+                // el subtítulo tiene que decir de qué cajón se trata.
+                let subtitulo;
+                if (nodo.id === SIN_PERSONA) {
+                    subtitulo = esAtendedor
+                        ? 'Solicitudes que nadie ha tomado'
+                        : 'Solicitudes sin solicitante registrado';
+                } else {
+                    subtitulo = [esAtendedor ? 'Atendedor' : 'Solicitante']
+                        .concat(entrada.depto === SIN_DEPTO ? [] : [entrada.depto])
+                        .join(' · ');
+                }
+
+                document.getElementById('btn-editar-equipo').style.display = 'none';
+                document.getElementById('detalle-titulo').innerText = entrada.nombre || nodo.titulo;
+                document.getElementById('detalle-subtitulo').innerText = subtitulo;
+
+                // Ojo con el nombre: 'aviso' es el letrero del lienzo, que vive
+                // en el mismo cierre y lo usa dibujar().
+                const avisoConfirmar = esAtendedor
+                    ? 'Ya las entregó y falta que quien las pidió las marque como recibidas.'
+                    : 'Ya tiene la refacción en la mano y falta que la marque como recibida.';
+
+                document.getElementById('detalle-cuerpo').innerHTML = `
+                    ${bloqueResumen(entrada.metrica, avisoConfirmar)}
+                    ${bloqueSolicitudes(solicitudes, 'persona', 'Sin solicitudes.')}
                 `;
 
                 return true;
