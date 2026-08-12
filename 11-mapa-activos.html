@@ -541,10 +541,16 @@
             const SIN_PLANTA = 'sin-planta';
             const SIN_LINEA = 'sin-linea';
 
-            // Dos colores y nada más: rojo lo que sigue pendiente, blanco lo
-            // demás. El cuadro nace rojo y se va vaciando a blanco desde abajo
-            // conforme se entrega, así que la mancha roja que queda es, a
-            // simple vista, el trabajo por hacer.
+            // El cuadro se lee de abajo hacia arriba, del trabajo terminado al
+            // que falta: blanco lo cerrado del todo, ámbar lo que ya se entregó
+            // pero el solicitante no ha confirmado, y rojo lo que sigue
+            // pendiente. Nace rojo entero y se va llenando desde abajo, así que
+            // la mancha roja que queda es, a simple vista, el trabajo por hacer.
+            //
+            // La banda ámbar es de quien pidió la refacción, no del almacén: la
+            // pieza ya se entregó y lo único que falta es que la acuse de
+            // recibida. Va en su propio color justamente para poder exigirlo,
+            // porque contada como entregada se confundía con la que sí se cerró.
             //
             // Un activo sin ninguna solicitud sale blanco, igual que uno con
             // todo entregado: en los dos casos no hay nada pendiente. La
@@ -552,8 +558,9 @@
             //
             // El texto es oscuro siempre, porque cae donde caiga: el mismo
             // renglón puede quedar medio sobre el rojo y medio sobre el
-            // blanco, y con este oscuro se lee en los dos.
+            // blanco, y con este oscuro se lee en los tres.
             const COLOR_PENDIENTE = '#f87171';
+            const COLOR_SIN_CONFIRMAR = '#fbbf24';
             const COLOR_ENTREGADO = '#ffffff';
             const COLOR_TEXTO = '#0f172a';
 
@@ -614,7 +621,7 @@
             }
 
             function metricaVacia() {
-                return { total: 0, pendientes: 0, cerradas: 0, canceladas: 0, urgentes: 0 };
+                return { total: 0, pendientes: 0, cerradas: 0, sinConfirmar: 0, canceladas: 0, urgentes: 0 };
             }
 
             // Las canceladas no cuentan ni para el tamaño ni para el color: no
@@ -628,6 +635,11 @@
                 m.total++;
                 if (CERRADOS.includes(req.estado)) {
                     m.cerradas++;
+                    // 'Entregada' es la que ya cerró quien la atiende; 'Recibida',
+                    // la que además confirmó el solicitante. Las que se quedan en
+                    // la primera son trabajo hecho que nadie acusó de recibido, y
+                    // es lo que sale en ámbar: el pendiente no es del almacén.
+                    if (req.estado === 'Entregada') m.sinConfirmar++;
                 } else {
                     m.pendientes++;
                     if (req.prioridad === 'Urgente') m.urgentes++;
@@ -670,9 +682,17 @@
                 });
 
                 const pct = global.total ? Math.round((global.cerradas / global.total) * 100) : 0;
+                // El punto ámbar sólo se enseña cuando hay algo que enseñar: si
+                // nadie debe confirmar, la leyenda no tiene por qué nombrar un
+                // color que no está en el mapa. Cuando sí lo hay ocupa el lugar
+                // del conteo de entregadas, que ya se deduce del porcentaje: en
+                // un teléfono los tres renglones no caben en una línea.
                 document.getElementById('resumen-global').innerHTML =
-                    `<span style="color:#f87171;">●</span> ${global.pendientes} pendientes · ` +
-                    `${global.cerradas} entregadas · ${pct}% de ${global.total}`;
+                    `<span style="color:${COLOR_PENDIENTE};">●</span> ${global.pendientes} pendientes · ` +
+                    (global.sinConfirmar
+                        ? `<span style="color:${COLOR_SIN_CONFIRMAR};">●</span> ${global.sinConfirmar} sin confirmar · `
+                        : `${global.cerradas} entregadas · `) +
+                    `${pct}% de ${global.total}`;
             }
 
             function metricaDe(mapa, clave) {
@@ -750,6 +770,7 @@
                     suma.total += m.total;
                     suma.pendientes += m.pendientes;
                     suma.cerradas += m.cerradas;
+                    suma.sinConfirmar += m.sinConfirmar;
                     suma.canceladas += m.canceladas;
                     suma.urgentes += m.urgentes;
                     return suma;
@@ -902,6 +923,19 @@
                     el.appendChild(relleno);
                 }
 
+                // La banda de lo entregado sin confirmar se apoya justo encima
+                // de lo cerrado del todo, en el mismo orden en que avanza una
+                // solicitud. Va después del relleno blanco para quedar por
+                // encima de él, y siempre debajo del cuerpo con los textos.
+                if (m.sinConfirmar) {
+                    const banda = document.createElement('div');
+                    banda.className = 'cuadro-relleno';
+                    banda.style.background = COLOR_SIN_CONFIRMAR;
+                    banda.style.bottom = ((m.cerradas - m.sinConfirmar) / m.total * 100) + '%';
+                    banda.style.height = (m.sinConfirmar / m.total * 100) + '%';
+                    el.appendChild(banda);
+                }
+
                 const cuerpo = document.createElement('div');
                 cuerpo.className = 'cuadro-cuerpo';
 
@@ -1041,6 +1075,7 @@
             document.getElementById('btn-lista-nivel').onclick = () => {
                 const nodos = nodosDelNivel().slice().sort((a, b) =>
                     (b.metrica.pendientes - a.metrica.pendientes) ||
+                    (b.metrica.sinConfirmar - a.metrica.sinConfirmar) ||
                     (b.metrica.total - a.metrica.total) ||
                     a.titulo.localeCompare(b.titulo));
 
@@ -1075,6 +1110,13 @@
                         relleno.style.height = (pct === null ? 100 : (m.cerradas / m.total) * 100) + '%';
                         marca.appendChild(relleno);
                     }
+                    if (m.sinConfirmar) {
+                        const banda = document.createElement('div');
+                        banda.style.background = COLOR_SIN_CONFIRMAR;
+                        banda.style.bottom = ((m.cerradas - m.sinConfirmar) / m.total * 100) + '%';
+                        banda.style.height = (m.sinConfirmar / m.total * 100) + '%';
+                        marca.appendChild(banda);
+                    }
 
                     const textos = document.createElement('div');
                     textos.style.cssText = 'flex:1; min-width:0;';
@@ -1086,7 +1128,8 @@
                     const registros = nodo.registros > 1 ? ` · ${nodo.registros} altas` : '';
                     detalle.innerText = (pct === null
                         ? 'Sin solicitudes'
-                        : `${m.pendientes} pendientes de ${m.total}${m.urgentes ? ` · ${m.urgentes} urgentes` : ''}`) + registros;
+                        : `${m.pendientes} pendientes de ${m.total}${m.urgentes ? ` · ${m.urgentes} urgentes` : ''}` +
+                          `${m.sinConfirmar ? ` · ${m.sinConfirmar} sin confirmar` : ''}`) + registros;
                     textos.appendChild(nombre);
                     textos.appendChild(detalle);
 
@@ -1225,9 +1268,12 @@
                 const pct = m.total ? Math.round((m.cerradas / m.total) * 100) : null;
 
                 // Lo que sigue abierto va primero, y dentro de eso lo urgente:
-                // una lista encabezada por diez entregadas no dice nada.
+                // una lista encabezada por diez entregadas no dice nada. Las
+                // entregadas sin confirmar van antes que las ya confirmadas,
+                // porque son las únicas cerradas en las que queda algo que pedir.
                 const orden = (req) => {
-                    if (req.estado === 'Cancelada') return 3;
+                    if (req.estado === 'Cancelada') return 4;
+                    if (req.estado === 'Recibida') return 3;
                     if (CERRADOS.includes(req.estado)) return 2;
                     return req.prioridad === 'Urgente' ? 0 : 1;
                 };
@@ -1284,6 +1330,7 @@
                     </div>
 
                     ${m.urgentes > 0 ? `<div style="background:#fee2e2; color:#b91c1c; border-radius:10px; padding:8px 12px; font-size:0.85rem; font-weight:700; margin-bottom:14px;">🚨 ${m.urgentes} solicitud${m.urgentes === 1 ? '' : 'es'} urgente${m.urgentes === 1 ? '' : 's'} sin cerrar</div>` : ''}
+                    ${m.sinConfirmar > 0 ? `<div style="background:#fef3c7; color:#92400e; border-radius:10px; padding:8px 12px; font-size:0.85rem; margin-bottom:14px;"><b>📦 ${m.sinConfirmar} entregada${m.sinConfirmar === 1 ? '' : 's'} sin confirmar.</b> La refacción ya se entregó y falta que quien la pidió la marque como recibida.</div>` : ''}
                     ${m.canceladas > 0 ? `<div style="font-size:0.78rem; color:#94a3b8; margin:-8px 0 14px;">${m.canceladas} cancelada${m.canceladas === 1 ? '' : 's'}, fuera del conteo.</div>` : ''}
 
                     <div style="font-size:0.78rem; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:6px;">Solicitudes</div>
@@ -1879,7 +1926,11 @@
             }
 
             function colorEstado(estado) {
-                if (estado === 'Entregada' || estado === 'Recibida') return { fondo: '#dcfce7', texto: '#15803d' };
+                // La etiqueta sigue a la banda del cuadro: verde sólo la que ya
+                // confirmó el solicitante, ámbar la entregada que sigue esperando
+                // ese acuse.
+                if (estado === 'Recibida') return { fondo: '#dcfce7', texto: '#15803d' };
+                if (estado === 'Entregada') return { fondo: '#fef3c7', texto: '#92400e' };
                 if (estado === 'Cancelada') return { fondo: '#f1f5f9', texto: '#64748b' };
                 return { fondo: '#ffedd5', texto: '#c2410c' };
             }
