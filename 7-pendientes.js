@@ -492,6 +492,11 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                                                 const targetsNormDeptos = targetsDeptos.map(t => String(t).toUpperCase().trim());
 
                                                                 misDirectosFull.forEach(sub => {
+                                                                    // Un subordinado dado de baja ya no va a responder ni
+                                                                    // se le va a evaluar: ni «Encuesta Atrasada» con su
+                                                                    // botón de recordar, ni «Evaluar a …».
+                                                                    if (!window.empleadoActivo(sub)) return;
+
                                                                     let aplicaSub = false;
 
                                                                     if (targetEmps.length > 0 && !targetEmps.includes('ALL')) {
