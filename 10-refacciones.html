@@ -1637,14 +1637,9 @@
             return { data: null, error: { message: 'No se pudo consultar la tabla de empleados.' } };
         };
 
-        // Un empleado puede tener varios encargos. La columna es text[], pero
-        // se acepta también una cadena separada por comas por si algún registro
-        // se capturó a mano desde Supabase.
-        window.normalizarEncargos = (valor) => {
-            if (!valor) return [];
-            const lista = Array.isArray(valor) ? valor : String(valor).split(',');
-            return lista.map(v => String(v).trim()).filter(v => v !== '');
-        };
+        // Un empleado puede tener varios encargos. `window.normalizarEncargos`
+        // vive en 1-config.js, con el resto de la regla de permisos, porque el
+        // mapa de activos la necesita igual y es otro documento.
 
         window.cargarEmpleadosEnCache = async () => {
             try {
@@ -1819,26 +1814,15 @@
         // por encargo extra, con una clave nueva: la anterior se queda como
         // estaba en system_config, así que hay que volver a marcar los
         // permisos una vez desde Configurar permisos.
+        //
+        // La regla en sí —qué encargos autorizan y cómo se comparan— vive en
+        // 1-config.js desde que el mapa de activos necesita decidir lo mismo.
+        // Aquí se queda sólo lo propio de esta pantalla: resolver los encargos
+        // del usuario contra la caché de empleados, que ya está cargada, en
+        // lugar de volver a preguntárselos a la base.
 
-        window.CLAVE_ENCARGOS_REFACCIONES = 'encargos_refacciones';
+        window.cargarEncargosAutorizados = () => window.encargosAutorizadosRefacciones();
 
-        window.cargarEncargosAutorizados = async () => {
-            try {
-                const { data: cfg } = await sb.from('system_config')
-                    .select('texto').eq('key', window.CLAVE_ENCARGOS_REFACCIONES);
-                if (cfg && cfg.length > 0 && cfg[0].texto) {
-                    return JSON.parse(cfg[0].texto).map(r => String(r).toUpperCase().trim());
-                }
-            } catch (e) {
-                console.error("Error al cargar los permisos de refacciones:", e);
-            }
-            return [];
-        };
-
-        // Los encargos del usuario no se leen de localStorage: la sesión se
-        // guarda al iniciar y dura hasta treinta días, así que un encargo
-        // asignado después no aparecería ahí. Se resuelven contra la caché de
-        // empleados, que se rellena al cargar la pantalla.
         window.encargosDelUsuario = async () => {
             let userLog = null;
             try { userLog = JSON.parse(localStorage.getItem("usuarioLogueado")); } catch (e) {}
@@ -1856,12 +1840,8 @@
             return window.normalizarEncargos(yo ? yo.encargos : []).map(v => v.toUpperCase());
         };
 
-        window.tienePermisoPorEncargo = async () => {
-            const autorizados = await window.cargarEncargosAutorizados();
-            if (autorizados.length === 0) return false;
-            const mios = await window.encargosDelUsuario();
-            return mios.some(e => autorizados.includes(e));
-        };
+        window.tienePermisoPorEncargo = async () =>
+            window.tienePermisoRefacciones(await window.encargosDelUsuario());
 
 
         // ==========================================

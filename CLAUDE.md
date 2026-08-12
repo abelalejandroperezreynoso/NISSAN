@@ -275,6 +275,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   que las pantallas que deciden sobre el usuario actual miran su ficha en
   `window.todosLosEmpleadosData` y no en `usuarioLogueado`, que no trae el
   campo.
+- **Quién manda en las refacciones.** El permiso para ver todas las
+  solicitudes de la empresa —y para repartirlas entre atendedores desde el
+  mapa— no va por puesto sino por **encargo extra**: en «Configurar permisos»
+  se marcan los encargos que autorizan y los tiene quien los lleve en su ficha.
+  La regla vive en `1-config.js` porque la usan dos documentos distintos,
+  `10-refacciones.html` y `11-mapa-activos.html`, que no comparten más
+  JavaScript que ese archivo:
+
+  ```js
+  await window.tienePermisoRefacciones()            // se los pregunta a la base
+  await window.tienePermisoRefacciones(misEncargos) // si ya se tienen a mano
+  ```
+
+  Los encargos del usuario **no se leen de `usuarioLogueado`**: la sesión dura
+  treinta días y un encargo asignado después no aparecería ahí. El panel los
+  saca de su caché de empleados y se los pasa al helper; el mapa, que no tiene
+  esa caché, deja que el helper los consulte. El modo administrador es aparte y
+  viaja en `sessionStorage.adminSostenido`, así que sigue valiendo al pasar de
+  una pantalla a la otra.
 - **Las estadísticas tienen dos desgloses y dos orígenes.** Por
   departamentos, los conteos vienen del reporte `obtener_estadisticas_empleados`,
   que suma todos los registros del filtro en la base. Por registro, en cambio,

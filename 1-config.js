@@ -109,6 +109,74 @@ window.leTocaFirmar = (emp, fechaRegistro) => {
     return window.fechaDeAltaEmpleado(emp) <= fechaRegistro;
 };
 
+// =========================================================
+// --- QUIÉN PUEDE VER Y REPARTIR TODAS LAS REFACCIONES ---
+// =========================================================
+// El permiso no va por puesto sino por encargo extra: en «Configurar
+// permisos» se marcan los encargos que autorizan, y los tiene quien los
+// lleve en su ficha. La regla vive aquí porque la usan dos pantallas —el
+// panel de refacciones y el mapa de activos—, que son documentos distintos
+// y no comparten más JavaScript que este archivo.
+window.CLAVE_ENCARGOS_REFACCIONES = 'encargos_refacciones';
+
+// La columna es text[], pero se acepta también una cadena separada por comas
+// por si algún registro se capturó a mano desde Supabase.
+window.normalizarEncargos = (valor) => {
+    if (!valor) return [];
+    const lista = Array.isArray(valor) ? valor : String(valor).split(',');
+    return lista.map(v => String(v).trim()).filter(v => v !== '');
+};
+
+window.encargosAutorizadosRefacciones = async () => {
+    try {
+        const { data } = await sb.from('system_config')
+            .select('texto').eq('key', window.CLAVE_ENCARGOS_REFACCIONES);
+        if (data && data.length > 0 && data[0].texto) {
+            return JSON.parse(data[0].texto).map(r => String(r).toUpperCase().trim());
+        }
+    } catch (e) {
+        console.error("Error al cargar los permisos de refacciones:", e);
+    }
+    return [];
+};
+
+// Los encargos del usuario no se leen de localStorage: la sesión se guarda al
+// iniciar y dura hasta treinta días, así que un encargo asignado después no
+// aparecería ahí. Hay que preguntárselos a la base.
+window.encargosDelUsuarioEnLaBase = async () => {
+    let sesion = null;
+    try { sesion = JSON.parse(localStorage.getItem("usuarioLogueado")); } catch (e) {}
+    if (!sesion || !sesion.id) return [];
+
+    try {
+        // La sesión guarda el id numérico o el de texto según su antigüedad, así
+        // que se prueban los dos campos.
+        const id = String(sesion.id).trim();
+        const { data, error } = await sb.from('employees')
+            .select('encargos').or(`id.eq.${id},employee_id.eq.${id}`);
+        // Si la columna 'encargos' todavía no existe en la base, no hay permiso
+        // que conceder; se avisa por consola y se sigue.
+        if (error) throw error;
+        return window.normalizarEncargos((data && data[0]) ? data[0].encargos : []);
+    } catch (e) {
+        console.error("No se pudieron leer los encargos del usuario:", e);
+        return [];
+    }
+};
+
+// Con encargos ya resueltos se pasan como argumento —el panel los tiene en su
+// caché de empleados—; sin ellos, se preguntan a la base.
+window.tienePermisoRefacciones = async (encargosDelUsuario) => {
+    const autorizados = await window.encargosAutorizadosRefacciones();
+    if (autorizados.length === 0) return false;
+
+    const mios = encargosDelUsuario === undefined
+        ? await window.encargosDelUsuarioEnLaBase()
+        : window.normalizarEncargos(encargosDelUsuario);
+
+    return mios.map(e => e.toUpperCase()).some(e => autorizados.includes(e));
+};
+
 // --- ESTADO DE LA APLICACIÓN ---
 window.paginaActual = 0;
 window.idEditando = null;

@@ -546,6 +546,23 @@
         </div>
     </div>
 
+    <div id="modal-asignar-atendedor" class="hoja-overlay" style="z-index:2200;">
+        <div class="hoja-contenido" style="max-width:520px; overflow:hidden; padding:12px 0 0;">
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h3 class="hoja-titulo">Quién atiende</h3>
+                    <div class="hoja-subtitulo" id="asignar-subtitulo"></div>
+                </div>
+                <button onclick="window.cerrarAsignarAtendedor()" class="ios-boton-cerrar ios-boton-icono"
+                        title="Cerrar" aria-label="Cerrar"></button>
+            </div>
+            <div style="padding:0 25px 10px;">
+                <input type="text" id="inp-buscar-atendedor" autocomplete="off" placeholder="Busca a quien la va a atender" style="width:100%; border:1px solid #cbd5e1; box-sizing:border-box; outline:none;">
+            </div>
+            <div id="lista-atendedores"></div>
+        </div>
+    </div>
+
     <div id="modal-lista-nivel" class="hoja-overlay" style="z-index:2100;">
         <div class="hoja-contenido" style="max-width:520px; overflow:hidden; padding:12px 0 0;">
             <div class="hoja-encabezado-lista">
@@ -582,8 +599,14 @@
             let equiposPorId = new Map();
 
             // Ficha de cada empleado, indexada por las dos claves con las que
-            // una solicitud puede guardar a una persona.
+            // una solicitud puede guardar a una persona. `plantilla` es la
+            // misma lista sin repetir, para poder recorrerla.
             let empleadosPorClave = new Map();
+            let plantilla = [];
+
+            // Si el usuario puede repartir solicitudes entre atendedores. Se
+            // resuelve al cargar y de ahí no se mueve.
+            let puedoAsignar = false;
 
             // Las dos vistas de personas, ya agregadas: cada entrada es una
             // persona con su métrica y sus solicitudes. Se arman al cargar,
@@ -658,7 +681,7 @@
                     // falla, ese mapa se dibuja igual y son las otras dos vistas
                     // las que se quedan sin nadie. Por eso queda fuera del lazo
                     // que aborta la carga, y por eso se atrapa aquí su rechazo.
-                    sb.from('employees').select('id, employee_id, name, department')
+                    sb.from('employees').select('id, employee_id, name, department, puesto, avatar_url, is_active')
                         .then(r => r, e => ({ data: null, error: e }))
                 ]);
 
@@ -684,11 +707,26 @@
                         const ficha = {
                             clave: String(e.id).trim(),
                             nombre: e.name,
-                            depto: String(e.department || '').trim() || SIN_DEPTO
+                            depto: String(e.department || '').trim() || SIN_DEPTO,
+                            puesto: String(e.puesto || '').trim().toUpperCase(),
+                            avatar: e.avatar_url || '',
+                            activo: e.is_active !== false
                         };
+                        plantilla.push(ficha);
                         if (e.id) empleadosPorClave.set(String(e.id).trim(), ficha);
                         if (e.employee_id) empleadosPorClave.set(String(e.employee_id).trim(), ficha);
                     });
+                }
+
+                // El reparto de solicitudes es cosa de quien tiene el permiso de
+                // refacciones; la regla la decide 1-config.js, que es donde vive
+                // para las dos pantallas. El modo administrador viaja en
+                // sessionStorage desde el panel, así que sigue valiendo aquí.
+                try {
+                    puedoAsignar = sessionStorage.getItem("adminSostenido") === 'true' ||
+                        await window.tienePermisoRefacciones();
+                } catch (e) {
+                    console.error("No se pudo comprobar el permiso de refacciones:", e);
                 }
 
                 agregarMetricas();
@@ -1469,7 +1507,9 @@
             function refrescarDetalle() {
                 if (!nodoDetalle) return;
                 if (nodoDetalle.tipo !== 'equipo') {
-                    pintarDetalle();
+                    // Reasignar una solicitud puede dejar a esa persona sin
+                    // ninguna, y entonces ya no hay hoja que pintar.
+                    if (!pintarDetalle()) window.cerrarDetalleActivo();
                     return;
                 }
 
@@ -1531,6 +1571,49 @@
                 return equipo ? '⚙️ ' + escapar(equipo) : '';
             }
 
+            // La foto de quien atiende, del tamaño de una burbuja. Sin foto se
+            // pone la inicial; sin atendedor, una interrogación en gris, que es
+            // además la señal de que ahí hay algo que repartir.
+            function avatarDeAtendedor(req) {
+                const ficha = personaDe(req.atendido_por_id);
+                const tam = 'width:26px; height:26px; border-radius:50%; flex-shrink:0; box-sizing:border-box;';
+
+                if (!ficha.nombre) {
+                    return `<div style="${tam} background:#f1f5f9; color:#94a3b8; border:1px dashed #cbd5e1; display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:700;">?</div>`;
+                }
+
+                const inicial = escapar(ficha.nombre.charAt(0).toUpperCase());
+                const circulo = `${tam} background:#e0f2fe; color:#0284c7; border:1px solid #bae6fd; display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:700;`;
+                if (!ficha.avatar) return `<div style="${circulo}">${inicial}</div>`;
+
+                // La foto se pone encima de la inicial, no en su lugar: si la
+                // URL falla se quita sola y debajo queda el círculo con la
+                // letra, en vez del icono de imagen rota. Con el modo de ahorro
+                // de datos, procesarUrlImagen devuelve un píxel transparente y
+                // pasa lo mismo sin gastar ancho de banda.
+                const url = window.procesarUrlImagen ? window.procesarUrlImagen(ficha.avatar) : ficha.avatar;
+                return `<div style="${circulo} position:relative; overflow:hidden;">${inicial}
+                    <img src="${escapar(url)}" alt="" onerror="this.remove()" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover;">
+                </div>`;
+            }
+
+            // Con permiso la foto es el botón de repartir; sin él, sólo una
+            // foto. En los dos casos dice a quién corresponde: es un icono sin
+            // texto, así que el nombre va al title y al aria-label.
+            function bloqueAtendedor(req) {
+                const ficha = personaDe(req.atendido_por_id);
+                const quien = ficha.nombre || 'Sin asignar';
+                const etiqueta = escapar(`Atiende: ${quien}`);
+                const foto = avatarDeAtendedor(req);
+
+                if (!puedoAsignar || req.estado === 'Cancelada') {
+                    return `<div title="${etiqueta}" aria-label="${etiqueta}" style="display:flex;">${foto}</div>`;
+                }
+                return `<button onclick="window.abrirAsignarAtendedor('${escapar(String(req.id))}')"
+                                title="${etiqueta} · Toca para cambiar" aria-label="${etiqueta}. Cambiar quién atiende"
+                                style="border:none; background:transparent; padding:0; cursor:pointer; display:flex; border-radius:50%;">${foto}</button>`;
+            }
+
             // El bloque de solicitudes, con su tope de ocho y su «ver las
             // restantes». El botón de mover es cosa de la vista de activos: en
             // la hoja de una persona no se está mirando ningún equipo al que
@@ -1559,6 +1642,7 @@
                                     <div style="font-size:0.75rem; color:#94a3b8;">${escapar(String(req.cantidad || ''))} ${escapar(req.unidad || '')} · ${fecha}</div>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                                    ${bloqueAtendedor(req)}
                                     <span class="etiqueta-estado" style="background:${colores.fondo}; color:${colores.texto};">${escapar(req.estado || 'Pendiente')}</span>
                                     ${tipo === 'equipo' ? `<button onclick="window.abrirMoverSolicitud('${escapar(String(req.id))}')" class="ios-boton-icono" title="Mover a otro equipo" aria-label="Mover a otro equipo" style="width:30px; height:30px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></button>` : ''}
                                 </div>
@@ -1671,10 +1755,12 @@
 
             window.cerrarDetalleActivo = () => {
                 nodoDetalle = null;
-                // La hoja de edición sale de ésta y nunca le sobrevive: si el
-                // detalle se cierra solo (al unir altas, al guardar) la de
-                // edición se quedaría flotando sobre el mapa sin dueño.
+                // Las hojas de edición y de reparto salen de ésta y nunca le
+                // sobreviven: si el detalle se cierra solo (al unir altas, al
+                // guardar, al quedarse una persona sin solicitudes) se quedarían
+                // flotando sobre el mapa sin dueño.
                 window.cerrarEdicionEquipo();
+                window.cerrarAsignarAtendedor();
                 document.getElementById('modal-detalle-activo').style.display = 'none';
             };
 
@@ -1889,6 +1975,163 @@
                 } catch (error) {
                     console.error("Error moviendo la solicitud:", error);
                     alert("Hubo un error de conexión al intentar mover la solicitud.");
+                } finally {
+                    lista.style.pointerEvents = '';
+                }
+            }
+
+            // ==========================================
+            // Repartir una solicitud entre atendedores
+            // ==========================================
+            // Quién puede atender: el personal STAFF, que es el que toma
+            // solicitudes en el panel, más quien ya atiende alguna aunque su
+            // puesto diga otra cosa. El panel además recorta la lista al
+            // departamento de quien asigna; aquí no, porque el mapa es la vista
+            // de toda la empresa y esa lista se quedaría vacía en cuanto se
+            // mirara la carga de otra planta.
+            function atendedoresPosibles(solicitud) {
+                const vistos = new Set();
+                const lista = [];
+
+                const agregar = (ficha, nota) => {
+                    if (!ficha || !ficha.nombre || vistos.has(ficha.clave)) return;
+                    vistos.add(ficha.clave);
+                    lista.push({ ficha, nota });
+                };
+
+                // El que ya la atiende encabeza la lista, cumpla o no el resto.
+                agregar(personaDe(solicitud.atendido_por_id), 'La atiende ahora');
+
+                const resto = [];
+                plantilla.forEach(f => { if (f.activo && f.puesto === 'STAFF') resto.push(f); });
+                atendedores.forEach(e => {
+                    const ficha = empleadosPorClave.get(e.clave);
+                    if (ficha) resto.push(ficha);
+                });
+
+                resto.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+                    .forEach(f => agregar(f, f.depto === SIN_DEPTO ? '' : f.depto));
+
+                return lista;
+            }
+
+            window.abrirAsignarAtendedor = (idSolicitud) => {
+                if (!puedoAsignar) return;
+                const solicitud = refacciones.find(r => String(r.id) === String(idSolicitud));
+                if (!solicitud) return;
+
+                const candidatos = atendedoresPosibles(solicitud);
+                const campo = document.getElementById('inp-buscar-atendedor');
+                const lista = document.getElementById('lista-atendedores');
+                const actual = personaDe(solicitud.atendido_por_id);
+
+                document.getElementById('asignar-subtitulo').innerText =
+                    solicitud.nombre_refaccion || 'Solicitud sin nombre';
+
+                const pintar = () => {
+                    const busca = normalizarBusqueda(campo.value);
+                    const encontrados = busca
+                        ? candidatos.filter(c => normalizarBusqueda(c.ficha.nombre).includes(busca) ||
+                                                 normalizarBusqueda(c.ficha.depto).includes(busca))
+                        : candidatos;
+
+                    lista.innerHTML = '';
+
+                    // Dejarla sin dueño es una opción, y sólo aparece cuando hay
+                    // dueño que quitar.
+                    if (actual.nombre && !busca) {
+                        const quitar = document.createElement('button');
+                        quitar.className = 'destino-mover';
+                        quitar.type = 'button';
+                        const texto = document.createElement('div');
+                        texto.style.cssText = 'font-weight:700; color:#be123c;';
+                        texto.innerText = 'Dejar sin asignar';
+                        quitar.appendChild(texto);
+                        quitar.onclick = () => asignarAtendedor(solicitud, null);
+                        lista.appendChild(quitar);
+                    }
+
+                    if (encontrados.length === 0) {
+                        const vacio = document.createElement('div');
+                        vacio.style.cssText = 'padding:16px 25px; color:#94a3b8; font-style:italic;';
+                        vacio.innerText = candidatos.length === 0
+                            ? 'No hay personal con puesto STAFF para atender solicitudes.'
+                            : 'Nadie coincide.';
+                        lista.appendChild(vacio);
+                        return;
+                    }
+
+                    encontrados.forEach(({ ficha, nota }) => {
+                        const esActual = ficha.clave === actual.clave && !!actual.nombre;
+
+                        const fila = document.createElement('button');
+                        fila.className = 'destino-mover';
+                        fila.type = 'button';
+                        fila.disabled = esActual;
+
+                        const arriba = document.createElement('div');
+                        arriba.style.cssText = 'font-weight:700; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+                        arriba.innerText = ficha.nombre;
+                        const abajo = document.createElement('div');
+                        abajo.style.cssText = 'font-size:0.78rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+                        abajo.innerText = esActual ? 'La atiende ahora' : nota;
+
+                        fila.appendChild(arriba);
+                        if (abajo.innerText) fila.appendChild(abajo);
+                        if (!esActual) fila.onclick = () => asignarAtendedor(solicitud, ficha.clave);
+                        lista.appendChild(fila);
+                    });
+                };
+
+                campo.value = '';
+                campo.oninput = pintar;
+                pintar();
+
+                lista.style.maxHeight = Math.round(window.innerHeight * 0.5) + 'px';
+                document.getElementById('modal-asignar-atendedor').style.display = 'flex';
+            };
+
+            window.cerrarAsignarAtendedor = () => {
+                document.getElementById('modal-asignar-atendedor').style.display = 'none';
+            };
+
+            async function asignarAtendedor(solicitud, clave) {
+                const lista = document.getElementById('lista-atendedores');
+                lista.style.pointerEvents = 'none';
+
+                let miId = null;
+                try {
+                    const sesion = JSON.parse(localStorage.getItem("usuarioLogueado"));
+                    if (sesion && sesion.id) miId = String(sesion.id).trim();
+                } catch (e) {}
+
+                try {
+                    // Quien asigna queda registrado, igual que en el panel; al
+                    // dejarla sin dueño se borra también esa firma.
+                    const { data, error } = await sb.from('refacciones')
+                        .update({ atendido_por_id: clave, asignado_por_id: clave ? miId : null })
+                        .eq('id', solicitud.id)
+                        .select('id');
+
+                    if (error) throw error;
+
+                    // El .select() no es decorativo: una escritura que las
+                    // políticas de la base no permiten contesta con éxito y cero
+                    // filas, y sin contarlas la pantalla se quedaría enseñando un
+                    // cambio que nunca ocurrió.
+                    if (!data || data.length === 0) {
+                        alert("La base no aplicó el cambio: no se modificó ninguna fila.\n\nRevisa los permisos de escritura (RLS) de la tabla refacciones.");
+                        return;
+                    }
+
+                    solicitud.atendido_por_id = clave;
+                    agregarMetricas();
+                    window.cerrarAsignarAtendedor();
+                    dibujar();
+                    refrescarDetalle();
+                } catch (error) {
+                    console.error("Error al asignar la solicitud:", error);
+                    alert("Hubo un error de conexión al intentar cambiar quién atiende.");
                 } finally {
                     lista.style.pointerEvents = '';
                 }
