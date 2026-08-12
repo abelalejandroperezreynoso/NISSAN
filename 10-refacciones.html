@@ -813,15 +813,23 @@
     </div>
 
     <div id="modal-config-refacciones" class="hoja-overlay" style="z-index:4800;">
-        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 25px 25px;">
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow-y: auto; padding: 12px 25px 25px;">
             <div class="hoja-encabezado">
                 <h3 class="hoja-titulo">Configurar permisos</h3>
                 <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
-            
+
             <p style="margin:0 0 15px 0; color:#64748b; font-size:0.9rem;">Selecciona los encargos extra que tendrán autorización para visualizar <b>todas</b> las solicitudes de la empresa (además de los administradores):</p>
 
-            <div id="lista-encargos-refacciones" style="display:flex; flex-wrap:wrap; gap:10px; max-height:250px; overflow-y:auto; margin-bottom:20px; padding: 5px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;"></div>
+            <div id="lista-encargos-refacciones" style="display:flex; flex-wrap:wrap; gap:10px; max-height:200px; overflow-y:auto; margin-bottom:20px; padding: 5px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;"></div>
+
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:8px;">
+                <h4 style="margin:0; font-size:0.95rem; color:#0f172a;">Quién tendría acceso</h4>
+                <span id="conteo-personas-refacciones" style="font-size:0.8rem; color:#64748b;"></span>
+            </div>
+            <p style="margin:0 0 10px 0; color:#94a3b8; font-size:0.78rem;">Personal activo con alguno de los encargos marcados arriba. Los administradores ven todo aunque no aparezcan aquí.</p>
+
+            <div id="lista-personas-refacciones" style="max-height:220px; overflow-y:auto; margin-bottom:20px; padding:5px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;"></div>
 
             <div style="display: flex; justify-content: flex-end; gap: 10px;">
                 <button onclick="document.getElementById('modal-config-refacciones').style.display='none'" style="padding:10px 15px; background:#f1f5f9; border:none; border-radius:8px; cursor:pointer; color:#475569; font-weight:600;">Cancelar</button>
@@ -850,11 +858,20 @@
         // --- Funciones Lógicas ---
 
         // Función para abrir la configuración en su modal
+                // El personal que se consultó al abrir la pantalla de permisos. Se
+                // guarda para poder rehacer el listado de autorizados cada vez que se
+                // marca o desmarca un encargo, sin volver a preguntar a la base.
+                window.personalConfigRefacciones = [];
+
                 window.abrirConfigRefacciones = async () => {
                     const modal = document.getElementById('modal-config-refacciones');
                     const containerEncargos = document.getElementById('lista-encargos-refacciones');
+                    const containerPersonas = document.getElementById('lista-personas-refacciones');
                     modal.style.display = 'flex';
                     containerEncargos.innerHTML = '<div style="text-align:center; color:#64748b; padding:10px;">Consultando encargos en la base de datos...</div>';
+                    containerPersonas.innerHTML = '<div style="color:#64748b; font-size:0.85rem; padding:6px;">Cargando…</div>';
+                    document.getElementById('conteo-personas-refacciones').innerText = '';
+                    window.personalConfigRefacciones = [];
 
                     const encargosAutorizados = await window.cargarEncargosAutorizados();
 
@@ -862,16 +879,24 @@
                         // Hacemos una consulta directa para asegurar que SIEMPRE traiga los
                         // encargos, independientemente de si la carga inicial de la página
                         // falló o se demoró.
-                        const { data: empleados, error } = await window.consultarEmpleados('encargos, is_active');
+                        const { data: empleados, error } = await window.consultarEmpleados('name, puesto, department, encargos, is_active');
 
                         if (error) throw error;
 
                         // Solo los encargos del personal activo: los de una baja no deberían
                         // seguir concediendo permisos.
-                        const encargos = new Set();
-                        (empleados || [])
+                        window.personalConfigRefacciones = (empleados || [])
                             .filter(e => e.is_active !== false)
-                            .forEach(e => window.normalizarEncargos(e.encargos).forEach(v => encargos.add(v)));
+                            .map(e => ({
+                                nombre: e.name || 'Sin nombre',
+                                puesto: (e.puesto || '').trim(),
+                                depto: (e.department || '').trim(),
+                                encargos: window.normalizarEncargos(e.encargos)
+                            }));
+
+                        const encargos = new Set();
+                        window.personalConfigRefacciones
+                            .forEach(e => e.encargos.forEach(v => encargos.add(v)));
 
                         if (encargos.size > 0) {
                             let chkHtml = '';
@@ -879,7 +904,7 @@
                                 const isChecked = encargosAutorizados.includes(p.toUpperCase()) ? 'checked' : '';
                                 chkHtml += `
                                     <label style="display:flex; align-items:center; gap:5px; background:white; padding:6px 12px; border-radius:8px; border:1px solid #bae6fd; font-size:0.85rem; cursor:pointer; color:#0f172a; transition: background 0.2s;" onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background='white'">
-                                        <input type="checkbox" class="chk-encargo-refaccion" value="${escaparHtml(p)}" ${isChecked} style="accent-color:#0ea5e9; width:16px; height:16px; cursor:pointer;">
+                                        <input type="checkbox" class="chk-encargo-refaccion" value="${escaparHtml(p)}" ${isChecked} onchange="window.renderizarPersonalAutorizado()" style="accent-color:#0ea5e9; width:16px; height:16px; cursor:pointer;">
                                         ${escaparHtml(p)}
                                     </label>
                                 `;
@@ -889,10 +914,69 @@
                         } else {
                             containerEncargos.innerHTML = '<div style="color:#64748b; font-size:0.85rem; padding:6px;">Todavía no hay encargos asignados. Ponlos en la ficha de cada empleado, en <b>Empleados › Encargos extra</b>.</div>';
                         }
+
+                        window.renderizarPersonalAutorizado();
                     } catch (error) {
                         console.error("Error al consultar encargos:", error);
                         containerEncargos.innerHTML = '<div style="color:#ef4444; font-size:0.85rem;">Hubo un error de conexión al cargar los encargos.</div>';
+                        containerPersonas.innerHTML = '<div style="color:#ef4444; font-size:0.85rem; padding:6px;">No se pudo cargar el personal.</div>';
                     }
+                };
+
+                // Rehace el listado de quién queda autorizado. Lee las casillas que
+                // están marcadas ahora mismo, no lo guardado en system_config: así el
+                // listado se adelanta a lo que hará el botón de guardar.
+                window.renderizarPersonalAutorizado = () => {
+                    const contenedor = document.getElementById('lista-personas-refacciones');
+                    const conteo = document.getElementById('conteo-personas-refacciones');
+                    if (!contenedor) return;
+
+                    const marcados = Array.from(document.querySelectorAll('.chk-encargo-refaccion:checked'))
+                        .map(cb => cb.value.toUpperCase().trim());
+
+                    if (marcados.length === 0) {
+                        contenedor.innerHTML = '<div style="color:#64748b; font-size:0.85rem; padding:6px;">Sin encargos marcados: solo los administradores ven todas las solicitudes.</div>';
+                        if (conteo) conteo.innerText = '';
+                        return;
+                    }
+
+                    const autorizados = window.personalConfigRefacciones
+                        .map(e => ({
+                            ...e,
+                            // Los encargos que le dan el acceso, para que se vea por qué
+                            // aparece en la lista.
+                            motivos: e.encargos.filter(v => marcados.includes(v.toUpperCase().trim()))
+                        }))
+                        .filter(e => e.motivos.length > 0)
+                        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+                    if (conteo) {
+                        conteo.innerText = autorizados.length === 1
+                            ? '1 persona'
+                            : `${autorizados.length} personas`;
+                    }
+
+                    if (autorizados.length === 0) {
+                        contenedor.innerHTML = '<div style="color:#64748b; font-size:0.85rem; padding:6px;">Ningún empleado activo tiene los encargos marcados.</div>';
+                        return;
+                    }
+
+                    contenedor.innerHTML = autorizados.map(e => {
+                        const cargo = [e.puesto, e.depto].filter(v => v !== '').join(' · ');
+                        const chips = e.motivos.map(m => `
+                            <span style="background:#e0f2fe; color:#0369a1; border-radius:6px; padding:2px 8px; font-size:0.72rem; font-weight:600; white-space:nowrap;">${escaparHtml(m)}</span>
+                        `).join('');
+                        // Los encargos van debajo del nombre y no a su derecha: en una
+                        // pantalla de teléfono, a la derecha le comen el ancho y el
+                        // nombre acaba recortado a la mitad.
+                        return `
+                            <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; margin-bottom:6px;">
+                                <div style="font-size:0.88rem; font-weight:600; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escaparHtml(e.nombre)}</div>
+                                ${cargo ? `<div style="font-size:0.75rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escaparHtml(cargo)}</div>` : ''}
+                                <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:5px;">${chips}</div>
+                            </div>
+                        `;
+                    }).join('');
                 };
 
                                 // NUEVA FUNCIÓN: Muestra u oculta el panel de filtros
