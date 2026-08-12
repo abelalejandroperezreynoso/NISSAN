@@ -1290,7 +1290,8 @@ function actualizarBadgeUI(empId, stats) {
 function actualizarBadgeEquipo() {
     let grandTotal = 0;
     const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
-    if(window.todosLosEmpleadosData) {
+    // Sin sesión no hay equipo que contar, y `user.id` reventaría la función.
+    if(window.todosLosEmpleadosData && user) {
         const misDirectosIds = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id)).map(e => e.id);
         misDirectosIds.forEach(id => { if(window.statsPendientes[id]) grandTotal += window.statsPendientes[id].total; });
         const teamBadge = document.getElementById('badge-team-total');
