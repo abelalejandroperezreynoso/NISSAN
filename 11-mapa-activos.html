@@ -533,6 +533,11 @@
             let metricasPorPlanta = new Map();
             let solicitudesPorEquipo = new Map();
 
+            // Nombre de cada empleado, para poner cara al solicitante en el
+            // detalle del equipo. Va indexado por las dos claves con las que
+            // una solicitud puede guardar a su autor.
+            let nombresEmpleados = new Map();
+
             // Nivel que se está viendo: [] = plantas, [planta] = sus líneas,
             // [planta, linea] = sus equipos.
             let ruta = [];
@@ -574,11 +579,17 @@
             // Carga
             // ==========================================
             try {
-                const [resPlantas, resLineas, resEquipos, resRefacciones] = await Promise.all([
+                const [resPlantas, resLineas, resEquipos, resRefacciones, resEmpleados] = await Promise.all([
                     sb.from('plantas').select('id, nombre').order('nombre'),
                     sb.from('lineas').select('id, nombre, planta_id').order('nombre'),
                     sb.from('equipos').select('id, nombre, id_interno, planta_id, linea_id, activo').order('nombre'),
-                    sb.from('refacciones').select('id, nombre_refaccion, estado, prioridad, cantidad, unidad, equipo_id, created_at').order('created_at', { ascending: false })
+                    sb.from('refacciones').select('id, nombre_refaccion, estado, prioridad, cantidad, unidad, equipo_id, solicitante_id, created_at').order('created_at', { ascending: false }),
+                    // Los nombres son un adorno del detalle, no el mapa: si esta
+                    // consulta falla, el renglón se queda sin nombre y todo lo
+                    // demás se dibuja igual. Por eso queda fuera del lazo que
+                    // aborta la carga, y por eso se atrapa aquí su rechazo.
+                    sb.from('employees').select('id, employee_id, name')
+                        .then(r => r, e => ({ data: null, error: e }))
                 ]);
 
                 for (const res of [resPlantas, resLineas, resEquipos, resRefacciones]) {
@@ -589,6 +600,19 @@
                 lineas = resLineas.data || [];
                 equipos = resEquipos.data || [];
                 refacciones = resRefacciones.data || [];
+
+                if (resEmpleados.error) {
+                    console.error("No se pudieron cargar los nombres de los empleados:", resEmpleados.error);
+                } else {
+                    // Una solicitud guarda a su autor con el id numérico o con
+                    // el de texto según su antigüedad, así que el índice lleva
+                    // las dos claves apuntando al mismo nombre.
+                    (resEmpleados.data || []).forEach(e => {
+                        if (!e.name) return;
+                        if (e.id) nombresEmpleados.set(String(e.id).trim(), e.name);
+                        if (e.employee_id) nombresEmpleados.set(String(e.employee_id).trim(), e.name);
+                    });
+                }
 
                 agregarMetricas();
                 aplicarRuta([], false);
@@ -1300,10 +1324,16 @@
                             ? new Date(req.created_at).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
                             : '';
                         const urgente = req.prioridad === 'Urgente' && !CERRADOS.includes(req.estado) && req.estado !== 'Cancelada';
+                        // El solicitante va en su propio renglón y no pegado a la
+                        // cantidad: es a quien hay que ir a buscar cuando la
+                        // solicitud lleva días entregada sin confirmar, y ahí
+                        // detrás de la fecha se lo comían los puntos suspensivos.
+                        const solicitante = nombresEmpleados.get(String(req.solicitante_id || '').trim());
                         return `
                             <div class="renglon-solicitud">
                                 <div style="min-width:0;">
                                     <div style="font-weight:600; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${urgente ? '🚨 ' : ''}${escapar(req.nombre_refaccion || 'Sin nombre')}</div>
+                                    ${solicitante ? `<div style="font-size:0.75rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">👤 ${escapar(solicitante)}</div>` : ''}
                                     <div style="font-size:0.75rem; color:#94a3b8;">${escapar(String(req.cantidad || ''))} ${escapar(req.unidad || '')} · ${fecha}</div>
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
