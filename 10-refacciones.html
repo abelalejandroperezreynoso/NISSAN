@@ -1189,8 +1189,15 @@
 
             let selectorFechaHtml = '';
                         
-                        // Usamos la variable soyElAtendedor que ya definimos arriba en el código
-                        if ((soyElAtendedor || window.modoAdminActivo) && req.estado !== 'Entregada' && req.estado !== 'Cancelada' && req.atendido_por_id) {
+                        // Usamos la variable soyElAtendedor que ya definimos arriba en el código.
+                        // La llegada estimada sólo se define mientras la solicitud sigue
+                        // pendiente. Antes la condición iba por descarte —ni Entregada ni
+                        // Cancelada— y se olvidaba de Recibida, así que al atendedor se le
+                        // seguía pidiendo fecha de llegada en una solicitud que el
+                        // solicitante ya había cerrado. Preguntar por Pendiente en positivo
+                        // deja fuera de una vez todos los estados cerrados, y también los
+                        // que se añadan después.
+                        if ((soyElAtendedor || window.modoAdminActivo) && req.estado === 'Pendiente' && req.atendido_por_id) {
                             selectorFechaHtml = `
                                 <div style="margin-bottom:15px; display:flex; align-items:center; justify-content:space-between; font-size:0.85rem; background:#fffbeb; padding:10px; border-radius:8px; border:1px solid #fde68a;">
                                     <span style="font-weight:600; color:#b45309;">📅 Definir Llegada Est.:</span>
@@ -1198,12 +1205,8 @@
                                 </div>
                             `;
                         } else if (req.fecha_estimada && req.estado !== 'Cancelada') {
-                            selectorFechaHtml = `
-                                <div style="margin-bottom:15px; display:flex; align-items:center; font-size:0.85rem; background:#f0f9ff; padding:10px; border-radius:8px; border:1px solid #bae6fd;">
-                                    <span style="color:#0369a1;">📅 Llegada Estimada: <b style="color:#0284c7;">${req.fecha_estimada}</b></span>
-                                </div>
-                            `;
-                        } else if (req.fecha_estimada && req.estado !== 'Cancelada') {
+                            // Cerrada o vista por alguien que no la atiende: la fecha se
+                            // queda a la vista, pero de sólo lectura.
                             selectorFechaHtml = `
                                 <div style="margin-bottom:15px; display:flex; align-items:center; font-size:0.85rem; background:#f0f9ff; padding:10px; border-radius:8px; border:1px solid #bae6fd;">
                                     <span style="color:#0369a1;">📅 Llegada Estimada: <b style="color:#0284c7;">${req.fecha_estimada}</b></span>
