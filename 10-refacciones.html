@@ -2275,13 +2275,24 @@
             btn.disabled = true;
 
             try {
-                let error;
+                // Se encadena .select() para contar las filas escritas: PostgREST
+                // responde con éxito a un update que las políticas de RLS rechazan,
+                // y sin este conteo la ficha decía "guardado" mientras el cambio
+                // —la baja, entre otros— nunca llegaba a la base.
+                let error, filas;
                 if (window.empleadoEditandoId) {
-                    ({ error } = await sb.from('employees').update(campos).eq('id', window.empleadoEditandoId));
+                    ({ data: filas, error } = await sb.from('employees')
+                        .update(campos).eq('id', window.empleadoEditandoId).select('id'));
                 } else {
-                    ({ error } = await sb.from('employees').insert([campos]));
+                    ({ data: filas, error } = await sb.from('employees')
+                        .insert([campos]).select('id'));
                 }
                 if (error) throw error;
+                if (!filas || filas.length === 0) {
+                    throw new Error(window.empleadoEditandoId
+                        ? "La base no aplicó el cambio: no se modificó ninguna fila. Revisa los permisos de escritura (RLS) de la tabla employees."
+                        : "La base no dio de alta al empleado: no se insertó ninguna fila. Revisa los permisos de escritura (RLS) de la tabla employees.");
+                }
 
                 window.cerrarFormEmpleado();
                 await window.cargarEmpleadosEnCache();

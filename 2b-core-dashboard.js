@@ -1104,6 +1104,17 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
             const puestoEmpleado = empleadoData ? (empleadoData.puesto || "").trim().toUpperCase() : "";
             const deptoEmpleado = empleadoData ? (empleadoData.department || empleadoData.dept || "GENERAL").trim().toUpperCase() : "GENERAL";
 
+            // Un empleado dado de baja no tiene nada pendiente: ya no firma ni
+            // responde. Se guarda el cero para que el badge desaparezca en vez
+            // de arrastrar el conteo del día que se le dio de baja.
+            if (!window.empleadoActivo(empleadoData)) {
+                const sinPendientes = { incidentes: 0, difusiones: 0, evaluaciones: 0, porCalificar: 0, total: 0 };
+                window.statsPendientes[empId] = sinPendientes;
+                window.CACHE_DASHBOARD.pendientes[empId] = sinPendientes;
+                actualizarBadgeUI(empId, sinPendientes);
+                return;
+            }
+
             let countEvals = 0;
             if (activeEvals && activeEvals.length > 0) {
                 const evalsQueLeTocan = activeEvals.filter(ev => {
@@ -1157,21 +1168,18 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
 
             let countInc = 0;
             let countDif = 0;
-            const puestosExentos = ["JR. MANAGER", "SR MANAGER", "JR MANAGER", "SR. MANAGER"];
-            
-            if (!puestosExentos.includes(puestoEmpleado) && incidentes && incidentes.length > 0) {
+
+            if (!window.esPuestoExentoDeFirmar(puestoEmpleado) && incidentes && incidentes.length > 0) {
                 const { data: firmas } = await sb.from('incident_signatures')
                     .select('incident_id')
                     .eq('employee_id', empId);
                 
                 const firmadosIds = firmas ? firmas.map(f => f.incident_id) : [];
-                const fechaIngresoEmp = empleadoData ? new Date(empleadoData.date) : new Date(0);
-                fechaIngresoEmp.setHours(0,0,0,0);
+                const fechaIngresoEmp = window.fechaDeAltaEmpleado(empleadoData);
 
                 incidentes.forEach(inc => {
-                    if (!inc.date) return;
-                    const [y, m, d] = inc.date.split('-');
-                    const incDate = new Date(y, m - 1, d);
+                    const incDate = window.fechaDeRegistro(inc.date);
+                    if (!incDate) return;
 
                     if (incDate >= fechaIngresoEmp) {
                         if (!firmadosIds.includes(inc.id)) {
@@ -1217,6 +1225,10 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                                                     const targetsNorm = targets.map(t => String(t).toUpperCase().trim());
 
                                                     misSubs.forEach(sub => {
+                                                        // A un subordinado dado de baja ya no le va a llegar
+                                                        // la encuesta; no cuenta como trabajo por calificar.
+                                                        if (!window.empleadoActivo(sub)) return;
+
                                                         let aplicaSub = false;
                                                         if (empsNorm.length > 0 && !empsNorm.includes('ALL')) {
                                                             aplicaSub = empsNorm.includes(String(sub.id).trim());

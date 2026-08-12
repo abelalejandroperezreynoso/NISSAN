@@ -15,12 +15,14 @@
 //       avance se calcula en el navegador, así que bajar al detalle no
 //       cuesta ninguna consulta más.
 //
-// Quién debe firmar es la misma regla que usan los pendientes del panel:
-// cuentan los empleados dados de alta en o antes de la fecha del registro,
-// salvo los puestos exentos. Las capacitaciones no se firman y quedan fuera.
-
-// --- CONFIGURACIÓN DE EXCLUSIÓN ---
-const PUESTOS_EXENTOS = ["JR. MANAGER", "SR MANAGER", "JR MANAGER", "SR. MANAGER"];
+// Quién debe firmar es la misma regla que usan los pendientes del panel, y vive
+// en 1-config.js (`window.leTocaFirmar`): cuentan los empleados activos dados de
+// alta en o antes de la fecha del registro, salvo los puestos exentos. Las
+// capacitaciones no se firman y quedan fuera.
+//
+// El desglose por departamentos también la aplica aquí, en el navegador: el
+// reporte devuelve una fila por empleado, así que descartar la fila descuenta
+// al empleado de todos los totales sin tocar la función SQL.
 
 // Los registros se traen de 25 en 25: la respuesta lleva las firmas dentro,
 // así que una página entera de golpe sería mucha descarga en el teléfono.
@@ -88,7 +90,10 @@ const escaparHTML = (texto) => String(texto === null || texto === undefined ? ''
 const paraOnclick = (texto) => escaparHTML(String(texto === null || texto === undefined ? '' : texto)
     .replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
 
-const esPuestoExento = (emp) => PUESTOS_EXENTOS.includes((emp.puesto || "").trim().toUpperCase());
+// Un empleado queda fuera del conteo si su puesto está exento o si está dado de
+// baja: en cualquiera de los dos casos no va a firmar, y dejarlo en el
+// denominador clava el registro por debajo del 100% para siempre.
+const quedaFueraDelConteo = (emp) => window.esPuestoExentoDeFirmar(emp.puesto) || !window.empleadoActivo(emp);
 
 const colorPorcentaje = (pct) => pct > 80 ? '#22c55e' : (pct > 50 ? '#f59e0b' : '#ef4444');
 
@@ -96,24 +101,6 @@ const vistaSeleccionada = () => {
     const sel = document.getElementById('stats-filter-vista');
     return sel ? sel.value : 'areas';
 };
-
-// La fecha del registro viene como 'YYYY-MM-DD'. Se arma a mano para que no
-// la corra la zona horaria, igual que en el cálculo de pendientes.
-const fechaDelRegistro = (texto) => {
-    if (!texto) return null;
-    const [y, m, d] = String(texto).split('-');
-    if (!y || !m || !d) return null;
-    return new Date(Number(y), Number(m) - 1, Number(d));
-};
-
-const fechaDeAlta = (emp) => {
-    const alta = emp.date ? new Date(emp.date) : new Date(0);
-    alta.setHours(0, 0, 0, 0);
-    return alta;
-};
-
-// Un registro sólo le toca a quien ya estaba dado de alta cuando ocurrió.
-const leTocaFirmar = (emp, fechaInc) => !esPuestoExento(emp) && fechaInc && fechaDeAlta(emp) <= fechaInc;
 
 const pintarBarraGlobal = (firmado, esperado, etiqueta) => {
     const globalFill = document.getElementById('global-fill');
@@ -216,8 +203,8 @@ async function calcularAvancePorAreas(usarCache) {
         const emp = window.todosLosEmpleadosData.find(e => String(e.id) === String(stat.emp_id));
         if (!emp) return;
 
-        // Validar si el puesto debe ser ignorado en la estadística
-        if (esPuestoExento(emp)) return;
+        // Exentos y bajas no cuentan en la estadística
+        if (quedaFueraDelConteo(emp)) return;
 
         const depto = emp.dept || "Sin Depto";
         if(!deptMap[depto]) deptMap[depto] = { total: 0, firmados: 0 };
@@ -255,8 +242,8 @@ window.verSupervisoresPorDepto = (deptName) => {
         const emp = window.todosLosEmpleadosData.find(e => String(e.id) === String(stat.emp_id));
         if (!emp || emp.dept !== deptName) return;
 
-        // Filtrar exentos en la vista de supervisores
-        if (esPuestoExento(emp)) return;
+        // Filtrar exentos y bajas en la vista de supervisores
+        if (quedaFueraDelConteo(emp)) return;
 
         const sup = emp.sup || "Sin Supervisor";
         if(!supMap[sup]) supMap[sup] = { total: 0, firmados: 0 };
@@ -281,8 +268,8 @@ window.verDetalleSupervisorStats = (supName) => {
         const emp = window.todosLosEmpleadosData.find(e => String(e.id) === String(stat.emp_id));
         if (!emp || emp.sup !== supName || emp.dept !== window.currentStatsDept) return;
 
-        // Filtrar exentos en el listado final de empleados
-        if (esPuestoExento(emp)) return;
+        // Filtrar exentos y bajas en el listado final de empleados
+        if (quedaFueraDelConteo(emp)) return;
 
         const pct = stat.total_esperado > 0 ? Math.round((stat.total_firmado / stat.total_esperado) * 100) : 0;
         empList.push({ name: emp.name, puesto: emp.puesto, pct: pct, firmados: stat.total_firmado, total: stat.total_esperado });
@@ -329,20 +316,19 @@ async function traerPaginaDeRegistros(filtroTipo, desde, avisarIntento) {
 
 // Empleados a los que les tocaba firmar este registro, con su estado.
 function auditoriaDelRegistro(registro) {
-    const fechaInc = fechaDelRegistro(registro.date);
+    const fechaInc = window.fechaDeRegistro(registro.date);
     const firmaron = new Set((registro.incident_signatures || []).map(f => String(f.employee_id)));
     const empleados = window.todosLosEmpleadosData || [];
 
     const lista = [];
     empleados.forEach(emp => {
-        if (!leTocaFirmar(emp, fechaInc)) return;
+        if (!window.leTocaFirmar(emp, fechaInc)) return;
         lista.push({
             id: emp.id,
             name: emp.name,
             puesto: emp.puesto,
             dept: emp.dept || "Sin Depto",
             sup: emp.sup || "Sin Supervisor",
-            activo: emp.isActive !== false,
             firmo: firmaron.has(String(emp.id))
         });
     });
@@ -556,10 +542,9 @@ window.verEmpleadosPorRegistro = (supName) => {
         const etiqueta = emp.firmo
             ? `<span style="color:#16a34a; font-weight:bold; font-size:0.8rem;">✓ Firmado</span>`
             : `<span style="color:#ea580c; font-weight:bold; font-size:0.8rem;">! Pendiente</span>`;
-        const baja = emp.activo ? '' : ` <span style="color:#94a3b8; font-weight:normal;">(Inactivo)</span>`;
         html += `
         <div class="stats-fila-empleado">
-            <div style="min-width:0;"><div class="stats-empleado-nombre">${escaparHTML(emp.name)}${baja}</div><div class="stats-empleado-puesto">${escaparHTML(emp.puesto || 'Colaborador')}</div></div>
+            <div style="min-width:0;"><div class="stats-empleado-nombre">${escaparHTML(emp.name)}</div><div class="stats-empleado-puesto">${escaparHTML(emp.puesto || 'Colaborador')}</div></div>
             <div style="text-align:right; flex-shrink:0;">${etiqueta}</div>
         </div>`;
     });

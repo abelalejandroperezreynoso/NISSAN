@@ -61,7 +61,10 @@ window.mostrarModalFirmaPendiente = async (id) => {
         const yaFirme = signedIds.has(myIdStr);
         
         const myPuesto = user.puesto ? user.puesto.trim().toUpperCase() : "";
-        const exentoDeFirmar = ["JR. MANAGER", "SR MANAGER", "JR MANAGER", "SR. MANAGER"].includes(myPuesto);
+        // Igual que en el detalle de incidentes: la baja no cierra la sesión
+        // abierta, así que el estado se mira en la caché de empleados.
+        const miFicha = (window.todosLosEmpleadosData || []).find(e => String(e.id) === myIdStr);
+        const exentoDeFirmar = window.esPuestoExentoDeFirmar(myPuesto) || !window.empleadoActivo(miFicha);
 
         let html = imageHtml;
         if(parentId) html += `<div style="background:#eff6ff; padding:10px; border-radius:8px; color:#1e40af; font-size:0.85rem; margin-bottom:15px; border:1px dashed #bfdbfe;">🔗 <b>Imágenes vinculadas.</b></div>`;
@@ -338,7 +341,8 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             try {
                 if (modo === 'PROPIOS') {
             const myPuesto = user.puesto ? user.puesto.trim().toUpperCase() : "SIN PUESTO";
-            const exentoDeFirmar = ["JR. MANAGER", "SR MANAGER", "JR MANAGER", "SR. MANAGER"].includes(myPuesto);
+            const miFicha = window.todosLosEmpleadosData.find(e => String(e.id) === String(user.id));
+            const exentoDeFirmar = window.esPuestoExentoDeFirmar(myPuesto) || !window.empleadoActivo(miFicha);
 
             if (!exentoDeFirmar) {
                 const { data: rpcData } = await sb.rpc('get_pending_incidents', { p_employee_id: user.id });
@@ -566,19 +570,12 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                         
                         if(teamIncidents) {
                             const validTeamIncidents = teamIncidents.filter(inc => {
-                                if (!inc.date) return false;
-                                const [y, m, d] = inc.date.split('-');
-                                const incDate = new Date(y, m - 1, d);
-                                
-                                const equipoElegible = window.todosLosEmpleadosData.filter(e => {
-                                    if (!teamIds.includes(String(e.id))) return false;
-                                    const empPuesto = e.puesto ? e.puesto.trim().toUpperCase() : "";
-                                    if (["JR. MANAGER", "SR MANAGER", "JR MANAGER", "SR. MANAGER"].includes(empPuesto)) return false;
-                                    const empDate = new Date(e.date);
-                                    empDate.setHours(0,0,0,0);
-                                    return empDate <= incDate;
-                                });
-                                
+                                const incDate = window.fechaDeRegistro(inc.date);
+                                if (!incDate) return false;
+
+                                const equipoElegible = window.todosLosEmpleadosData.filter(e =>
+                                    teamIds.includes(String(e.id)) && window.leTocaFirmar(e, incDate));
+
                                 if(equipoElegible.length === 0) return false;
                                 const signedIds = inc.incident_signatures ? inc.incident_signatures.map(s => String(s.employee_id)) : [];
                                 const faltanFirmas = equipoElegible.some(e => !signedIds.includes(String(e.id)));
@@ -619,6 +616,10 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                                                             const targetsNormDeptos = targetsDeptos.map(t => String(t).toUpperCase().trim());
 
                                                                             myFullTeam.forEach(sub => {
+                                                                                // Un subordinado dado de baja ya no va a responder:
+                                                                                // no se le arrastra como encuesta atrasada.
+                                                                                if (!window.empleadoActivo(sub)) return;
+
                                                                                 let aplicaSub = false;
 
                                                                                 if (targetEmps.length > 0 && !targetEmps.includes('ALL')) {
@@ -1008,18 +1009,10 @@ if (item.virtual_type === 'waiting_boss') {
                             const hierarchyIds = window.obtenerJerarquiaCompleta(user.id);
                             const myFullTeam = window.todosLosEmpleadosData.filter(e => hierarchyIds.has(String(e.id)));
                             
-                            const [y, m, d] = item.date.split('-');
-                            const fechaInc = new Date(y, m - 1, d);
+                            const fechaInc = window.fechaDeRegistro(item.date);
 
-                            const eligibleTeam = myFullTeam.filter(e => {
-                                const empPuesto = e.puesto ? e.puesto.trim().toUpperCase() : "";
-                                if (["JR. MANAGER", "SR MANAGER", "JR MANAGER", "SR. MANAGER"].includes(empPuesto)) return false;
+                            const eligibleTeam = myFullTeam.filter(e => window.leTocaFirmar(e, fechaInc));
 
-                                const empDate = new Date(e.date);
-                                empDate.setHours(0,0,0,0);
-                                return empDate <= fechaInc;
-                            });
-                            
                             const totalTarget = eligibleTeam.length;
                             let signedCount = 0;
                             if (totalTarget > 0 && item.incident_signatures) {

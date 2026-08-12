@@ -137,8 +137,8 @@ window.cargarIncidentes = async function() {
             // Progreso simple para jefes/admin
             let progressText = '';
             if (window.modoAdminActivo || hierarchyIds.size > 1) {
-                const fechaInc = new Date(dataItem.date);
-                const eligibleTeam = myFullTeam.filter(e => new Date(e.date) <= fechaInc);
+                const fechaInc = window.fechaDeRegistro(dataItem.date);
+                const eligibleTeam = myFullTeam.filter(e => window.leTocaFirmar(e, fechaInc));
                 const totalMyTarget = eligibleTeam.length;
                 let myScopeSigned = 0;
                 if (totalMyTarget > 0 && dataItem.incident_signatures) {
@@ -264,8 +264,8 @@ window.abrirDetalleIndependiente = async (id) => {
         const todosLosEmpleados = window.todosLosEmpleadosData || [];
         const myFullTeam = todosLosEmpleados.filter(e => hierarchyIds.has(String(e.id)));
         
-        const fechaInc = new Date(data.date);
-        const eligibleTeam = myFullTeam.filter(e => new Date(e.date) <= fechaInc);
+        const fechaInc = window.fechaDeRegistro(data.date);
+        const eligibleTeam = myFullTeam.filter(e => window.leTocaFirmar(e, fechaInc));
         const signedIds = new Set(signatures ? signatures.map(s => String(s.employee_id)) : []);
         const missingTeam = eligibleTeam.filter(e => !signedIds.has(String(e.id)) && String(e.id) !== myIdStr);
 
@@ -285,7 +285,11 @@ window.abrirDetalleIndependiente = async (id) => {
 
         const yaFirme = signedIds.has(myIdStr);
         const myPuesto = user.puesto ? user.puesto.trim().toUpperCase() : "";
-        const exentoDeFirmar = ["JR. MANAGER", "SR MANAGER", "JR MANAGER", "SR. MANAGER"].includes(myPuesto);
+        // La baja no cierra la sesión que ya estaba abierta, así que el estado
+        // se mira en la caché de empleados y no en `usuarioLogueado`. Si la
+        // caché aún no ha cargado, se da por activo y el botón sigue saliendo.
+        const miFicha = (window.todosLosEmpleadosData || []).find(e => String(e.id) === myIdStr);
+        const exentoDeFirmar = window.esPuestoExentoDeFirmar(myPuesto) || !window.empleadoActivo(miFicha);
 
         if (!yaFirme && !exentoDeFirmar && data.tipo !== 'Capacitación') {
             html += `

@@ -240,20 +240,41 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   simplemente afecta a cero filas. Comprobar `error` no basta, y el código
   que da por hecho que la escritura ocurrió deja la pantalla mintiendo hasta
   la siguiente recarga. Donde importe, hay que encadenar `.select()` a la
-  escritura y contar las filas que devuelve, que es lo que hace la unión de
-  altas repetidas del mapa de activos. Las políticas van por operación, así
-  que una tabla puede dejar actualizar y no borrar.
+  escritura y contar las filas que devuelve, que es lo que hacen la unión de
+  altas repetidas del mapa de activos y `guardarEmpleado()` en
+  `10-refacciones.html`. Las políticas van por operación, así que una tabla
+  puede dejar actualizar y no borrar.
 - **Quién debe firmar un registro.** No hay tabla que lo diga: la regla la
-  repite el código en cada pantalla que la necesita. Le toca firmar a todo
-  empleado dado de alta **en o antes** de la fecha del registro, salvo los
-  puestos exentos (`JR. MANAGER`, `SR MANAGER`, con y sin punto). Las
-  capacitaciones no se firman y quedan fuera de cualquier conteo de avance.
-  Vive en `2b-core-dashboard.js` (badges de pendientes), `3-incidentes.js`
-  (avance de la tarjeta), `7-pendientes.js` y `9-estadisticas.js`. Al tocar
-  una hay que mirar las otras: si se separan, dos pantallas dan porcentajes
-  distintos del mismo registro. Ojo con la fecha, que llega como
-  `'YYYY-MM-DD'` y hay que armarla a mano (`new Date(y, m-1, d)`) para que no
-  la corra la zona horaria un día hacia atrás.
+  sostiene el código, y desde que se separó en cuatro copias vive en un solo
+  sitio, `1-config.js`. Le toca firmar a todo empleado **activo** dado de alta
+  **en o antes** de la fecha del registro, salvo los puestos exentos
+  (`JR. MANAGER`, `SR MANAGER`, con y sin punto). Las capacitaciones no se
+  firman y quedan fuera de cualquier conteo de avance.
+
+  ```js
+  window.leTocaFirmar(emp, window.fechaDeRegistro(inc.date))
+  ```
+
+  Lo usan `2b-core-dashboard.js` (badges de pendientes), `3-incidentes.js`
+  (avance de la tarjeta y lista de quién falta), `7-pendientes.js` y
+  `9-estadisticas.js`. **Ninguna pantalla vuelve a escribir la lista de puestos
+  exentos ni la comparación de fechas**: si hace falta cambiar la regla, se
+  cambia el helper y cambian las cuatro a la vez. Cuando sólo se necesita una
+  mitad están `window.esPuestoExentoDeFirmar(puesto)` y
+  `window.empleadoActivo(emp)`, que acepta tanto `isActive` (cachés del
+  navegador) como `is_active` (la base) y ante la duda da por activo.
+
+  Ojo con la fecha, que llega como `'YYYY-MM-DD'`: `window.fechaDeRegistro` la
+  arma a mano porque `new Date('2026-01-31')` se lee en UTC y la zona horaria
+  la corre un día hacia atrás.
+
+  Un empleado dado de baja no cuenta **en ningún lado**: ni como pendiente
+  suyo, ni en el denominador del avance de un registro anterior a su baja —que
+  si no, se quedaba clavado por debajo del 100% para siempre—, ni como encuesta
+  atrasada de su jefe. La baja no cierra la sesión que ya estaba abierta, así
+  que las pantallas que deciden sobre el usuario actual miran su ficha en
+  `window.todosLosEmpleadosData` y no en `usuarioLogueado`, que no trae el
+  campo.
 - **Las estadísticas tienen dos desgloses y dos orígenes.** Por
   departamentos, los conteos vienen del reporte `obtener_estadisticas_empleados`,
   que suma todos los registros del filtro en la base. Por registro, en cambio,
@@ -263,6 +284,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   colaborador no cuesta ninguna consulta más. Como uno lo calcula la base y el
   otro el navegador, sus totales pueden discrepar un poco si la función SQL
   no aplica exactamente la regla de arriba.
+
+  Lo que salva la parte de los exentos y las bajas es que el reporte devuelve
+  **una fila por empleado**: el navegador la cruza con
+  `window.todosLosEmpleadosData` y descarta la fila entera, así que descontar a
+  alguien no necesita tocar la función SQL. Lo que sí puede discrepar es la
+  fecha de alta, que la aplica la base por su cuenta.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con

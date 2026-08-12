@@ -56,6 +56,59 @@ window.procesarUrlImagen = (urlOriginal) => {
     return urlOriginal;
 };
 
+// =========================================================
+// --- QUIÉN DEBE FIRMAR UN REGISTRO ---
+// =========================================================
+// Firma todo empleado activo dado de alta en o antes de la fecha del registro,
+// salvo los puestos exentos. Las capacitaciones no se firman y quedan fuera de
+// cualquier conteo de avance.
+//
+// La regla vivía copiada en los badges del panel (2b-core-dashboard.js), en los
+// incidentes (3-incidentes.js), en los pendientes (7-pendientes.js) y en las
+// estadísticas (9-estadisticas.js), y se había separado: la tarjeta del
+// incidente no descontaba a los puestos exentos y ninguna miraba las bajas.
+// Ahora las cuatro llaman aquí para que den el mismo número.
+
+window.PUESTOS_EXENTOS_DE_FIRMAR = ["JR. MANAGER", "SR MANAGER", "JR MANAGER", "SR. MANAGER"];
+
+window.esPuestoExentoDeFirmar = (puesto) =>
+    window.PUESTOS_EXENTOS_DE_FIRMAR.includes(String(puesto === null || puesto === undefined ? "" : puesto).trim().toUpperCase());
+
+// Un empleado dado de baja no puede firmar: no cuenta como pendiente ni engorda
+// el denominador del avance. Vale cualquiera de las dos formas del campo
+// —`isActive` en las cachés del navegador, `is_active` tal como viene de la
+// base— y ante la duda se le da por activo, que es como estaban las cosas antes
+// de que la columna existiera.
+window.empleadoActivo = (emp) => {
+    if (!emp) return true;
+    return emp.isActive !== false && emp.is_active !== false;
+};
+
+// Las fechas de los registros llegan como 'YYYY-MM-DD' y hay que armarlas a
+// mano: `new Date('2026-01-31')` se lee en UTC y la zona horaria la corre un
+// día hacia atrás.
+window.fechaDeRegistro = (texto) => {
+    if (texto instanceof Date) return texto;
+    const partes = String(texto === null || texto === undefined ? "" : texto).split('T')[0].split('-');
+    if (partes.length !== 3 || !partes[0] || !partes[1] || !partes[2]) return null;
+    return new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+};
+
+// La fecha de alta sí viene como timestamp completo; se recorta a medianoche
+// para poder compararla con la del registro.
+window.fechaDeAltaEmpleado = (emp) => {
+    const alta = (emp && emp.date) ? new Date(emp.date) : new Date(0);
+    alta.setHours(0, 0, 0, 0);
+    return alta;
+};
+
+window.leTocaFirmar = (emp, fechaRegistro) => {
+    if (!emp || !fechaRegistro) return false;
+    if (!window.empleadoActivo(emp)) return false;
+    if (window.esPuestoExentoDeFirmar(emp.puesto)) return false;
+    return window.fechaDeAltaEmpleado(emp) <= fechaRegistro;
+};
+
 // --- ESTADO DE LA APLICACIÓN ---
 window.paginaActual = 0;
 window.idEditando = null;
