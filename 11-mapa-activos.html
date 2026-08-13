@@ -332,6 +332,19 @@
 
         .renglon-solicitud:last-child { border-bottom: none; }
 
+        /* El renglón abre la solicitud en el panel de refacciones. El resalte
+           se sale al ancho del recuadro que los envuelve, que trae 12px de
+           relleno, para que se vea como una fila entera y no como una tira
+           flotando en medio. */
+        .renglon-solicitud--abrible {
+            cursor: pointer;
+            margin: 0 -12px;
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+
+        .renglon-solicitud--abrible:active { background: #f1f5f9; }
+
         /* Sugerencias del buscador de ID. Van en el flujo y no flotando: una
            capa absoluta se recortaría contra el borde de la hoja, que es la
            que desplaza el contenido. */
@@ -1670,10 +1683,17 @@
                 if (!puedoAdministrar || req.estado === 'Cancelada') {
                     return `<div title="${etiqueta}" aria-label="${etiqueta}" style="display:flex;">${foto}</div>`;
                 }
-                return `<button onclick="window.abrirAsignarAtendedor('${escapar(String(req.id))}')"
+                return `<button onclick="event.stopPropagation(); window.abrirAsignarAtendedor('${escapar(String(req.id))}')"
                                 title="${etiqueta} · Toca para cambiar" aria-label="${etiqueta}. Cambiar quién atiende"
                                 style="border:none; background:transparent; padding:0; cursor:pointer; display:flex; border-radius:50%;">${foto}</button>`;
             }
+
+            // El panel de detalles de una solicitud —con sus notas, su foto y
+            // todas sus acciones— vive en 10-refacciones.html y no se copia
+            // aquí: el mapa manda a esa pantalla diciéndole cuál abrir.
+            window.abrirSolicitudEnPanel = (idSolicitud) => {
+                window.location.href = '10-refacciones.html?solicitud=' + encodeURIComponent(idSolicitud);
+            };
 
             function esMia(req, campo) {
                 return !!miFicha && personaDe(req[campo]).clave === miFicha.clave;
@@ -1721,7 +1741,7 @@
                 if (!accion) {
                     return `<span class="etiqueta-estado" style="${estilo}">${texto}</span>`;
                 }
-                return `<button onclick="window.avanzarSolicitudEnMapa('${escapar(String(req.id))}')"
+                return `<button onclick="event.stopPropagation(); window.avanzarSolicitudEnMapa('${escapar(String(req.id))}')"
                                 class="etiqueta-estado" style="${estilo}"
                                 title="${escapar(accion.titulo)}"
                                 aria-label="${escapar(accion.aria)}">${texto} ✓</button>`;
@@ -1782,8 +1802,14 @@
                         // cantidad: es el dato por el que se abre la hoja, y ahí
                         // detrás de la fecha se lo comían los puntos suspensivos.
                         const contexto = contextoDeSolicitud(req, tipo);
+                        // El renglón entero abre la solicitud. Los controles que
+                        // lleva dentro paran el evento para que tocarlos no se
+                        // lleve además la pantalla por delante.
                         return `
-                            <div class="renglon-solicitud">
+                            <div class="renglon-solicitud renglon-solicitud--abrible" role="button" tabindex="0"
+                                 onclick="window.abrirSolicitudEnPanel('${escapar(String(req.id))}')"
+                                 onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.abrirSolicitudEnPanel('${escapar(String(req.id))}'); }"
+                                 title="Ver los detalles de la solicitud">
                                 <div style="min-width:0;">
                                     <div style="font-weight:600; color:#0f172a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${urgente ? '🚨 ' : ''}${escapar(req.nombre_refaccion || 'Sin nombre')}</div>
                                     ${contexto ? `<div style="font-size:0.75rem; color:#64748b; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${contexto}</div>` : ''}
@@ -1792,7 +1818,7 @@
                                 <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
                                     ${bloqueAtendedor(req)}
                                     ${bloqueEstado(req, colores)}
-                                    ${tipo === 'equipo' && puedoAdministrar ? `<button onclick="window.abrirMoverSolicitud('${escapar(String(req.id))}')" class="ios-boton-icono" title="Mover a otro equipo" aria-label="Mover a otro equipo" style="width:30px; height:30px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></button>` : ''}
+                                    ${tipo === 'equipo' && puedoAdministrar ? `<button onclick="event.stopPropagation(); window.abrirMoverSolicitud('${escapar(String(req.id))}')" class="ios-boton-icono" title="Mover a otro equipo" aria-label="Mover a otro equipo" style="width:30px; height:30px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></button>` : ''}
                                 </div>
                             </div>`;
                     }).join('');

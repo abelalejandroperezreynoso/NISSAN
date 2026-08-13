@@ -4363,8 +4363,29 @@
                 }
             }
 
-            window.abrirStatsRefacciones();
+            await window.abrirStatsRefacciones();
+            window.abrirSolicitudDeLaDireccion();
         });
+
+        // El mapa de activos manda aquí con ?solicitud=<id> al tocar un renglón
+        // de su listado: el panel de detalles, con las notas, la foto y todas
+        // las acciones, vive en esta pantalla y no se copia allá.
+        window.abrirSolicitudDeLaDireccion = () => {
+            let id = null;
+            try { id = new URLSearchParams(window.location.search).get('solicitud'); } catch (e) {}
+            if (!id) return;
+
+            // La dirección se limpia en cuanto se lee: si no, recargar la
+            // pantalla volvería a abrir el panel encima una y otra vez.
+            history.replaceState(null, '', window.location.pathname);
+
+            const req = (window.refaccionesDataCache || []).find(r => String(r.id) === String(id));
+            if (!req) {
+                alert("No se encontró esa solicitud. Puede que la hayan eliminado.");
+                return;
+            }
+            window.verDetallesRefaccion(req);
+        };
         
         
         window.procesarYSubirImagen = async (idRefaccion, input) => {
