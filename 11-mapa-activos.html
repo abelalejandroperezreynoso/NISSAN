@@ -1668,12 +1668,39 @@
                                 style="border:none; background:transparent; padding:0; cursor:pointer; display:flex; border-radius:50%;">${foto}</button>`;
             }
 
-            // Si la solicitud es de quien tiene la sesión abierta —suya de
-            // atenderla, no de haberla pedido— y sigue pendiente, la puede dar
-            // por entregada sin salir del mapa.
-            function laAtiendoYo(req) {
-                if (req.estado !== 'Pendiente' || !miFicha) return false;
-                return personaDe(req.atendido_por_id).clave === miFicha.clave;
+            function esMia(req, campo) {
+                return !!miFicha && personaDe(req[campo]).clave === miFicha.clave;
+            }
+
+            // Lo que puede hacer con esta solicitud quien tiene la sesión
+            // abierta, sin salir del mapa. Las mismas dos acciones del panel y
+            // con las mismas reglas: quien la atiende la da por entregada
+            // mientras siga pendiente, y quien la pidió acusa el recibo hasta
+            // que esté cerrada.
+            //
+            // Si es las dos cosas —se atiende su propia solicitud— gana la de
+            // solicitante: 'Recibida' cierra el ciclo entero y se ahorra el
+            // paso intermedio.
+            function accionSobreSolicitud(req) {
+                if (!miFicha || req.estado === 'Cancelada') return null;
+
+                if (esMia(req, 'solicitante_id') && (req.estado === 'Pendiente' || req.estado === 'Entregada')) {
+                    return {
+                        estado: 'Recibida',
+                        titulo: 'La pediste tú: marcar como recibida',
+                        aria: 'Marcar esta solicitud como recibida',
+                        pregunta: "✅ ¿Confirmas que ya recibiste esta refacción en tus manos y deseas cerrar la solicitud?"
+                    };
+                }
+                if (esMia(req, 'atendido_por_id') && req.estado === 'Pendiente') {
+                    return {
+                        estado: 'Entregada',
+                        titulo: 'La atiendes tú: marcar como entregada',
+                        aria: 'Marcar esta solicitud como entregada',
+                        pregunta: "📦 ¿Confirmas que ya entregaste esta refacción al solicitante?"
+                    };
+                }
+                return null;
             }
 
             // La etiqueta de estado hace además de botón cuando hay algo que
@@ -1682,26 +1709,30 @@
             function bloqueEstado(req, colores) {
                 const texto = escapar(req.estado || 'Pendiente');
                 const estilo = `background:${colores.fondo}; color:${colores.texto};`;
+                const accion = accionSobreSolicitud(req);
 
-                if (!laAtiendoYo(req)) {
+                if (!accion) {
                     return `<span class="etiqueta-estado" style="${estilo}">${texto}</span>`;
                 }
-                return `<button onclick="window.marcarEntregadaEnMapa('${escapar(String(req.id))}')"
+                return `<button onclick="window.avanzarSolicitudEnMapa('${escapar(String(req.id))}')"
                                 class="etiqueta-estado" style="${estilo}"
-                                title="La atiendes tú: marcar como entregada"
-                                aria-label="Marcar esta solicitud como entregada">${texto} ✓</button>`;
+                                title="${escapar(accion.titulo)}"
+                                aria-label="${escapar(accion.aria)}">${texto} ✓</button>`;
             }
 
-            window.marcarEntregadaEnMapa = async (idSolicitud) => {
+            window.avanzarSolicitudEnMapa = async (idSolicitud) => {
                 const solicitud = refacciones.find(r => String(r.id) === String(idSolicitud));
-                // Se vuelve a comprobar aquí y no sólo al pintar: entre que se
-                // dibujó el renglón y el toque pudo cambiar el reparto.
-                if (!solicitud || !laAtiendoYo(solicitud)) return;
-                if (!confirm("📦 ¿Confirmas que ya entregaste esta refacción al solicitante?")) return;
+                // La acción se vuelve a resolver aquí y no se pasa en el onclick:
+                // entre que se dibujó el renglón y el toque pudo cambiar el
+                // reparto o el estado, y lo que se escribe tiene que salir de lo
+                // que la solicitud es ahora.
+                const accion = solicitud ? accionSobreSolicitud(solicitud) : null;
+                if (!accion) return;
+                if (!confirm(accion.pregunta)) return;
 
                 try {
                     const { data, error } = await sb.from('refacciones')
-                        .update({ estado: 'Entregada' })
+                        .update({ estado: accion.estado })
                         .eq('id', solicitud.id)
                         .select('id');
 
@@ -1714,13 +1745,13 @@
                         return;
                     }
 
-                    solicitud.estado = 'Entregada';
+                    solicitud.estado = accion.estado;
                     agregarMetricas();
                     dibujar();
                     refrescarDetalle();
                 } catch (error) {
-                    console.error("Error al marcar la solicitud como entregada:", error);
-                    alert("Hubo un error de conexión al intentar marcarla como entregada.");
+                    console.error("Error al cambiar el estado de la solicitud:", error);
+                    alert("Hubo un error de conexión al intentar cambiar el estado de la solicitud.");
                 }
             };
 
