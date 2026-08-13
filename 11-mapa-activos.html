@@ -416,6 +416,18 @@
             border-radius: 999px;
         }
 
+        /* La misma etiqueta, cuando además es el botón con el que quien atiende
+           la solicitud la da por entregada. El borde punteado es lo que la
+           distingue de las que sólo informan; no lleva control aparte porque en
+           un renglón de teléfono no cabe otro más. */
+        button.etiqueta-estado {
+            font-family: inherit;
+            border: 1px dashed currentColor;
+            cursor: pointer;
+        }
+
+        button.etiqueta-estado:active { filter: brightness(0.95); }
+
         /* Lista del nivel: la forma de llegar a un cuadro demasiado pequeño
            para tocarlo, que es lo que le pasa a un equipo sin solicitudes. */
         #lista-nivel {
@@ -608,6 +620,29 @@
             // resuelve al cargar y de ahí no se mueve.
             let puedoAsignar = false;
 
+            // Los encargos que hoy dan permiso sobre refacciones y la ficha de
+            // quien tiene la sesión abierta, que es quien puede entregar lo suyo.
+            let encargosAutorizados = [];
+            let miFicha = null;
+
+            function fichaDeLaSesion() {
+                try {
+                    const sesion = JSON.parse(localStorage.getItem("usuarioLogueado"));
+                    if (!sesion || !sesion.id) return null;
+                    return empleadosPorClave.get(String(sesion.id).trim()) || null;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            // Atiende refacciones quien lleva en su ficha alguno de los encargos
+            // marcados en «Configurar permisos», y sigue de alta. No hay otra
+            // lista: el permiso de ver todo y el de atender son el mismo.
+            function atiendeRefacciones(ficha) {
+                if (!ficha || !ficha.activo || encargosAutorizados.length === 0) return false;
+                return (ficha.encargos || []).some(e => encargosAutorizados.includes(e));
+            }
+
             // Las dos vistas de personas, ya agregadas: cada entrada es una
             // persona con su métrica y sus solicitudes. Se arman al cargar,
             // igual que las de activos.
@@ -670,6 +705,19 @@
             // ==========================================
             // Carga
             // ==========================================
+            async function consultarPlantilla() {
+                const base = 'id, employee_id, name, department, avatar_url, is_active';
+                try {
+                    const res = await sb.from('employees').select(base + ', encargos');
+                    if (!res.error) return res;
+                    if (!String(res.error.message || '').includes('encargos')) return res;
+                    console.warn("La tabla employees todavía no tiene la columna 'encargos'.");
+                    return await sb.from('employees').select(base);
+                } catch (e) {
+                    return { data: null, error: e };
+                }
+            }
+
             try {
                 const [resPlantas, resLineas, resEquipos, resRefacciones, resEmpleados] = await Promise.all([
                     sb.from('plantas').select('id, nombre').order('nombre'),
@@ -681,8 +729,12 @@
                     // falla, ese mapa se dibuja igual y son las otras dos vistas
                     // las que se quedan sin nadie. Por eso queda fuera del lazo
                     // que aborta la carga, y por eso se atrapa aquí su rechazo.
-                    sb.from('employees').select('id, employee_id, name, department, puesto, avatar_url, is_active')
-                        .then(r => r, e => ({ data: null, error: e }))
+                    //
+                    // 'encargos' es columna opcional —hay bases donde todavía no
+                    // se ha corrido el script—, así que si es ella la que rompe
+                    // la consulta se repite sin pedirla: sin encargos no habrá a
+                    // quién repartirle nada, pero los nombres se salvan.
+                    consultarPlantilla()
                 ]);
 
                 for (const res of [resPlantas, resLineas, resEquipos, resRefacciones]) {
@@ -708,7 +760,7 @@
                             clave: String(e.id).trim(),
                             nombre: e.name,
                             depto: String(e.department || '').trim() || SIN_DEPTO,
-                            puesto: String(e.puesto || '').trim().toUpperCase(),
+                            encargos: window.normalizarEncargos(e.encargos).map(v => v.toUpperCase()),
                             avatar: e.avatar_url || '',
                             activo: e.is_active !== false
                         };
@@ -723,8 +775,10 @@
                 // para las dos pantallas. El modo administrador viaja en
                 // sessionStorage desde el panel, así que sigue valiendo aquí.
                 try {
+                    encargosAutorizados = await window.encargosAutorizadosRefacciones();
+                    miFicha = fichaDeLaSesion();
                     puedoAsignar = sessionStorage.getItem("adminSostenido") === 'true' ||
-                        await window.tienePermisoRefacciones();
+                        (miFicha ? atiendeRefacciones(miFicha) : false);
                 } catch (e) {
                     console.error("No se pudo comprobar el permiso de refacciones:", e);
                 }
@@ -1614,6 +1668,62 @@
                                 style="border:none; background:transparent; padding:0; cursor:pointer; display:flex; border-radius:50%;">${foto}</button>`;
             }
 
+            // Si la solicitud es de quien tiene la sesión abierta —suya de
+            // atenderla, no de haberla pedido— y sigue pendiente, la puede dar
+            // por entregada sin salir del mapa.
+            function laAtiendoYo(req) {
+                if (req.estado !== 'Pendiente' || !miFicha) return false;
+                return personaDe(req.atendido_por_id).clave === miFicha.clave;
+            }
+
+            // La etiqueta de estado hace además de botón cuando hay algo que
+            // pulsar. Ir a un control aparte costaría el ancho que en un
+            // teléfono le queda al nombre de la pieza.
+            function bloqueEstado(req, colores) {
+                const texto = escapar(req.estado || 'Pendiente');
+                const estilo = `background:${colores.fondo}; color:${colores.texto};`;
+
+                if (!laAtiendoYo(req)) {
+                    return `<span class="etiqueta-estado" style="${estilo}">${texto}</span>`;
+                }
+                return `<button onclick="window.marcarEntregadaEnMapa('${escapar(String(req.id))}')"
+                                class="etiqueta-estado" style="${estilo}"
+                                title="La atiendes tú: marcar como entregada"
+                                aria-label="Marcar esta solicitud como entregada">${texto} ✓</button>`;
+            }
+
+            window.marcarEntregadaEnMapa = async (idSolicitud) => {
+                const solicitud = refacciones.find(r => String(r.id) === String(idSolicitud));
+                // Se vuelve a comprobar aquí y no sólo al pintar: entre que se
+                // dibujó el renglón y el toque pudo cambiar el reparto.
+                if (!solicitud || !laAtiendoYo(solicitud)) return;
+                if (!confirm("📦 ¿Confirmas que ya entregaste esta refacción al solicitante?")) return;
+
+                try {
+                    const { data, error } = await sb.from('refacciones')
+                        .update({ estado: 'Entregada' })
+                        .eq('id', solicitud.id)
+                        .select('id');
+
+                    if (error) throw error;
+
+                    // Cero filas es lo que contesta una escritura que las
+                    // políticas de la base no permiten, y llega sin error.
+                    if (!data || data.length === 0) {
+                        alert("La base no aplicó el cambio: no se modificó ninguna fila.\n\nRevisa los permisos de escritura (RLS) de la tabla refacciones.");
+                        return;
+                    }
+
+                    solicitud.estado = 'Entregada';
+                    agregarMetricas();
+                    dibujar();
+                    refrescarDetalle();
+                } catch (error) {
+                    console.error("Error al marcar la solicitud como entregada:", error);
+                    alert("Hubo un error de conexión al intentar marcarla como entregada.");
+                }
+            };
+
             // El bloque de solicitudes, con su tope de ocho y su «ver las
             // restantes». El botón de mover es cosa de la vista de activos: en
             // la hoja de una persona no se está mirando ningún equipo al que
@@ -1643,7 +1753,7 @@
                                 </div>
                                 <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
                                     ${bloqueAtendedor(req)}
-                                    <span class="etiqueta-estado" style="background:${colores.fondo}; color:${colores.texto};">${escapar(req.estado || 'Pendiente')}</span>
+                                    ${bloqueEstado(req, colores)}
                                     ${tipo === 'equipo' ? `<button onclick="window.abrirMoverSolicitud('${escapar(String(req.id))}')" class="ios-boton-icono" title="Mover a otro equipo" aria-label="Mover a otro equipo" style="width:30px; height:30px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></button>` : ''}
                                 </div>
                             </div>`;
@@ -1983,12 +2093,12 @@
             // ==========================================
             // Repartir una solicitud entre atendedores
             // ==========================================
-            // Quién puede atender: el personal STAFF, que es el que toma
-            // solicitudes en el panel, más quien ya atiende alguna aunque su
-            // puesto diga otra cosa. El panel además recorta la lista al
-            // departamento de quien asigna; aquí no, porque el mapa es la vista
-            // de toda la empresa y esa lista se quedaría vacía en cuanto se
-            // mirara la carga de otra planta.
+            // Quién puede atender: sólo quien está marcado con permiso, es decir
+            // quien lleva alguno de los encargos autorizados en «Configurar
+            // permisos». No vale el resto de la plantilla, ni siquiera quien ya
+            // atiende alguna solicitud de antes: si le quitaron el encargo, no
+            // se le reparte nada nuevo. El único que aparece sin cumplirlo es el
+            // que ya la atiende, y sale desactivado, para poder ver quién es.
             function atendedoresPosibles(solicitud) {
                 const vistos = new Set();
                 const lista = [];
@@ -1999,17 +2109,11 @@
                     lista.push({ ficha, nota });
                 };
 
-                // El que ya la atiende encabeza la lista, cumpla o no el resto.
                 agregar(personaDe(solicitud.atendido_por_id), 'La atiende ahora');
 
-                const resto = [];
-                plantilla.forEach(f => { if (f.activo && f.puesto === 'STAFF') resto.push(f); });
-                atendedores.forEach(e => {
-                    const ficha = empleadosPorClave.get(e.clave);
-                    if (ficha) resto.push(ficha);
-                });
-
-                resto.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+                plantilla
+                    .filter(atiendeRefacciones)
+                    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
                     .forEach(f => agregar(f, f.depto === SIN_DEPTO ? '' : f.depto));
 
                 return lista;
@@ -2055,7 +2159,7 @@
                         const vacio = document.createElement('div');
                         vacio.style.cssText = 'padding:16px 25px; color:#94a3b8; font-style:italic;';
                         vacio.innerText = candidatos.length === 0
-                            ? 'No hay personal con puesto STAFF para atender solicitudes.'
+                            ? 'Nadie tiene todavía un encargo con permiso para atender refacciones. Se marcan en el panel, en Configurar permisos.'
                             : 'Nadie coincide.';
                         lista.appendChild(vacio);
                         return;
