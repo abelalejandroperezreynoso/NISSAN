@@ -490,7 +490,7 @@
         <div id="barra-vistas" role="tablist" aria-label="Punto de vista">
             <button class="vista-opcion" data-vista="activos" role="tab">Activos</button>
             <button class="vista-opcion" data-vista="solicitantes" role="tab">Solicitantes</button>
-            <button class="vista-opcion" data-vista="atendedores" role="tab">Atendedores</button>
+            <button class="vista-opcion" data-vista="atendedores" role="tab">Atiende</button>
         </div>
 
         <div id="barra-ruta">
@@ -616,9 +616,13 @@
             let empleadosPorClave = new Map();
             let plantilla = [];
 
-            // Si el usuario puede repartir solicitudes entre atendedores. Se
-            // resuelve al cargar y de ahí no se mueve.
-            let puedoAsignar = false;
+            // Si el usuario puede tocar lo que es de todos: repartir una
+            // solicitud, moverla de equipo, renombrar una máquina o unir sus
+            // altas repetidas. Se resuelve al cargar y de ahí no se mueve.
+            //
+            // Marcar como entregada o recibida NO pasa por aquí: eso es trabajo
+            // propio de cada quien y lo decide `accionSobreSolicitud`.
+            let puedoAdministrar = false;
 
             // Los encargos que hoy dan permiso sobre refacciones y la ficha de
             // quien tiene la sesión abierta, que es quien puede entregar lo suyo.
@@ -660,11 +664,14 @@
             let ruta = [];
 
             // Cada vista dice de dónde cuelga su ruta, cómo se llama cada
-            // nivel en la hoja de lista y qué se ve al final del camino.
+            // nivel en la hoja de lista y qué se ve al final del camino. La
+            // clave es interna —viaja en el estado del historial—; lo que se
+            // lee en pantalla es lo de aquí, y por eso 'atendedores' se rotula
+            // «Atiende», igual que el pie de cada solicitud.
             const VISTAS = {
                 activos: { raiz: 'Plantas', niveles: ['Plantas', 'Líneas', 'Equipos'] },
                 solicitantes: { raiz: 'Departamentos', niveles: ['Departamentos', 'Solicitantes'] },
-                atendedores: { raiz: 'Atendedores', niveles: ['Atendedores'] }
+                atendedores: { raiz: 'Atiende', niveles: ['Atiende'] }
             };
 
             const CERRADOS = ['Entregada', 'Recibida'];
@@ -777,7 +784,7 @@
                 try {
                     encargosAutorizados = await window.encargosAutorizadosRefacciones();
                     miFicha = fichaDeLaSesion();
-                    puedoAsignar = sessionStorage.getItem("adminSostenido") === 'true' ||
+                    puedoAdministrar = sessionStorage.getItem("adminSostenido") === 'true' ||
                         (miFicha ? atiendeRefacciones(miFicha) : false);
                 } catch (e) {
                     console.error("No se pudo comprobar el permiso de refacciones:", e);
@@ -1660,7 +1667,7 @@
                 const etiqueta = escapar(`Atiende: ${quien}`);
                 const foto = avatarDeAtendedor(req);
 
-                if (!puedoAsignar || req.estado === 'Cancelada') {
+                if (!puedoAdministrar || req.estado === 'Cancelada') {
                     return `<div title="${etiqueta}" aria-label="${etiqueta}" style="display:flex;">${foto}</div>`;
                 }
                 return `<button onclick="window.abrirAsignarAtendedor('${escapar(String(req.id))}')"
@@ -1785,7 +1792,7 @@
                                 <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
                                     ${bloqueAtendedor(req)}
                                     ${bloqueEstado(req, colores)}
-                                    ${tipo === 'equipo' ? `<button onclick="window.abrirMoverSolicitud('${escapar(String(req.id))}')" class="ios-boton-icono" title="Mover a otro equipo" aria-label="Mover a otro equipo" style="width:30px; height:30px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></button>` : ''}
+                                    ${tipo === 'equipo' && puedoAdministrar ? `<button onclick="window.abrirMoverSolicitud('${escapar(String(req.id))}')" class="ios-boton-icono" title="Mover a otro equipo" aria-label="Mover a otro equipo" style="width:30px; height:30px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13"/><path d="M13 6l6 6-6 6"/></svg></button>` : ''}
                                 </div>
                             </div>`;
                     }).join('');
@@ -1836,7 +1843,10 @@
                 if (filas.length > 1) marcas.push(`${filas.length} altas en esta línea`);
                 if (filas.every(e => e.activo === false)) marcas.push('Dado de baja');
 
-                document.getElementById('btn-editar-equipo').style.display = '';
+                // Renombrar una máquina y unir sus altas repetidas cambia el
+                // catálogo para toda la empresa, así que va con el mismo permiso
+                // que el reparto.
+                document.getElementById('btn-editar-equipo').style.display = puedoAdministrar ? '' : 'none';
                 document.getElementById('detalle-titulo').innerText = nodo.subtitulo || nodo.titulo;
                 document.getElementById('detalle-subtitulo').innerText =
                     [ruta.map(p => p.titulo).join(' › ')].concat(marcas).join(' · ');
@@ -1871,7 +1881,7 @@
                         ? 'Solicitudes que nadie ha tomado'
                         : 'Solicitudes sin solicitante registrado';
                 } else {
-                    subtitulo = [esAtendedor ? 'Atendedor' : 'Solicitante']
+                    subtitulo = [esAtendedor ? 'Atiende' : 'Solicitante']
                         .concat(entrada.depto === SIN_DEPTO ? [] : [entrada.depto])
                         .join(' · ');
                 }
@@ -1934,6 +1944,7 @@
             }
 
             window.abrirEdicionEquipo = () => {
+                if (!puedoAdministrar) return;
                 const filas = filasDelDetalle();
                 if (filas.length === 0) return;
 
@@ -1973,6 +1984,7 @@
             // llevar las filas en un onclick que se rehaga al abrir: se vuelven
             // a leer del detalle, que es de donde salieron.
             window.guardarEdicionEquipo = () => {
+                if (!puedoAdministrar) return;
                 const filas = filasDelDetalle();
                 if (filas.length > 0) guardarEquipo(filas);
             };
@@ -2031,6 +2043,10 @@
             }
 
             window.abrirMoverSolicitud = (idSolicitud) => {
+                // La comprobación se repite aquí y no sólo al pintar el botón:
+                // estas funciones cuelgan de window y el renglón que las llama
+                // se rehace en cada repintado.
+                if (!puedoAdministrar) return;
                 const solicitud = refacciones.find(r => String(r.id) === String(idSolicitud));
                 if (!solicitud) return;
 
@@ -2151,7 +2167,7 @@
             }
 
             window.abrirAsignarAtendedor = (idSolicitud) => {
-                if (!puedoAsignar) return;
+                if (!puedoAdministrar) return;
                 const solicitud = refacciones.find(r => String(r.id) === String(idSolicitud));
                 if (!solicitud) return;
 
@@ -2323,6 +2339,7 @@
             // las filas. Si el borrado falla, las solicitudes ya están a
             // salvo en el alta que se queda y no se perdió nada.
             async function unirAltas(filas) {
+                if (!puedoAdministrar) return;
                 const boton = document.getElementById('btn-unir-altas');
                 const elegido = document.querySelector('input[name="alta-superviviente"]:checked');
                 if (!elegido) return;
