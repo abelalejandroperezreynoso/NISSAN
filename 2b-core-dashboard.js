@@ -1199,10 +1199,14 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                 const misSubsIds = misSubs.map(e => e.id);
                 
                 if(misSubsIds.length > 0) {
+                    // Sólo cuentan las respuestas de encuestas encendidas: si
+                    // no, el badge seguiría pidiendo calificar algo que ya no
+                    // aparece en la lista de pendientes.
                     const { count: countExacto } = await sb.from('evaluation_responses')
                         .select('id', { count: 'exact', head: true })
                         .in('review_status', ['Pendiente', 'Mal Revisada'])
-                        .in('employee_id', misSubsIds);
+                        .in('employee_id', misSubsIds)
+                        .in('evaluation_id', activeEvals.map(e => e.id));
                     countPorCalificar += (countExacto || 0);
 
                     const teamObligatorias = activeEvalsDb ? activeEvalsDb.filter(ev => ev.is_obligatory !== false) : [];

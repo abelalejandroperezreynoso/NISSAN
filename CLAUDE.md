@@ -307,11 +307,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   Se apaga y se enciende desde el botón 🚫/✅ de la tarjeta —
   `window.alternarEncuestaActiva(id, activar)` en `4-evaluaciones-admin.js`— o
-  desde la casilla «Activa» de la hoja de crear y editar. Todas las consultas
-  que arman pendientes ya filtraban por `active`
-  (`2b-core-dashboard.js`, `7-pendientes.js`, `6-calendario.js`), así que
-  apagarla basta para que dejen de contar; **toda consulta nueva que liste
-  encuestas a un usuario tiene que filtrar igual**.
+  desde la casilla «Activa» de la hoja de crear y editar.
+
+  Los pendientes salen de dos sitios y hay que apagar los dos. Las consultas
+  que preguntan **qué encuesta falta por contestar** parten de `evaluations` y
+  ya filtraban por `active` (`2b-core-dashboard.js`, `7-pendientes.js`,
+  `6-calendario.js`). Las que preguntan **qué respuesta falta por calificar**
+  parten de `evaluation_responses`, que no tiene ese campo: se traen `active`
+  en el embebido —`evaluations(title, active)`— y descartan al dibujar
+  («Revisión: …» y «Mal Revisada: …» en `7-pendientes.js`), o acotan por
+  `evaluation_id` a las encendidas (el badge `countPorCalificar` de
+  `2b-core-dashboard.js`). Si el embebido viene vacío porque la encuesta ya no
+  existe, el pendiente se deja pasar, que es como estaba antes. **Toda consulta
+  nueva que liste encuestas o respuestas a un usuario tiene que filtrar
+  igual.**
 
   La lista de `4-evaluaciones-base.js` es la excepción: se trae también las
   inactivas y las esconde al dibujar. Filtrarlas en la consulta ataría

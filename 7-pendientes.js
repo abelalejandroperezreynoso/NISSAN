@@ -446,12 +446,15 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
             // --- NUEVO: Buscar las encuestas del usuario marcadas como Mal Revisadas ---
             const { data: misMalRevisadas } = await sb.from('evaluation_responses')
-                .select('id, submitted_at, evaluation_id, review_status, evaluations(title)')
+                .select('id, submitted_at, evaluation_id, review_status, evaluations(title, active)')
                 .eq('employee_id', user.id)
                 .eq('review_status', 'Mal Revisada');
 
             if (misMalRevisadas) {
                 misMalRevisadas.forEach(e => {
+                    // Si la encuesta se apagó, tampoco hay nada que rehacer.
+                    if (e.evaluations && !window.encuestaActiva(e.evaluations)) return;
+
                     items.push({
                         id: 'malrev_' + e.id, 
                         title: `Mal Revisada: ${e.evaluations?.title || 'Evaluación'}`, 
@@ -543,13 +546,19 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 }
 
                 const { data: evalsPorRevisar } = await sb.from('evaluation_responses')
-                    .select('id, submitted_at, employee_id, evaluation_id, answers_json, grades_json, review_status, evaluations(title, category)')
+                    .select('id, submitted_at, employee_id, evaluation_id, answers_json, grades_json, review_status, evaluations(title, category, active)')
                     .in('review_status', ['Pendiente', 'Mal Revisada'])
                     .in('employee_id', equipoDirectoIds)
                     .order('submitted_at', { ascending: true });
 
                 if (evalsPorRevisar) {
                     evalsPorRevisar.forEach(e => {
+                        // Una encuesta apagada deja de pedir calificación: la
+                        // respuesta se queda guardada y el pendiente vuelve si
+                        // se vuelve a encender. Si la encuesta ya no existe se
+                        // deja pasar, que es como estaba antes.
+                        if (e.evaluations && !window.encuestaActiva(e.evaluations)) return;
+
                         const prefijo = e.review_status === 'Mal Revisada' ? '⚠️ Corregir:' : 'Revisión:';
                         items.push({
                             id: e.id, title: `${prefijo} ${e.evaluations?.title || 'Evaluación'}`, date: e.submitted_at.split('T')[0],
