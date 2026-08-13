@@ -1725,6 +1725,9 @@ window.abrirModalCrearEval = async () => {
     const chkArea = document.getElementById('chk-eval-por-area');
     if(chkArea) chkArea.checked = false;
 
+    const chkActiva = document.getElementById('chk-eval-activa');
+    if(chkActiva) chkActiva.checked = true;
+
     const chkAllEmpleados = document.getElementById('chk-all-empleados');
         if(chkAllEmpleados) chkAllEmpleados.checked = true;
         window.empleadosSeleccionadosEval = [];
@@ -1804,6 +1807,9 @@ window.editarEvaluacion = async (id) => {
     
     const chkArea = document.getElementById('chk-eval-por-area');
     if(chkArea) { chkArea.checked = (evaluacion.evaluates_area === true); }
+
+    const chkActiva = document.getElementById('chk-eval-activa');
+    if(chkActiva) { chkActiva.checked = window.encuestaActiva(evaluacion); }
 
     await window.prepararInputCategorias(evaluacion.category || 'General');
 
@@ -1924,6 +1930,38 @@ window.borrarPreguntaDB = async (questionId, btnElement) => {
     else { btnElement.closest('.pregunta-wrapper').remove(); }
 };
 
+// Apagar y encender una encuesta desde su propia tarjeta. Una encuesta
+// inactiva se queda en la base con todas sus respuestas, pero sólo la ve el
+// administrador y deja de generar pendientes: las consultas que los arman
+// filtran por `active`.
+window.alternarEncuestaActiva = async (id, activar) => {
+    if (!window.modoAdminActivo) { alert("Requiere permisos de administrador"); return; }
+
+    const quiereActivar = (activar === true || activar === 'true');
+    if (!quiereActivar && !confirm("¿Desactivar esta encuesta?\n\nDejará de aparecer a los usuarios y de generar pendientes. Sus respuestas se conservan y tú la seguirás viendo en modo administrador.")) return;
+
+    try {
+        // PostgREST responde con éxito aunque las políticas rechacen la
+        // escritura: se encadena .select() para contar las filas que de
+        // verdad cambiaron.
+        const { data, error } = await sb.from('evaluations')
+            .update({ active: quiereActivar })
+            .eq('id', id)
+            .select('id');
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            alert("La base no aplicó el cambio: no hay permiso para modificar esta encuesta.");
+            return;
+        }
+
+        window.evalCache = null;
+        if (window.cargarVistaEvaluaciones) await window.cargarVistaEvaluaciones();
+    } catch (e) {
+        alert("Error al cambiar el estado: " + e.message);
+    }
+};
+
 window.borrarEvaluacion = async (id) => {
     if(!confirm("¿Estás seguro de eliminar esta evaluación?")) return;
     try {
@@ -2030,6 +2068,11 @@ window.guardarNuevaEvaluacion = async () => {
         const chkArea = document.getElementById('chk-eval-por-area');
                 const evaluatesArea = chkArea ? chkArea.checked : false;
 
+                // Sin la casilla marcada la encuesta queda inactiva: sólo la
+                // ve el administrador y no genera pendientes a nadie.
+                const chkActiva = document.getElementById('chk-eval-activa');
+                const estaActiva = chkActiva ? chkActiva.checked : true;
+
                 const chkAllEmpleados = document.getElementById('chk-all-empleados');
                 let targetEmployees = ['ALL'];
 
@@ -2053,14 +2096,15 @@ window.guardarNuevaEvaluacion = async () => {
                     target_departments: targetDepartments,
                     target_employees: targetEmployees,
                     evaluates_area: evaluatesArea,
-                    is_obligatory: isObligatory
+                    is_obligatory: isObligatory,
+                    active: estaActiva
                 };
 
                 if(eid) {
             const { error } = await sb.from('evaluations').update(payload).eq('id', eid);
             if(error) throw error;
         } else {
-            const {data, error} = await sb.from('evaluations').insert({ ...payload, active: true }).select().single();
+            const {data, error} = await sb.from('evaluations').insert(payload).select().single();
             if(error) throw error;
             eid = data.id;
         }

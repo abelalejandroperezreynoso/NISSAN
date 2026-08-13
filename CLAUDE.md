@@ -294,6 +294,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   esa caché, deja que el helper los consulte. El modo administrador es aparte y
   viaja en `sessionStorage.adminSostenido`, así que sigue valiendo al pasar de
   una pantalla a la otra.
+- **Una encuesta inactiva sigue existiendo, pero sólo para el administrador.**
+  La columna `active` de `evaluations` decide quién la ve: apagada, la encuesta
+  desaparece de la lista, de los pendientes, de las encuestas atrasadas y de
+  las estadísticas de todo el mundo salvo de quien tenga el modo administrador
+  encendido. Sus respuestas no se tocan y volver a encenderla la devuelve tal
+  cual estaba, que es lo que la separa de borrarla.
+
+  ```js
+  window.encuestaActiva(ev)   // en 1-config.js; si el campo no vino, activa
+  ```
+
+  Se apaga y se enciende desde el botón 🚫/✅ de la tarjeta —
+  `window.alternarEncuestaActiva(id, activar)` en `4-evaluaciones-admin.js`— o
+  desde la casilla «Activa» de la hoja de crear y editar. Todas las consultas
+  que arman pendientes ya filtraban por `active`
+  (`2b-core-dashboard.js`, `7-pendientes.js`, `6-calendario.js`), así que
+  apagarla basta para que dejen de contar; **toda consulta nueva que liste
+  encuestas a un usuario tiene que filtrar igual**.
+
+  La lista de `4-evaluaciones-base.js` es la excepción: se trae también las
+  inactivas y las esconde al dibujar. Filtrarlas en la consulta ataría
+  `window.evalCache` al modo que hubiera al cargarla, y encender el modo
+  administrador no la invalida. La cronología de esa misma pantalla sí recibe
+  la lista completa: sólo la usa para saber de qué clasificación era cada
+  respuesta ya contestada, y apagar una encuesta no borra el historial de
+  nadie.
+
+  Lo que no mira `active` es el calendario: una encuesta programada a una
+  persona concreta en `scheduled_evaluations` sigue apareciendo en su día
+  aunque después se apague la encuesta. Esa programación es una asignación
+  explícita y se cancela desde el propio calendario.
 - **Las estadísticas tienen dos desgloses y dos orígenes.** Por
   departamentos, los conteos vienen del reporte `obtener_estadisticas_empleados`,
   que suma todos los registros del filtro en la base. Por registro, en cambio,

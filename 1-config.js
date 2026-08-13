@@ -110,6 +110,28 @@ window.leTocaFirmar = (emp, fechaRegistro) => {
 };
 
 // =========================================================
+// --- ENCUESTAS INACTIVAS ---
+// =========================================================
+// Una encuesta inactiva sigue en la base con todas sus respuestas, pero deja
+// de existir para el usuario: no aparece en la lista de encuestas, no genera
+// pendientes ni la cuentan como atrasada, y queda fuera de las estadísticas.
+// Sólo la ve —y la puede volver a encender— quien esté en modo administrador.
+//
+// La columna `active` ya venía en la tabla y todas las consultas que arman
+// pendientes filtran por ella (`2b-core-dashboard.js`, `7-pendientes.js`,
+// `6-calendario.js`), así que apagarla basta para que dejen de contar. Lo que
+// faltaba era poder apagarla desde la aplicación y no dar por activa a la que
+// no lo dice.
+//
+// Si el campo no viene en la consulta se da por activa, que es como estaban
+// las cosas cuando nadie lo apagaba.
+window.encuestaActiva = (ev) => {
+    if (!ev) return false;
+    if (ev.active === undefined || ev.active === null) return true;
+    return ev.active !== false && String(ev.active).toLowerCase() !== 'false';
+};
+
+// =========================================================
 // --- QUIÉN PUEDE VER Y REPARTIR TODAS LAS REFACCIONES ---
 // =========================================================
 // El permiso no va por puesto sino por encargo extra: en «Configurar

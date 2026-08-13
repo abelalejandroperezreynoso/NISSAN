@@ -22,7 +22,11 @@ window.cargarStatsEncuestasGlobales = async () => {
             ? Promise.resolve(null)
             : window.cargarDatosEmpleados();
             
-        const p2 = sb.from('evaluations').select('*').eq('active', true);
+        // Las encuestas inactivas salen de las estadísticas de todo el mundo
+        // salvo del administrador, que es el único que las sigue viendo.
+        let consultaEvals = sb.from('evaluations').select('*');
+        if (!window.modoAdminActivo) consultaEvals = consultaEvals.eq('active', true);
+        const p2 = consultaEvals;
         
         // Paginación automática (Batch Fetching)
         const fetchTodasLasRespuestas = async () => {

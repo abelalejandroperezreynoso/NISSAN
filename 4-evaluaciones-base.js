@@ -270,9 +270,12 @@ window.cargarVistaEvaluaciones = async () => {
         allPending = window.evalCache.allPending;
         teamResponses = window.evalCache.teamResponses || misRespuestas;
     } else {
+        // Se traen también las inactivas: la lista las esconde más abajo a
+        // quien no esté en modo administrador. Filtrar aquí dejaría la caché
+        // atada al modo que hubiera al cargarla, y encender el modo admin no
+        // la invalida.
         const { data: eData, error: eErr } = await sb.from('evaluations')
             .select('*')
-            .eq('active', true)
             .order('created_at', { ascending: false });
             
         if (eErr || !eData) {
@@ -368,13 +371,19 @@ window.cargarVistaEvaluaciones = async () => {
         setTimeout(() => window.renderizarCronologiaGlobal(teamResponses, evals), 100);
     }
 
-    if (evals.length === 0) {
+    // Las encuestas inactivas sólo se listan en modo administrador. La
+    // cronología de arriba sí recibe la lista completa: sirve para saber de
+    // qué clasificación era cada respuesta ya contestada, y apagar una
+    // encuesta no borra el historial de nadie.
+    const evalsListables = window.modoAdminActivo ? evals : evals.filter(window.encuestaActiva);
+
+    if (evalsListables.length === 0) {
         container.insertAdjacentHTML('beforeend', `<div style="text-align:center; padding:40px; color:#64748b;">No hay evaluaciones disponibles.</div>`);
         return;
     }
 
     const groups = {};
-    evals.forEach(ev => {
+    evalsListables.forEach(ev => {
         const cat = ev.category || "General";
         if (!groups[cat]) groups[cat] = [];
         groups[cat].push(ev);
@@ -463,11 +472,21 @@ window.cargarVistaEvaluaciones = async () => {
             
             const safeTitle = ev.title.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
 
+            // Una inactiva sólo llega hasta aquí en modo administrador: se
+            // dibuja apagada para no confundirla con las que sí ve la gente.
+            const estaActiva = window.encuestaActiva(ev);
+
             // Variables de Estilo iOS
                         let iconHtml = mode === 'boss' ? "👥" : "📋";
                         let bgStyle = "background: linear-gradient(135deg, #64748b 0%, #334155 100%);"; // Gradiente Gris Pizarra Elegante
-                        let notificationBadge = ""; 
-                        
+                        let estiloApagado = "";
+                        let etiquetaInactiva = "";
+                        if (!estaActiva) {
+                            estiloApagado = "filter: grayscale(1); opacity:0.45;";
+                            etiquetaInactiva = `<div style="margin-top:3px; background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; border-radius:6px; font-size:0.6rem; font-weight:bold; padding:1px 6px; letter-spacing:0.5px;">INACTIVA</div>`;
+                        }
+                        let notificationBadge = "";
+
                         // NOTIFICACIÓN DE PENDIENTES / MAL REVISADAS
                         const pendientesDeEstaEval = pendingMap[ev.id] || 0;
                         if (pendientesDeEstaEval > 0) {
@@ -478,14 +497,18 @@ window.cargarVistaEvaluaciones = async () => {
                         let adminBtn = '';
                         if (window.modoAdminActivo) {
                             adminBtn = `
-                            <div style="display:flex; gap:8px; margin-top:6px; justify-content:center; position:relative; z-index:100;">
-                                <button onclick="event.stopPropagation(); window.cerrarModalEvaluaciones(); window.editarEvaluacion('${ev.id}')" 
-                                        style="border:none; background:#e2e8f0; color:#475569; border-radius:50%; width:26px; height:26px; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;" 
+                            <div style="display:flex; gap:5px; margin-top:6px; justify-content:center; position:relative; z-index:100;">
+                                <button onclick="event.stopPropagation(); window.cerrarModalEvaluaciones(); window.editarEvaluacion('${ev.id}')"
+                                        style="border:none; background:#e2e8f0; color:#475569; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:0.7rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;" 
                                         onmouseover="this.style.background='#cbd5e1'" onmouseout="this.style.background='#e2e8f0'"
                                         title="Editar Evaluación">✏️</button>
                                 
-                                <button onclick="event.stopPropagation(); window.borrarEvaluacion('${ev.id}')" 
-                                        style="border:none; background:#fee2e2; color:#ef4444; border-radius:50%; width:26px; height:26px; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;" 
+                                <button onclick="event.stopPropagation(); window.alternarEncuestaActiva('${ev.id}', ${estaActiva ? 'false' : 'true'})"
+                                        style="border:none; background:${estaActiva ? '#e0f2fe' : '#dcfce7'}; color:${estaActiva ? '#0369a1' : '#15803d'}; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:0.7rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;"
+                                        title="${estaActiva ? 'Desactivar (sólo la verá el administrador)' : 'Activar (volverá a verla todo el mundo)'}">${estaActiva ? '🚫' : '✅'}</button>
+
+                                <button onclick="event.stopPropagation(); window.borrarEvaluacion('${ev.id}')"
+                                        style="border:none; background:#fee2e2; color:#ef4444; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:0.7rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;"
                                         onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'"
                                         title="Eliminar Evaluación">🗑️</button>
                             </div>`;
@@ -495,8 +518,8 @@ window.cargarVistaEvaluaciones = async () => {
                         const cardHtml = `
                         <div style="display:flex; flex-direction:column; align-items:center; width: 100%; max-width: 85px; cursor:default; transition:transform 0.1s ease-in-out;">
                             
-                            <div onclick="window.abrirHistorialEvaluacion('${ev.id}', '${safeTitle}')" 
-                                 style="position:relative; ${bgStyle} width: 64px; height: 64px; border-radius: 16px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.15); margin-bottom: 6px; cursor:pointer; transition: transform 0.1s;"
+                            <div onclick="window.abrirHistorialEvaluacion('${ev.id}', '${safeTitle}')"
+                                 style="position:relative; ${bgStyle} ${estiloApagado} width: 64px; height: 64px; border-radius: 16px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.15); margin-bottom: 6px; cursor:pointer; transition: transform 0.1s;"
                                  onmouseover="this.style.transform='scale(0.95)'" onmouseout="this.style.transform='scale(1)'">
                                 
                                 ${notificationBadge} <!-- Globo de Pendientes/Mal Revisadas -->
@@ -504,10 +527,12 @@ window.cargarVistaEvaluaciones = async () => {
                                 <div style="font-size:2.2rem; line-height:1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">${iconHtml}</div>
                             </div>
                             
-                            <div style="font-size:0.75rem; font-weight:500; color:#1e293b; text-align:center; width:100%; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.2; padding: 0 2px;">
+                            <div style="font-size:0.75rem; font-weight:500; color:${estaActiva ? '#1e293b' : '#94a3b8'}; text-align:center; width:100%; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.2; padding: 0 2px;">
                                 ${ev.title}
                             </div>
-                            
+
+                            ${etiquetaInactiva}
+
                             ${adminBtn}
                             
                         </div>`;
