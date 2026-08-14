@@ -793,10 +793,15 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                 plugins: [{
                     afterDatasetsDraw(chart) {
                         const { ctx } = chart;
-                        const data = chart.data.datasets[0].data;
-                        const sum = data.reduce((a, b) => a + b, 0);
-                        const avg = data.length > 0 ? Math.round(sum / data.length) : 0;
-                        
+                        // El número del centro es el mismo que el del recuadro
+                        // «Calificación Promedio»: la media de las respuestas,
+                        // redondeada una sola vez. Promediar las puntas de la
+                        // gráfica daría otra cosa —cada punta ya viene
+                        // redondeada y todas pesarían igual sin importar
+                        // cuántas respuestas hay detrás—, y por eso el centro
+                        // decía 81% donde el recuadro decía 80%.
+                        const avg = globalAvgScore;
+
                         const totalU=new Set();
                         const totalA=new Set();
                         if(isSingleEvalMode){
@@ -887,6 +892,11 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
 
     const radarMap = {};
     const assignedMap = {};
+    // Media del recorte, con la misma definición que el recuadro de
+    // «Calificación Promedio»: se suma el promedio de cada respuesta y se
+    // redondea una sola vez, al final.
+    let sumaRecorte = 0;
+    let conteoRecorte = 0;
     const activeEvalsMap = {};
     cache.activeEvalsList.forEach(e => activeEvalsMap[e.id] = e);
     
@@ -976,6 +986,8 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
         });
         
         const finalScore = qCount > 0 ? (sumScore / qCount) : 0;
+        sumaRecorte += finalScore;
+        conteoRecorte++;
 
         if (!isSingleEvalMode) {
             if (!radarMap[radarKey]) radarMap[radarKey] = { sum: 0, count: 0, users: new Set() };
@@ -1094,10 +1106,8 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
             plugins: [{
                 afterDatasetsDraw(chart) {
                     const { ctx } = chart;
-                    const data = chart.data.datasets[0].data;
-                    const sum = data.reduce((a, b) => a + b, 0);
-                    const avg = data.length > 0 ? Math.round(sum / data.length) : 0;
-                    
+                    const avg = conteoRecorte > 0 ? Math.round(sumaRecorte / conteoRecorte) : 0;
+
                     const totalU=new Set();
                     const totalA=new Set();
                     if(isSingleEvalMode){
