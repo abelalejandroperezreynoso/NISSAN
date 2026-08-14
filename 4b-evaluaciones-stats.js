@@ -612,7 +612,9 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                 <h3 class="stats-seccion-titulo" style="color:#be185d;">📍 Comparativa de Desempeño por Áreas</h3>
                 <span style="font-size:0.8rem; color:#be185d; font-weight:600;">Evaluaciones enfocadas en áreas</span>
             </div>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap:15px;">
+            <!-- Las áreas no se apilan: van en fila y se arrastran con el dedo,
+                 que es lo que evita que esta sección se coma la pantalla. -->
+            <div class="stats-carrusel hide-scrollbar">
                 ${window.renderAreaStats(areaPerfMap)}
             </div>
         </div>`;
@@ -1344,25 +1346,29 @@ usersHtml+=`
 }else{
 usersHtml=`<div style="font-size:0.75rem; color:#94a3b8; font-style:italic; padding:5px 0;">Aún no hay evaluaciones</div>`;
 }
+// La lista de participantes va plegada: con un catálogo grande, abierta se
+// llevaba casi toda la pantalla. El <details> guarda su propio estado y no
+// necesita ninguna función colgada de window.
+const numParticipantes=d.userStats?Object.keys(d.userStats).length:0;
 h+=`
-<div style="background:#fdfdfd; border:1px solid #f1f5f9; padding:15px; border-radius:10px; box-shadow:0 1px 2px rgba(0,0,0,0.02); border-left: 4px solid ${col}; opacity:${d.count>0?'1':'0.6'};">
-<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;">
-<div style="flex: 1; padding-right: 10px;">
+<div class="stats-area" style="border-left-color:${col}; opacity:${d.count>0?'1':'0.6'};">
+<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:12px;">
+<div style="flex: 1; min-width:0;">
 <div style="font-size:1rem; color:#334155; font-weight:700; display:flex; align-items:center; gap:8px;">
-<span style="font-size:1.2rem; color:${d.count>0?'inherit':'#cbd5e1'};">${medal}</span> ${k}
+<span style="font-size:1.2rem; color:${d.count>0?'inherit':'#cbd5e1'}; flex-shrink:0;">${medal}</span> ${k}
 </div>
 </div>
-<div style="text-align:right;">
+<div style="text-align:right; flex-shrink:0;">
 <span style="display:inline-block; background:${d.count>0?col+'20':'#f1f5f9'}; color:${col}; padding:4px 10px; border-radius:8px; font-weight:bold; font-size:1rem;">${d.count>0?avg+'%':'N/A'}</span>
-<div style="font-size:0.7rem; color:#94a3b8; margin-top:2px;">(${d.count} encuestas)</div>
+<div style="font-size:0.7rem; color:#94a3b8; margin-top:2px; white-space:nowrap;">(${d.count} encuestas)</div>
 </div>
 </div>
-<div style="border-top:1px solid #f1f5f9; padding-top:10px;">
-<strong style="color:#475569; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.5px;">Participantes</strong>
-<div style="margin-top:5px; display:flex; flex-direction:column;">
+<details class="stats-plegable">
+<summary>Participantes${numParticipantes>0?` <span class="stats-plegable-conteo">${numParticipantes}</span>`:''}</summary>
+<div class="stats-plegable-cuerpo">
 ${usersHtml}
 </div>
-</div>
+</details>
 </div>`;
 });
 return h;

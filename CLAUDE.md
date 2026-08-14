@@ -367,6 +367,16 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   dentro del encabezado de la hoja: `.hoja-acciones` no encoge, así que ahí
   estrujaban el título hasta dejarlo en una columna de tres letras. Su fuente
   es de 16px por la trampa de siempre del zoom de Safari.
+
+  Una sección que crece con el catálogo no se apila: va en `.stats-carrusel`,
+  una fila que se arrastra con el dedo y engancha las tarjetas de una en una.
+  El último elemento se recorta a propósito —asomar el siguiente es lo único
+  que avisa de que hay más— y las tarjetas no se estiran entre sí. Lo que
+  llevan dentro va plegado con `<details class="stats-plegable">`, que guarda
+  su estado solo y no necesita ninguna función colgada de `window`; abierta,
+  la lista se desplaza dentro de su tarjeta (`.stats-plegable-cuerpo`, tope de
+  260px) en vez de estirar la fila. Así es la comparativa por áreas, que con
+  todo el personal desplegado se llevaba nueve mil píxeles de la pantalla.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con

@@ -2325,6 +2325,104 @@ html.modal-abierto {
     margin-top: 5px;
 }
 
+/* Fila que se arrastra con el dedo, con las tarjetas enganchadas de una en
+   una. El recorte del último elemento es a propósito: asomar el siguiente es
+   lo único que le dice al dedo que ahí hay más. */
+.stats-carrusel {
+    display: flex;
+    /* Cada tarjeta con su propio alto: si se estiraran todas, desplegar una
+       lista dejaría a las vecinas con un hueco del tamaño de esa lista. */
+    align-items: flex-start;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    /* El desplazamiento horizontal no debe arrastrar a la hoja entera. */
+    overscroll-behavior-x: contain;
+}
+
+.stats-carrusel > * {
+    flex: 0 0 min(300px, 84%);
+    scroll-snap-align: start;
+}
+
+/* Tarjeta de área dentro del carrusel. */
+.stats-area {
+    background: #fdfdfd;
+    border: 1px solid #f1f5f9;
+    border-left: 4px solid #94a3b8;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Lista plegada. El triángulo de iOS se sustituye por una flecha propia para
+   que gire igual en Safari y en Chrome. */
+.stats-plegable {
+    border-top: 1px solid #f1f5f9;
+    padding-top: 8px;
+    margin-top: auto;
+}
+
+.stats-plegable > summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    list-style: none;
+    color: #475569;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 0;
+    /* Un objetivo de toque que no obligue a apuntar al texto. */
+    min-height: 32px;
+}
+
+.stats-plegable > summary::-webkit-details-marker {
+    display: none;
+}
+
+.stats-plegable > summary::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 5px solid #94a3b8;
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+.stats-plegable[open] > summary::before {
+    transform: rotate(90deg);
+}
+
+.stats-plegable-conteo {
+    background: #f1f5f9;
+    color: #64748b;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 0.7rem;
+    letter-spacing: 0;
+}
+
+/* Abierta, la lista se queda dentro de la tarjeta y se desplaza por dentro:
+   así una área con doscientas personas no estira el carrusel. */
+.stats-plegable-cuerpo {
+    display: flex;
+    flex-direction: column;
+    max-height: 260px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
 /* Columna de barras de los gráficos por departamento y por puesto. */
 .stats-columna {
     display: flex;
