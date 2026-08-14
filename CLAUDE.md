@@ -349,6 +349,24 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `window.todosLosEmpleadosData` y descarta la fila entera, así que descontar a
   alguien no necesita tocar la función SQL. Lo que sí puede discrepar es la
   fecha de alta, que la aplica la base por su cuenta.
+- **Las rejillas se salen de la hoja en un teléfono.** `repeat(auto-fit,
+  minmax(300px, 1fr))` no encoge por debajo de ese mínimo: con 327 px de ancho
+  útil la pista sigue midiendo 300 y la tarjeta desborda. El mínimo va siempre
+  envuelto, `minmax(min(300px, 100%), 1fr)`. Es lo que partía la pantalla de
+  estadísticas de encuestas en un iPhone 12 mini, que con 375 px es el más
+  estrecho que se usa en campo.
+
+  Esa pantalla ya no se estila a mano: sus bloques repetidos —`.stats-filtros`,
+  `.stats-resumen`, `.stats-tarjeta`, `.stats-seccion`, `.stats-leyenda`,
+  `.stats-columna`— viven al final de `estilos.css` con su variante para
+  pantallas de 600 px o menos, donde las tres cifras de cabecera pasan a una
+  sola fila y los rellenos se aprietan. Un bloque nuevo se le añade ahí, no en
+  un atributo `style`.
+
+  Los dos desplegables van en su propia fila (`#encabezado-filtro-stats`) y no
+  dentro del encabezado de la hoja: `.hoja-acciones` no encoge, así que ahí
+  estrujaban el título hasta dejarlo en una columna de tres letras. Su fuente
+  es de 16px por la trampa de siempre del zoom de Safari.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con

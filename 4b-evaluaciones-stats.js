@@ -607,12 +607,12 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     let areasHtml = '';
     if (Object.keys(areaPerfMap).length > 0) {
         areasHtml = `
-        <div style="background:white; border-radius:12px; padding:20px; border:1px solid #fbcfe8; margin-bottom:20px; box-shadow:0 4px 6px -1px rgba(190, 24, 93, 0.05);">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #fdf2f8; padding-bottom:10px; margin-bottom:15px;">
-                <h3 style="margin:0; color:#be185d; font-size:1.1rem;">📍 Comparativa de Desempeño por Áreas</h3>
+        <div class="stats-seccion" style="border-color:#fbcfe8; box-shadow:0 4px 6px -1px rgba(190, 24, 93, 0.05);">
+            <div class="stats-seccion-encabezado" style="border-bottom-color:#fdf2f8;">
+                <h3 class="stats-seccion-titulo" style="color:#be185d;">📍 Comparativa de Desempeño por Áreas</h3>
                 <span style="font-size:0.8rem; color:#be185d; font-weight:600;">Evaluaciones enfocadas en áreas</span>
             </div>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:15px;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap:15px;">
                 ${window.renderAreaStats(areaPerfMap)}
             </div>
         </div>`;
@@ -644,17 +644,17 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
 
         const filtroContainer = document.getElementById('encabezado-filtro-stats');
         if (filtroContainer) {
+            // El aspecto de la fila y de los desplegables lo pone .stats-filtros
+            // en estilos.css; aquí sólo queda el color de cada uno.
             filtroContainer.innerHTML = `
-                <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-                    <select id="global-stats-filter" onchange="window.renderizarPanelEstadisticas(this.value, document.getElementById('global-period-filter') ? document.getElementById('global-period-filter').value : 'CURRENT')" 
-                        style="padding:8px 12px; border-radius:8px; border:1px solid #cbd5e1; font-size:0.9rem; color:#1e40af; font-weight:bold; cursor:pointer; background:#eff6ff; outline:none;">
-                        ${optionsHtml}
-                    </select>
-                    <select id="global-period-filter" onchange="window.renderizarPanelEstadisticas(document.getElementById('global-stats-filter').value, this.value)" 
-                        style="padding:8px 12px; border-radius:8px; border:1px solid #cbd5e1; font-size:0.9rem; color:#0f766e; font-weight:bold; cursor:pointer; background:#f0fdf4; outline:none;">
-                        ${periodOptionsHtml}
-                    </select>
-                </div>
+                <select id="global-stats-filter" onchange="window.renderizarPanelEstadisticas(this.value, document.getElementById('global-period-filter') ? document.getElementById('global-period-filter').value : 'CURRENT')"
+                    style="color:#1e40af; background:#eff6ff;">
+                    ${optionsHtml}
+                </select>
+                <select id="global-period-filter" onchange="window.renderizarPanelEstadisticas(document.getElementById('global-stats-filter').value, this.value)"
+                    style="color:#0f766e; background:#f0fdf4;">
+                    ${periodOptionsHtml}
+                </select>
             `;
         }
         const universoContainer = document.getElementById('stats-universo-count');
@@ -665,10 +665,8 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         // LEYENDA ACTUALIZADA INTERACTIVA CON ORDENAMIENTO (SIN FLECHA A CALIFICACIÓN)
                 const criterion = window.currentStatsSortCriterion || 'participacion';
                 const legendsHtml = `
-                    <div style="display:flex; flex-direction:column; gap:8px; font-size:0.75rem; color:#64748b; width: 100%; margin-top: 5px;">
-                        
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:15px; flex-wrap:nowrap; background:#f8fafc; padding:10px 15px; border-radius:8px; border:1px solid #e2e8f0; overflow-x:auto; overflow-y:hidden;">
-                            
+                    <div class="stats-leyenda">
+
                             <!-- Sección 1 -->
                             <div style="display:flex; align-items:center; gap:4px;">
                                 <div onclick="window.cambiarOrdenStats('participacion')" style="display:flex; align-items:center; gap:4px; font-weight:bold; cursor:pointer; padding:4px 8px; border-radius:4px; background:${criterion === 'participacion' ? '#eff6ff' : 'transparent'}; border:${criterion === 'participacion' ? '1px solid #bfdbfe' : '1px solid transparent'}; transition: all 0.2s;" title="Ordenar gráficos por: Participación">
@@ -725,42 +723,41 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                                 </div>
                             </div>
 
-                        </div>
                     </div>
                 `;
 
         let html = `
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:15px; margin-bottom:15px;">
-            <div style="background:white; border-radius:16px; padding:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border:1px solid #e2e8f0;">
-                <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Participación</div>
-                <div style="font-size:2.2rem; font-weight:800; color:#3b82f6; line-height:1.2; margin-top:5px;">${participacionGlobal}<span style="font-size:1.2rem; color:#94a3b8;">%</span></div>
-                <div style="font-size:0.8rem; color:#94a3b8;">${totalContestadas} de ${totalAsignadasGlobal} realizadas</div>
+        <div class="stats-resumen">
+            <div class="stats-tarjeta">
+                <div class="stats-tarjeta-rotulo">Participación</div>
+                <div class="stats-tarjeta-cifra" style="color:#3b82f6;">${participacionGlobal}<span>%</span></div>
+                <div class="stats-tarjeta-pie">${totalContestadas} de ${totalAsignadasGlobal} realizadas</div>
             </div>
-            <div style="background:white; border-radius:16px; padding:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border:1px solid #e2e8f0;">
-                <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Progreso Revisión</div>
-                <div style="font-size:2.2rem; font-weight:800; color:#10b981; line-height:1.2; margin-top:5px;">${porcentajeRevision}<span style="font-size:1.2rem; color:#94a3b8;">%</span></div>
-                <div style="font-size:0.8rem; color:#94a3b8;">${totalRevisadas} de ${totalContestadas} procesadas</div>
+            <div class="stats-tarjeta">
+                <div class="stats-tarjeta-rotulo">Progreso Revisión</div>
+                <div class="stats-tarjeta-cifra" style="color:#10b981;">${porcentajeRevision}<span>%</span></div>
+                <div class="stats-tarjeta-pie">${totalRevisadas} de ${totalContestadas} procesadas</div>
             </div>
-            <div style="background:white; border-radius:16px; padding:20px; box-shadow:0 2px 5px rgba(0,0,0,0.05); border:1px solid #e2e8f0; border-bottom: 4px solid ${colorGlobalScore};">
-                <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Calificación Promedio</div>
-                <div style="font-size:2.2rem; font-weight:800; color:#1e293b; line-height:1.2; margin-top:5px;">${globalAvgScore}<span style="font-size:1.2rem; color:#94a3b8;">%</span></div>
-                <div style="font-size:0.8rem; color:#94a3b8;">Considera cumplimiento</div>
+            <div class="stats-tarjeta" style="border-bottom: 4px solid ${colorGlobalScore};">
+                <div class="stats-tarjeta-rotulo">Calificación Promedio</div>
+                <div class="stats-tarjeta-cifra" style="color:#1e293b;">${globalAvgScore}<span>%</span></div>
+                <div class="stats-tarjeta-pie">Considera cumplimiento</div>
             </div>
         </div>
 
-        <div style="background:#f8fafc; border-radius:12px; padding:12px 20px; border:1px dashed #cbd5e1; margin-bottom:25px; display:flex; align-items:center; gap:12px;">
+        <div class="stats-objetivo">
             <div style="font-size:1.4rem;">🎯</div>
-            <div>
-                <div style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Puestos objetivo de esta clasificación</div>
-                <div style="font-size:0.9rem; color:#1e293b; font-weight:600; margin-top:3px; line-height:1.4;">${textoPuestosDirigidos}</div>
+            <div style="min-width:0;">
+                <div class="stats-tarjeta-rotulo">Puestos objetivo de esta clasificación</div>
+                <div style="font-size:0.85rem; color:#1e293b; font-weight:600; margin-top:3px; line-height:1.35;">${textoPuestosDirigidos}</div>
             </div>
         </div>
 
         ${areasHtml} 
         
-        <div style="background:white; border-radius:12px; padding:20px; border:1px solid #e2e8f0; margin-bottom:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding-bottom:10px; margin-bottom:15px; flex-wrap: wrap; gap: 10px;">
-                <h3 style="margin:0; color:#0f172a; font-size:1.1rem;">Por Departamento</h3>
+        <div class="stats-seccion">
+            <div class="stats-seccion-encabezado">
+                <h3 class="stats-seccion-titulo">Por Departamento</h3>
                 ${legendsHtml}
             </div>
             <div id="dept-list-container">
@@ -768,9 +765,9 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             </div>
         </div>
 
-        <div style="background:white; border-radius:12px; padding:20px; border:1px solid #e2e8f0; margin-bottom:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #f1f5f9; padding-bottom:10px; margin-bottom:15px; flex-wrap: wrap; gap: 10px;">
-                <h3 style="margin:0; color:#0f172a; font-size:1.1rem;">Por Puesto</h3>
+        <div class="stats-seccion">
+            <div class="stats-seccion-encabezado">
+                <h3 class="stats-seccion-titulo">Por Puesto</h3>
                 ${legendsHtml}
             </div>
             <div id="puesto-list-container">
@@ -778,9 +775,9 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             </div>
         </div>
 
-        <div style="background:white; border-radius:12px; padding:20px; border:1px solid #e2e8f0; margin-bottom:20px;">
+        <div class="stats-seccion">
             <div style="border-bottom:1px solid #f1f5f9; padding-bottom:15px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                <h3 id="titulo-ranking-text" style="margin:0; color:#0f172a; font-size:1.1rem; flex:1; min-width: 250px;">
+                <h3 id="titulo-ranking-text" class="stats-seccion-titulo" style="flex:1; min-width: 0;">
                     <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                         <span>Ranking General de Cumplimiento</span> 
                         <span style="font-size:0.85rem; color:#2563eb; background:#eff6ff; padding:4px 10px; border-radius:12px; white-space: nowrap; font-weight: bold;">${finalRankingList.length} Sobresalientes</span>
@@ -797,14 +794,14 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                 </div>
             </div>
 
-            <div id="ranking-list-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
+            <div id="ranking-list-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap:10px;">
                 ${renderRankingListHTML(finalRankingList)}
             </div>
         </div>
-        
-        <div style="background:white; border-radius:12px; padding:20px; border:1px solid #e2e8f0; margin-bottom:20px;">
-            <h3 style="margin-top:0; color:#0f172a; border-bottom:1px solid #f1f5f9; padding-bottom:10px; font-size:1.1rem; margin-bottom:15px;">📝 Por Tipo de Encuesta</h3>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:15px;">
+
+        <div class="stats-seccion">
+            <h3 class="stats-seccion-titulo" style="border-bottom:1px solid #f1f5f9; padding-bottom:10px; margin-bottom:15px;">📝 Por Tipo de Encuesta</h3>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap:15px;">
                 ${window.renderMiniTable(evalPerfMap)}
             </div>
         </div>`;
@@ -1292,11 +1289,11 @@ window.renderMiniTable = (dataMap) => {
         const col = getColor(avg);
         h += `
         <div style="background:white; border:1px solid #f1f5f9; padding:15px; border-radius:10px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <div style="font-size:0.95rem; color:#334155; font-weight:600;">${k}</div>
-                <div style="text-align:right;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px;">
+                <div style="font-size:0.9rem; color:#334155; font-weight:600; min-width:0;">${k}</div>
+                <div style="text-align:right; flex-shrink:0;">
                     <span style="display:inline-block; background:${col}20; color:${col}; padding:3px 8px; border-radius:6px; font-weight:bold; font-size:0.85rem;">${avg}%</span>
-                    <div style="font-size:0.7rem; color:#94a3b8; margin-top:3px;">(${d.countRevisadas} rev.)</div>
+                    <div style="font-size:0.7rem; color:#94a3b8; margin-top:3px; white-space:nowrap;">(${d.countRevisadas} rev.)</div>
                 </div>
             </div>
             <div style="width:100%; height:6px; background:#f1f5f9; border-radius:3px; overflow:hidden;">
@@ -1451,7 +1448,7 @@ window.renderDeptDetailed = (dataMap) => {
         chartHtml += `
         <div onclick="verStatsDetalleDepto(this.dataset.name)" data-name="${safeK}"
         title="${safeK}&#10;Asignadas: ${assigned}&#10;Respuestas: ${responses}&#10;Revisadas: ${reviewed}&#10;Certificadas: ${certificadas}&#10;Falsas/Anuladas: ${falsas}&#10;Mal Revisadas: ${malRevisadas}&#10;⭐ Calificación: ${avgScore}%" 
-        style="display:flex; flex-direction:column; align-items:center; cursor:pointer; min-width:95px; flex:1; padding:5px; border-radius:8px; transition:all 0.2s;" 
+        class="stats-columna" 
         onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
         onmouseout="this.style.background='transparent'; this.style.transform='none';">
 
@@ -1487,7 +1484,7 @@ window.renderDeptDetailed = (dataMap) => {
 
         </div>
 
-        <div style="font-size:0.6rem; font-weight:bold; color:#1e293b; margin-top:8px; text-align:center; width:100%; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.2; height:34px; word-break:break-word; padding:0 2px;">${safeK}</div>
+        <div class="stats-columna-rotulo">${safeK}</div>
         </div>`;
     });
     
@@ -1582,7 +1579,7 @@ window.renderPuestoDetailed = (dataMap) => {
         chartHtml += `
         <div onclick="verStatsDetallePuesto(this.dataset.name)" data-name="${safeK}"
         title="${safeK}&#10;Asignadas: ${assigned}&#10;Respuestas: ${responses}&#10;Revisadas: ${reviewed}&#10;Certificadas: ${certificadas}&#10;Falsas/Anuladas: ${falsas}&#10;Mal Revisadas: ${malRevisadas}&#10;⭐ Calificación: ${avgScore}%" 
-        style="display:flex; flex-direction:column; align-items:center; cursor:pointer; min-width:95px; flex:1; padding:5px; border-radius:8px; transition:all 0.2s;" 
+        class="stats-columna" 
         onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
         onmouseout="this.style.background='transparent'; this.style.transform='none';">
 
@@ -1618,7 +1615,7 @@ window.renderPuestoDetailed = (dataMap) => {
 
         </div>
 
-        <div style="font-size:0.6rem; font-weight:bold; color:#1e293b; margin-top:8px; text-align:center; width:100%; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.2; height:34px; word-break:break-word; padding:0 2px;">${safeK}</div>
+        <div class="stats-columna-rotulo">${safeK}</div>
         </div>`;
     });
     
@@ -1718,7 +1715,7 @@ window.verStatsDetalleDepto = (deptName) => {
             html += `
             <div onclick="verStatsDetalleSupervisor(this.dataset.dept, this.dataset.sup)" data-dept="${safeDept}" data-sup="${safeSup}"
             title="Grupo de ${safeSup}&#10;Asignadas: ${assigned}&#10;Respuestas: ${responses}&#10;Revisadas: ${reviewed}&#10;Certificadas: ${certificadas}&#10;Falsas/Anuladas: ${falsas}&#10;Mal Revisadas: ${malRevisadas}&#10;⭐ Calificación: ${avgScore}%" 
-            style="display:flex; flex-direction:column; align-items:center; cursor:pointer; min-width:95px; flex:1; padding:5px; border-radius:8px; transition:all 0.2s;" 
+            class="stats-columna" 
             onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
             onmouseout="this.style.background='transparent'; this.style.transform='none';">
 
@@ -1754,7 +1751,7 @@ window.verStatsDetalleDepto = (deptName) => {
 
             </div>
 
-            <div style="font-size:0.6rem; font-weight:bold; color:#1e293b; margin-top:8px; text-align:center; width:100%; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.2; height:34px; word-break:break-word; padding:0 2px;">Grupo de ${safeSup}</div>
+            <div class="stats-columna-rotulo">Grupo de ${safeSup}</div>
             </div>`;
         });
     }
@@ -1936,7 +1933,7 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
 
             html += `
             <div title="${safeName}&#10;📍 Área: ${safeArea}&#10;Departamento: ${safeDeptUser}&#10;Puesto: ${safeJob}&#10;Asignadas: ${emp.totalAssigned}&#10;Respuestas: ${emp.totalResp}&#10;Revisadas: ${emp.reviewedCount}&#10;Certificadas: ${emp.certificadasCount}&#10;Falsas/Anuladas: ${emp.falsasCount}&#10;Mal Revisadas: ${emp.malRevisadasCount}&#10;⭐ Calificación: ${avgScore}%${emp.incompleto ? '&#10;¡Faltan Obligatorias!' : ''}" 
-            style="display:flex; flex-direction:column; align-items:center; min-width:95px; flex:1; padding:5px; border-radius:8px; transition:all 0.2s; opacity:${opacity};" 
+            class="stats-columna" style="cursor:default; opacity:${opacity};" 
             onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
             onmouseout="this.style.background='transparent'; this.style.transform='none';">
 
@@ -2154,7 +2151,7 @@ window.verStatsDetallePuesto = (puestoName) => {
 
             html += `
             <div title="${safeName}&#10;📍 Área: ${safeArea}&#10;Departamento: ${safeDept}&#10;Puesto: ${safeJob}&#10;Asignadas: ${emp.totalAssigned}&#10;Respuestas: ${emp.totalResp}&#10;Revisadas: ${emp.reviewedCount}&#10;Certificadas: ${emp.certificadasCount}&#10;Falsas/Anuladas: ${emp.falsasCount}&#10;Mal Revisadas: ${emp.malRevisadasCount}&#10;⭐ Calificación: ${avgScore}%${emp.incompleto ? '&#10;¡Faltan Obligatorias!' : ''}" 
-            style="display:flex; flex-direction:column; align-items:center; min-width:95px; flex:1; padding:5px; border-radius:8px; transition:all 0.2s; opacity:${opacity};" 
+            class="stats-columna" style="cursor:default; opacity:${opacity};" 
             onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
             onmouseout="this.style.background='transparent'; this.style.transform='none';">
 

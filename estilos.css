@@ -2172,3 +2172,267 @@ html {
 html.modal-abierto {
     background-color: #f0f2f5;
 }
+
+/* =========================================
+   ESTADÍSTICAS DE ENCUESTAS
+   =========================================
+   La hoja #modal-stats-encuestas mete mucho dato en poco ancho, así que sus
+   bloques repetidos viven aquí y no en atributos style: es la única forma de
+   apretarlos en un teléfono. La referencia es el iPhone 12 mini, 375 px de
+   ancho, que es el más estrecho que se usa en campo.
+
+   Regla de oro de los anchos: nada de minmax(300px, 1fr) a secas en las
+   rejillas. Con menos de 300 px disponibles la pista no encoge y la tarjeta
+   se sale de la hoja; hay que envolver el mínimo en min(300px, 100%). */
+
+/* Fila de filtros, debajo del encabezado. Los dos desplegables se reparten
+   el ancho y se recortan con puntos suspensivos en lugar de empujarse.
+   La fuente es de 16px a propósito: por debajo, Safari de iOS hace zoom al
+   enfocar el campo. */
+.stats-filtros {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #fff;
+    border-bottom: 0.5px solid rgba(60, 60, 67, 0.22);
+    flex-shrink: 0;
+}
+
+.stats-filtros:empty {
+    display: none;
+}
+
+.stats-filtros select {
+    flex: 1;
+    min-width: 0;
+    flex-basis: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    text-overflow: ellipsis;
+}
+
+#contenedor-modal-stats-encuestas {
+    padding: 20px;
+}
+
+/* Las tres cifras de cabecera. En pantalla ancha son tres tarjetas grandes;
+   en el teléfono se convierten en tres fichas en una sola fila, que es lo que
+   evita que ocupen tres pantallas de alto. */
+.stats-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.stats-tarjeta {
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+}
+
+.stats-tarjeta-rotulo {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 700;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.stats-tarjeta-cifra {
+    font-size: 2.2rem;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-top: 5px;
+}
+
+.stats-tarjeta-cifra span {
+    font-size: 1.2rem;
+    color: #94a3b8;
+}
+
+.stats-tarjeta-pie {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    line-height: 1.25;
+}
+
+/* Recuadro de «Puestos objetivo». */
+.stats-objetivo {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 12px 20px;
+    border: 1px dashed #cbd5e1;
+    margin-bottom: 25px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Cada bloque blanco de la pantalla: por departamento, por puesto, ranking… */
+.stats-seccion {
+    background: #fff;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    margin-bottom: 20px;
+}
+
+.stats-seccion-titulo {
+    margin: 0;
+    color: #0f172a;
+    font-size: 1.1rem;
+}
+
+/* Encabezado de sección: título a la izquierda y, debajo o al lado según
+   quepa, la leyenda de colores. */
+.stats-seccion-encabezado {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f1f5f9;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* La leyenda no cabe de ancho en un teléfono y se desplaza en horizontal. */
+.stats-leyenda {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    flex-wrap: nowrap;
+    background: #f8fafc;
+    padding: 10px 15px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    font-size: 0.75rem;
+    color: #64748b;
+    width: 100%;
+    margin-top: 5px;
+}
+
+/* Columna de barras de los gráficos por departamento y por puesto. */
+.stats-columna {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    min-width: 95px;
+    flex: 1;
+    padding: 5px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+/* El rótulo de la columna se recorta a tres renglones; la altura fija los
+   deja todos alineados aunque unos nombres ocupen más que otros. */
+.stats-columna-rotulo {
+    font-size: 0.6rem;
+    font-weight: bold;
+    color: #1e293b;
+    margin-top: 8px;
+    text-align: center;
+    width: 100%;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.2;
+    height: 34px;
+    word-break: break-word;
+    padding: 0 2px;
+}
+
+@media (max-width: 600px) {
+    #contenedor-modal-stats-encuestas {
+        padding: 12px;
+    }
+
+    .stats-resumen {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .stats-tarjeta {
+        padding: 10px 8px;
+        border-radius: 12px;
+    }
+
+    /* Dos renglones fijos para el rótulo: «Progreso Revisión» y «Calificación
+       Promedio» ocupan dos y «Participación» uno, y sin esta altura las tres
+       cifras quedaban a distinta altura. */
+    .stats-tarjeta-rotulo {
+        font-size: 0.58rem;
+        letter-spacing: -0.01em;
+        min-height: 2.4em;
+    }
+
+    .stats-tarjeta-cifra {
+        font-size: 1.5rem;
+        margin-top: 2px;
+    }
+
+    .stats-tarjeta-cifra span {
+        font-size: 0.8rem;
+    }
+
+    .stats-tarjeta-pie {
+        font-size: 0.6rem;
+        margin-top: auto;
+    }
+
+    .stats-objetivo {
+        padding: 10px 12px;
+        margin-bottom: 15px;
+        gap: 8px;
+    }
+
+    .stats-seccion {
+        padding: 12px;
+        border-radius: 10px;
+        margin-bottom: 12px;
+    }
+
+    .stats-seccion-titulo {
+        font-size: 1rem;
+    }
+
+    .stats-seccion-encabezado {
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+
+    .stats-leyenda {
+        padding: 8px 10px;
+        gap: 10px;
+    }
+
+    /* Columnas más estrechas: así entran cuatro departamentos en pantalla en
+       lugar de tres, y la barra de desplazamiento se hace más corta. Al
+       estrecharlas, los nombres largos necesitan un renglón más. */
+    .stats-columna {
+        min-width: 78px;
+        padding: 4px 2px;
+    }
+
+    .stats-columna-rotulo {
+        -webkit-line-clamp: 4;
+        height: 46px;
+        margin-top: 6px;
+    }
+}
