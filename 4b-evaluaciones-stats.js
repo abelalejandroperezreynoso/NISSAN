@@ -333,7 +333,6 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     
     const evalPerfMap={};
     const radarPerfMap={};
-    const rankingMap={};
     const areaPerfMap={};
     let evaluaAreas=false;
     evalsList.forEach(ev=>{
@@ -472,10 +471,6 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                 radarPerfMap[radarKey].users.add(empId);
             }
 
-            if (!rankingMap[empId]) rankingMap[empId] = { sum: 0, count: 0, empObj: empObj };
-            rankingMap[empId].sum += finalScore;
-            rankingMap[empId].count++;
-
             if(evalInfo.evaluates_area){
             let empArea="Sin Área";
             if(r.employee_area&&r.employee_area!=='Sin Área'){
@@ -504,64 +499,6 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         }
     });
 
-    const userResponses = {};
-    dataset.forEach(r => {
-        const empId = String(r.employee_id);
-        if (!userResponses[empId]) userResponses[empId] = new Set();
-        userResponses[empId].add(String(r.evaluation_id));
-    });
-
-    const rankingArr = Object.values(rankingMap).map(item => {
-        const empId = String(item.empObj.id);
-        const empPuestoNorm = (item.empObj.puesto || item.empObj.Puesto || "").trim().toUpperCase();
-        const empDeptoNorm = getDept(item.empObj).toUpperCase();
-        let assignedCount = 0;
-        let obligatoryAssigned = 0;
-        let obligatoryCompleted = 0;
-
-        evalsList.forEach(ev => {
-            const info = evalMap[ev.id];
-            const targetsNorm = info.targets ? info.targets.map(t => String(t).toUpperCase().trim()) : ['ALL'];
-            const deptosNorm = info.target_departments ? info.target_departments.map(t => String(t).toUpperCase().trim()) : ['ALL'];
-
-            const matchesPuesto = targetsNorm.includes('ALL') || targetsNorm.includes(empPuestoNorm);
-            const matchesDepto = deptosNorm.includes('ALL') || deptosNorm.includes(empDeptoNorm);
-
-            if (matchesPuesto && matchesDepto) {
-                assignedCount++;
-                if (info.is_obligatory) {
-                    obligatoryAssigned++;
-                    if (userResponses[empId] && userResponses[empId].has(String(ev.id))) {
-                        obligatoryCompleted++;
-                    }
-                }
-            }
-        });
-
-        const incompleto = obligatoryCompleted < obligatoryAssigned;
-        const displayTotal = Math.max(assignedCount, item.count);
-        const avgScoreReal = displayTotal > 0 ? Math.round(item.sum / displayTotal) : 0;
-
-        return {
-            name: item.empObj.name,
-            dept: getDept(item.empObj),
-            sup: getSup(item.empObj),
-            puesto: getPuesto(item.empObj),
-            avg: avgScoreReal,
-            count: item.count,
-            totalAssigned: displayTotal,
-            incompleto: incompleto,
-            avatar: item.empObj.avatar
-        };
-    });
-        
-    rankingArr.sort((a,b) => {
-        if (a.incompleto !== b.incompleto) return a.incompleto ? 1 : -1;
-        if (b.avg !== a.avg) return b.avg - a.avg;
-        return b.count - a.count;
-    });
-        
-    const finalRankingList = rankingArr.filter(item => item.avg >= 80);
 
     const radarLabels=[];
     const radarDataPoints=[];
@@ -600,8 +537,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         statsCache,
         puestoCache,
         cleanResponses: dataset,
-        activeEvalsList: evalsList,
-        rankingCompleto: rankingArr
+        activeEvalsList: evalsList
     };
 
     let areasHtml = '';
@@ -777,27 +713,18 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             </div>
         </div>
 
-        <div class="stats-seccion">
-            <div style="border-bottom:1px solid #f1f5f9; padding-bottom:15px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                <h3 id="titulo-ranking-text" class="stats-seccion-titulo" style="flex:1; min-width: 0;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-                        <span>Ranking General de Cumplimiento</span> 
-                        <span style="font-size:0.85rem; color:#2563eb; background:#eff6ff; padding:4px 10px; border-radius:12px; white-space: nowrap; font-weight: bold;">${finalRankingList.length} Sobresalientes</span>
-                    </div>
-                </h3>
+        <div class="stats-seccion" id="stats-seccion-radar">
+            <div style="border-bottom:1px solid #f1f5f9; padding-bottom:12px; margin-bottom:15px;">
+                <h3 id="titulo-radar-text" class="stats-seccion-titulo">Panorama de cumplimiento</h3>
             </div>
-            
-            <div id="stats-radar-wrapper" style="width: 100%; max-width: 400px; margin: 0 auto 30px auto; display:block;">
+
+            <div id="stats-radar-wrapper" style="width: 100%; max-width: 400px; margin: 0 auto; display:block;">
                 <h4 id="radar-title" style="text-align:center; color:#64748b; font-size:0.85rem; text-transform:uppercase; margin-bottom:10px;">
-                    ${categoriaFiltro === 'GLOBAL' ? 'Panorama General por Categoría' : 'Detalle de Evaluaciones: ' + categoriaFiltro}
+                    ${categoriaFiltro === 'GLOBAL' ? 'Promedio por categoría' : 'Detalle de Evaluaciones: ' + categoriaFiltro}
                 </h4>
                 <div style="position: relative; width: 100%; height: 300px;">
                     <canvas id="stats-radar-chart"></canvas>
                 </div>
-            </div>
-
-            <div id="ranking-list-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap:10px;">
-                ${renderRankingListHTML(finalRankingList)}
             </div>
         </div>
 
@@ -904,7 +831,10 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                 }]
             });
         } else {
-            document.getElementById('stats-radar-wrapper').style.display = 'none';
+            // Sin datos que dibujar, la sección se esconde entera: ya no queda
+            // nada debajo del radar que la justifique.
+            const seccionRadar = document.getElementById('stats-seccion-radar');
+            if (seccionRadar) seccionRadar.style.display = 'none';
         }
 
     } catch(e) {
@@ -913,36 +843,25 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     }
 };
 
-window.actualizarRankingDOM = (deptName = null, supName = null, puestoName = null) => {
+// Redibuja el radar con el recorte que se esté mirando: un departamento, el
+// grupo de un supervisor o un puesto. El título de la sección es lo único que
+// dice a qué recorte pertenece lo que muestra la gráfica.
+window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null) => {
     const cache = window.encuestasStatsCacheForDrilldown;
-    if (!cache || !cache.rankingCompleto) return;
+    if (!cache || !cache.activeEvalsList) return;
 
-    let lista = cache.rankingCompleto.filter(item => item.avg >= 80);
-    let tituloBase = 'Ranking General de Cumplimiento';
+    let tituloBase = 'Panorama de cumplimiento';
 
     if (puestoName) {
-        lista = lista.filter(emp => emp.puesto === puestoName);
-        tituloBase = `Ranking Puesto: ${puestoName}`;
+        tituloBase = `Panorama del puesto: ${puestoName}`;
     } else if (deptName && supName) {
-        lista = lista.filter(emp => emp.dept === deptName && emp.sup === supName);
-        tituloBase = `Ranking: ${supName}`;
+        tituloBase = `Panorama: ${supName}`;
     } else if (deptName) {
-        lista = lista.filter(emp => emp.dept === deptName);
-        tituloBase = `Ranking: ${deptName}`;
+        tituloBase = `Panorama: ${deptName}`;
     }
 
-    const tituloConConteo = `<div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-        <span>${tituloBase}</span> 
-        <span style="font-size:0.85rem; color:#2563eb; background:#eff6ff; padding:4px 10px; border-radius:12px; white-space: nowrap; font-weight: bold;">${lista.length} Sobresalientes</span>
-    </div>`;
-
-    const container = document.getElementById('ranking-list-container');
-    const tituloEl = document.getElementById('titulo-ranking-text');
-    const btnReset = document.getElementById('btn-reset-ranking');
-
-    if (container) container.innerHTML = renderRankingListHTML(lista);
-    if (tituloEl) tituloEl.innerHTML = tituloConConteo;
-    if (btnReset) btnReset.style.display = (deptName || puestoName) ? 'block' : 'none';
+    const tituloEl = document.getElementById('titulo-radar-text');
+    if (tituloEl) tituloEl.innerText = tituloBase;
 
     const getDept = (e) => (e.department || e.departamento || e.dept || "Sin Departamento").trim();
     const getSup = (e) => (e.sup || e.supervisor || e.supervisor_name || "Sin Supervisor").trim();
@@ -950,7 +869,7 @@ window.actualizarRankingDOM = (deptName = null, supName = null, puestoName = nul
 
     const validEmpIds = new Set();
     window.todosLosEmpleadosData.forEach(e => {
-         if (e.isActive === false) return; // <-- NUEVO: Excluir inactivos del ranking
+         if (e.isActive === false) return; // Los dados de baja no cuentan en el radar
          const d = getDept(e);
          const s = getSup(e);
          const p = getPuesto(e);
@@ -1109,19 +1028,18 @@ window.actualizarRankingDOM = (deptName = null, supName = null, puestoName = nul
         });
     }
 
+    // El recorte que se esté mirando lo dice el título de la sección; aquí sólo
+    // va cómo están agrupadas las puntas de la gráfica.
     const radarTitleEl = document.getElementById('radar-title');
     if (radarTitleEl) {
-        if (puestoName) radarTitleEl.innerText = `Panorama Puesto: ${puestoName}`;
-        else if (deptName && supName) radarTitleEl.innerText = `Panorama de: ${supName}`;
-        else if (deptName) radarTitleEl.innerText = `Panorama de: ${deptName}`;
-        else radarTitleEl.innerText = currentFilter === 'GLOBAL' ? 'Panorama General por Categoría' : 'Detalle de Evaluaciones: ' + currentFilter;
+        radarTitleEl.innerText = currentFilter === 'GLOBAL' ? 'Promedio por categoría' : 'Detalle de Evaluaciones: ' + currentFilter;
     }
 
     const ctx = document.getElementById('stats-radar-chart');
-    const radarWrapper = document.getElementById('stats-radar-wrapper');
-    
+    const seccionRadar = document.getElementById('stats-seccion-radar');
+
     if (radarLabels.length > 0 && ctx) {
-        if (radarWrapper) radarWrapper.style.display = 'block';
+        if (seccionRadar) seccionRadar.style.display = 'block';
         if (window.statsRadarChart) window.statsRadarChart.destroy();
         
         const formattedLabels = radarLabels.map((label, idx) => {
@@ -1214,67 +1132,9 @@ window.actualizarRankingDOM = (deptName = null, supName = null, puestoName = nul
             }]
         });
     } else {
-        if (radarWrapper) radarWrapper.style.display = 'none';
+        if (seccionRadar) seccionRadar.style.display = 'none';
     }
 };
-
-function renderRankingListHTML(list) {
-    if (list.length === 0) return '<div style="grid-column:1/-1; text-align:center; padding:20px; color:#94a3b8; font-style:italic;">No hay datos suficientes para mostrar ranking en esta selección.</div>';
-
-    const getColor = window.getColorScore || ((s) => s >= 80 ? '#166534' : '#ef4444');
-    let h = '';
-    list.forEach((emp, index) => {
-        const medal = `#${index + 1}`;
-        const entregadasPct = Math.min(100, emp.totalAssigned > 0 ? (emp.count / emp.totalAssigned) * 100 : 0);
-        
-        let scoreDisplay;
-        if (emp.incompleto) {
-            scoreDisplay = `<div style="font-size:0.75rem; color:#ef4444; font-weight:bold; line-height:1.2;">Faltan<br>Obligatorias</div>`;
-        } else {
-            const col = getColor(emp.avg);
-            scoreDisplay = `<div style="font-weight:800; font-size:1.1rem; color:${col};">${emp.avg}%</div>`;
-        }
-
-        let avatarHtml = '<div style="font-size:1.2rem;">👤</div>';
-        let bgStyle = 'background:#eff6ff; border:2px solid #bfdbfe;';
-        if (emp.avatar) {
-            const safeUrl = window.procesarUrlImagen ? window.procesarUrlImagen(emp.avatar) : emp.avatar;
-            avatarHtml = `<img src="${safeUrl}" loading="lazy" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-            bgStyle = 'background:white; border:2px solid #bfdbfe; padding:0;';
-        }
-        
-        const safeName = window.sanitizeForHTML(emp.name);
-        const safePuesto = window.sanitizeForHTML(emp.puesto);
-        const safeDept = window.sanitizeForHTML(emp.dept);
-                
-        h += `
-        <div style="background:white; border:1px solid ${emp.incompleto ? '#fee2e2' : '#f1f5f9'}; padding:12px; border-radius:10px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 1px 2px rgba(0,0,0,0.02); opacity:${emp.incompleto ? '0.7' : '1'};">
-            <div style="display:flex; align-items:center; gap:12px; flex:1;">
-                <div style="display:flex; flex-direction:column; align-items:center; gap:4px; flex-shrink:0; width:45px;">
-                    <div style="width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.05); overflow:hidden; ${bgStyle}">
-                        ${avatarHtml}
-                    </div>
-                    <div style="font-weight:900; color:#cbd5e1; font-size:0.85rem; text-align:center; line-height:1;">${emp.incompleto ? '-' : medal}</div>
-                </div>
-                <div style="flex:1;">
-                    <div style="font-weight:700; color:#334155; font-size:0.9rem; line-height:1.2; margin-bottom:2px;">${safeName}</div>
-                    <div style="font-size:0.75rem; color:#475569; font-weight:500; margin-bottom:1px;">${safePuesto}</div>
-                    <div style="font-size:0.7rem; color:#94a3b8;">${safeDept}</div>
-                    <div style="display:flex; align-items:center; gap:5px; margin-top:4px;">
-                        <div style="flex:1; max-width:80px; height:4px; background:#e2e8f0; border-radius:2px; overflow:hidden;">
-                            <div style="width:${Math.min(entregadasPct, 100)}%; background:${emp.incompleto ? '#94a3b8' : '#3b82f6'}; height:100%;"></div>
-                        </div>
-                        <div style="font-size:0.65rem; color:#94a3b8;">${emp.count}/${emp.totalAssigned}</div>
-                    </div>
-                </div>
-            </div>
-            <div style="text-align:right;">
-                ${scoreDisplay}
-            </div>
-        </div>`;
-    });
-    return h;
-}
 
 window.renderMiniTable = (dataMap) => {
     const keys = Object.keys(dataMap).sort((a,b) => {
@@ -1633,7 +1493,7 @@ window.renderPuestoDetailed = (dataMap) => {
 };
 
 window.verStatsDetalleDepto = (deptName) => {
-    window.actualizarRankingDOM(deptName);
+    window.actualizarRadarDOM(deptName);
     
     const data = window.encuestasStatsCacheForDrilldown.statsCache[deptName];
     if (!data) return;
@@ -1680,7 +1540,7 @@ window.verStatsDetalleDepto = (deptName) => {
     let html = `
     <div style="margin-bottom:15px; display:flex; flex-direction:column; gap:5px;">
         <div style="display:flex; align-items:center; gap:10px;">
-            <button onclick="document.getElementById('dept-list-container').innerHTML = window.renderDeptDetailed(window.encuestasStatsCacheForDrilldown.statsCache); window.actualizarRankingDOM(null);" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
+            <button onclick="document.getElementById('dept-list-container').innerHTML = window.renderDeptDetailed(window.encuestasStatsCacheForDrilldown.statsCache); window.actualizarRadarDOM(null);" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
             <span style="font-weight:bold; color:#1e293b; font-size:1rem;">${safeDept}</span>
         </div>
         <div style="font-size:0.75rem; color:#64748b; margin-left:5px;">Supervisores en esta área: ${supList.length}</div>
@@ -1766,7 +1626,7 @@ window.verStatsDetalleDepto = (deptName) => {
 };
 
 window.verStatsDetalleSupervisor = (deptName, supName) => {
-    window.actualizarRankingDOM(deptName, supName);
+    window.actualizarRadarDOM(deptName, supName);
     
     const data = window.encuestasStatsCacheForDrilldown;
     const allEmps = window.todosLosEmpleadosData;
@@ -1989,7 +1849,7 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
 };
 
 window.verStatsDetallePuesto = (puestoName) => {
-    window.actualizarRankingDOM(null, null, puestoName);
+    window.actualizarRadarDOM(null, null, puestoName);
     
     const data = window.encuestasStatsCacheForDrilldown;
     const allEmps = window.todosLosEmpleadosData;
@@ -2125,7 +1985,7 @@ window.verStatsDetallePuesto = (puestoName) => {
     let html = `
     <div style="margin-bottom:15px; display:flex; flex-direction:column; gap:5px;">
         <div style="display:flex; align-items:center; gap:10px;">
-             <button onclick="document.getElementById('puesto-list-container').innerHTML = window.renderPuestoDetailed(window.encuestasStatsCacheForDrilldown.puestoCache); window.actualizarRankingDOM();" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
+             <button onclick="document.getElementById('puesto-list-container').innerHTML = window.renderPuestoDetailed(window.encuestasStatsCacheForDrilldown.puestoCache); window.actualizarRadarDOM();" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
             <span style="font-weight:bold; color:#1e293b; font-size:1rem;">${safePuesto}</span>
         </div>
         <div style="font-size:0.75rem; color:#64748b; margin-left:5px;">Personal evaluado: ${empStats.length}</div>
