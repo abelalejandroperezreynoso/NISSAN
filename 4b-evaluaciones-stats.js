@@ -12,6 +12,105 @@ window.sanitizeForHTML = (str) => {
     return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 };
 
+// --- CUESTIONARIO DE REFERENCIA DE UN PERIODO ---
+// Una encuesta se edita: se agrega una pregunta, se borra otra. Las respuestas
+// viejas siguen guardando su calificación bajo el id de las preguntas que
+// tenían, así que un periodo puede traer respuestas de dos cuestionarios
+// distintos y el radar acabaría dibujando ejes de preguntas que ya no existen.
+//
+// La regla es la del periodo: lo contestado antes de la edición vale para su
+// periodo con el cuestionario que había entonces, y del periodo siguiente en
+// adelante manda el cuestionario actualizado. Aquí se decide cuál de los dos
+// rige lo que se está mirando: si en el periodo hay aunque sea una respuesta
+// del cuestionario de hoy, es que la edición ya ocurrió y manda el de hoy; si
+// no hay ninguna, el periodo es anterior a la edición y manda el suyo, el que
+// más respuestas tenga.
+//
+// No hace falta ninguna columna nueva: el juego de preguntas calificadas es la
+// huella de la versión con la que se contestó. Lo que no distingue es un
+// cambio de enunciado, que conserva el id de la pregunta.
+window.cuestionarioDeReferencia = (respuestas, preguntasVigentes) => {
+    const firmaDe = (r) => Object.keys(r.grades_json || {}).sort().join('|');
+
+    const vigentes = (preguntasVigentes || []).filter(p => p && p.id);
+    const firmaVigente = vigentes.map(p => String(p.id)).sort().join('|');
+
+    // Sin calificar no hay huella: esas respuestas no dicen de qué versión son.
+    const conNotas = (respuestas || []).filter(r => Object.keys(r.grades_json || {}).length > 0);
+
+    const conteoFirmas = {};
+    conNotas.forEach(r => {
+        const f = firmaDe(r);
+        conteoFirmas[f] = (conteoFirmas[f] || 0) + 1;
+    });
+
+    let firmaElegida = '';
+    if (firmaVigente && conteoFirmas[firmaVigente]) {
+        firmaElegida = firmaVigente;
+    } else {
+        let mejor = 0;
+        Object.keys(conteoFirmas).forEach(f => {
+            if (conteoFirmas[f] > mejor) { mejor = conteoFirmas[f]; firmaElegida = f; }
+        });
+    }
+
+    let preguntas;
+    if (firmaElegida && firmaElegida === firmaVigente) {
+        preguntas = vigentes.map(p => ({ id: String(p.id), texto: p.texto || '' }));
+    } else {
+        // El cuestionario de ese periodo ya no está en la base. Se reconstruye
+        // con las llaves de las respuestas y con el enunciado que ellas mismas
+        // guardaron al calificarse.
+        const textos = {};
+        conNotas.forEach(r => {
+            Object.entries(r.grades_json || {}).forEach(([qKey, g]) => {
+                if (textos[qKey]) return;
+                if (g && typeof g === 'object') textos[qKey] = g.question || g.title || g.text || g.label || '';
+            });
+        });
+        preguntas = (firmaElegida ? firmaElegida.split('|') : []).map(id => ({ id: id, texto: textos[id] || '' }));
+    }
+
+    return {
+        preguntas: preguntas,
+        esElVigente: !!firmaVigente && firmaElegida === firmaVigente,
+        totalCalificadas: conNotas.length,
+        deOtraVersion: conNotas.filter(r => firmaDe(r) !== firmaElegida).length
+    };
+};
+
+// Ejes del radar cuando se mira una sola encuesta: uno por cada pregunta del
+// cuestionario de referencia y en su orden, no uno por cada llave que aparezca
+// en las respuestas. Una pregunta que nadie ha contestado todavía no dibuja
+// eje: valdría cero y se leería como que todos la fallaron.
+window.ejesPorPregunta = (referencia, mapaPreguntas, textoUsuarios) => {
+    const labels = [], puntos = [], usuarios = [], completos = [];
+    let n = 1;
+    referencia.preguntas.forEach(p => {
+        const d = mapaPreguntas[p.id];
+        if (!d || d.count === 0) { n++; return; }
+        const enunciado = p.texto || d.labelText || '';
+        let label = enunciado && enunciado.length <= 40 ? enunciado : `Pregunta ${n}`;
+        if (!enunciado && String(p.id).match(/^[0-9a-fA-F-]+$/)) label = `P${n}`;
+        labels.push(label);
+        puntos.push(Math.round(d.sum / d.count));
+        usuarios.push(textoUsuarios(d));
+        completos.push(enunciado || p.id);
+        n++;
+    });
+    return { labels, puntos, usuarios, completos };
+};
+
+// Aviso bajo el título del radar cuando el periodo mezcla versiones.
+window.avisoDeVersion = (referencia) => {
+    const el = document.getElementById('aviso-version-encuesta');
+    if (!el) return;
+    if (!referencia || referencia.deOtraVersion === 0) { el.style.display = 'none'; el.innerText = ''; return; }
+    const n = referencia.deOtraVersion;
+    el.style.display = 'block';
+    el.innerText = `${n} de ${referencia.totalCalificadas} respuestas se contestaron con otra versión del cuestionario y no entran en la gráfica; sí cuentan en participación y calificación.`;
+};
+
 // --- 1. PUNTO DE ENTRADA (SOLO DESCARGA DAfv<TOS) ---
 window.cargarStatsEncuestasGlobales = async () => {
     const container = document.getElementById('contenedor-modal-stats-encuestas');
@@ -50,7 +149,12 @@ window.cargarStatsEncuestasGlobales = async () => {
             return todasLasRespuestas;
         };
 
-        const [_, resEvals, rawResponses] = await Promise.all([p1, p2, fetchTodasLasRespuestas()]);
+        // El cuestionario de hoy. Las respuestas guardan la calificación bajo
+        // el id de la pregunta, así que sin esta lista no hay forma de saber
+        // cuáles de esas preguntas siguen existiendo.
+        const p3 = sb.from('evaluation_questions').select('id, evaluation_id, question_text, order_index').order('order_index');
+
+        const [_, resEvals, rawResponses, resPreguntas] = await Promise.all([p1, p2, fetchTodasLasRespuestas(), p3]);
 
         if (resEvals.error) throw new Error("Error evaluaciones: " + resEvals.error.message);
 
@@ -60,10 +164,20 @@ window.cargarStatsEncuestasGlobales = async () => {
         evalsList.forEach(e => catSet.add(e.category || 'General'));
         const categories = Array.from(catSet).sort();
 
+        // Si la consulta falla, el mapa queda vacío y la pantalla se comporta
+        // como antes: los ejes salen de las respuestas y no del cuestionario.
+        const preguntasPorEncuesta = {};
+        (resPreguntas && resPreguntas.data ? resPreguntas.data : []).forEach(q => {
+            const clave = String(q.evaluation_id);
+            if (!preguntasPorEncuesta[clave]) preguntasPorEncuesta[clave] = [];
+            preguntasPorEncuesta[clave].push({ id: String(q.id), texto: q.question_text || '' });
+        });
+
         window.encuestasRawData = {
             evalsList,
             rawResponses,
-            categories
+            categories,
+            preguntasPorEncuesta
         };
 
         window.renderizarPanelEstadisticas('GLOBAL');
@@ -504,22 +618,20 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     const radarDataPoints=[];
     const radarUserStats=[];
     const radarFullLabels=[];
+    let referenciaCuestionario=null;
     if(isSingleEvalMode){
-    let pCounter=1;
     const evalTitle=evalsList[0].title;
-    Object.keys(radarQuestionsMap).forEach(qKey=>{
-    const d=radarQuestionsMap[qKey];
-    const avg=d.count>0?Math.round(d.sum/d.count):0;
-    const uniqueParticipating=d.users.size;
+    referenciaCuestionario=window.cuestionarioDeReferencia(
+        dataset.filter(r=>r.review_status==='Revisado'||r.review_status==='Certificada'),
+        raw.preguntasPorEncuesta?raw.preguntasPorEncuesta[String(evalsList[0].id)]:[]
+    );
     const uniqueAssigned=radarGroupingUsersAssigned[evalTitle]?radarGroupingUsersAssigned[evalTitle].size:0;
-    let label=qKey.length>20?`Pregunta ${pCounter}`:qKey;
-    if(label.match(/^[0-9a-fA-F-]+$/))label=`P${pCounter}`;
-    radarLabels.push(label);
-    radarDataPoints.push(avg);
-    radarUserStats.push(`${uniqueParticipating} de ${uniqueAssigned} usuarios`);
-    radarFullLabels.push(d.labelText||qKey);
-    pCounter++;
-    });
+    const ejes=window.ejesPorPregunta(referenciaCuestionario,radarQuestionsMap,
+        (d)=>`${d.users.size} de ${uniqueAssigned} usuarios`);
+    radarLabels.push(...ejes.labels);
+    radarDataPoints.push(...ejes.puntos);
+    radarUserStats.push(...ejes.usuarios);
+    radarFullLabels.push(...ejes.completos);
     }else{
     Object.keys(radarPerfMap).sort().forEach(key=>{
     const d=radarPerfMap[key];
@@ -722,6 +834,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                 <h4 id="radar-title" style="text-align:center; color:#64748b; font-size:0.85rem; text-transform:uppercase; margin-bottom:10px;">
                     ${categoriaFiltro === 'GLOBAL' ? 'Promedio por categoría' : 'Detalle de Evaluaciones: ' + categoriaFiltro}
                 </h4>
+                <div id="aviso-version-encuesta" style="display:none; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-size:0.75rem; line-height:1.35; border-radius:8px; padding:8px 10px; margin-bottom:10px;"></div>
                 <div style="position: relative; width: 100%; height: 300px;">
                     <canvas id="stats-radar-chart"></canvas>
                 </div>
@@ -736,6 +849,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         </div>`;
 
         container.innerHTML = html;
+        window.avisoDeVersion(referenciaCuestionario);
 
         if (radarLabels.length > 0) {
             const ctx = document.getElementById('stats-radar-chart');
@@ -943,11 +1057,13 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
     const isSingleEvalMode = currentFilter !== 'GLOBAL' && evalsInCat.length === 1;
     const radarQuestionsMap = {}; // Caché para el Drilldown
 
+    const respuestasDelRecorte = [];
     cache.cleanResponses.forEach(r => {
         if (r.review_status !== 'Revisado' && r.review_status !== 'Certificada') return;
         const evalInfo = activeEvalsMap[r.evaluation_id];
         if (!evalInfo) return;
         if (!validEmpIds.has(String(r.employee_id))) return;
+        respuestasDelRecorte.push(r);
 
         const radarKey = currentFilter === 'GLOBAL' ? (evalInfo.category || 'General') : evalInfo.title;
 
@@ -1004,26 +1120,26 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
     const totalU = new Set();
     const totalA = new Set();
     
+    let referenciaCuestionario = null;
     if (isSingleEvalMode) {
-        let pCounter = 1;
         const evalTitle = evalsInCat[0].title;
-        Object.keys(radarQuestionsMap).forEach(qKey => {
-            const d = radarQuestionsMap[qKey];
-            const avg = d.count > 0 ? Math.round(d.sum / d.count) : 0;
-            const uniqueParticipating = d.users.size;
-            const uniqueAssigned = assignedMap[evalTitle] ? assignedMap[evalTitle].size : 0;
-            
-            let label = qKey.length > 20 ? `Pregunta ${pCounter}` : qKey;
-            if (label.match(/^[0-9a-fA-F-]+$/)) label = `P${pCounter}`;
+        const preguntasDeLaBase = window.encuestasRawData && window.encuestasRawData.preguntasPorEncuesta
+            ? window.encuestasRawData.preguntasPorEncuesta[String(evalsInCat[0].id)]
+            : [];
+        referenciaCuestionario = window.cuestionarioDeReferencia(respuestasDelRecorte, preguntasDeLaBase);
 
-            radarLabels.push(label);
-            radarDataPoints.push(avg);
-            radarUserStats.push(`${uniqueParticipating} de ${uniqueAssigned} usuarios`);
-            
-            d.users.forEach(u => totalU.add(u));
-            if (assignedMap[evalTitle]) assignedMap[evalTitle].forEach(u => totalA.add(u));
-            pCounter++;
+        const uniqueAssigned = assignedMap[evalTitle] ? assignedMap[evalTitle].size : 0;
+        const ejes = window.ejesPorPregunta(referenciaCuestionario, radarQuestionsMap,
+            (d) => `${d.users.size} de ${uniqueAssigned} usuarios`);
+        radarLabels.push(...ejes.labels);
+        radarDataPoints.push(...ejes.puntos);
+        radarUserStats.push(...ejes.usuarios);
+
+        referenciaCuestionario.preguntas.forEach(p => {
+            const d = radarQuestionsMap[p.id];
+            if (d) d.users.forEach(u => totalU.add(u));
         });
+        if (assignedMap[evalTitle]) assignedMap[evalTitle].forEach(u => totalA.add(u));
     } else {
         Object.keys(radarMap).sort().forEach(key => {
             const d = radarMap[key];
@@ -1046,6 +1162,7 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
     if (radarTitleEl) {
         radarTitleEl.innerText = currentFilter === 'GLOBAL' ? 'Promedio por categoría' : 'Detalle de Evaluaciones: ' + currentFilter;
     }
+    window.avisoDeVersion(referenciaCuestionario);
 
     const ctx = document.getElementById('stats-radar-chart');
     const seccionRadar = document.getElementById('stats-seccion-radar');

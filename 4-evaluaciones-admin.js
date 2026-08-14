@@ -919,6 +919,16 @@ window.guardarCalificacionAdmin = async () => {
     
     try {
         const responseId = window.gradingResponseId;
+
+        // El enunciado se copia dentro de la calificación. La llave de
+        // grades_json es el id de la pregunta, así que si mañana se edita el
+        // texto —o se borra la pregunta— esta respuesta seguiría sin poder
+        // decir qué se preguntó. Con la copia, se lee sola.
+        (window.preguntasCacheActual || []).forEach(q => {
+            const g = window.gradesTemp[q.id];
+            if (g && typeof g === 'object' && q.question_text) g.question = q.question_text;
+        });
+
         const updates = {
             grades_json: window.gradesTemp,
             review_status: 'Revisado'

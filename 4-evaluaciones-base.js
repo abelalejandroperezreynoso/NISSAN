@@ -1113,7 +1113,11 @@ window.enviarRespuestasEval = async () => {
                         type: 'numeric_score',
                         value: numericVal,
                         max: max,
-                        percentage: Math.round(percentage * 100) / 100
+                        percentage: Math.round(percentage * 100) / 100,
+                        // Copia del enunciado tal como se preguntó: la llave es
+                        // el id de la pregunta y ese texto puede cambiar o
+                        // desaparecer del cuestionario más adelante.
+                        question: q.question_text || ''
                     };
                     autoGradedCount++;
                 }

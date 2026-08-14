@@ -349,6 +349,36 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `window.todosLosEmpleadosData` y descarta la fila entera, así que descontar a
   alguien no necesita tocar la función SQL. Lo que sí puede discrepar es la
   fecha de alta, que la aplica la base por su cuenta.
+- **Editar una encuesta parte su historial en dos.** `answers_json` y
+  `grades_json` guardan cada respuesta bajo el **id de la pregunta**
+  (`evaluation_questions.id`). Editar el enunciado conserva el id, así que la
+  respuesta vieja queda colgada del texto nuevo; borrar la pregunta borra su
+  fila pero **deja la calificación dentro de cada respuesta anterior**, y
+  agregar una deja a las viejas sin ese dato. Ninguna consulta lo limpia.
+
+  La regla es la del periodo: lo contestado antes de la edición vale para su
+  periodo con el cuestionario que había entonces, y del periodo siguiente en
+  adelante manda el actualizado. `window.cuestionarioDeReferencia(respuestas,
+  preguntasVigentes)` en `4b-evaluaciones-stats.js` decide cuál rige lo que se
+  está mirando: si en el periodo hay aunque sea una respuesta con el juego de
+  preguntas de hoy, manda el de hoy; si no, el periodo es anterior a la edición
+  y manda el suyo, el más repetido. **La versión se deduce del juego de
+  preguntas calificadas**, no de ninguna columna: por eso no hace falta tocar
+  la base, y por eso un cambio de sólo enunciado no se detecta.
+
+  El radar de una encuesta dibuja un eje por pregunta de ese cuestionario y en
+  su orden (`window.ejesPorPregunta`), no uno por cada llave que aparezca en
+  las respuestas —así dejó de dibujar preguntas ya borradas—, y las respuestas
+  de otra versión se quedan fuera de la gráfica pero siguen contando en
+  participación y calificación, que es lo que avisa
+  `window.avisoDeVersion`. Una pregunta que nadie ha contestado todavía no
+  dibuja eje: valdría cero y se leería como que todos la fallaron.
+
+  Al calificar se copia el enunciado dentro de la calificación
+  (`grades_json[idPregunta].question`, en `guardarCalificacionAdmin` y en el
+  envío de `4-evaluaciones-base.js`). Es lo que permite rotular el eje de una
+  pregunta que ya no existe, y sólo vale de aquí en adelante: lo contestado
+  antes no lo trae y cae en «Pregunta N».
 - **Las rejillas se salen de la hoja en un teléfono.** `repeat(auto-fit,
   minmax(300px, 1fr))` no encoge por debajo de ese mínimo: con 327 px de ancho
   útil la pista sigue midiendo 300 y la tarjeta desborda. El mínimo va siempre
