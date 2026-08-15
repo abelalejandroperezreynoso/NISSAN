@@ -398,6 +398,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   estrujaban el título hasta dejarlo en una columna de tres letras. Su fuente
   es de 16px por la trampa de siempre del zoom de Safari.
 
+  «Por Departamento» se mira de dos formas y el conmutador de su encabezado
+  elige cuál; la elegida vive en `sessionStorage.graficoDepto` y la pinta
+  `window.pintarPorDepartamento()`, que es también lo que llama el «Volver»
+  del desglose para no salirse del modo. En cuadros se esconde la leyenda:
+  explica —y ordena— las barras, y con los cuadros no pinta nada.
+
+  **El treemap de esta pantalla no usa d3.** El del mapa de activos sí, pero
+  ése es un documento aparte que ya carga la librería; traerla al panel
+  principal por un solo gráfico serían 280 KB en el arranque de todos los
+  días. La geometría la reparte `window.repartirEnCuadros(valores, ancho,
+  alto)`, que es el mismo algoritmo *squarify* que hay detrás de
+  `d3.treemapSquarify`. Se validó contra d3 con seis repartos: misma área
+  exacta, sin solapes y proporciones igual de buenas o mejores. El reparto va
+  en píxeles, así que al girar el teléfono hay que rehacerlo — de eso se
+  encarga el oyente de `resize` que se registra una sola vez.
+
   Una sección que crece con el catálogo no se apila: va en `.stats-carrusel`,
   una fila que se arrastra con el dedo y engancha las tarjetas de una en una.
   El último elemento se recorta a propósito —asomar el siguiente es lo único

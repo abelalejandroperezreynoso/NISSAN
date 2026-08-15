@@ -12,6 +12,78 @@ window.sanitizeForHTML = (str) => {
     return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 };
 
+// --- REPARTO EN CUADROS (TREEMAP) ---
+// El mismo dibujo que el mapa de activos, pero aquí la geometría se calcula a
+// mano en lugar de con d3: el mapa es una pantalla aparte que ya carga la
+// librería entera, y el panel principal no la carga para nada más. Traerla por
+// este único gráfico serían 280 KB en el arranque de todos los días.
+//
+// El algoritmo es squarify (Bruls, Huizing y van Wijk), el mismo que hay
+// detrás de d3.treemapSquarify: va formando filas contra el lado corto del
+// rectángulo que queda libre y cierra la fila en cuanto añadir un cuadro más
+// empeoraría la peor proporción de la fila.
+window.repartirEnCuadros = (valores, ancho, alto) => {
+    const items = valores
+        .map((v, i) => ({ indice: i, valor: Math.max(Number(v) || 0, 0) }))
+        .filter(it => it.valor > 0)
+        .sort((a, b) => b.valor - a.valor);
+
+    if (items.length === 0 || ancho <= 0 || alto <= 0) return [];
+
+    const suma = items.reduce((a, it) => a + it.valor, 0);
+    const escala = (ancho * alto) / suma;
+    items.forEach(it => { it.area = it.valor * escala; });
+
+    // Peor proporción (lado largo entre lado corto) de una fila de área total
+    // `sumaFila` apoyada sobre un lado de longitud `lado`.
+    const peorProporcion = (fila, lado, sumaFila) => {
+        if (sumaFila <= 0) return Infinity;
+        const grosor = sumaFila / lado;
+        let peor = 1;
+        fila.forEach(it => {
+            const largo = it.area / grosor;
+            peor = Math.max(peor, largo / grosor, grosor / largo);
+        });
+        return peor;
+    };
+
+    const cuadros = [];
+    let x = 0, y = 0, libreAncho = ancho, libreAlto = alto;
+    let fila = [], sumaFila = 0;
+
+    const cerrarFila = () => {
+        const lado = Math.min(libreAncho, libreAlto);
+        const grosor = sumaFila / lado;
+        let avance = 0;
+        fila.forEach(it => {
+            const largo = it.area / grosor;
+            if (libreAncho >= libreAlto) {
+                // Fila en columna, pegada al borde izquierdo de lo que queda.
+                cuadros.push({ indice: it.indice, x: x, y: y + avance, ancho: grosor, alto: largo });
+            } else {
+                cuadros.push({ indice: it.indice, x: x + avance, y: y, ancho: largo, alto: grosor });
+            }
+            avance += largo;
+        });
+        if (libreAncho >= libreAlto) { x += grosor; libreAncho -= grosor; }
+        else { y += grosor; libreAlto -= grosor; }
+        fila = []; sumaFila = 0;
+    };
+
+    items.forEach(it => {
+        const lado = Math.min(libreAncho, libreAlto);
+        if (fila.length > 0 &&
+            peorProporcion(fila.concat(it), lado, sumaFila + it.area) > peorProporcion(fila, lado, sumaFila)) {
+            cerrarFila();
+        }
+        fila.push(it);
+        sumaFila += it.area;
+    });
+    if (fila.length > 0) cerrarFila();
+
+    return cuadros;
+};
+
 // --- CUESTIONARIO DE REFERENCIA DE UN PERIODO ---
 // Una encuesta se edita: se agrega una pregunta, se borra otra. Las respuestas
 // viejas siguen guardando su calificación bajo el id de las preguntas que
@@ -808,11 +880,13 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         <div class="stats-seccion">
             <div class="stats-seccion-encabezado">
                 <h3 class="stats-seccion-titulo">Por Departamento</h3>
-                ${legendsHtml}
+                <div class="stats-conmutador" id="conmutador-depto">
+                    <button data-modo="cuadros" onclick="window.cambiarGraficoDepto('cuadros')" aria-pressed="true">Cuadros</button>
+                    <button data-modo="barras" onclick="window.cambiarGraficoDepto('barras')" aria-pressed="false">Barras</button>
+                </div>
+                <div id="leyenda-depto" style="width:100%;">${legendsHtml}</div>
             </div>
-            <div id="dept-list-container">
-                ${window.renderDeptDetailed(statsCache)}
-            </div>
+            <div id="dept-list-container"></div>
         </div>
 
         <div class="stats-seccion">
@@ -850,6 +924,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
 
         container.innerHTML = html;
         window.avisoDeVersion(referenciaCuestionario);
+        window.pintarPorDepartamento();
 
         if (radarLabels.length > 0) {
             const ctx = document.getElementById('stats-radar-chart');
@@ -1361,6 +1436,191 @@ ${usersHtml}
 return h;
 };
 
+// --- GRÁFICO DE CUADROS POR DEPARTAMENTO ---
+// Se recuerda entre aperturas de la hoja, no entre sesiones: es una forma de
+// mirar, no una preferencia que valga la pena guardar en el navegador.
+window.modoGraficoDepto = sessionStorage.getItem('graficoDepto') || 'cuadros';
+
+window.cambiarGraficoDepto = (modo) => {
+    window.modoGraficoDepto = modo;
+    sessionStorage.setItem('graficoDepto', modo);
+    window.pintarPorDepartamento();
+};
+
+// Pinta el bloque «Por Departamento» con la forma elegida. Es también lo que
+// devuelve el botón «Volver» del desglose, para que no se salga del modo.
+window.pintarPorDepartamento = () => {
+    const cont = document.getElementById('dept-list-container');
+    const cache = window.encuestasStatsCacheForDrilldown;
+    if (!cont || !cache) return;
+
+    const modo = window.modoGraficoDepto === 'barras' ? 'barras' : 'cuadros';
+
+    // La leyenda explica —y ordena— las barras; con los cuadros no pinta nada.
+    const leyenda = document.getElementById('leyenda-depto');
+    if (leyenda) leyenda.style.display = modo === 'cuadros' ? 'none' : '';
+
+    document.querySelectorAll('#conmutador-depto button').forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.modo === modo));
+    });
+
+    if (modo === 'barras') {
+        cont.innerHTML = window.renderDeptDetailed(cache.statsCache);
+        return;
+    }
+
+    // Con los cuadros no va la leyenda de las barras, así que el pie explica
+    // qué mide el tamaño y qué mide el relleno.
+    cont.innerHTML = '<div id="dept-treemap" class="stats-treemap"></div>' +
+        '<div class="stats-cuadro-pie">' +
+            'El tamaño es cuántas encuestas le tocan al departamento. El relleno sube desde abajo: ' +
+            '<span style="color:#6ee7b7; font-weight:700;">■</span> revisadas, ' +
+            '<span style="color:#93c5fd; font-weight:700;">■</span> contestadas sin revisar, ' +
+            '<span style="color:#cbd5e1; font-weight:700;">■</span> sin contestar. Toca un cuadro para ver sus supervisores.' +
+        '</div>';
+    window.dibujarCuadrosDepto();
+};
+
+// Ancho de un texto por cada píxel de fuente, medido con un lienzo suelto.
+// Se mide una sola vez por texto: dibujar los cuadros llama a esto para cada
+// palabra de cada nombre.
+window.anchoPorPixelDeTexto = (() => {
+    const medidor = document.createElement('canvas').getContext('2d');
+    const cache = {};
+    return (texto) => {
+        if (cache[texto] === undefined) {
+            medidor.font = '800 10px -apple-system, BlinkMacSystemFont, sans-serif';
+            cache[texto] = medidor.measureText(texto).width / 10;
+        }
+        return cache[texto];
+    };
+})();
+
+window.dibujarCuadrosDepto = () => {
+    const lienzo = document.getElementById('dept-treemap');
+    const cache = window.encuestasStatsCacheForDrilldown;
+    if (!lienzo || !cache) return;
+
+    const ancho = lienzo.clientWidth;
+    const alto = lienzo.clientHeight;
+    lienzo.innerHTML = '';
+    if (ancho <= 0 || alto <= 0) return;
+
+    const getColor = window.getColorScore || ((s) => s >= 80 ? '#166534' : '#ef4444');
+
+    const nodos = [];
+    Object.keys(cache.statsCache).forEach(nombre => {
+        const d = cache.statsCache[nombre];
+        const asignadas = d.assignedCount || 0;
+        if (asignadas === 0 && d.responses === 0) return;
+        const procesadas = (d.reviewed || 0) + (d.certificadas || 0) + (d.falsas || 0) + (d.malRevisadas || 0);
+        nodos.push({
+            nombre: nombre,
+            asignadas: asignadas,
+            respuestas: d.responses || 0,
+            procesadas: procesadas,
+            calificacion: d.countScore > 0 ? Math.round(d.sumScore / d.countScore) : null
+        });
+    });
+
+    if (nodos.length === 0) {
+        lienzo.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100%; color:#94a3b8; font-size:0.85rem;">Sin datos para este periodo.</div>';
+        return;
+    }
+
+    // Un departamento sin encuestas asignadas no puede desaparecer del todo o
+    // no habría manera de abrirlo; se le deja un peso mínimo y queda diminuto.
+    const mayor = nodos.reduce((m, n) => Math.max(m, n.asignadas), 0);
+    const cuadros = window.repartirEnCuadros(nodos.map(n => Math.max(n.asignadas, mayor * 0.02, 0.5)), ancho, alto);
+
+    cuadros.forEach(c => {
+        const n = nodos[c.indice];
+        // 1px de separación, que es el blanco de la tarjeta asomando.
+        const w = Math.max(c.ancho - 1, 1);
+        const h = Math.max(c.alto - 1, 1);
+        const area = w * h;
+
+        const pctParticipacion = n.asignadas > 0 ? Math.min(100, (n.respuestas / n.asignadas) * 100) : 0;
+        const pctProcesadas = n.asignadas > 0 ? Math.min(100, (n.procesadas / n.asignadas) * 100) : 0;
+
+        const el = document.createElement('div');
+        el.className = 'stats-cuadro';
+        el.style.left = c.x + 'px';
+        el.style.top = c.y + 'px';
+        el.style.width = w + 'px';
+        el.style.height = h + 'px';
+        el.dataset.nombre = n.nombre;
+        el.title = `${n.nombre}\nAsignadas: ${n.asignadas}\nContestadas: ${n.respuestas} (${Math.round(pctParticipacion)}%)`
+            + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación: ${n.calificacion}%`);
+        el.onclick = () => window.verStatsDetalleDepto(n.nombre);
+
+        // El relleno lleva la proporción sin redondear: con el 99% redondeado
+        // a 100 el cuadro se vería lleno sin estarlo.
+        const contestadas = document.createElement('div');
+        contestadas.className = 'stats-cuadro-relleno';
+        contestadas.style.background = '#bfdbfe';
+        contestadas.style.height = pctParticipacion + '%';
+        el.appendChild(contestadas);
+
+        const revisadas = document.createElement('div');
+        revisadas.className = 'stats-cuadro-relleno';
+        revisadas.style.background = '#86efac';
+        revisadas.style.height = pctProcesadas + '%';
+        el.appendChild(revisadas);
+
+        const cuerpo = document.createElement('div');
+        cuerpo.className = 'stats-cuadro-cuerpo';
+
+        const tam = Math.max(8, Math.min(20, Math.sqrt(area) / 7));
+
+        // El nombre se parte entre palabras, nunca a media palabra: la fuente
+        // se encoge hasta que la palabra más larga cabe de ancho. Sin esto,
+        // «MANTENIMIENTO» se leía «MANTENIMIENT / O».
+        const palabras = String(n.nombre).split(/\s+/).filter(Boolean);
+        const anchoUtil = Math.max(w - 9, 4);
+        const anchoPalabra = palabras.reduce((m, p) => Math.max(m, window.anchoPorPixelDeTexto(p)), 0.01);
+        const tamTitulo = Math.max(6, Math.min(tam, anchoUtil / anchoPalabra));
+
+        const titulo = document.createElement('div');
+        titulo.className = 'stats-cuadro-titulo';
+        titulo.style.fontSize = tamTitulo + 'px';
+        titulo.innerText = n.nombre;
+        cuerpo.appendChild(titulo);
+
+        // Los renglones de abajo sólo caben en los cuadros grandes.
+        if (area >= 2600 && h >= 44) {
+            const dato = document.createElement('div');
+            dato.className = 'stats-cuadro-dato';
+            dato.style.fontSize = Math.max(8, tam * 0.62) + 'px';
+            dato.innerText = `${Math.round(pctParticipacion)}% contestadas`;
+            cuerpo.appendChild(dato);
+        }
+        if (area >= 6000 && h >= 66 && n.calificacion !== null) {
+            const sub = document.createElement('div');
+            sub.className = 'stats-cuadro-sub';
+            sub.style.fontSize = Math.max(8, tam * 0.55) + 'px';
+            sub.style.color = getColor(n.calificacion);
+            sub.innerText = `⭐ ${n.calificacion}%`;
+            cuerpo.appendChild(sub);
+        }
+
+        el.appendChild(cuerpo);
+        lienzo.appendChild(el);
+    });
+};
+
+// El reparto se calcula en píxeles, así que al girar el teléfono hay que
+// rehacerlo. El oyente se pone una sola vez.
+if (!window.__cuadrosDeptoEscucha) {
+    window.__cuadrosDeptoEscucha = true;
+    let temporizador = null;
+    window.addEventListener('resize', () => {
+        if (!document.getElementById('dept-treemap')) return;
+        clearTimeout(temporizador);
+        temporizador = setTimeout(() => window.dibujarCuadrosDepto(), 150);
+    });
+}
+
 window.renderDeptDetailed = (dataMap) => {
     const keys = Object.keys(dataMap).sort((a,b) => {
         const dA = dataMap[a];
@@ -1667,7 +1927,7 @@ window.verStatsDetalleDepto = (deptName) => {
     let html = `
     <div style="margin-bottom:15px; display:flex; flex-direction:column; gap:5px;">
         <div style="display:flex; align-items:center; gap:10px;">
-            <button onclick="document.getElementById('dept-list-container').innerHTML = window.renderDeptDetailed(window.encuestasStatsCacheForDrilldown.statsCache); window.actualizarRadarDOM(null);" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
+            <button onclick="window.pintarPorDepartamento(); window.actualizarRadarDOM(null);" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
             <span style="font-weight:bold; color:#1e293b; font-size:1rem;">${safeDept}</span>
         </div>
         <div style="font-size:0.75rem; color:#64748b; margin-left:5px;">Supervisores en esta área: ${supList.length}</div>

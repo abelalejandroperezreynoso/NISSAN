@@ -2423,6 +2423,105 @@ html.modal-abierto {
     -webkit-overflow-scrolling: touch;
 }
 
+/* Gráfico de cuadros por departamento, hermano del treemap del mapa de
+   activos: el tamaño del cuadro son las encuestas asignadas y el relleno sube
+   desde abajo conforme se contestan y se revisan, así que lo que queda sin
+   llenar es justo lo que falta. Los cuadros van en absoluto sobre el lienzo,
+   con las coordenadas que calcula window.repartirEnCuadros. */
+.stats-treemap {
+    position: relative;
+    width: 100%;
+    height: 300px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #fff;
+    touch-action: manipulation;
+}
+
+.stats-cuadro {
+    position: absolute;
+    box-sizing: border-box;
+    overflow: hidden;
+    cursor: pointer;
+    border-radius: 3px;
+    background: #e2e8f0;
+}
+
+.stats-cuadro:active { filter: brightness(0.94); }
+
+/* Las bandas se apoyan en el suelo del cuadro y se apilan en el mismo orden
+   en que avanza el trabajo: primero lo revisado, encima lo contestado. */
+.stats-cuadro-relleno {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.stats-cuadro-cuerpo {
+    position: relative;
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 3px 4px;
+    overflow: hidden;
+    color: #0f172a;
+}
+
+.stats-cuadro-titulo {
+    font-weight: 800;
+    line-height: 1.1;
+    max-width: 100%;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    /* Se parte entre palabras; a media palabra sólo si no queda otra. */
+    overflow-wrap: break-word;
+}
+
+.stats-cuadro-dato { font-weight: 700; line-height: 1.25; }
+
+.stats-cuadro-pie {
+    font-size: 0.7rem;
+    color: #64748b;
+    line-height: 1.35;
+    margin-top: 8px;
+}
+.stats-cuadro-sub { color: #334155; line-height: 1.25; }
+
+/* Conmutador de cuadros y barras. */
+.stats-conmutador {
+    display: flex;
+    gap: 4px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 3px;
+    flex-shrink: 0;
+}
+
+.stats-conmutador button {
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 5px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    min-height: 30px;
+}
+
+.stats-conmutador button[aria-pressed="true"] {
+    background: #fff;
+    color: #0f172a;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
 /* Columna de barras de los gráficos por departamento y por puesto. */
 .stats-columna {
     display: flex;
@@ -2532,5 +2631,9 @@ html.modal-abierto {
         -webkit-line-clamp: 4;
         height: 46px;
         margin-top: 6px;
+    }
+
+    .stats-treemap {
+        height: 240px;
     }
 }
