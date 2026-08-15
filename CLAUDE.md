@@ -456,7 +456,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   quién va peor: para eso cada cuadro lleva su puesto en la tabla (`#3 · 6.5
   días`) y el encabezado señala al peor del nivel
   (`window.extremoDelCriterio`), que en falsas y mal revisadas es el de más y
-  en los demás el de menos. El gráfico lleva encima el criterio con su color
+  en los demás el de menos.
+
+  Prontitud además se llena en **escala relativa** (`escalaRelativa` en su
+  criterio): en un mes de 31 días, contestar en 6 o en 7 son 81% y 77%, así que
+  en absoluto los ocho cuadros salían igual de llenos. Con la escala del nivel,
+  el más rápido llena el cuadro y el más lento lo deja vacío; los días y el
+  puesto de dentro siguen siendo los absolutos. Si todos van igual —menos de
+  dos puntos entre el mejor y el peor— no se estira nada: amplificar ese ruido
+  diría que uno va mal cuando no va peor que nadie. El gráfico lleva encima el criterio con su color
   (`.stats-grafico-titulo`): el conmutador también lo marca, pero se desplaza
   y el elegido puede quedar fuera de la vista. Debajo no va nada: el pie que
   explicaba los colores de la barra apilada se quitó a propósito, así que hoy

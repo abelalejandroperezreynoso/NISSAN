@@ -318,7 +318,7 @@ window.CRITERIOS_STATS = [
     // pronto. Dentro del cuadro no se enseña esa proporción sino los días, que
     // es lo que se entiende sin explicación.
     { clave: 'prontitud', etiqueta: 'Prontitud', nombre: 'de prontitud', color: '#6366f1', relleno: '#c7d2fe',
-      extremo: 'El más lento',
+      extremo: 'El más lento', escalaRelativa: true,
       valor: (d) => d.countProntitud > 0 ? d.sumProntitud / d.countProntitud : 0,
       texto: (d) => d.countDias > 0 ? window.textoDias(d.sumDias / d.countDias) : 'sin datos' }
 ];
@@ -1599,8 +1599,9 @@ window.encabezadoDelGrafico = (forma, nodos) => {
     return '<div class="stats-grafico-titulo">' +
             `<span class="stats-grafico-punto" style="background:${criterio.color};"></span>` +
             criterio.etiqueta +
-            (forma === 'barras' ? '<span class="stats-grafico-nota">ordena las columnas</span>'
-                                : '<span class="stats-grafico-nota">llena los cuadros</span>') +
+            (forma === 'barras'
+                ? '<span class="stats-grafico-nota">ordena las columnas</span>'
+                : `<span class="stats-grafico-nota">${criterio.escalaRelativa ? 'del más rápido al más lento' : 'llena los cuadros'}</span>`) +
         '</div>' +
         (peor
             ? '<div class="stats-grafico-extremo">' +
@@ -1741,6 +1742,25 @@ window.dibujarCuadros = (nodos, alTocar) => {
     const puesto = {};
     ordenados.forEach((n, i) => { puesto[n.nombre] = i + 1; });
 
+    // Prontitud se llena en relativo. En un mes de 31 días, contestar en 6 o en
+    // 7 son 81% y 77%: en absoluto los ocho cuadros salían igual de llenos y no
+    // se distinguía al ágil del lento. Así, el más rápido del nivel llena el
+    // cuadro y el más lento lo deja vacío. Los días de dentro y el puesto
+    // siguen siendo los de verdad, que es lo que da la medida absoluta.
+    let escala = null;
+    if (criterio.escalaRelativa) {
+        const valores = ordenados
+            .filter(n => criterio.clave !== 'prontitud' || n.datos.countProntitud > 0)
+            .map(n => criterio.valor(n.datos));
+        if (valores.length > 1) {
+            const min = Math.min.apply(null, valores);
+            const max = Math.max.apply(null, valores);
+            // Si van todos igual no hay nada que estirar: amplificar esa
+            // diferencia diría que uno va mal cuando no va peor que nadie.
+            if (max - min > 0.02) escala = { min: min, max: max };
+        }
+    }
+
     // Un departamento sin encuestas asignadas no puede desaparecer del todo o
     // no habría manera de abrirlo; se le deja un peso mínimo y queda diminuto.
     const mayor = nodos.reduce((m, n) => Math.max(m, n.asignadas), 0);
@@ -1753,7 +1773,10 @@ window.dibujarCuadros = (nodos, alTocar) => {
         const h = Math.max(c.alto - 1, 1);
         const area = w * h;
 
-        const pctCriterio = Math.min(100, Math.max(criterio.valor(n.datos) * 100, 0));
+        const valorCriterio = criterio.valor(n.datos);
+        const pctCriterio = escala
+            ? Math.min(100, Math.max((valorCriterio - escala.min) / (escala.max - escala.min) * 100, 0))
+            : Math.min(100, Math.max(valorCriterio * 100, 0));
         const pctProcesadas = n.asignadas > 0 ? Math.min(100, (n.procesadas / n.asignadas) * 100) : 0;
 
         const el = document.createElement('div');
