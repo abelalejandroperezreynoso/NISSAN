@@ -2495,13 +2495,6 @@ html.modal-abierto {
     white-space: nowrap;
 }
 
-.stats-cuadro-pie {
-    font-size: 0.7rem;
-    color: #64748b;
-    line-height: 1.35;
-    margin-top: 8px;
-}
-
 /* Conmutador de cuadros y barras. */
 .stats-conmutador {
     display: flex;

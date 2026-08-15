@@ -1439,9 +1439,6 @@ window.pintarDesglose = () => {
     // lo que se estuviera mirando ya no está en pantalla.
     window.actualizarRadarDOM();
 
-    const marca = (color, texto) => `<span style="color:${color}; font-weight:700;">■</span> ${texto}`;
-    const dondeLleva = esPuesto ? 'sus colaboradores' : 'sus supervisores';
-
     // El gráfico dice de entrada qué está midiendo. El conmutador lo marca,
     // pero se desplaza y el elegido puede quedar fuera de la vista; además,
     // dentro de los cuadros pequeños no cabe ningún texto.
@@ -1456,31 +1453,11 @@ window.pintarDesglose = () => {
         cont.innerHTML = encabezado +
             (esPuesto
                 ? window.renderPuestoDetailed(cache.puestoCache)
-                : window.renderDeptDetailed(cache.statsCache)) +
-            // La barra apila todo a la vez y el criterio sólo decide el orden,
-            // así que aquí van los colores de la pila: nadie más los explica.
-            '<div class="stats-cuadro-pie">' +
-                'La barra izquierda apila ' + marca('#3b82f6', 'contestadas') + ', ' +
-                marca('#10b981', 'revisadas') + ', ' + marca('#047857', '≥ 80%') + ', ' +
-                marca('#eab308', 'certificadas') + ', ' + marca('#ef4444', 'falsas') + ' y ' +
-                marca('#a855f7', 'mal revisadas') + '; la derecha es la ' +
-                marca('#86efac', 'calificación') + '. Toca una columna para ver ' + dondeLleva + '.' +
-            '</div>';
+                : window.renderDeptDetailed(cache.statsCache));
         return;
     }
 
-    cont.innerHTML = encabezado +
-        '<div id="desglose-treemap" class="stats-treemap"></div>' +
-        '<div class="stats-cuadro-pie">' +
-            (esPuesto
-                ? 'El tamaño es cuántas encuestas le tocan al puesto; el relleno, '
-                : 'El tamaño es cuántas encuestas le tocan al departamento; el relleno, ') +
-            'su ' + criterio.etiqueta.toLowerCase() + ' sobre las asignadas' +
-            (criterio.clave === 'participacion'
-                ? ', con lo ya ' + marca('#6ee7b7', 'revisado') + ' encima.'
-                : '.') +
-            ' Toca un cuadro para ver ' + dondeLleva + '.' +
-        '</div>';
+    cont.innerHTML = encabezado + '<div id="desglose-treemap" class="stats-treemap"></div>';
     window.dibujarCuadrosDesglose();
 };
 

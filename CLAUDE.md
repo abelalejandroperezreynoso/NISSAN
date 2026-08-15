@@ -415,10 +415,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   banda —contestado y, encima, lo ya revisado—; los demás criterios son una
   sola cosa y una sola banda. El gráfico lleva encima el criterio con su color
   (`.stats-grafico-titulo`): el conmutador también lo marca, pero se desplaza
-  y el elegido puede quedar fuera de la vista. Lo que la leyenda explicaba se
-  quedó en el pie (`.stats-cuadro-pie`), que en barras nombra los colores de
-  la pila —no los explica nadie más— y en cuadros dice qué mide el tamaño y
-  qué el relleno.
+  y el elegido puede quedar fuera de la vista. Debajo no va nada: el pie que
+  explicaba los colores de la barra apilada se quitó a propósito, así que hoy
+  esos colores no los nombra ningún texto de la pantalla.
 
   **El treemap de esta pantalla no usa d3.** El del mapa de activos sí, pero
   ése es un documento aparte que ya carga la librería; traerla al panel
