@@ -406,7 +406,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   que es también lo que llaman los botones «Volver» para no salirse del modo, y
   que de paso devuelve el radar a la vista general. Los tres desgloses
   —departamento, supervisor y puesto— escriben en el mismo
-  `#desglose-container`.
+  `#desglose-container` y respetan la forma elegida: en cuadros, entrar a un
+  departamento dibuja los cuadros de sus supervisores y entrar a uno de ellos
+  los de sus colaboradores, con `window.vistaCuadrosDentro()` poniendo las
+  migas y el «Volver». Las filas por colaborador no usan los nombres de campo
+  de las cachés (`totalAssigned`, `totalResp`…), así que pasan por
+  `window.nodosDeColaboradores()` antes de dibujarse. Quien repinta al girar
+  el teléfono es `window.__redibujarCuadros`, que deja puesto el último
+  dibujo: así la rotación no se sale del nivel en el que se esté.
 
   El criterio antes era una leyenda de colores clicable que sólo ordenaba las
   barras. Ahora es un conmutador más y **manda también en los cuadros**: cada

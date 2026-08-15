@@ -2467,6 +2467,52 @@ html.modal-abierto {
 
 .stats-cuadro-dato { font-weight: 700; line-height: 1.25; }
 
+/* Migas del desglose en cuadros: volver, dónde se está y cuánto hay. */
+.stats-migas {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    min-width: 0;
+}
+
+.stats-migas button {
+    background: #f1f5f9;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: #475569;
+    font-weight: 700;
+    flex-shrink: 0;
+    min-height: 32px;
+}
+
+.stats-migas-titulo {
+    font-weight: 700;
+    color: #1e293b;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* El conteo cede el ancho antes que el título: saber dónde estás importa más
+   que cuántos hay, y en un teléfono no caben los dos enteros. */
+.stats-migas-sub {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-left: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 0 3 auto;
+    min-width: 0;
+}
+
 /* Encabezado del gráfico: qué se está midiendo, con el color con el que se
    pinta. El conmutador también lo marca, pero se desplaza y el criterio
    elegido puede quedar fuera de la vista. */

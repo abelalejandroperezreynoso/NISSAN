@@ -1464,6 +1464,52 @@ window.pintarDesglose = () => {
 // Ancho de un texto por cada píxel de fuente, medido con un lienzo suelto.
 // Se mide una sola vez por texto: dibujar los cuadros llama a esto para cada
 // palabra de cada nombre.
+// Un nivel de dentro del desglose dibujado en cuadros: encabezado con
+// «Volver», el nombre de lo que se está mirando y el lienzo. Es lo que ven
+// los supervisores de un departamento y los colaboradores de un supervisor o
+// de un puesto cuando la forma elegida son cuadros.
+window.vistaCuadrosDentro = ({ titulo, subtitulo, volver, nodos, alTocar }) => {
+    const cont = document.getElementById('desglose-container');
+    if (!cont) return;
+
+    const criterio = window.criterioStats();
+    cont.innerHTML =
+        '<div class="stats-grafico-titulo">' +
+            `<span class="stats-grafico-punto" style="background:${criterio.color};"></span>` +
+            criterio.etiqueta +
+            '<span class="stats-grafico-nota">llena los cuadros</span>' +
+        '</div>' +
+        '<div class="stats-migas">' +
+            '<button type="button" id="btn-volver-cuadros">Volver</button>' +
+            `<span class="stats-migas-titulo">${window.sanitizeForHTML(titulo)}</span>` +
+            (subtitulo ? `<span class="stats-migas-sub">${window.sanitizeForHTML(subtitulo)}</span>` : '') +
+        '</div>' +
+        '<div id="desglose-treemap" class="stats-treemap"></div>';
+
+    document.getElementById('btn-volver-cuadros').onclick = volver;
+    window.dibujarCuadros(nodos, alTocar);
+};
+
+// Las filas por colaborador no usan los mismos nombres que las cachés por
+// departamento y por puesto, así que se traducen antes de dibujarlas.
+window.nodosDeColaboradores = (empStats) => {
+    const mapa = {};
+    empStats.forEach(emp => {
+        mapa[emp.name] = {
+            assignedCount: emp.totalAssigned || 0,
+            responses: emp.totalResp || 0,
+            reviewed: emp.reviewedCount || 0,
+            certificadas: emp.certificadasCount || 0,
+            falsas: emp.falsasCount || 0,
+            malRevisadas: emp.malRevisadasCount || 0,
+            revisadasAltas: emp.revisadasAltasCount || 0,
+            sumScore: emp.sumScore || 0,
+            countScore: emp.countScore || 0
+        };
+    });
+    return window.nodosDeCuadros(mapa);
+};
+
 window.anchoPorPixelDeTexto = (() => {
     const medidor = document.createElement('canvas').getContext('2d');
     const cache = {};
@@ -1476,14 +1522,48 @@ window.anchoPorPixelDeTexto = (() => {
     };
 })();
 
-window.dibujarCuadrosDesglose = () => {
-    const lienzo = document.getElementById('desglose-treemap');
-    const cache = window.encuestasStatsCacheForDrilldown;
-    if (!lienzo || !cache) return;
+// Convierte un mapa {nombre: fila} en los nodos que dibuja el treemap. La
+// fila tiene que traer los nombres canónicos de las cachés
+// (`assignedCount`, `responses`, `reviewed`…), que son los que mide cada
+// criterio de CRITERIOS_STATS.
+window.nodosDeCuadros = (mapa) => {
+    const nodos = [];
+    Object.keys(mapa).forEach(nombre => {
+        const d = mapa[nombre];
+        const asignadas = d.assignedCount || 0;
+        if (asignadas === 0 && (d.responses || 0) === 0) return;
+        nodos.push({
+            nombre: nombre,
+            datos: d,
+            asignadas: asignadas,
+            respuestas: d.responses || 0,
+            procesadas: (d.reviewed || 0) + (d.certificadas || 0) + (d.falsas || 0) + (d.malRevisadas || 0),
+            calificacion: d.countScore > 0 ? Math.round(d.sumScore / d.countScore) : null
+        });
+    });
+    return nodos;
+};
 
+// Quién repinta al girar el teléfono. Lo deja puesto el último dibujo, así
+// que la rotación conserva el nivel en el que se esté y no vuelve al de
+// arriba.
+window.__redibujarCuadros = null;
+
+window.dibujarCuadrosDesglose = () => {
+    const cache = window.encuestasStatsCacheForDrilldown;
+    if (!cache) return;
     const esPuesto = window.dimensionDesglose === 'puesto';
-    const datos = esPuesto ? cache.puestoCache : cache.statsCache;
-    const abrir = esPuesto ? window.verStatsDetallePuesto : window.verStatsDetalleDepto;
+    window.dibujarCuadros(
+        window.nodosDeCuadros(esPuesto ? cache.puestoCache : cache.statsCache),
+        esPuesto ? window.verStatsDetallePuesto : window.verStatsDetalleDepto
+    );
+};
+
+window.dibujarCuadros = (nodos, alTocar) => {
+    window.__redibujarCuadros = () => window.dibujarCuadros(nodos, alTocar);
+
+    const lienzo = document.getElementById('desglose-treemap');
+    if (!lienzo) return;
 
     const ancho = lienzo.clientWidth;
     const alto = lienzo.clientHeight;
@@ -1491,22 +1571,6 @@ window.dibujarCuadrosDesglose = () => {
     if (ancho <= 0 || alto <= 0) return;
 
     const criterio = window.criterioStats();
-
-    const nodos = [];
-    Object.keys(datos).forEach(nombre => {
-        const d = datos[nombre];
-        const asignadas = d.assignedCount || 0;
-        if (asignadas === 0 && d.responses === 0) return;
-        const procesadas = (d.reviewed || 0) + (d.certificadas || 0) + (d.falsas || 0) + (d.malRevisadas || 0);
-        nodos.push({
-            nombre: nombre,
-            datos: d,
-            asignadas: asignadas,
-            respuestas: d.responses || 0,
-            procesadas: procesadas,
-            calificacion: d.countScore > 0 ? Math.round(d.sumScore / d.countScore) : null
-        });
-    });
 
     if (nodos.length === 0) {
         lienzo.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100%; color:#94a3b8; font-size:0.85rem;">Sin datos para este periodo.</div>';
@@ -1538,7 +1602,8 @@ window.dibujarCuadrosDesglose = () => {
         el.title = `${n.nombre}\nAsignadas: ${n.asignadas}\nContestadas: ${n.respuestas}`
             + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación: ${n.calificacion}%`)
             + `\n${criterio.etiqueta}: ${Math.round(pctCriterio)}%`;
-        el.onclick = () => abrir(n.nombre);
+        if (alTocar) el.onclick = () => alTocar(n.nombre);
+        else el.style.cursor = 'default';
 
         // El relleno lleva la proporción sin redondear: con el 99% redondeado
         // a 100 el cuadro se vería lleno sin estarlo.
@@ -1598,7 +1663,9 @@ if (!window.__cuadrosDesgloseEscucha) {
     window.addEventListener('resize', () => {
         if (!document.getElementById('desglose-treemap')) return;
         clearTimeout(temporizador);
-        temporizador = setTimeout(() => window.dibujarCuadrosDesglose(), 150);
+        temporizador = setTimeout(() => {
+            if (window.__redibujarCuadros) window.__redibujarCuadros();
+        }, 150);
     });
 }
 
@@ -1903,6 +1970,17 @@ window.verStatsDetalleDepto = (deptName) => {
         return assB - assA;
     });
     
+    if (window.formaDesglose !== 'barras') {
+        window.vistaCuadrosDentro({
+            titulo: deptName,
+            subtitulo: `${supList.length} supervisores`,
+            volver: () => window.pintarDesglose(),
+            nodos: window.nodosDeCuadros(data.supervisors),
+            alTocar: (supName) => window.verStatsDetalleSupervisor(deptName, supName)
+        });
+        return;
+    }
+
     const safeDept = window.sanitizeForHTML(deptName);
     
     let html = `
@@ -2129,6 +2207,17 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
         return assB - assA;
     });
 
+    if (window.formaDesglose !== 'barras') {
+        window.vistaCuadrosDentro({
+            titulo: `Grupo de ${supName}`,
+            subtitulo: `${empStats.length} evaluados`,
+            volver: () => window.verStatsDetalleDepto(deptName),
+            nodos: window.nodosDeColaboradores(empStats),
+            alTocar: null
+        });
+        return;
+    }
+
     const safeDept = window.sanitizeForHTML(deptName);
     const safeSup = window.sanitizeForHTML(supName);
 
@@ -2347,6 +2436,17 @@ window.verStatsDetallePuesto = (puestoName) => {
         if (partB !== partA) return partB - partA;
         return assB - assA;
     });
+
+    if (window.formaDesglose !== 'barras') {
+        window.vistaCuadrosDentro({
+            titulo: puestoName,
+            subtitulo: `${empStats.length} evaluados`,
+            volver: () => window.pintarDesglose(),
+            nodos: window.nodosDeColaboradores(empStats),
+            alTocar: null
+        });
+        return;
+    }
 
     const safePuesto = window.sanitizeForHTML(puestoName);
 
