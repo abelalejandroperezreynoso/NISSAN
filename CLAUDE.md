@@ -451,7 +451,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   criterio de `CRITERIOS_STATS` trae su color y su `valor(fila)`, que es la
   proporción con la que se llena el cuadro. Participación conserva su segunda
   banda —contestado y, encima, lo ya revisado—; los demás criterios son una
-  sola cosa y una sola banda. El gráfico lleva encima el criterio con su color
+  sola cosa y una sola banda. Un treemap coloca por tamaño y no por medida, así
+  que con valores parecidos los rellenos se ven iguales y no hay forma de ver
+  quién va peor: para eso cada cuadro lleva su puesto en la tabla (`#3 · 6.5
+  días`) y el encabezado señala al peor del nivel
+  (`window.extremoDelCriterio`), que en falsas y mal revisadas es el de más y
+  en los demás el de menos. El gráfico lleva encima el criterio con su color
   (`.stats-grafico-titulo`): el conmutador también lo marca, pero se desplaza
   y el elegido puede quedar fuera de la vista. Debajo no va nada: el pie que
   explicaba los colores de la barra apilada se quitó a propósito, así que hoy

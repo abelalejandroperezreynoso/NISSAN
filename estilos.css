@@ -2533,6 +2533,18 @@ html.modal-abierto {
     flex-shrink: 0;
 }
 
+/* A quién hay que mirar: el peor del nivel según el criterio. */
+.stats-grafico-extremo {
+    font-size: 0.75rem;
+    color: #64748b;
+    line-height: 1.35;
+    margin: -4px 0 10px;
+}
+
+.stats-grafico-extremo b {
+    color: #0f172a;
+}
+
 .stats-grafico-nota {
     font-size: 0.7rem;
     font-weight: 600;
