@@ -1442,13 +1442,24 @@ window.pintarDesglose = () => {
     const marca = (color, texto) => `<span style="color:${color}; font-weight:700;">■</span> ${texto}`;
     const dondeLleva = esPuesto ? 'sus colaboradores' : 'sus supervisores';
 
+    // El gráfico dice de entrada qué está midiendo. El conmutador lo marca,
+    // pero se desplaza y el elegido puede quedar fuera de la vista; además,
+    // dentro de los cuadros pequeños no cabe ningún texto.
+    const encabezado = '<div class="stats-grafico-titulo">' +
+        `<span class="stats-grafico-punto" style="background:${criterio.color};"></span>` +
+        criterio.etiqueta +
+        (forma === 'barras' ? '<span class="stats-grafico-nota">ordena las columnas</span>'
+                            : '<span class="stats-grafico-nota">llena los cuadros</span>') +
+        '</div>';
+
     if (forma === 'barras') {
-        cont.innerHTML = (esPuesto
+        cont.innerHTML = encabezado +
+            (esPuesto
                 ? window.renderPuestoDetailed(cache.puestoCache)
                 : window.renderDeptDetailed(cache.statsCache)) +
             // La barra apila todo a la vez y el criterio sólo decide el orden,
             // así que aquí van los colores de la pila: nadie más los explica.
-            '<div class="stats-cuadro-pie">Ordenado por <b>' + criterio.etiqueta + '</b>. ' +
+            '<div class="stats-cuadro-pie">' +
                 'La barra izquierda apila ' + marca('#3b82f6', 'contestadas') + ', ' +
                 marca('#10b981', 'revisadas') + ', ' + marca('#047857', '≥ 80%') + ', ' +
                 marca('#eab308', 'certificadas') + ', ' + marca('#ef4444', 'falsas') + ' y ' +
@@ -1458,15 +1469,16 @@ window.pintarDesglose = () => {
         return;
     }
 
-    cont.innerHTML = '<div id="desglose-treemap" class="stats-treemap"></div>' +
+    cont.innerHTML = encabezado +
+        '<div id="desglose-treemap" class="stats-treemap"></div>' +
         '<div class="stats-cuadro-pie">' +
             (esPuesto
                 ? 'El tamaño es cuántas encuestas le tocan al puesto; el relleno, '
                 : 'El tamaño es cuántas encuestas le tocan al departamento; el relleno, ') +
-            marca(criterio.color, '<b>' + criterio.etiqueta + '</b>') +
+            'su ' + criterio.etiqueta.toLowerCase() + ' sobre las asignadas' +
             (criterio.clave === 'participacion'
                 ? ', con lo ya ' + marca('#6ee7b7', 'revisado') + ' encima.'
-                : ' sobre las asignadas.') +
+                : '.') +
             ' Toca un cuadro para ver ' + dondeLleva + '.' +
         '</div>';
     window.dibujarCuadrosDesglose();

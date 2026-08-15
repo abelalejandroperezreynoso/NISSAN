@@ -2467,6 +2467,34 @@ html.modal-abierto {
 
 .stats-cuadro-dato { font-weight: 700; line-height: 1.25; }
 
+/* Encabezado del gráfico: qué se está midiendo, con el color con el que se
+   pinta. El conmutador también lo marca, pero se desplaza y el criterio
+   elegido puede quedar fuera de la vista. */
+.stats-grafico-titulo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 2px 0 10px;
+}
+
+.stats-grafico-punto {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.stats-grafico-nota {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
 .stats-cuadro-pie {
     font-size: 0.7rem;
     color: #64748b;
