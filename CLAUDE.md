@@ -379,6 +379,31 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   envío de `4-evaluaciones-base.js`). Es lo que permite rotular el eje de una
   pregunta que ya no existe, y sólo vale de aquí en adelante: lo contestado
   antes no lo trae y cae en «Pregunta N».
+- **Cuánto tardan en contestar sale de la fecha, no de un registro.** La base
+  no guarda en ningún sitio el momento en que una encuesta apareció en el panel
+  de pendientes de alguien: los pendientes se calculan al vuelo cada vez que se
+  abre el panel. No hace falta guardarlo, porque el inicio es determinista —una
+  mensual arranca el día 1, una semanal el lunes—, y de eso ya sabe
+  `window.periodoVigente(frecuencia, referencia)` en `7-pendientes.js`, que es
+  la misma definición con la que el panel decide qué te muestra.
+
+  `window.origenDelPendiente(frecuencia, altaEncuesta, empleado, fecha)` en
+  `4b-evaluaciones-stats.js` toma el más tardío de tres fechas: el inicio del
+  periodo, el alta de la encuesta —antes no existía— y el alta del empleado
+  —antes no estaba para contestarla—. Con eso, cada respuesta queda sellada al
+  vuelo con `r.diasAtencion` y `r.prontitud` (la parte del plazo que le quedaba
+  sin gastar), igual que ya se sellaba `r.finalScoreCalculated`, y los
+  desgloses por colaborador sólo tienen que sumarlos.
+
+  **El sello tiene que calcularse antes de sumarlo**: al ponerlo después del
+  bucle de calificaciones, el acumulado del periodo salía `NaN` y la tarjeta
+  decía «sin datos» aunque las respuestas estuvieran bien selladas.
+
+  Lo que esta medida **no** dice es cuánto le costó llenarla: la fila de
+  respuesta se inserta entera al final, así que no hay rastro de cuándo la
+  abrió. Para eso haría falta una columna nueva sellada al abrir, y sólo
+  mediría de ahí en adelante. Ojo también con que `submitted_at` se puede
+  editar a mano desde el calendario: cualquier medida hereda esa edición.
 - **Las rejillas se salen de la hoja en un teléfono.** `repeat(auto-fit,
   minmax(300px, 1fr))` no encoge por debajo de ese mínimo: con 327 px de ancho
   útil la pista sigue midiendo 300 y la tarjeta desborda. El mínimo va siempre
@@ -414,6 +439,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `window.nodosDeColaboradores()` antes de dibujarse. Quien repinta al girar
   el teléfono es `window.__redibujarCuadros`, que deja puesto el último
   dibujo: así la rotación no se sale del nivel en el que se esté.
+
+  Todos los desgloses ordenan con `window.valorDeCriterio(fila)`, que mide la
+  fila venga de la caché por departamento, por puesto o de las filas por
+  colaborador —esas pasan por `window.filaCanonica()`, que traduce sus nombres
+  de campo—. Antes cada uno de los cinco niveles repetía la misma cadena de
+  ifs y añadir un criterio obligaba a tocar las cinco.
 
   El criterio antes era una leyenda de colores clicable que sólo ordenaba las
   barras. Ahora es un conmutador más y **manda también en los cuadros**: cada

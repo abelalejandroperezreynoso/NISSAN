@@ -2626,8 +2626,10 @@ html.modal-abierto {
         padding: 12px;
     }
 
+    /* Cuatro cifras de dos en dos: en una sola fila cada una se quedaba con
+       menos de 80px y el rótulo salía en cuatro renglones. */
     .stats-resumen {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(2, 1fr);
         gap: 8px;
         margin-bottom: 12px;
     }

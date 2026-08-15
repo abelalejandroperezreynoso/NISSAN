@@ -12,6 +12,34 @@ window.sanitizeForHTML = (str) => {
     return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 };
 
+// --- DESDE CUÁNDO LE CORRÍA EL PENDIENTE ---
+// La base no guarda en ningún lado el momento en que una encuesta apareció en
+// el panel de pendientes de alguien: los pendientes se calculan al vuelo cada
+// vez que se abre el panel. No hace falta guardarlo, porque el inicio es
+// determinista: una encuesta mensual arranca el día 1, una semanal el lunes.
+// Es el mismo `window.periodoVigente` de 7-pendientes.js, que es justo la
+// definición con la que el panel decide qué te muestra.
+//
+// El origen real de cada persona es el más tardío de tres fechas: el inicio
+// del periodo, el alta de la encuesta —antes no existía— y el alta del
+// empleado —antes no estaba para contestarla—.
+window.origenDelPendiente = (frecuencia, altaEncuesta, empObj, fechaRespuesta) => {
+    const periodo = window.periodoVigente ? window.periodoVigente(frecuencia, fechaRespuesta) : null;
+    let origen = periodo ? new Date(periodo.inicio) : null;
+
+    if (altaEncuesta) {
+        const alta = new Date(altaEncuesta);
+        if (!isNaN(alta) && (!origen || alta > origen)) origen = alta;
+    }
+    if (window.fechaDeAltaEmpleado) {
+        const altaEmp = window.fechaDeAltaEmpleado(empObj);
+        if (altaEmp && !isNaN(altaEmp) && origen && altaEmp > origen) origen = altaEmp;
+    }
+    if (!origen || isNaN(origen)) return null;
+
+    return { origen: origen, cierre: periodo ? periodo.fin : null };
+};
+
 // --- REPARTO EN CUADROS (TREEMAP) ---
 // El mismo dibujo que el mapa de activos, pero aquí la geometría se calcula a
 // mano en lugar de con d3: el mapa es una pantalla aparte que ya carga la
@@ -277,8 +305,25 @@ window.CRITERIOS_STATS = [
     { clave: 'mal_revisadas', etiqueta: 'Mal rev.', nombre: 'mal revisadas', color: '#a855f7', relleno: '#e9d5ff',
       valor: (d) => d.assignedCount > 0 ? (d.malRevisadas || 0) / d.assignedCount : 0 },
     { clave: 'calificacion', etiqueta: 'Calificación', nombre: 'de calificación', color: '#16a34a', relleno: '#86efac',
-      valor: (d) => d.countScore > 0 ? (d.sumScore / d.countScore) / 100 : 0 }
+      valor: (d) => d.countScore > 0 ? (d.sumScore / d.countScore) / 100 : 0 },
+    // Prontitud: qué parte del plazo quedaba sin gastar al contestar. Lleno es
+    // pronto. Dentro del cuadro no se enseña esa proporción sino los días, que
+    // es lo que se entiende sin explicación.
+    { clave: 'prontitud', etiqueta: 'Prontitud', nombre: 'de prontitud', color: '#6366f1', relleno: '#c7d2fe',
+      valor: (d) => d.countProntitud > 0 ? d.sumProntitud / d.countProntitud : 0,
+      texto: (d) => d.countDias > 0 ? window.textoDias(d.sumDias / d.countDias) : 'sin datos' }
 ];
+
+// Días con una cifra, y en horas cuando es menos de un día: «4.2 días» dice
+// poco de una encuesta que se contesta la misma mañana.
+window.textoDias = (dias) => {
+    if (dias === null || dias === undefined || isNaN(dias)) return 'sin datos';
+    if (dias < 1) {
+        const horas = Math.round(dias * 24);
+        return horas <= 1 ? 'menos de 1 h' : `${horas} h`;
+    }
+    return `${dias.toFixed(1)} días`;
+};
 
 window.criterioStats = () => window.CRITERIOS_STATS.find(c => c.clave === window.currentStatsSortCriterion)
     || window.CRITERIOS_STATS[0];
@@ -337,7 +382,8 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             target_departments: targetDeptos,
             is_obligatory: e.is_obligatory !== false,
             evaluates_area: e.evaluates_area === true,
-            frequency: f
+            frequency: f,
+            alta: e.created_at || null
         };
     });
 
@@ -539,6 +585,8 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     let totalContestadas = dataset.length;
     let totalRevisadas = 0; // Agrupa Revisadas y Certificadas para el progreso global
     let totalScoreSum = 0;
+    let totalDiasAtencion = 0;
+    let countDiasAtencion = 0;
     
     const evalPerfMap={};
     const radarPerfMap={};
@@ -575,6 +623,24 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         const title = evalInfo.title;
         const radarKey = categoriaFiltro === 'GLOBAL' ? evalInfo.category : evalInfo.title;
 
+        // Cuánto tardó en atenderla desde que le apareció como pendiente, y qué
+        // parte del plazo le quedaba sin gastar al enviarla. Se guardan en la
+        // respuesta como el puntaje, para que los desgloses por colaborador no
+        // tengan que volver a calcularlos.
+        r.diasAtencion = null;
+        r.prontitud = null;
+        const marca = window.origenDelPendiente(evalInfo.frequency, evalInfo.alta, empObj, new Date(r.submitted_at));
+        if (marca) {
+            const transcurrido = new Date(r.submitted_at) - marca.origen;
+            r.diasAtencion = Math.max(0, transcurrido) / 86400000;
+            if (marca.cierre) {
+                const plazo = marca.cierre - marca.origen;
+                // Sin plazo no hay prontitud que medir: las encuestas de una
+                // sola vez no tienen periodo que gastar.
+                if (plazo > 0) r.prontitud = Math.max(0, Math.min(1, 1 - Math.max(0, transcurrido) / plazo));
+            }
+        }
+
         if (statsCache[dept]) {
             statsCache[dept].responses++;
             if (statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].responses++;
@@ -583,6 +649,22 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         if (puestoCache[empPuestoKey]) {
             puestoCache[empPuestoKey].responses++;
         }
+
+        const sumarTiempos = (fila) => {
+            if (!fila) return;
+            if (r.diasAtencion !== null) {
+                fila.sumDias = (fila.sumDias || 0) + r.diasAtencion;
+                fila.countDias = (fila.countDias || 0) + 1;
+            }
+            if (r.prontitud !== null) {
+                fila.sumProntitud = (fila.sumProntitud || 0) + r.prontitud;
+                fila.countProntitud = (fila.countProntitud || 0) + 1;
+            }
+        };
+        sumarTiempos(statsCache[dept]);
+        if (statsCache[dept]) sumarTiempos(statsCache[dept].supervisors[sup]);
+        sumarTiempos(puestoCache[empPuestoKey]);
+        if (r.diasAtencion !== null) { totalDiasAtencion += r.diasAtencion; countDiasAtencion++; }
 
         if(!evalPerfMap[title]) evalPerfMap[title] = { sum: 0, countRevisadas: 0, countTotal: 0 };
         evalPerfMap[title].countTotal++;
@@ -639,6 +721,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         
         const finalScore = qCount > 0 ? (sumScore / qCount) : 0;
         r.finalScoreCalculated = finalScore; // Guardar para el drilldown (vistas secundarias)
+
         
         // 2. CONTADOR DE REVISADAS ALTAS (Para cualquier evaluación procesada que supere 80%)
         if (['Revisado', 'Certificada', 'Falsa', 'Mal Revisada'].includes(r.review_status) && finalScore >= 80) {
@@ -767,6 +850,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         const participacionGlobal = Math.min(100, totalAsignadasGlobal > 0 ? Math.round((totalContestadas / totalAsignadasGlobal) * 100) : 0);
         const porcentajeRevision = totalContestadas > 0 ? Math.round((totalRevisadas / totalContestadas) * 100) : 0;
         const globalAvgScore = totalRevisadas > 0 ? Math.round(totalScoreSum / totalRevisadas) : 0;
+        const promedioDias = countDiasAtencion > 0 ? (totalDiasAtencion / countDiasAtencion) : null;
         
         const getColor = window.getColorScore || ((s) => s >= 80 ? '#166534' : '#ef4444');
         const colorGlobalScore = getColor(globalAvgScore);
@@ -823,6 +907,11 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                 <div class="stats-tarjeta-rotulo">Calificación Promedio</div>
                 <div class="stats-tarjeta-cifra" style="color:#1e293b;">${globalAvgScore}<span>%</span></div>
                 <div class="stats-tarjeta-pie">Considera cumplimiento</div>
+            </div>
+            <div class="stats-tarjeta">
+                <div class="stats-tarjeta-rotulo">Tiempo de Atención</div>
+                <div class="stats-tarjeta-cifra" style="color:#6366f1;">${window.textoDias(promedioDias).replace(/ (días|h)$/, '<span> $1</span>')}</div>
+                <div class="stats-tarjeta-pie">${countDiasAtencion > 0 ? 'Desde que abre el periodo' : 'Sin datos en este periodo'}</div>
             </div>
         </div>
 
@@ -1491,23 +1580,37 @@ window.vistaCuadrosDentro = ({ titulo, subtitulo, volver, nodos, alTocar }) => {
 };
 
 // Las filas por colaborador no usan los mismos nombres que las cachés por
-// departamento y por puesto, así que se traducen antes de dibujarlas.
+// departamento y por puesto, así que se traducen antes de medirlas o dibujarlas.
+window.filaCanonica = (emp) => ({
+    assignedCount: emp.totalAssigned || 0,
+    responses: emp.totalResp || 0,
+    reviewed: emp.reviewedCount || 0,
+    certificadas: emp.certificadasCount || 0,
+    falsas: emp.falsasCount || 0,
+    malRevisadas: emp.malRevisadasCount || 0,
+    revisadasAltas: emp.revisadasAltasCount || 0,
+    sumScore: emp.sumScore || 0,
+    countScore: emp.countScore || 0,
+    sumDias: emp.sumDias || 0,
+    countDias: emp.countDias || 0,
+    sumProntitud: emp.sumProntitud || 0,
+    countProntitud: emp.countProntitud || 0
+});
+
 window.nodosDeColaboradores = (empStats) => {
     const mapa = {};
-    empStats.forEach(emp => {
-        mapa[emp.name] = {
-            assignedCount: emp.totalAssigned || 0,
-            responses: emp.totalResp || 0,
-            reviewed: emp.reviewedCount || 0,
-            certificadas: emp.certificadasCount || 0,
-            falsas: emp.falsasCount || 0,
-            malRevisadas: emp.malRevisadasCount || 0,
-            revisadasAltas: emp.revisadasAltasCount || 0,
-            sumScore: emp.sumScore || 0,
-            countScore: emp.countScore || 0
-        };
-    });
+    empStats.forEach(emp => { mapa[emp.name] = window.filaCanonica(emp); });
     return window.nodosDeCuadros(mapa);
+};
+
+// Con qué se ordena cualquier desglose: el criterio elegido, midiendo la fila
+// venga de donde venga. Antes cada nivel repetía la misma cadena de ifs, y
+// añadir un criterio obligaba a tocar las cinco.
+window.valorDeCriterio = (fila) => {
+    if (!fila) return 0;
+    const d = (fila.totalAssigned !== undefined || fila.totalResp !== undefined)
+        ? window.filaCanonica(fila) : fila;
+    return window.criterioStats().valor(d) || 0;
 };
 
 window.anchoPorPixelDeTexto = (() => {
@@ -1647,7 +1750,7 @@ window.dibujarCuadros = (nodos, alTocar) => {
             const dato = document.createElement('div');
             dato.className = 'stats-cuadro-dato';
             dato.style.fontSize = Math.max(8, tam * 0.62) + 'px';
-            dato.innerText = `${Math.round(pctCriterio)}% ${criterio.nombre}`;
+            dato.innerText = criterio.texto ? criterio.texto(n.datos) : `${Math.round(pctCriterio)}% ${criterio.nombre}`;
             cuerpo.appendChild(dato);
         }
         el.appendChild(cuerpo);
@@ -1676,31 +1779,8 @@ window.renderDeptDetailed = (dataMap) => {
         const assA = dA.assignedCount || 0;
         const assB = dB.assignedCount || 0;
 
-        let valA = 0;
-        let valB = 0;
-
-        if (window.currentStatsSortCriterion === 'participacion') {
-            valA = assA > 0 ? dA.responses / assA : 0;
-            valB = assB > 0 ? dB.responses / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas') {
-            valA = assA > 0 ? dA.reviewed / assA : 0;
-            valB = assB > 0 ? dB.reviewed / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas_altas') {
-            valA = assA > 0 ? (dA.revisadasAltas || 0) / assA : 0;
-            valB = assB > 0 ? (dB.revisadasAltas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'certificadas') {
-            valA = assA > 0 ? (dA.certificadas || 0) / assA : 0;
-            valB = assB > 0 ? (dB.certificadas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'falsas') {
-            valA = assA > 0 ? (dA.falsas || 0) / assA : 0;
-            valB = assB > 0 ? (dB.falsas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'mal_revisadas') {
-        valA = assA > 0 ? (dA.malRevisadas || 0) / assA : 0;
-        valB = assB > 0 ? (dB.malRevisadas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'calificacion') {
-        valA = dA.countScore > 0 ? (dA.sumScore / dA.countScore) : 0;
-        valB = dB.countScore > 0 ? (dB.sumScore / dB.countScore) : 0;
-        }
+        const valA = window.valorDeCriterio(dA);
+        const valB = window.valorDeCriterio(dB);
 
         if (valB !== valA) return valB - valA;
         const partA = assA > 0 ? dA.responses / assA : 0;
@@ -1805,32 +1885,8 @@ window.renderPuestoDetailed = (dataMap) => {
         const assA = dA.assignedCount || 0;
         const assB = dB.assignedCount || 0;
 
-        let valA = 0;
-        let valB = 0;
-
-        // Evalúa el valor de orden según el criterio activo en la leyenda
-        if (window.currentStatsSortCriterion === 'participacion') {
-            valA = assA > 0 ? dA.responses / assA : 0;
-            valB = assB > 0 ? dB.responses / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas') {
-            valA = assA > 0 ? dA.reviewed / assA : 0;
-            valB = assB > 0 ? dB.reviewed / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas_altas') {
-            valA = assA > 0 ? (dA.revisadasAltas || 0) / assA : 0;
-            valB = assB > 0 ? (dB.revisadasAltas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'certificadas') {
-            valA = assA > 0 ? (dA.certificadas || 0) / assA : 0;
-            valB = assB > 0 ? (dB.certificadas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'falsas') {
-            valA = assA > 0 ? (dA.falsas || 0) / assA : 0;
-            valB = assB > 0 ? (dB.falsas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'mal_revisadas') {
-        valA = assA > 0 ? a.malRevisadasCount / assA : 0;
-        valB = assB > 0 ? b.malRevisadasCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'calificacion') {
-        valA = a.countScore > 0 ? (a.sumScore / a.countScore) : 0;
-        valB = b.countScore > 0 ? (b.sumScore / b.countScore) : 0;
-        }
+        const valA = window.valorDeCriterio(dA);
+        const valB = window.valorDeCriterio(dB);
 
         if (valB !== valA) return valB - valA;
         // Rompe empates usando la participación base
@@ -1936,31 +1992,8 @@ window.verStatsDetalleDepto = (deptName) => {
     supList.sort((a,b) => {
         const assA = a.assignedCount || 0;
         const assB = b.assignedCount || 0;
-        let valA = 0;
-        let valB = 0;
-
-        if (window.currentStatsSortCriterion === 'participacion') {
-            valA = assA > 0 ? a.responses / assA : 0;
-            valB = assB > 0 ? b.responses / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas') {
-            valA = assA > 0 ? a.reviewed / assA : 0;
-            valB = assB > 0 ? b.reviewed / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas_altas') {
-            valA = assA > 0 ? (a.revisadasAltas || 0) / assA : 0;
-            valB = assB > 0 ? (b.revisadasAltas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'certificadas') {
-            valA = assA > 0 ? (a.certificadas || 0) / assA : 0;
-            valB = assB > 0 ? (b.certificadas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'falsas') {
-            valA = assA > 0 ? (a.falsas || 0) / assA : 0;
-            valB = assB > 0 ? (b.falsas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'mal_revisadas') {
-        valA = assA > 0 ? (a.malRevisadas || 0) / assA : 0;
-        valB = assB > 0 ? (b.malRevisadas || 0) / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'calificacion') {
-        valA = a.countScore > 0 ? (a.sumScore / a.countScore) : 0;
-        valB = b.countScore > 0 ? (b.sumScore / b.countScore) : 0;
-        }
+        const valA = window.valorDeCriterio(a);
+        const valB = window.valorDeCriterio(b);
 
         if (valB !== valA) return valB - valA;
         
@@ -2144,11 +2177,16 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
 
         let sumScore = 0;
         let countScore = 0;
+        let sumDias = 0, countDias = 0, sumProntitud = 0, countProntitud = 0;
         empResps.forEach(r => {
         if (r.review_status === 'Revisado' || r.review_status === 'Certificada') {
         sumScore += (r.finalScoreCalculated || 0);
         countScore++;
         }
+        // Los tiempos ya vienen sellados en la respuesta desde el cálculo
+        // principal, así que aquí sólo se suman.
+        if (r.diasAtencion !== null && r.diasAtencion !== undefined) { sumDias += r.diasAtencion; countDias++; }
+        if (r.prontitud !== null && r.prontitud !== undefined) { sumProntitud += r.prontitud; countProntitud++; }
         });
 
         return {
@@ -2165,6 +2203,10 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
         revisadasAltasCount: revisadasAltasCount,
         sumScore: sumScore,
         countScore: countScore,
+        sumDias: sumDias,
+        countDias: countDias,
+        sumProntitud: sumProntitud,
+        countProntitud: countProntitud,
         incompleto: (obligatoryCompleted < obligatoryAssigned)
         };
     }).filter(emp => emp.totalAssigned > 0 || emp.totalResp > 0);
@@ -2174,31 +2216,8 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
         
         const assA = a.totalAssigned || 0;
         const assB = b.totalAssigned || 0;
-        let valA = 0;
-        let valB = 0;
-
-        if (window.currentStatsSortCriterion === 'participacion') {
-            valA = assA > 0 ? a.totalResp / assA : 0;
-            valB = assB > 0 ? b.totalResp / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas') {
-            valA = assA > 0 ? a.reviewedCount / assA : 0;
-            valB = assB > 0 ? b.reviewedCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas_altas') {
-            valA = assA > 0 ? a.revisadasAltasCount / assA : 0;
-            valB = assB > 0 ? b.revisadasAltasCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'certificadas') {
-            valA = assA > 0 ? a.certificadasCount / assA : 0;
-            valB = assB > 0 ? b.certificadasCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'falsas') {
-            valA = assA > 0 ? a.falsasCount / assA : 0;
-            valB = assB > 0 ? b.falsasCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'mal_revisadas') {
-        valA = assA > 0 ? a.malRevisadasCount / assA : 0;
-        valB = assB > 0 ? b.malRevisadasCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'calificacion') {
-        valA = a.countScore > 0 ? (a.sumScore / a.countScore) : 0;
-        valB = b.countScore > 0 ? (b.sumScore / b.countScore) : 0;
-        }
+        const valA = window.valorDeCriterio(a);
+        const valB = window.valorDeCriterio(b);
 
         if (valB !== valA) return valB - valA;
         const partA = assA > 0 ? a.totalResp / assA : 0;
@@ -2374,11 +2393,16 @@ window.verStatsDetallePuesto = (puestoName) => {
 
         let sumScore = 0;
         let countScore = 0;
+        let sumDias = 0, countDias = 0, sumProntitud = 0, countProntitud = 0;
         empResps.forEach(r => {
         if (r.review_status === 'Revisado' || r.review_status === 'Certificada') {
         sumScore += (r.finalScoreCalculated || 0);
         countScore++;
         }
+        // Los tiempos ya vienen sellados en la respuesta desde el cálculo
+        // principal, así que aquí sólo se suman.
+        if (r.diasAtencion !== null && r.diasAtencion !== undefined) { sumDias += r.diasAtencion; countDias++; }
+        if (r.prontitud !== null && r.prontitud !== undefined) { sumProntitud += r.prontitud; countProntitud++; }
         });
 
         return {
@@ -2395,6 +2419,10 @@ window.verStatsDetallePuesto = (puestoName) => {
         revisadasAltasCount: revisadasAltasCount,
         sumScore: sumScore,
         countScore: countScore,
+        sumDias: sumDias,
+        countDias: countDias,
+        sumProntitud: sumProntitud,
+        countProntitud: countProntitud,
         incompleto: (obligatoryCompleted < obligatoryAssigned)
         };
     }).filter(emp => emp.totalAssigned > 0 || emp.totalResp > 0);
@@ -2404,31 +2432,8 @@ window.verStatsDetallePuesto = (puestoName) => {
         
         const assA = a.totalAssigned || 0;
         const assB = b.totalAssigned || 0;
-        let valA = 0;
-        let valB = 0;
-
-        if (window.currentStatsSortCriterion === 'participacion') {
-            valA = assA > 0 ? a.totalResp / assA : 0;
-            valB = assB > 0 ? b.totalResp / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas') {
-            valA = assA > 0 ? a.reviewedCount / assA : 0;
-            valB = assB > 0 ? b.reviewedCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'revisadas_altas') {
-            valA = assA > 0 ? a.revisadasAltasCount / assA : 0;
-            valB = assB > 0 ? b.revisadasAltasCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'certificadas') {
-            valA = assA > 0 ? a.certificadasCount / assA : 0;
-            valB = assB > 0 ? b.certificadasCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'falsas') {
-            valA = assA > 0 ? a.falsasCount / assA : 0;
-            valB = assB > 0 ? b.falsasCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'mal_revisadas') {
-        valA = assA > 0 ? a.malRevisadasCount / assA : 0;
-        valB = assB > 0 ? b.malRevisadasCount / assB : 0;
-        } else if (window.currentStatsSortCriterion === 'calificacion') {
-        valA = a.countScore > 0 ? (a.sumScore / a.countScore) : 0;
-        valB = b.countScore > 0 ? (b.sumScore / b.countScore) : 0;
-        }
+        const valA = window.valorDeCriterio(a);
+        const valB = window.valorDeCriterio(b);
 
         if (valB !== valA) return valB - valA;
         const partA = assA > 0 ? a.totalResp / assA : 0;
