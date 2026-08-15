@@ -1513,7 +1513,6 @@ window.dibujarCuadrosDesglose = () => {
     lienzo.innerHTML = '';
     if (ancho <= 0 || alto <= 0) return;
 
-    const getColor = window.getColorScore || ((s) => s >= 80 ? '#166534' : '#ef4444');
     const criterio = window.criterioStats();
 
     const nodos = [];
@@ -1609,15 +1608,6 @@ window.dibujarCuadrosDesglose = () => {
             dato.innerText = `${Math.round(pctCriterio)}% ${criterio.nombre}`;
             cuerpo.appendChild(dato);
         }
-        if (area >= 6000 && h >= 66 && n.calificacion !== null && criterio.clave !== 'calificacion') {
-            const sub = document.createElement('div');
-            sub.className = 'stats-cuadro-sub';
-            sub.style.fontSize = Math.max(8, tam * 0.55) + 'px';
-            sub.style.color = getColor(n.calificacion);
-            sub.innerText = `⭐ ${n.calificacion}%`;
-            cuerpo.appendChild(sub);
-        }
-
         el.appendChild(cuerpo);
         lienzo.appendChild(el);
     });
