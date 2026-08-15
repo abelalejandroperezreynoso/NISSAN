@@ -879,24 +879,18 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         
         <div class="stats-seccion">
             <div class="stats-seccion-encabezado">
-                <h3 class="stats-seccion-titulo">Por Departamento</h3>
-                <div class="stats-conmutador" id="conmutador-depto">
-                    <button data-modo="cuadros" onclick="window.cambiarGraficoDepto('cuadros')" aria-pressed="true">Cuadros</button>
-                    <button data-modo="barras" onclick="window.cambiarGraficoDepto('barras')" aria-pressed="false">Barras</button>
+                <h3 class="stats-seccion-titulo">Desglose</h3>
+                <div class="stats-conmutador" id="conmutador-dimension">
+                    <button data-dimension="departamento" onclick="window.cambiarDimensionDesglose('departamento')">Departamento</button>
+                    <button data-dimension="puesto" onclick="window.cambiarDimensionDesglose('puesto')">Puesto</button>
                 </div>
-                <div id="leyenda-depto" style="width:100%;">${legendsHtml}</div>
+                <div class="stats-conmutador" id="conmutador-forma">
+                    <button data-forma="cuadros" onclick="window.cambiarFormaDesglose('cuadros')">Cuadros</button>
+                    <button data-forma="barras" onclick="window.cambiarFormaDesglose('barras')">Barras</button>
+                </div>
+                <div id="leyenda-desglose" style="width:100%;">${legendsHtml}</div>
             </div>
-            <div id="dept-list-container"></div>
-        </div>
-
-        <div class="stats-seccion">
-            <div class="stats-seccion-encabezado">
-                <h3 class="stats-seccion-titulo">Por Puesto</h3>
-                ${legendsHtml}
-            </div>
-            <div id="puesto-list-container">
-                ${window.renderPuestoDetailed(puestoCache)}
-            </div>
+            <div id="desglose-container"></div>
         </div>
 
         <div class="stats-seccion" id="stats-seccion-radar">
@@ -924,7 +918,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
 
         container.innerHTML = html;
         window.avisoDeVersion(referenciaCuestionario);
-        window.pintarPorDepartamento();
+        window.pintarDesglose();
 
         if (radarLabels.length > 0) {
             const ctx = document.getElementById('stats-radar-chart');
@@ -1436,49 +1430,76 @@ ${usersHtml}
 return h;
 };
 
-// --- GRÁFICO DE CUADROS POR DEPARTAMENTO ---
-// Se recuerda entre aperturas de la hoja, no entre sesiones: es una forma de
-// mirar, no una preferencia que valga la pena guardar en el navegador.
-window.modoGraficoDepto = sessionStorage.getItem('graficoDepto') || 'cuadros';
+// --- DESGLOSE POR DEPARTAMENTO O POR PUESTO ---
+// Un solo bloque con dos conmutadores: por qué se corta —departamento o
+// puesto— y con qué forma se dibuja —cuadros o barras—. Antes eran dos
+// secciones con el mismo gráfico repetido, una debajo de la otra.
+//
+// Ambas elecciones se recuerdan mientras dure la sesión, no en localStorage:
+// son formas de mirar, no preferencias que valga la pena guardar para siempre.
+window.dimensionDesglose = sessionStorage.getItem('dimensionDesglose') || 'departamento';
+window.formaDesglose = sessionStorage.getItem('formaDesglose') || 'cuadros';
 
-window.cambiarGraficoDepto = (modo) => {
-    window.modoGraficoDepto = modo;
-    sessionStorage.setItem('graficoDepto', modo);
-    window.pintarPorDepartamento();
+window.cambiarDimensionDesglose = (dimension) => {
+    window.dimensionDesglose = dimension === 'puesto' ? 'puesto' : 'departamento';
+    sessionStorage.setItem('dimensionDesglose', window.dimensionDesglose);
+    window.pintarDesglose();
 };
 
-// Pinta el bloque «Por Departamento» con la forma elegida. Es también lo que
-// devuelve el botón «Volver» del desglose, para que no se salga del modo.
-window.pintarPorDepartamento = () => {
-    const cont = document.getElementById('dept-list-container');
+window.cambiarFormaDesglose = (forma) => {
+    window.formaDesglose = forma === 'barras' ? 'barras' : 'cuadros';
+    sessionStorage.setItem('formaDesglose', window.formaDesglose);
+    window.pintarDesglose();
+};
+
+// Pinta el desglose como esté elegido y devuelve el radar a la vista general.
+// Es también lo que llaman los botones «Volver», para no salirse del modo.
+window.pintarDesglose = () => {
+    const cont = document.getElementById('desglose-container');
     const cache = window.encuestasStatsCacheForDrilldown;
     if (!cont || !cache) return;
 
-    const modo = window.modoGraficoDepto === 'barras' ? 'barras' : 'cuadros';
+    const esPuesto = window.dimensionDesglose === 'puesto';
+    const forma = window.formaDesglose === 'barras' ? 'barras' : 'cuadros';
 
-    // La leyenda explica —y ordena— las barras; con los cuadros no pinta nada.
-    const leyenda = document.getElementById('leyenda-depto');
-    if (leyenda) leyenda.style.display = modo === 'cuadros' ? 'none' : '';
-
-    document.querySelectorAll('#conmutador-depto button').forEach(b => {
-        b.setAttribute('aria-pressed', String(b.dataset.modo === modo));
+    document.querySelectorAll('#conmutador-dimension button').forEach(b => {
+        b.setAttribute('aria-pressed', String((b.dataset.dimension === 'puesto') === esPuesto));
+    });
+    document.querySelectorAll('#conmutador-forma button').forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.forma === forma));
     });
 
-    if (modo === 'barras') {
-        cont.innerHTML = window.renderDeptDetailed(cache.statsCache);
+    // La leyenda explica —y ordena— las barras; con los cuadros no pinta nada.
+    const leyenda = document.getElementById('leyenda-desglose');
+    if (leyenda) leyenda.style.display = forma === 'cuadros' ? 'none' : '';
+
+    // Volver al nivel de arriba también devuelve el radar a la vista general:
+    // lo que se estuviera mirando ya no está en pantalla.
+    window.actualizarRadarDOM();
+
+    if (forma === 'barras') {
+        cont.innerHTML = esPuesto
+            ? window.renderPuestoDetailed(cache.puestoCache)
+            : window.renderDeptDetailed(cache.statsCache);
         return;
     }
 
     // Con los cuadros no va la leyenda de las barras, así que el pie explica
     // qué mide el tamaño y qué mide el relleno.
-    cont.innerHTML = '<div id="dept-treemap" class="stats-treemap"></div>' +
+    cont.innerHTML = '<div id="desglose-treemap" class="stats-treemap"></div>' +
         '<div class="stats-cuadro-pie">' +
-            'El tamaño es cuántas encuestas le tocan al departamento. El relleno sube desde abajo: ' +
+            (esPuesto
+                ? 'El tamaño es cuántas encuestas le tocan al puesto. '
+                : 'El tamaño es cuántas encuestas le tocan al departamento. ') +
+            'El relleno sube desde abajo: ' +
             '<span style="color:#6ee7b7; font-weight:700;">■</span> revisadas, ' +
             '<span style="color:#93c5fd; font-weight:700;">■</span> contestadas sin revisar, ' +
-            '<span style="color:#cbd5e1; font-weight:700;">■</span> sin contestar. Toca un cuadro para ver sus supervisores.' +
+            '<span style="color:#cbd5e1; font-weight:700;">■</span> sin contestar. ' +
+            (esPuesto
+                ? 'Toca un cuadro para ver a sus colaboradores.'
+                : 'Toca un cuadro para ver sus supervisores.') +
         '</div>';
-    window.dibujarCuadrosDepto();
+    window.dibujarCuadrosDesglose();
 };
 
 // Ancho de un texto por cada píxel de fuente, medido con un lienzo suelto.
@@ -1496,10 +1517,14 @@ window.anchoPorPixelDeTexto = (() => {
     };
 })();
 
-window.dibujarCuadrosDepto = () => {
-    const lienzo = document.getElementById('dept-treemap');
+window.dibujarCuadrosDesglose = () => {
+    const lienzo = document.getElementById('desglose-treemap');
     const cache = window.encuestasStatsCacheForDrilldown;
     if (!lienzo || !cache) return;
+
+    const esPuesto = window.dimensionDesglose === 'puesto';
+    const datos = esPuesto ? cache.puestoCache : cache.statsCache;
+    const abrir = esPuesto ? window.verStatsDetallePuesto : window.verStatsDetalleDepto;
 
     const ancho = lienzo.clientWidth;
     const alto = lienzo.clientHeight;
@@ -1509,8 +1534,8 @@ window.dibujarCuadrosDepto = () => {
     const getColor = window.getColorScore || ((s) => s >= 80 ? '#166534' : '#ef4444');
 
     const nodos = [];
-    Object.keys(cache.statsCache).forEach(nombre => {
-        const d = cache.statsCache[nombre];
+    Object.keys(datos).forEach(nombre => {
+        const d = datos[nombre];
         const asignadas = d.assignedCount || 0;
         if (asignadas === 0 && d.responses === 0) return;
         const procesadas = (d.reviewed || 0) + (d.certificadas || 0) + (d.falsas || 0) + (d.malRevisadas || 0);
@@ -1552,7 +1577,7 @@ window.dibujarCuadrosDepto = () => {
         el.dataset.nombre = n.nombre;
         el.title = `${n.nombre}\nAsignadas: ${n.asignadas}\nContestadas: ${n.respuestas} (${Math.round(pctParticipacion)}%)`
             + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación: ${n.calificacion}%`);
-        el.onclick = () => window.verStatsDetalleDepto(n.nombre);
+        el.onclick = () => abrir(n.nombre);
 
         // El relleno lleva la proporción sin redondear: con el 99% redondeado
         // a 100 el cuadro se vería lleno sin estarlo.
@@ -1611,13 +1636,13 @@ window.dibujarCuadrosDepto = () => {
 
 // El reparto se calcula en píxeles, así que al girar el teléfono hay que
 // rehacerlo. El oyente se pone una sola vez.
-if (!window.__cuadrosDeptoEscucha) {
-    window.__cuadrosDeptoEscucha = true;
+if (!window.__cuadrosDesgloseEscucha) {
+    window.__cuadrosDesgloseEscucha = true;
     let temporizador = null;
     window.addEventListener('resize', () => {
-        if (!document.getElementById('dept-treemap')) return;
+        if (!document.getElementById('desglose-treemap')) return;
         clearTimeout(temporizador);
-        temporizador = setTimeout(() => window.dibujarCuadrosDepto(), 150);
+        temporizador = setTimeout(() => window.dibujarCuadrosDesglose(), 150);
     });
 }
 
@@ -1927,7 +1952,7 @@ window.verStatsDetalleDepto = (deptName) => {
     let html = `
     <div style="margin-bottom:15px; display:flex; flex-direction:column; gap:5px;">
         <div style="display:flex; align-items:center; gap:10px;">
-            <button onclick="window.pintarPorDepartamento(); window.actualizarRadarDOM(null);" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
+            <button onclick="window.pintarDesglose();" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
             <span style="font-weight:bold; color:#1e293b; font-size:1rem;">${safeDept}</span>
         </div>
         <div style="font-size:0.75rem; color:#64748b; margin-left:5px;">Supervisores en esta área: ${supList.length}</div>
@@ -2009,7 +2034,7 @@ window.verStatsDetalleDepto = (deptName) => {
         });
     }
     html += `</div>`;
-    document.getElementById('dept-list-container').innerHTML = html;
+    document.getElementById('desglose-container').innerHTML = html;
 };
 
 window.verStatsDetalleSupervisor = (deptName, supName) => {
@@ -2232,7 +2257,7 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
         });
     }
     html += `</div>`;
-    document.getElementById('dept-list-container').innerHTML = html;
+    document.getElementById('desglose-container').innerHTML = html;
 };
 
 window.verStatsDetallePuesto = (puestoName) => {
@@ -2372,7 +2397,7 @@ window.verStatsDetallePuesto = (puestoName) => {
     let html = `
     <div style="margin-bottom:15px; display:flex; flex-direction:column; gap:5px;">
         <div style="display:flex; align-items:center; gap:10px;">
-             <button onclick="document.getElementById('puesto-list-container').innerHTML = window.renderPuestoDetailed(window.encuestasStatsCacheForDrilldown.puestoCache); window.actualizarRadarDOM();" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
+             <button onclick="window.pintarDesglose();" style="background:#f1f5f9; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; font-size:0.8rem; color:#475569; font-weight:bold;">Volver</button>
             <span style="font-weight:bold; color:#1e293b; font-size:1rem;">${safePuesto}</span>
         </div>
         <div style="font-size:0.75rem; color:#64748b; margin-left:5px;">Personal evaluado: ${empStats.length}</div>
@@ -2450,7 +2475,7 @@ window.verStatsDetallePuesto = (puestoName) => {
         });
     }
     html += `</div>`;
-    document.getElementById('puesto-list-container').innerHTML = html;
+    document.getElementById('desglose-container').innerHTML = html;
 };
 
 console.log("✅ Evaluaciones Stats v63: BARRA INDEPENDIENTE PARA CERTIFICADAS");

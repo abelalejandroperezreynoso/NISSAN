@@ -398,11 +398,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   estrujaban el título hasta dejarlo en una columna de tres letras. Su fuente
   es de 16px por la trampa de siempre del zoom de Safari.
 
-  «Por Departamento» se mira de dos formas y el conmutador de su encabezado
-  elige cuál; la elegida vive en `sessionStorage.graficoDepto` y la pinta
-  `window.pintarPorDepartamento()`, que es también lo que llama el «Volver»
-  del desglose para no salirse del modo. En cuadros se esconde la leyenda:
-  explica —y ordena— las barras, y con los cuadros no pinta nada.
+  Departamento y puesto comparten un solo bloque, «Desglose», con dos
+  conmutadores en su encabezado: por qué se corta —`dimensionDesglose`— y con
+  qué forma se dibuja —`formaDesglose`—. Las dos elecciones viven en
+  `sessionStorage` y las pinta `window.pintarDesglose()`, que es también lo que
+  llaman los botones «Volver» para no salirse del modo, y que de paso devuelve
+  el radar a la vista general. Los tres desgloses —departamento, supervisor y
+  puesto— escriben en el mismo `#desglose-container`. En cuadros se esconde la
+  leyenda: explica —y ordena— las barras, y con los cuadros no pinta nada.
 
   **El treemap de esta pantalla no usa d3.** El del mapa de activos sí, pero
   ése es un documento aparte que ya carga la librería; traerla al panel

@@ -2636,4 +2636,11 @@ html.modal-abierto {
     .stats-treemap {
         height: 240px;
     }
+
+    /* Dos conmutadores en una sección estrecha: aprietan para que el de la
+       dimensión quepa al lado del título. */
+    .stats-conmutador button {
+        font-size: 0.72rem;
+        padding: 5px 8px;
+    }
 }
