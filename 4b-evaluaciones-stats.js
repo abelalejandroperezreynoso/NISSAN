@@ -261,13 +261,36 @@ window.cargarStatsEncuestasGlobales = async () => {
 };
 
 
-window.currentStatsSortCriterion = 'participacion'; // Criterio por defecto
+// Lo que mide el desglose. Ordena las barras y es lo que pintan y dicen los
+// cuadros, así que el conmutador del encabezado gobierna las dos formas.
+// `valor` devuelve una proporción de 0 a 1 sobre las encuestas asignadas; la
+// calificación es la excepción, que ya viene en porcentaje.
+window.CRITERIOS_STATS = [
+    { clave: 'participacion', etiqueta: 'Participación', nombre: 'contestadas', color: '#3b82f6', relleno: '#bfdbfe',
+      valor: (d) => d.assignedCount > 0 ? (d.responses || 0) / d.assignedCount : 0 },
+    { clave: 'revisadas_altas', etiqueta: 'Revisadas ≥80%', nombre: 'revisadas ≥80%', color: '#047857', relleno: '#6ee7b7',
+      valor: (d) => d.assignedCount > 0 ? (d.revisadasAltas || 0) / d.assignedCount : 0 },
+    { clave: 'certificadas', etiqueta: 'Certificadas', nombre: 'certificadas', color: '#eab308', relleno: '#fde68a',
+      valor: (d) => d.assignedCount > 0 ? (d.certificadas || 0) / d.assignedCount : 0 },
+    { clave: 'falsas', etiqueta: 'Falsas', nombre: 'falsas', color: '#ef4444', relleno: '#fecaca',
+      valor: (d) => d.assignedCount > 0 ? (d.falsas || 0) / d.assignedCount : 0 },
+    { clave: 'mal_revisadas', etiqueta: 'Mal rev.', nombre: 'mal revisadas', color: '#a855f7', relleno: '#e9d5ff',
+      valor: (d) => d.assignedCount > 0 ? (d.malRevisadas || 0) / d.assignedCount : 0 },
+    { clave: 'calificacion', etiqueta: 'Calificación', nombre: 'de calificación', color: '#16a34a', relleno: '#86efac',
+      valor: (d) => d.countScore > 0 ? (d.sumScore / d.countScore) / 100 : 0 }
+];
+
+window.criterioStats = () => window.CRITERIOS_STATS.find(c => c.clave === window.currentStatsSortCriterion)
+    || window.CRITERIOS_STATS[0];
+
+window.currentStatsSortCriterion = sessionStorage.getItem('criterioStats') || 'participacion';
 
 window.cambiarOrdenStats = (criterio) => {
     window.currentStatsSortCriterion = criterio;
-    const catFiltro = document.getElementById('global-stats-filter') ? document.getElementById('global-stats-filter').value : 'GLOBAL';
-    const perFiltro = document.getElementById('global-period-filter') ? document.getElementById('global-period-filter').value : 'CURRENT';
-    window.renderizarPanelEstadisticas(catFiltro, perFiltro);
+    sessionStorage.setItem('criterioStats', criterio);
+    // Sólo hay que repintar el desglose: los totales de arriba y el radar no
+    // dependen del criterio.
+    window.pintarDesglose();
 };
 
 
@@ -784,70 +807,6 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             universoContainer.innerText = `${totalAsignadasGlobal} asignadas`;
         }
 
-        // LEYENDA ACTUALIZADA INTERACTIVA CON ORDENAMIENTO (SIN FLECHA A CALIFICACIÓN)
-                const criterion = window.currentStatsSortCriterion || 'participacion';
-                const legendsHtml = `
-                    <div class="stats-leyenda">
-
-                            <!-- Sección 1 -->
-                            <div style="display:flex; align-items:center; gap:4px;">
-                                <div onclick="window.cambiarOrdenStats('participacion')" style="display:flex; align-items:center; gap:4px; font-weight:bold; cursor:pointer; padding:4px 8px; border-radius:4px; background:${criterion === 'participacion' ? '#eff6ff' : 'transparent'}; border:${criterion === 'participacion' ? '1px solid #bfdbfe' : '1px solid transparent'}; transition: all 0.2s;" title="Ordenar gráficos por: Participación">
-                                    <div style="width:10px; height:10px; background:#3b82f6; border-radius:2px; flex-shrink:0;"></div>
-                                    <span style="color:#1e293b; white-space:nowrap;">1. Participación</span>
-                                </div>
-                            </div>
-                            
-                            <span style="color:#cbd5e1; flex-shrink:0;">➔</span>
-                            
-                            <!-- Sección 2 -->
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <span style="color:#1e293b; font-weight:bold; white-space:nowrap;">2. Revisadas:</span>
-                                <div style="display:flex; align-items:center; gap:4px; padding:2px 4px;">
-                                    <div style="width:10px; height:10px; background:#10b981; border-radius:2px; flex-shrink:0;"></div>
-                                    <span style="color:#475569; white-space:nowrap;">&lt; 80%</span>
-                                </div>
-                                <div onclick="event.stopPropagation(); window.cambiarOrdenStats('revisadas_altas')" style="display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 4px; border-radius:4px; background:${criterion === 'revisadas_altas' ? '#dcfce7' : 'transparent'}; border:${criterion === 'revisadas_altas' ? '1px solid #86efac' : '1px solid transparent'}; transition: all 0.2s;">
-                                    <div style="width:10px; height:10px; background:#047857; border-radius:2px; flex-shrink:0;"></div>
-                                    <span style="color:${criterion === 'revisadas_altas' ? '#14532d' : '#475569'}; font-weight:${criterion === 'revisadas_altas' ? 'bold' : 'normal'}; white-space:nowrap;">≥ 80%</span>
-                                </div>
-                            </div>
-                            
-                            <span style="color:#cbd5e1; flex-shrink:0;">➔</span>
-                            
-                            <!-- Sección 3 -->
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <span style="color:#475569; font-weight:bold; white-space:nowrap;">3. Auditado:</span>
-                                
-                                <div onclick="window.cambiarOrdenStats('certificadas')" style="display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 6px; border-radius:4px; background:${criterion === 'certificadas' ? '#fffbeb' : 'transparent'}; border:${criterion === 'certificadas' ? '1px solid #fde68a' : '1px solid transparent'}; transition: all 0.2s;">
-                                    <div style="width:10px; height:10px; background:#eab308; border-radius:2px; flex-shrink:0;"></div>
-                                    <span style="white-space:nowrap;">Certificadas</span>
-                                </div>
-                                
-                                <div onclick="window.cambiarOrdenStats('falsas')" style="display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 6px; border-radius:4px; background:${criterion === 'falsas' ? '#fef2f2' : 'transparent'}; border:${criterion === 'falsas' ? '1px solid #fee2e2' : '1px solid transparent'}; transition: all 0.2s;">
-                                    <div style="width:10px; height:10px; background:#ef4444; border-radius:2px; flex-shrink:0;"></div>
-                                    <span style="white-space:nowrap;">Falsas</span>
-                                </div>
-                                
-                                <div onclick="window.cambiarOrdenStats('mal_revisadas')" style="display:flex; align-items:center; gap:4px; cursor:pointer; padding:2px 6px; border-radius:4px; background:${criterion === 'mal_revisadas' ? '#fdf4ff' : 'transparent'}; border:${criterion === 'mal_revisadas' ? '1px solid #fbcfe8' : '1px solid transparent'}; transition: all 0.2s;">
-                                    <div style="width:10px; height:10px; background:#a855f7; border-radius:2px; flex-shrink:0;"></div>
-                                    <span style="white-space:nowrap;">Mal Rev.</span>
-                                </div>
-                            </div>
-
-                            <!-- Separador vertical sutil en lugar de flecha -->
-                            <div style="width:2px; height:20px; background:#e2e8f0; margin:0 5px; flex-shrink:0; border-radius:1px;"></div>
-
-                            <!-- Sección 4 -->
-                            <div style="display:flex; align-items:center; gap:4px;">
-                                <div onclick="window.cambiarOrdenStats('calificacion')" style="display:flex; align-items:center; gap:4px; font-weight:bold; cursor:pointer; padding:4px 8px; border-radius:4px; background:${criterion === 'calificacion' ? '#f3f4f6' : 'transparent'}; border:${criterion === 'calificacion' ? '1px solid #d1d5db' : '1px solid transparent'}; transition: all 0.2s;" title="Ordenar gráficos por: Calificación Promedio">
-                                    <div style="width:10px; height:10px; background:#86efac; border-radius:2px; flex-shrink:0;"></div>
-                                    <span style="color:#1e293b; white-space:nowrap;">4. Calificación</span>
-                                </div>
-                            </div>
-
-                    </div>
-                `;
-
         let html = `
         <div class="stats-resumen">
             <div class="stats-tarjeta">
@@ -888,7 +847,9 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                     <button data-forma="cuadros" onclick="window.cambiarFormaDesglose('cuadros')">Cuadros</button>
                     <button data-forma="barras" onclick="window.cambiarFormaDesglose('barras')">Barras</button>
                 </div>
-                <div id="leyenda-desglose" style="width:100%;">${legendsHtml}</div>
+                <div class="stats-conmutador stats-conmutador--desliza hide-scrollbar" id="conmutador-criterio">
+                    ${window.CRITERIOS_STATS.map(c => `<button data-criterio="${c.clave}" onclick="window.cambiarOrdenStats('${c.clave}')">${c.etiqueta}</button>`).join('')}
+                </div>
             </div>
             <div id="desglose-container"></div>
         </div>
@@ -1469,35 +1430,44 @@ window.pintarDesglose = () => {
         b.setAttribute('aria-pressed', String(b.dataset.forma === forma));
     });
 
-    // La leyenda explica —y ordena— las barras; con los cuadros no pinta nada.
-    const leyenda = document.getElementById('leyenda-desglose');
-    if (leyenda) leyenda.style.display = forma === 'cuadros' ? 'none' : '';
+    const criterio = window.criterioStats();
+    document.querySelectorAll('#conmutador-criterio button').forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.criterio === criterio.clave));
+    });
 
     // Volver al nivel de arriba también devuelve el radar a la vista general:
     // lo que se estuviera mirando ya no está en pantalla.
     window.actualizarRadarDOM();
 
+    const marca = (color, texto) => `<span style="color:${color}; font-weight:700;">■</span> ${texto}`;
+    const dondeLleva = esPuesto ? 'sus colaboradores' : 'sus supervisores';
+
     if (forma === 'barras') {
-        cont.innerHTML = esPuesto
-            ? window.renderPuestoDetailed(cache.puestoCache)
-            : window.renderDeptDetailed(cache.statsCache);
+        cont.innerHTML = (esPuesto
+                ? window.renderPuestoDetailed(cache.puestoCache)
+                : window.renderDeptDetailed(cache.statsCache)) +
+            // La barra apila todo a la vez y el criterio sólo decide el orden,
+            // así que aquí van los colores de la pila: nadie más los explica.
+            '<div class="stats-cuadro-pie">Ordenado por <b>' + criterio.etiqueta + '</b>. ' +
+                'La barra izquierda apila ' + marca('#3b82f6', 'contestadas') + ', ' +
+                marca('#10b981', 'revisadas') + ', ' + marca('#047857', '≥ 80%') + ', ' +
+                marca('#eab308', 'certificadas') + ', ' + marca('#ef4444', 'falsas') + ' y ' +
+                marca('#a855f7', 'mal revisadas') + '; la derecha es la ' +
+                marca('#86efac', 'calificación') + '. Toca una columna para ver ' + dondeLleva + '.' +
+            '</div>';
         return;
     }
 
-    // Con los cuadros no va la leyenda de las barras, así que el pie explica
-    // qué mide el tamaño y qué mide el relleno.
     cont.innerHTML = '<div id="desglose-treemap" class="stats-treemap"></div>' +
         '<div class="stats-cuadro-pie">' +
             (esPuesto
-                ? 'El tamaño es cuántas encuestas le tocan al puesto. '
-                : 'El tamaño es cuántas encuestas le tocan al departamento. ') +
-            'El relleno sube desde abajo: ' +
-            '<span style="color:#6ee7b7; font-weight:700;">■</span> revisadas, ' +
-            '<span style="color:#93c5fd; font-weight:700;">■</span> contestadas sin revisar, ' +
-            '<span style="color:#cbd5e1; font-weight:700;">■</span> sin contestar. ' +
-            (esPuesto
-                ? 'Toca un cuadro para ver a sus colaboradores.'
-                : 'Toca un cuadro para ver sus supervisores.') +
+                ? 'El tamaño es cuántas encuestas le tocan al puesto; el relleno, '
+                : 'El tamaño es cuántas encuestas le tocan al departamento; el relleno, ') +
+            marca(criterio.color, '<b>' + criterio.etiqueta + '</b>') +
+            (criterio.clave === 'participacion'
+                ? ', con lo ya ' + marca('#6ee7b7', 'revisado') + ' encima.'
+                : ' sobre las asignadas.') +
+            ' Toca un cuadro para ver ' + dondeLleva + '.' +
         '</div>';
     window.dibujarCuadrosDesglose();
 };
@@ -1532,6 +1502,7 @@ window.dibujarCuadrosDesglose = () => {
     if (ancho <= 0 || alto <= 0) return;
 
     const getColor = window.getColorScore || ((s) => s >= 80 ? '#166534' : '#ef4444');
+    const criterio = window.criterioStats();
 
     const nodos = [];
     Object.keys(datos).forEach(nombre => {
@@ -1541,6 +1512,7 @@ window.dibujarCuadrosDesglose = () => {
         const procesadas = (d.reviewed || 0) + (d.certificadas || 0) + (d.falsas || 0) + (d.malRevisadas || 0);
         nodos.push({
             nombre: nombre,
+            datos: d,
             asignadas: asignadas,
             respuestas: d.responses || 0,
             procesadas: procesadas,
@@ -1565,7 +1537,7 @@ window.dibujarCuadrosDesglose = () => {
         const h = Math.max(c.alto - 1, 1);
         const area = w * h;
 
-        const pctParticipacion = n.asignadas > 0 ? Math.min(100, (n.respuestas / n.asignadas) * 100) : 0;
+        const pctCriterio = Math.min(100, Math.max(criterio.valor(n.datos) * 100, 0));
         const pctProcesadas = n.asignadas > 0 ? Math.min(100, (n.procesadas / n.asignadas) * 100) : 0;
 
         const el = document.createElement('div');
@@ -1575,23 +1547,28 @@ window.dibujarCuadrosDesglose = () => {
         el.style.width = w + 'px';
         el.style.height = h + 'px';
         el.dataset.nombre = n.nombre;
-        el.title = `${n.nombre}\nAsignadas: ${n.asignadas}\nContestadas: ${n.respuestas} (${Math.round(pctParticipacion)}%)`
-            + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación: ${n.calificacion}%`);
+        el.title = `${n.nombre}\nAsignadas: ${n.asignadas}\nContestadas: ${n.respuestas}`
+            + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación: ${n.calificacion}%`)
+            + `\n${criterio.etiqueta}: ${Math.round(pctCriterio)}%`;
         el.onclick = () => abrir(n.nombre);
 
         // El relleno lleva la proporción sin redondear: con el 99% redondeado
         // a 100 el cuadro se vería lleno sin estarlo.
-        const contestadas = document.createElement('div');
-        contestadas.className = 'stats-cuadro-relleno';
-        contestadas.style.background = '#bfdbfe';
-        contestadas.style.height = pctParticipacion + '%';
-        el.appendChild(contestadas);
+        const relleno = document.createElement('div');
+        relleno.className = 'stats-cuadro-relleno';
+        relleno.style.background = criterio.relleno;
+        relleno.style.height = pctCriterio + '%';
+        el.appendChild(relleno);
 
-        const revisadas = document.createElement('div');
-        revisadas.className = 'stats-cuadro-relleno';
-        revisadas.style.background = '#86efac';
-        revisadas.style.height = pctProcesadas + '%';
-        el.appendChild(revisadas);
+        // Participación se lee en dos etapas —contestado y ya revisado—, que
+        // es como avanza el trabajo. Los demás criterios son una sola cosa.
+        if (criterio.clave === 'participacion') {
+            const revisadas = document.createElement('div');
+            revisadas.className = 'stats-cuadro-relleno';
+            revisadas.style.background = '#86efac';
+            revisadas.style.height = pctProcesadas + '%';
+            el.appendChild(revisadas);
+        }
 
         const cuerpo = document.createElement('div');
         cuerpo.className = 'stats-cuadro-cuerpo';
@@ -1617,10 +1594,10 @@ window.dibujarCuadrosDesglose = () => {
             const dato = document.createElement('div');
             dato.className = 'stats-cuadro-dato';
             dato.style.fontSize = Math.max(8, tam * 0.62) + 'px';
-            dato.innerText = `${Math.round(pctParticipacion)}% contestadas`;
+            dato.innerText = `${Math.round(pctCriterio)}% ${criterio.nombre}`;
             cuerpo.appendChild(dato);
         }
-        if (area >= 6000 && h >= 66 && n.calificacion !== null) {
+        if (area >= 6000 && h >= 66 && n.calificacion !== null && criterio.clave !== 'calificacion') {
             const sub = document.createElement('div');
             sub.className = 'stats-cuadro-sub';
             sub.style.fontSize = Math.max(8, tam * 0.55) + 'px';

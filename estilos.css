@@ -2306,25 +2306,6 @@ html.modal-abierto {
     gap: 10px;
 }
 
-/* La leyenda no cabe de ancho en un teléfono y se desplaza en horizontal. */
-.stats-leyenda {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 15px;
-    flex-wrap: nowrap;
-    background: #f8fafc;
-    padding: 10px 15px;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    font-size: 0.75rem;
-    color: #64748b;
-    width: 100%;
-    margin-top: 5px;
-}
-
 /* Fila que se arrastra con el dedo, con las tarjetas enganchadas de una en
    una. El recorte del último elemento es a propósito: asomar el siguiente es
    lo único que le dice al dedo que ahí hay más. */
@@ -2522,6 +2503,26 @@ html.modal-abierto {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
+/* Seis criterios no caben de ancho en un teléfono, así que este conmutador se
+   arrastra con el dedo en lugar de partirse en dos renglones. El último botón
+   asomando por el borde es lo que avisa de que hay más. */
+.stats-conmutador--desliza {
+    /* Renglón propio y a todo lo ancho: como cualquier conmutador no encoge,
+       de flex item normal desbordaba la sección en un teléfono. */
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+}
+
+.stats-conmutador--desliza button {
+    white-space: nowrap;
+    flex-shrink: 0;
+    scroll-snap-align: center;
+}
+
 /* Columna de barras de los gráficos por departamento y por puesto. */
 .stats-columna {
     display: flex;
@@ -2612,11 +2613,6 @@ html.modal-abierto {
     .stats-seccion-encabezado {
         gap: 6px;
         margin-bottom: 10px;
-    }
-
-    .stats-leyenda {
-        padding: 8px 10px;
-        gap: 10px;
     }
 
     /* Columnas más estrechas: así entran cuatro departamentos en pantalla en

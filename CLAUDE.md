@@ -387,7 +387,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   estrecho que se usa en campo.
 
   Esa pantalla ya no se estila a mano: sus bloques repetidos —`.stats-filtros`,
-  `.stats-resumen`, `.stats-tarjeta`, `.stats-seccion`, `.stats-leyenda`,
+  `.stats-resumen`, `.stats-tarjeta`, `.stats-seccion`, `.stats-conmutador`,
   `.stats-columna`— viven al final de `estilos.css` con su variante para
   pantallas de 600 px o menos, donde las tres cifras de cabecera pasan a una
   sola fila y los rellenos se aprietan. Un bloque nuevo se le añade ahí, no en
@@ -398,14 +398,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   estrujaban el título hasta dejarlo en una columna de tres letras. Su fuente
   es de 16px por la trampa de siempre del zoom de Safari.
 
-  Departamento y puesto comparten un solo bloque, «Desglose», con dos
-  conmutadores en su encabezado: por qué se corta —`dimensionDesglose`— y con
-  qué forma se dibuja —`formaDesglose`—. Las dos elecciones viven en
-  `sessionStorage` y las pinta `window.pintarDesglose()`, que es también lo que
-  llaman los botones «Volver» para no salirse del modo, y que de paso devuelve
-  el radar a la vista general. Los tres desgloses —departamento, supervisor y
-  puesto— escriben en el mismo `#desglose-container`. En cuadros se esconde la
-  leyenda: explica —y ordena— las barras, y con los cuadros no pinta nada.
+  Departamento y puesto comparten un solo bloque, «Desglose», con tres
+  conmutadores en su encabezado: por qué se corta —`dimensionDesglose`—, con
+  qué forma se dibuja —`formaDesglose`— y qué se mide
+  —`currentStatsSortCriterion`, de la lista `window.CRITERIOS_STATS`—. Las tres
+  elecciones viven en `sessionStorage` y las pinta `window.pintarDesglose()`,
+  que es también lo que llaman los botones «Volver» para no salirse del modo, y
+  que de paso devuelve el radar a la vista general. Los tres desgloses
+  —departamento, supervisor y puesto— escriben en el mismo
+  `#desglose-container`.
+
+  El criterio antes era una leyenda de colores clicable que sólo ordenaba las
+  barras. Ahora es un conmutador más y **manda también en los cuadros**: cada
+  criterio de `CRITERIOS_STATS` trae su color y su `valor(fila)`, que es la
+  proporción con la que se llena el cuadro. Participación conserva su segunda
+  banda —contestado y, encima, lo ya revisado—; los demás criterios son una
+  sola cosa y una sola banda. Lo que la leyenda explicaba se quedó en el pie
+  del gráfico (`.stats-cuadro-pie`), que en barras nombra los colores de la
+  pila —no los explica nadie más— y en cuadros dice qué mide el tamaño y qué
+  el relleno.
 
   **El treemap de esta pantalla no usa d3.** El del mapa de activos sí, pero
   ése es un documento aparte que ya carga la librería; traerla al panel
