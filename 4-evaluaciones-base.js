@@ -1175,8 +1175,12 @@ window.enviarRespuestasEval = async () => {
     }
 };
 
-const btnNuevaEval = document.getElementById('btn-nueva-eval');
-if (btnNuevaEval) { btnNuevaEval.onclick = () => { if (window.cerrarPanelAdmin) window.cerrarPanelAdmin(); if (window.abrirModalCrearEval) window.abrirModalCrearEval(); }; }
+// Igual que «Nuevo Registro»: cuelga de window y la llama el onclick del
+// botón, en vez de engancharse por id al cargarse el archivo.
+window.abrirNuevaEvaluacion = () => {
+    if (window.cerrarPanelAdmin) window.cerrarPanelAdmin();
+    if (window.abrirModalCrearEval) window.abrirModalCrearEval();
+};
 
 // ==========================================
 // LÓGICA PARA VER EL HISTORIAL DENTRO DEL PANEL FLOTANTE

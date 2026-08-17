@@ -1314,7 +1314,8 @@ const DB_TABLES_ORDER = [ 'employees', 'evaluations', 'evaluation_questions', 'i
 window.exportarBaseDatos = async () => {
     if(!confirm("¿Descargar copia completa de la base de datos?")) return;
     const btn = document.getElementById('btn-backup-download');
-    const originalText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
+    if (!btn) return;
+    const originalText = window.textoBoton(btn, "⏳..."); btn.disabled = true;
     try {
         const backupData = { timestamp: new Date().toISOString(), version: "1.0", tables: {} };
         for (const tableName of DB_TABLES_ORDER) {
@@ -1328,7 +1329,7 @@ window.exportarBaseDatos = async () => {
         document.body.appendChild(a); a.click(); a.remove();
         alert(`Backup completado.`);
     } catch (e) { alert("Error: " + e.message); }
-    btn.innerText = originalText; btn.disabled = false;
+    window.textoBoton(btn, originalText); btn.disabled = false;
 };
 
 window.importarBaseDatos = async (inputElement) => {

@@ -626,23 +626,23 @@
                 <div class="admin-hoja-grupo">
                     <div class="admin-hoja-titulo">Crear</div>
                     <div class="admin-hoja-lista">
-                        <button id="btn-nuevo" class="admin-btn">Nuevo Registro</button>
-                        <button id="btn-nueva-eval" class="admin-btn">Nueva Evaluación</button>
-                        <button class="admin-btn" onclick="window.cerrarPanelAdmin(); window.abrirModalAccesos();" style="border-color: #eab308; color: #ca8a04;">⭐ Accesos Directos</button>
+                        <button id="btn-nuevo" class="admin-btn" onclick="window.abrirNuevoRegistro()"><span aria-hidden="true">📝</span><span data-texto>Nuevo Registro</span></button>
+                        <button id="btn-nueva-eval" class="admin-btn" onclick="window.abrirNuevaEvaluacion()"><span aria-hidden="true">📋</span><span data-texto>Nueva Evaluación</span></button>
+                        <button class="admin-btn" onclick="window.cerrarPanelAdmin(); window.abrirModalAccesos();" style="border-color: #eab308; color: #ca8a04;"><span aria-hidden="true">⭐</span><span data-texto>Accesos Directos</span></button>
                     </div>
                 </div>
 
                 <div class="admin-hoja-grupo">
                     <div class="admin-hoja-titulo">Datos</div>
                     <div class="admin-hoja-lista">
-                        <!-- El texto y los colores de este botón los pone
-                             window.actualizarBotonAhorroVisual con innerText,
-                             así que no puede llevar marcado dentro. -->
-                        <button id="btn-toggle-ahorro" class="admin-btn" onclick="window.toggleAhorroGlobal()" style="border-color: #64748b; color: #64748b;">📡 Cargando...</button>
+                        <!-- El estado lo escribe window.actualizarBotonAhorroVisual
+                             en el <span data-texto>, así que el emoji se queda
+                             donde está. Ver window.textoBoton en 1-config.js. -->
+                        <button id="btn-toggle-ahorro" class="admin-btn" onclick="window.toggleAhorroGlobal()" style="border-color: #64748b; color: #64748b;"><span aria-hidden="true">📡</span><span data-texto>Cargando...</span></button>
 
                         <input type="file" id="inp-import-db" style="display:none" accept=".json" onchange="window.importarBaseDatos(this)">
-                        <button id="btn-backup-download" class="admin-btn" onclick="window.exportarBaseDatos()">Respaldar</button>
-                        <button id="btn-backup-upload" class="admin-btn" onclick="document.getElementById('inp-import-db').click()">Restaurar</button>
+                        <button id="btn-backup-download" class="admin-btn" onclick="window.exportarBaseDatos()"><span aria-hidden="true">💾</span><span data-texto>Respaldar</span></button>
+                        <button id="btn-backup-upload" class="admin-btn" onclick="document.getElementById('inp-import-db').click()"><span aria-hidden="true">📥</span><span data-texto>Restaurar</span></button>
                     </div>
                 </div>
             </div>

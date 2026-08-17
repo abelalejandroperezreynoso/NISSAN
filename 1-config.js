@@ -57,6 +57,35 @@ window.procesarUrlImagen = (urlOriginal) => {
 };
 
 // =========================================================
+// --- TEXTO DE UN BOTÓN QUE CAMBIA DESDE EL CÓDIGO ---
+// =========================================================
+//
+// `btn.innerText = 'Guardando…'` borra todo lo que hubiera dentro del botón:
+// el `<svg>` de un icono, un `<span>` con el emoji, cualquier marcado. Por eso
+// los botones que anuncian su estado —el del modo ahorro, el de respaldar—
+// tenían que ser de texto pelado, y la primera vez que alguien les metiera un
+// icono se lo llevaba el primer toque.
+//
+// Con esto el botón puede llevar dentro lo que quiera: la escritura va al
+// `<span data-texto>` si existe, y sólo cae sobre el botón entero cuando no lo
+// hay, que es como se comportaba antes. Devuelve siempre el texto que había,
+// para poder restaurarlo al terminar:
+//
+//     const anterior = window.textoBoton(btn, '⏳…');
+//     …
+//     window.textoBoton(btn, anterior);
+//
+// Sin segundo argumento sólo lee. Se usa `textContent` y no `innerText`
+// porque leer `innerText` obliga al navegador a recalcular el diseño.
+window.textoBoton = (btn, nuevoTexto) => {
+    if (!btn) return '';
+    const destino = btn.querySelector('[data-texto]') || btn;
+    const anterior = destino.textContent.trim();
+    if (nuevoTexto !== undefined) destino.textContent = nuevoTexto;
+    return anterior;
+};
+
+// =========================================================
 // --- QUIÉN DEBE FIRMAR UN REGISTRO ---
 // =========================================================
 // Firma todo empleado activo dado de alta en o antes de la fecha del registro,
@@ -352,8 +381,19 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
     const revisar = () => {
         // Se excluyen los elementos internos que comparten el prefijo pero no
         // son overlays; el filtro por position:fixed ya los descarta.
-        const hayModal = Array.from(document.querySelectorAll('[id^="modal-"]')).some(esOverlayVisible);
-        document.documentElement.classList.toggle('modal-abierto', hayModal);
+        const visibles = Array.from(document.querySelectorAll('[id^="modal-"]')).filter(esOverlayVisible);
+        document.documentElement.classList.toggle('modal-abierto', visibles.length > 0);
+
+        // El panel de administración se aparta solo en cuanto se abre otra
+        // hoja. Sus botones la cierran ellos mismos antes de abrir la suya,
+        // que es lo que evita el fotograma con las dos a la vista; esto es la
+        // red de seguridad, para que un botón nuevo no tenga que acordarse ni
+        // dependa de que su hoja lleve un z-index más alto. Dos hojas
+        // apiladas esconden la de abajo y dejan dos tiradores a la vista.
+        const admin = document.getElementById('modal-admin');
+        if (admin && visibles.length > 1 && visibles.includes(admin)) {
+            admin.style.display = 'none';
+        }
     };
 
     // Estas páginas repintan listas completas con innerHTML, así que las

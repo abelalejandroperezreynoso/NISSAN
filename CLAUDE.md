@@ -205,19 +205,36 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   a `#simple-form-container`, o la hoja pierde tirador, esquinas y tope de
   altura.
 
-  El panel de administración es otro caso con su regla. La barra
-  `#admin-toolbar`, que aparece al encender el modo administrador, ya no
-  guarda las acciones: sólo trae el botón que abre la hoja `#modal-admin`
-  (`window.abrirPanelAdmin` y `window.cerrarPanelAdmin`, en `2a-core-nav.js`).
-  Los botones de dentro **se quedan en el marcado de `index.html`** y no se
-  inyectan al abrir, porque otros archivos se enganchan a ellos por id nada
-  más cargarse —`btn-nuevo` en `2a-core-nav.js`, `btn-nueva-eval` en
-  `4-evaluaciones-base.js`— y ese `getElementById` va sin comprobar si
-  encontró algo. Los tres que abren otra hoja la cierran antes: dos hojas
-  apiladas esconden la de abajo y dejan dos tiradores a la vista. Un botón
-  nuevo que abra panel tiene que llamar también a `cerrarPanelAdmin()`.
-  `btn-toggle-ahorro` y `btn-backup-download` cambian su texto con
-  `innerText`, así que no pueden llevar marcado dentro.
+  El panel de administración es otro caso. La barra `#admin-toolbar`, que
+  aparece al encender el modo administrador, ya no guarda las acciones: sólo
+  trae el botón que abre la hoja `#modal-admin` (`window.abrirPanelAdmin` y
+  `window.cerrarPanelAdmin`, en `2a-core-nav.js`). Un botón nuevo se le añade
+  al marcado de `index.html` y **no necesita nada más**: llama a su función de
+  `window` desde el `onclick`, como el resto de la aplicación, y si abre otra
+  hoja el observador de `1-config.js` aparta ésta al ver dos abiertas a la vez
+  —los botones actuales llaman además a `cerrarPanelAdmin()` ellos mismos, que
+  es lo que evita el fotograma con las dos a la vista, pero olvidarlo ya no
+  rompe nada—.
+
+  Esto no siempre fue así, y las tres reglas que sostenían el panel se
+  quitaron de raíz:
+
+  - `2a-core-nav.js` enganchaba `btn-nuevo` con un `getElementById(…).onclick`
+    sin comprobar, nada más cargarse. Un botón que no estuviera ya en el
+    marcado no dejaba sin manejador a ese botón: reventaba ahí y se llevaba
+    por delante las seis funciones que el archivo declara después —el modo
+    administrador, `checkAdmin`, el cierre de sesión—. Hoy la acción es
+    `window.abrirNuevoRegistro()` y el enganche por id no existe; igual con
+    `btn-nueva-eval`, que era `window.abrirNuevaEvaluacion()`.
+  - El z-index de `#modal-admin` (1700) sigue por debajo del de las hojas que
+    abre, pero ya sólo como red de seguridad: el que las separa es el
+    observador.
+  - `btn-toggle-ahorro` y `btn-backup-download` cambiaban su texto con
+    `innerText`, que borra todo lo que hubiera dentro del botón. Ahora lo
+    escriben con **`window.textoBoton(btn, texto)`** (en `1-config.js`), que
+    apunta al `<span data-texto>` de dentro y deja en paz al emoji; sin
+    segundo argumento sólo lee, y al escribir devuelve el texto anterior para
+    poder restaurarlo. Todo botón que anuncie su estado va así.
 
   Queda a pantalla completa, y a propósito, sólo el visor de imágenes
   (`#modal-visor`).

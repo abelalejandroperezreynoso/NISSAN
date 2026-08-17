@@ -194,7 +194,13 @@ if(btnEquipo) {
     };
 }
 
-document.getElementById('btn-nuevo').onclick = () => {
+// Va colgada de window y se invoca desde el onclick del botón, como el resto.
+// Antes se enganchaba al cargarse el archivo con un getElementById sin
+// comprobar, así que el botón tenía que existir ya en el marcado: si algún día
+// se inyectaba al abrir la hoja de administración, el `.onclick` sobre null
+// reventaba aquí y se llevaba por delante todo lo que este archivo declara
+// después —el modo administrador, el cierre de sesión, el respaldo—.
+window.abrirNuevoRegistro = () => {
     if(!window.checkAdmin()) return;
     window.cerrarPanelAdmin();
     window.idEditando=null;
@@ -368,13 +374,15 @@ document.getElementById('btn-logout').onclick = () => {
 
 window.actualizarBotonAhorroVisual = (btn) => {
     if (!btn) return;
+    // El emoji vive en su propio <span> dentro del botón y no se toca: aquí
+    // sólo se escribe la parte que cambia. Ver window.textoBoton en 1-config.js.
     if (window.MODO_AHORRO_DATOS) {
-        btn.innerText = "📡 Ahorro: ON";
+        window.textoBoton(btn, "Ahorro: ON");
         btn.style.background = "#dcfce7";
         btn.style.color = "#166534";
         btn.style.borderColor = "#22c55e";
     } else {
-        btn.innerText = "📡 Ahorro: OFF";
+        window.textoBoton(btn, "Ahorro: OFF");
         btn.style.background = "#fee2e2";
         btn.style.color = "#991b1b";
         btn.style.borderColor = "#ef4444";
@@ -384,9 +392,10 @@ window.actualizarBotonAhorroVisual = (btn) => {
 window.toggleAhorroGlobal = async () => {
     if (!window.checkAdmin()) return;
     const btn = document.getElementById('btn-toggle-ahorro');
+    if (!btn) return;
     const estadoAnterior = window.MODO_AHORRO_DATOS;
     const nuevoEstado = !estadoAnterior;
-    btn.innerText = "Guardando..."; btn.disabled = true;
+    window.textoBoton(btn, "Guardando..."); btn.disabled = true;
 
     try {
         const { error } = await sb.from('system_config').upsert({ key: 'ahorro_datos', value: nuevoEstado });
@@ -420,48 +429,14 @@ document.addEventListener('DOMContentLoaded', () => {
 // y sólo servían para que un arreglo pareciera hecho por duplicado.
 
 // --- BACKUP Y RESTAURACIÓN ---
-
-window.exportarBaseDatos = async () => {
-    if(!confirm("¿Descargar copia completa?")) return;
-    const btn = document.getElementById('btn-backup-download');
-    const originalText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
-    try {
-        const backupData = { timestamp: new Date().toISOString(), version: "1.0", tables: {} };
-        const DB_TABLES = ['employees', 'evaluations', 'evaluation_questions', 'incidents', 'incident_gallery', 'incident_signatures', 'evaluation_responses'];
-        for (const tableName of DB_TABLES) {
-            const { data, error } = await sb.from(tableName).select('*');
-            if (error) throw new Error(error.message);
-            backupData.tables[tableName] = data;
-        }
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
-        const a = document.createElement('a'); a.href = dataStr;
-        a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a); a.click(); a.remove();
-        alert(`Backup completado.`);
-    } catch (e) { alert("Error: " + e.message); }
-    btn.innerText = originalText; btn.disabled = false;
-};
-
-window.importarBaseDatos = async (inputElement) => {
-    const file = inputElement.files[0]; if (!file) return;
-    if(!confirm("⚠️ Esto sobrescribirá datos. ¿Continuar?")) { inputElement.value = ''; return; }
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        try {
-            const backupData = JSON.parse(e.target.result);
-            const DB_TABLES = ['employees', 'evaluations', 'evaluation_questions', 'incidents', 'incident_gallery', 'incident_signatures', 'evaluation_responses'];
-            for (const tableName of DB_TABLES) {
-                const rows = backupData.tables[tableName];
-                if (rows && rows.length > 0) {
-                    for (let i = 0; i < rows.length; i += 100) {
-                        await sb.from(tableName).upsert(rows.slice(i, i + 100));
-                    }
-                }
-            }
-            alert("✅ Restauración completada."); location.reload();
-        } catch (err) { alert("Error: " + err.message); }
-    };
-    reader.readAsText(file); inputElement.value = '';
-};
+//
+// Viven en 2b-core-dashboard.js. Aquí había una segunda copia de
+// `exportarBaseDatos` e `importarBaseDatos`; como index.html carga este
+// archivo antes que 2b, las de allá ganaban y éstas no llegaban a ejecutarse
+// nunca. Se quedaron atrás —la restauración no comprobaba el formato del
+// archivo ni el error de cada `upsert`, así que un respaldo corrupto se
+// aplicaba a medias sin decir nada— y sólo servían para que un arreglo
+// pareciera hecho por duplicado. Es la misma historia que la de los badges de
+// pendientes, unas líneas más arriba.
 
 console.log("✅ Core Nav Loaded (2a) + FIX Reaparición Encuestas por Frecuencia (V17)");
