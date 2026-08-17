@@ -508,6 +508,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   el teléfono es `window.__redibujarCuadros`, que deja puesto el último
   dibujo: así la rotación no se sale del nivel en el que se esté.
 
+  En barras, los cinco niveles arman su columna con
+  `window.columnaDeCriterio()` —o con `window.columnaDeColaborador()`, que le
+  pasa la fila por `filaCanonica` y le pone el rótulo de cuatro renglones—.
+  Antes cada nivel repetía cuarenta líneas del mismo marcado y un cambio en el
+  gráfico había que hacerlo cinco veces; departamento y puesto, que sólo se
+  diferencian en a dónde lleva el toque, comparten hoy
+  `window.renderCacheDetailed(mapa, funcion)`. El alto sale de
+  `window.alturaDeCriterio(fila, escala)` y la escala del nivel de
+  `window.escalaDelNivel(filas)`, las mismas dos que usan los cuadros: así
+  prontitud se estira igual en las dos formas. Lo que va escrito encima de la
+  barra lo decide `window.cifraCortaDelCriterio()`, que parte la cifra en dos
+  renglones porque una columna mide 78px en un teléfono; en un cuadro cabe de
+  una línea y allí manda `cifraDelCriterio`.
+
   Todos los desgloses ordenan con `window.valorDeCriterio(fila)`, que mide la
   fila venga de la caché por departamento, por puesto o de las filas por
   colaborador —esas pasan por `window.filaCanonica()`, que traduce sus nombres
@@ -517,12 +531,16 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   El criterio antes era una leyenda de colores clicable que sólo ordenaba las
   barras. Ahora es un conmutador más y **manda también en los cuadros**: cada
   criterio de `CRITERIOS_STATS` trae su color y su `valor(fila)`, que es la
-  proporción con la que se llena el cuadro. **Un cuadro, una banda**: la del
-  criterio elegido y nada más. Participación llevaba encima una segunda con lo
-  ya revisado, de cuando eso no se podía ver en ningún otro sitio; desde que
-  «Avance de revisión» es un criterio con su propio cuadro, esa banda sólo
-  estorbaba —dos rellenos midiendo cosas distintas sobre el mismo cuadro no se
-  comparan con los de al lado—. Un treemap coloca por tamaño y no por medida, así
+  proporción con la que se llena el cuadro. **Un relleno, una medida**: la del
+  criterio elegido y nada más, tanto en los cuadros como en las barras.
+  Participación llevaba encima una segunda banda con lo ya revisado, y cada
+  columna dibujaba dos barras —el flujo de revisión, con cinco colores
+  apilados dentro, y la calificación— de cuando eso no se podía ver en ningún
+  otro sitio; desde que cada cosa es un criterio con su propio dibujo, todo
+  eso sólo estorbaba: dos medidas distintas sobre la misma columna no se
+  comparan con las de al lado, que es justo para lo que sirve el gráfico. El
+  detalle completo sigue en el globo de cada cuadro y de cada columna
+  (`window.globoDeFila`). Un treemap coloca por tamaño y no por medida, así
   que con valores parecidos los rellenos se ven iguales y no hay forma de ver
   quién va peor: para eso cada cuadro lleva su puesto en la tabla (`#3 · 6.5
   días`) y el encabezado señala al peor del nivel

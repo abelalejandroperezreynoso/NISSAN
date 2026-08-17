@@ -2843,6 +2843,18 @@ html.modal-abierto {
     scroll-snap-align: center;
 }
 
+/* La fila de columnas del desglose en barras. Se arrastra de lado cuando no
+   caben: los departamentos de una planta no entran en un teléfono. */
+.stats-barras {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    border-bottom: 2px solid #e2e8f0;
+    min-height: 165px;
+}
+
 /* Columna de barras de los gráficos por departamento y por puesto. */
 .stats-columna {
     display: flex;
@@ -2873,6 +2885,95 @@ html.modal-abierto {
     height: 34px;
     word-break: break-word;
     padding: 0 2px;
+}
+
+/* La cifra de encima de la barra: lo que mide el criterio elegido, del color
+   del criterio. El segundo renglón es para lo que no cabe al lado —el
+   conteo del avance de revisión—. */
+.stats-columna-cifra {
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 4px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.stats-columna-detalle {
+    display: block;
+    font-size: 0.55rem;
+    font-weight: 700;
+    color: #94a3b8;
+}
+
+/* Una sola barra por columna, la del criterio. El canal gris de detrás es lo
+   que deja ver cuánto falta. */
+.stats-columna-barra {
+    width: 16px;
+    height: 90px;
+    background: #f1f5f9;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.stats-columna-relleno {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    transition: height 0.25s ease;
+}
+
+/* El rótulo de una persona lleva cuatro renglones y altura fija, para que las
+   barras de al lado apoyen todas a la misma altura. */
+.stats-columna-rotulo-persona {
+    margin-top: 8px;
+    text-align: center;
+    width: 100%;
+    padding: 0 2px;
+    height: 55px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+.stats-columna-persona-nombre {
+    font-size: 0.6rem;
+    font-weight: bold;
+    color: #1e293b;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.1;
+    word-break: break-word;
+}
+
+.stats-columna-persona-puesto,
+.stats-columna-persona-depto,
+.stats-columna-persona-area {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stats-columna-persona-puesto {
+    font-size: 0.5rem;
+    color: #64748b;
+    margin-top: 2px;
+    font-weight: 600;
+}
+
+.stats-columna-persona-depto {
+    font-size: 0.5rem;
+    color: #94a3b8;
+}
+
+.stats-columna-persona-area {
+    font-size: 0.45rem;
+    color: #94a3b8;
+    font-style: italic;
 }
 
 @media (max-width: 600px) {

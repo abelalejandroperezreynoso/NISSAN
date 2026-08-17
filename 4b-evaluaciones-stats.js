@@ -341,7 +341,12 @@ window.CRITERIOS_STATS = [
       valor: (d) => (d.responses || 0) > 0 ? window.procesadasDe(d) / d.responses : 0,
       texto: (d) => (d.responses || 0) > 0
           ? `${window.pctTexto(window.procesadasDe(d), d.responses)}% · ${window.procesadasDe(d)}/${d.responses}`
-          : 'sin contestar' },
+          : 'sin contestar',
+      // En una columna no cabe todo de una línea, así que el conteo baja al
+      // segundo renglón.
+      corto: (d) => (d.responses || 0) > 0
+          ? { cifra: `${window.pctTexto(window.procesadasDe(d), d.responses)}%`, detalle: `${window.procesadasDe(d)}/${d.responses}` }
+          : { cifra: '—', detalle: 'sin contestar' } },
     { clave: 'revisadas_altas', etiqueta: 'Revisadas ≥80%', nombre: 'revisadas ≥80%', color: '#047857', relleno: '#6ee7b7',
       extremo: 'El que menos revisadas altas tiene',
       valor: (d) => d.assignedCount > 0 ? (d.revisadasAltas || 0) / d.assignedCount : 0 },
@@ -415,6 +420,103 @@ window.cifraDelCriterio = (fila) => {
 
 window.criterioStats = () => window.CRITERIOS_STATS.find(c => c.clave === window.currentStatsSortCriterion)
     || window.CRITERIOS_STATS[0];
+
+// La cifra de una columna. Es estrecha —78px en un teléfono—, así que lo que
+// no cabe de una línea baja al segundo renglón. En un cuadro hay sitio para
+// una sola línea larga y de eso se encarga `cifraDelCriterio`.
+window.cifraCortaDelCriterio = (fila) => {
+    const criterio = window.criterioStats();
+    if (criterio.corto) return criterio.corto(fila);
+    if (criterio.texto) return { cifra: criterio.texto(fila), detalle: '' };
+    return { cifra: `${window.pctTexto(criterio.valor(fila))}%`, detalle: '' };
+};
+
+// La escala con la que se llena un nivel. Casi siempre es la absoluta, de 0 a
+// 1. Prontitud es la excepción (`escalaRelativa`): en un mes de 31 días,
+// contestar en 6 o en 7 son 81% y 77%, y en absoluto todos salían igual de
+// llenos. Con la escala del nivel, el más rápido llena y el más lento vacía.
+// Si van todos igual —menos de dos puntos entre el mejor y el peor— no se
+// estira nada: amplificar ese ruido diría que uno va mal cuando no va peor
+// que nadie.
+window.escalaDelNivel = (filas) => {
+    const criterio = window.criterioStats();
+    if (!criterio.escalaRelativa) return null;
+
+    const valores = (filas || [])
+        .filter(d => criterio.clave !== 'prontitud' || (d.countProntitud || 0) > 0)
+        .map(d => criterio.valor(d));
+    if (valores.length < 2) return null;
+
+    const min = Math.min.apply(null, valores);
+    const max = Math.max.apply(null, valores);
+    return (max - min > 0.02) ? { min: min, max: max } : null;
+};
+
+// Cuánto se llena una fila, de 0 a 100. Es geometría, así que va sin
+// redondear: el rótulo es quien tiene que decir 99% cuando falta algo.
+window.alturaDeCriterio = (fila, escala) => {
+    const valor = window.criterioStats().valor(fila) || 0;
+    const bruto = escala
+        ? (valor - escala.min) / (escala.max - escala.min) * 100
+        : valor * 100;
+    return Math.min(100, Math.max(bruto, 0));
+};
+
+// La columna de un colaborador. Su fila usa otros nombres de campo, así que
+// pasa por `filaCanonica`, y su rótulo lleva cuatro renglones —nombre, puesto,
+// departamento y área— en lugar de uno. Es el último nivel: no se entra a
+// ningún sitio desde aquí, y por eso no es clicable.
+window.columnaDeColaborador = (emp, escala) => {
+    const fila = window.filaCanonica(emp);
+    const safeName = window.sanitizeForHTML(emp.name);
+    const safeJob = window.sanitizeForHTML(emp.job);
+    const safeDept = window.sanitizeForHTML(emp.dept);
+    const safeArea = window.sanitizeForHTML(emp.area);
+
+    return window.columnaDeCriterio({
+        fila: fila,
+        escala: escala,
+        clicable: false,
+        // Atenuado y con una línea más en el globo cuando le faltan
+        // obligatorias, que es lo que la lista venía señalando.
+        opacidad: emp.incompleto ? '0.6' : '',
+        titulo: window.globoDeFila(`${safeName}&#10;📍 Área: ${safeArea}&#10;Departamento: ${safeDept}&#10;Puesto: ${safeJob}`, fila)
+            + (emp.incompleto ? '&#10;¡Faltan Obligatorias!' : ''),
+        rotulo: `<div class="stats-columna-rotulo-persona">
+                <div class="stats-columna-persona-nombre">${safeName}</div>
+                <div class="stats-columna-persona-puesto" title="${safeJob}">${safeJob}</div>
+                <div class="stats-columna-persona-depto" title="${safeDept}">${safeDept}</div>
+                <div class="stats-columna-persona-area" title="${safeArea}">📍 ${safeArea}</div>
+            </div>`
+    });
+};
+
+// Una columna del desglose en barras: la cifra del criterio arriba, una sola
+// barra —la del criterio, como en los cuadros— y el rótulo debajo. La
+// comparten los cinco niveles (departamento, puesto, supervisores y las dos
+// listas de colaboradores), que antes repetían cada uno el mismo bloque de
+// marcado con dos barras y cinco colores dentro.
+window.columnaDeCriterio = ({ fila, escala, atributos, titulo, rotulo, opacidad, clicable = true }) => {
+    const criterio = window.criterioStats();
+    const { cifra, detalle } = window.cifraCortaDelCriterio(fila);
+    const alto = window.alturaDeCriterio(fila, escala);
+
+    const estilo = (clicable ? '' : 'cursor:default;') + (opacidad ? `opacity:${opacidad};` : '');
+
+    return `
+        <div ${atributos || ''} title="${titulo}" class="stats-columna"${estilo ? ` style="${estilo}"` : ''}
+            onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';"
+            onmouseout="this.style.background='transparent'; this.style.transform='none';">
+            <div class="stats-columna-cifra" style="color:${criterio.color};">
+                ${cifra}
+                ${detalle ? `<span class="stats-columna-detalle">${detalle}</span>` : ''}
+            </div>
+            <div class="stats-columna-barra">
+                <div class="stats-columna-relleno" style="height:${alto}%; background:${criterio.color};"></div>
+            </div>
+            ${rotulo}
+        </div>`;
+};
 
 window.currentStatsSortCriterion = sessionStorage.getItem('criterioStats') || 'participacion';
 
@@ -1789,24 +1891,10 @@ window.dibujarCuadros = (nodos, alTocar) => {
     const puesto = {};
     ordenados.forEach((n, i) => { puesto[n.nombre] = i + 1; });
 
-    // Prontitud se llena en relativo. En un mes de 31 días, contestar en 6 o en
-    // 7 son 81% y 77%: en absoluto los ocho cuadros salían igual de llenos y no
-    // se distinguía al ágil del lento. Así, el más rápido del nivel llena el
-    // cuadro y el más lento lo deja vacío. Los días de dentro y el puesto
-    // siguen siendo los de verdad, que es lo que da la medida absoluta.
-    let escala = null;
-    if (criterio.escalaRelativa) {
-        const valores = ordenados
-            .filter(n => criterio.clave !== 'prontitud' || n.datos.countProntitud > 0)
-            .map(n => criterio.valor(n.datos));
-        if (valores.length > 1) {
-            const min = Math.min.apply(null, valores);
-            const max = Math.max.apply(null, valores);
-            // Si van todos igual no hay nada que estirar: amplificar esa
-            // diferencia diría que uno va mal cuando no va peor que nadie.
-            if (max - min > 0.02) escala = { min: min, max: max };
-        }
-    }
+    // Prontitud se llena en relativo; los días de dentro y el puesto siguen
+    // siendo los absolutos, que es lo que da la medida de verdad. La misma
+    // escala rige las barras.
+    const escala = window.escalaDelNivel(ordenados.map(n => n.datos));
 
     // Un departamento sin encuestas asignadas no puede desaparecer del todo o
     // no habría manera de abrirlo; se le deja un peso mínimo y queda diminuto.
@@ -1820,10 +1908,7 @@ window.dibujarCuadros = (nodos, alTocar) => {
         const h = Math.max(c.alto - 1, 1);
         const area = w * h;
 
-        const valorCriterio = criterio.valor(n.datos);
-        const pctCriterio = escala
-            ? Math.min(100, Math.max((valorCriterio - escala.min) / (escala.max - escala.min) * 100, 0))
-            : Math.min(100, Math.max(valorCriterio * 100, 0));
+        const pctCriterio = window.alturaDeCriterio(n.datos, escala);
 
         const el = document.createElement('div');
         el.className = 'stats-cuadro';
@@ -1898,210 +1983,65 @@ if (!window.__cuadrosDesgloseEscucha) {
     });
 }
 
-window.renderDeptDetailed = (dataMap) => {
-    const keys = Object.keys(dataMap).sort((a,b) => {
-        const dA = dataMap[a];
-        const dB = dataMap[b];
-        const assA = dA.assignedCount || 0;
-        const assB = dB.assignedCount || 0;
+// El globo de una fila, el mismo en barras y en cuadros: el detalle completo
+// y, al final, lo que mide el criterio elegido. El encabezado va aparte
+// porque las filas de colaborador cuelgan de él su área, departamento y
+// puesto.
+window.globoDeFila = (encabezado, fila) => {
+    const criterio = window.criterioStats();
+    const calificacion = fila.countScore > 0 ? window.pctTexto(fila.sumScore / fila.countScore / 100) : null;
 
-        const valA = window.valorDeCriterio(dA);
-        const valB = window.valorDeCriterio(dB);
-
-        if (valB !== valA) return valB - valA;
-        const partA = assA > 0 ? dA.responses / assA : 0;
-        const partB = assB > 0 ? dB.responses / assB : 0;
-        if (partB !== partA) return partB - partA;
-        return assB - assA;
-    });
-    
-    let tieneDatos = false;
-    
-    let chartHtml = `
-    <div style="display:flex; flex-direction:column; width:100%;">
-        <div style="display:flex; align-items:flex-end; gap:4px; overflow-x:auto; padding-bottom:5px; border-bottom:2px solid #e2e8f0; min-height:165px;" class="hide-scrollbar">
-    `;
-    
-    keys.forEach(k => {
-        const d = dataMap[k];
-        const assigned = d.assignedCount;
-        if (assigned === 0 && d.responses === 0) return;
-        tieneDatos = true;
-        
-        const responses = d.responses;
-        const reviewed = d.reviewed;
-        const certificadas = d.certificadas || 0;
-        const falsas = d.falsas || 0;
-        const malRevisadas = d.malRevisadas || 0;
-        const revisadasAltas = d.revisadasAltas || 0;
-        
-        const totalProcesadas = reviewed + certificadas + falsas + malRevisadas;
-
-        const pctParticipacion = window.pctTexto(responses, assigned);
-        const pctRevision = window.pctTexto(totalProcesadas, assigned);
-        const avgScore = d.countScore > 0 ? window.pctTexto(d.sumScore / d.countScore / 100) : 0;
-        const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
-
-        const partColor = '#3b82f6';
-        const revColor = '#10b981';
-        const certColor = '#eab308';
-        const falsaColor = '#ef4444';
-        const malRevColor = '#a855f7';
-        const safeK = window.sanitizeForHTML(k);
-
-        chartHtml += `
-        <div onclick="verStatsDetalleDepto(this.dataset.name)" data-name="${safeK}"
-        title="${safeK}&#10;Asignadas: ${assigned}&#10;Respuestas: ${responses}&#10;Revisadas: ${reviewed}&#10;Certificadas: ${certificadas}&#10;Falsas/Anuladas: ${falsas}&#10;Mal Revisadas: ${malRevisadas}&#10;⭐ Calificación: ${avgScore}%" 
-        class="stats-columna" 
-        onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
-        onmouseout="this.style.background='transparent'; this.style.transform='none';">
-
-        <div style="font-size:0.65rem; color:#64748b; margin-bottom:4px; text-align:center; font-weight:700; line-height:1.2; display:flex; justify-content:center; gap:8px;">
-        <div>
-        <div style="color:${partColor}">${pctParticipacion}%</div>
-        <div style="color:${revColor}; font-size:0.6rem;">${pctRevision}%</div>
-        </div>
-        ${d.countScore > 0 ? `
-        <div style="display:flex; align-items:flex-end;">
-        <div style="color:${colorScore}; font-size:0.65rem; font-weight:800;">${avgScore}%</div>
-        </div>` : ''}
-        </div>
-
-        <div style="display:flex; align-items:flex-end; height:90px; width:100%; justify-content:center; gap:4px;">
-
-        <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Flujo de Revisión">
-        <div style="position:absolute; bottom:0; left:0; width:100%; height:${pctParticipacion}%; background:${partColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-        ${totalProcesadas > 0 ? `
-        <div style="width:100%; height:${(totalProcesadas / responses) * 100}%; background:${revColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-        ${(Math.max(0, revisadasAltas - certificadas - falsas - malRevisadas)) > 0 ? `<div style="width:100%; height:${(Math.max(0, revisadasAltas - certificadas - falsas - malRevisadas) / totalProcesadas) * 100}%; background:#047857;"></div>` : ''}
-        ${certificadas > 0 ? `<div style="width:100%; height:${(certificadas / totalProcesadas) * 100}%; background:${certColor};"></div>` : ''}
-        ${falsas > 0 ? `<div style="width:100%; height:${(falsas / totalProcesadas) * 100}%; background:${falsaColor};"></div>` : ''}
-        ${malRevisadas > 0 ? `<div style="width:100%; height:${(malRevisadas / totalProcesadas) * 100}%; background:${malRevColor};"></div>` : ''}
-        </div>
-        ` : ''}
-        </div>
-        </div>
-
-        <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Calificación Promedio">
-        ${d.countScore > 0 ? `<div style="position:absolute; bottom:0; left:0; width:100%; height:${avgScore}%; background:${colorScore};"></div>` : ''}
-        </div>
-
-        </div>
-
-        <div class="stats-columna-rotulo">${safeK}</div>
-        </div>`;
-    });
-    
-    chartHtml += `
-        </div>
-    </div>`;
-    
-    return tieneDatos ? chartHtml : '<div style="padding:10px; font-size:0.8rem; color:#94a3b8;">Sin datos.</div>';
+    return `${encabezado}`
+        + `&#10;Asignadas: ${fila.assignedCount || 0}`
+        + `&#10;Contestadas: ${fila.responses || 0}`
+        + `&#10;Revisadas: ${window.procesadasDe(fila)}`
+        + `&#10;Certificadas: ${fila.certificadas || 0}`
+        + `&#10;Falsas/Anuladas: ${fila.falsas || 0}`
+        + `&#10;Mal Revisadas: ${fila.malRevisadas || 0}`
+        + (calificacion === null ? '' : `&#10;⭐ Calificación: ${calificacion}%`)
+        + `&#10;${criterio.etiqueta}: ${window.cifraDelCriterio(fila)}`;
 };
 
+// El gráfico de barras de un mapa {nombre: fila}. Departamento y puesto sólo
+// se diferencian en a dónde lleva el toque, así que comparten esto entero.
+window.renderCacheDetailed = (dataMap, funcionAlTocar) => {
+    const keys = Object.keys(dataMap)
+        .filter(k => (dataMap[k].assignedCount || 0) > 0 || (dataMap[k].responses || 0) > 0)
+        .sort((a, b) => {
+            const dA = dataMap[a], dB = dataMap[b];
+            const valA = window.valorDeCriterio(dA), valB = window.valorDeCriterio(dB);
+            if (valB !== valA) return valB - valA;
+            // Rompe empates con la participación base y, si sigue el empate,
+            // con el tamaño.
+            const assA = dA.assignedCount || 0, assB = dB.assignedCount || 0;
+            const partA = assA > 0 ? dA.responses / assA : 0;
+            const partB = assB > 0 ? dB.responses / assB : 0;
+            if (partB !== partA) return partB - partA;
+            return assB - assA;
+        });
 
+    if (keys.length === 0) return '<div style="padding:10px; font-size:0.8rem; color:#94a3b8;">Sin datos.</div>';
 
-window.renderPuestoDetailed = (dataMap) => {
-    const keys = Object.keys(dataMap).sort((a,b) => {
-        const dA = dataMap[a];
-        const dB = dataMap[b];
-        const assA = dA.assignedCount || 0;
-        const assB = dB.assignedCount || 0;
+    const escala = window.escalaDelNivel(keys.map(k => dataMap[k]));
 
-        const valA = window.valorDeCriterio(dA);
-        const valB = window.valorDeCriterio(dB);
-
-        if (valB !== valA) return valB - valA;
-        // Rompe empates usando la participación base
-        const partA = assA > 0 ? dA.responses / assA : 0;
-        const partB = assB > 0 ? dB.responses / assB : 0;
-        if (partB !== partA) return partB - partA;
-        return assB - assA;
-    });
-    
-    let tieneDatos = false;
-    
-    let chartHtml = `
-    <div style="display:flex; flex-direction:column; width:100%;">
-        <div style="display:flex; align-items:flex-end; gap:4px; overflow-x:auto; padding-bottom:5px; border-bottom:2px solid #e2e8f0; min-height:165px;" class="hide-scrollbar">
-    `;
-    
-    keys.forEach(k => {
-        const d = dataMap[k];
-        const assigned = d.assignedCount;
-        if (assigned === 0 && d.responses === 0) return;
-        tieneDatos = true;
-        
-        const responses = d.responses;
-        const reviewed = d.reviewed;
-        const certificadas = d.certificadas || 0;
-        const falsas = d.falsas || 0;
-        const malRevisadas = d.malRevisadas || 0;
-        const revisadasAltas = d.revisadasAltas || 0;
-        
-        const totalProcesadas = reviewed + certificadas + falsas + malRevisadas;
-
-        const pctParticipacion = window.pctTexto(responses, assigned);
-        const pctRevision = window.pctTexto(totalProcesadas, assigned);
-        const avgScore = d.countScore > 0 ? window.pctTexto(d.sumScore / d.countScore / 100) : 0;
-        const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
-
-        const partColor = '#3b82f6';
-        const revColor = '#10b981';
-        const certColor = '#eab308';
-        const falsaColor = '#ef4444';
-        const malRevColor = '#a855f7';
+    const columnas = keys.map(k => {
         const safeK = window.sanitizeForHTML(k);
+        return window.columnaDeCriterio({
+            fila: dataMap[k],
+            escala: escala,
+            atributos: `onclick="${funcionAlTocar}(this.dataset.name)" data-name="${safeK}"`,
+            titulo: window.globoDeFila(safeK, dataMap[k]),
+            rotulo: `<div class="stats-columna-rotulo">${safeK}</div>`
+        });
+    }).join('');
 
-        chartHtml += `
-        <div onclick="verStatsDetallePuesto(this.dataset.name)" data-name="${safeK}"
-        title="${safeK}&#10;Asignadas: ${assigned}&#10;Respuestas: ${responses}&#10;Revisadas: ${reviewed}&#10;Certificadas: ${certificadas}&#10;Falsas/Anuladas: ${falsas}&#10;Mal Revisadas: ${malRevisadas}&#10;⭐ Calificación: ${avgScore}%" 
-        class="stats-columna" 
-        onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
-        onmouseout="this.style.background='transparent'; this.style.transform='none';">
-
-        <div style="font-size:0.65rem; color:#64748b; margin-bottom:4px; text-align:center; font-weight:700; line-height:1.2; display:flex; justify-content:center; gap:8px;">
-        <div>
-        <div style="color:${partColor}">${pctParticipacion}%</div>
-        <div style="color:${revColor}; font-size:0.6rem;">${pctRevision}%</div>
-        </div>
-        ${d.countScore > 0 ? `
-        <div style="display:flex; align-items:flex-end;">
-        <div style="color:${colorScore}; font-size:0.65rem; font-weight:800;">${avgScore}%</div>
-        </div>` : ''}
-        </div>
-
-        <div style="display:flex; align-items:flex-end; height:90px; width:100%; justify-content:center; gap:4px;">
-
-        <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Flujo de Revisión">
-        <div style="position:absolute; bottom:0; left:0; width:100%; height:${pctParticipacion}%; background:${partColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-        ${totalProcesadas > 0 ? `
-        <div style="width:100%; height:${(totalProcesadas / responses) * 100}%; background:${revColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-        ${(Math.max(0, revisadasAltas - certificadas - falsas - malRevisadas)) > 0 ? `<div style="width:100%; height:${(Math.max(0, revisadasAltas - certificadas - falsas - malRevisadas) / totalProcesadas) * 100}%; background:#047857;"></div>` : ''}
-        ${certificadas > 0 ? `<div style="width:100%; height:${(certificadas / totalProcesadas) * 100}%; background:${certColor};"></div>` : ''}
-        ${falsas > 0 ? `<div style="width:100%; height:${(falsas / totalProcesadas) * 100}%; background:${falsaColor};"></div>` : ''}
-        ${malRevisadas > 0 ? `<div style="width:100%; height:${(malRevisadas / totalProcesadas) * 100}%; background:${malRevColor};"></div>` : ''}
-        </div>
-        ` : ''}
-        </div>
-        </div>
-
-        <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Calificación Promedio">
-        ${d.countScore > 0 ? `<div style="position:absolute; bottom:0; left:0; width:100%; height:${avgScore}%; background:${colorScore};"></div>` : ''}
-        </div>
-
-        </div>
-
-        <div class="stats-columna-rotulo">${safeK}</div>
-        </div>`;
-    });
-    
-    chartHtml += `
-        </div>
+    return `<div style="display:flex; flex-direction:column; width:100%;">
+        <div class="stats-barras hide-scrollbar">${columnas}</div>
     </div>`;
-    
-    return tieneDatos ? chartHtml : '<div style="padding:10px; font-size:0.8rem; color:#94a3b8;">Sin datos.</div>';
 };
+
+window.renderDeptDetailed = (dataMap) => window.renderCacheDetailed(dataMap, 'verStatsDetalleDepto');
+window.renderPuestoDetailed = (dataMap) => window.renderCacheDetailed(dataMap, 'verStatsDetallePuesto');
 
 window.verStatsDetalleDepto = (deptName) => {
     window.actualizarRadarDOM(deptName);
@@ -2144,77 +2084,23 @@ window.verStatsDetalleDepto = (deptName) => {
         </div>
         <div style="font-size:0.75rem; color:#64748b; margin-left:5px;">Supervisores en esta área: ${supList.length}</div>
     </div>
-    <div style="display:flex; align-items:flex-end; gap:4px; overflow-x:auto; padding-bottom:5px; border-bottom:2px solid #e2e8f0; min-height:165px;" class="hide-scrollbar">`;
+    <div class="stats-barras hide-scrollbar">`;
     
     if (supList.length === 0) {
         html += `<div style="padding:15px; text-align:center; color:#94a3b8; font-style:italic; width:100%;">No se encontraron supervisores.</div>`;
     } else {
-        supList.forEach(sup => {
-            const assigned = sup.assignedCount;
-            if (assigned === 0 && sup.responses === 0) return;
-            
-            const responses = sup.responses;
-            const reviewed = sup.reviewed;
-            const certificadas = sup.certificadas || 0;
-            const falsas = sup.falsas || 0;
-            const malRevisadas = sup.malRevisadas || 0;
-            const revisadasAltas = sup.revisadasAltas || 0;
-            
-            const totalProcesadas = reviewed + certificadas + falsas + malRevisadas;
-                        
-            const pctParticipacion = window.pctTexto(responses, assigned);
-            const pctRevision = window.pctTexto(totalProcesadas, assigned);
-            const avgScore = sup.countScore > 0 ? window.pctTexto(sup.sumScore / sup.countScore / 100) : 0;
-            const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
+        const visibles = supList.filter(sup => (sup.assignedCount || 0) > 0 || (sup.responses || 0) > 0);
+        const escala = window.escalaDelNivel(visibles);
 
-            const partColor = '#3b82f6';
-            const revColor = '#10b981';
-            const certColor = '#eab308';
-            const falsaColor = '#ef4444';
-            const malRevColor = '#a855f7';
+        visibles.forEach(sup => {
             const safeSup = window.sanitizeForHTML(sup.name);
-
-            html += `
-            <div onclick="verStatsDetalleSupervisor(this.dataset.dept, this.dataset.sup)" data-dept="${safeDept}" data-sup="${safeSup}"
-            title="Grupo de ${safeSup}&#10;Asignadas: ${assigned}&#10;Respuestas: ${responses}&#10;Revisadas: ${reviewed}&#10;Certificadas: ${certificadas}&#10;Falsas/Anuladas: ${falsas}&#10;Mal Revisadas: ${malRevisadas}&#10;⭐ Calificación: ${avgScore}%" 
-            class="stats-columna" 
-            onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
-            onmouseout="this.style.background='transparent'; this.style.transform='none';">
-
-            <div style="font-size:0.65rem; color:#64748b; margin-bottom:4px; text-align:center; font-weight:700; line-height:1.2; display:flex; justify-content:center; gap:8px;">
-            <div>
-            <div style="color:${partColor}">${pctParticipacion}%</div>
-            <div style="color:${revColor}; font-size:0.6rem;">${pctRevision}%</div>
-            </div>
-            ${sup.countScore > 0 ? `
-            <div style="display:flex; align-items:flex-end;">
-            <div style="color:${colorScore}; font-size:0.65rem; font-weight:800;">${avgScore}%</div>
-            </div>` : ''}
-            </div>
-
-            <div style="display:flex; align-items:flex-end; height:90px; width:100%; justify-content:center; gap:4px;">
-
-            <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Flujo de Revisión">
-            <div style="position:absolute; bottom:0; left:0; width:100%; height:${pctParticipacion}%; background:${partColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-            ${totalProcesadas > 0 ? `
-            <div style="width:100%; height:${(totalProcesadas / responses) * 100}%; background:${revColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-            ${(Math.max(0, revisadasAltas - certificadas - falsas - malRevisadas)) > 0 ? `<div style="width:100%; height:${(Math.max(0, revisadasAltas - certificadas - falsas - malRevisadas) / totalProcesadas) * 100}%; background:#047857;" title="Pendientes de Auditoría (>= 80%)"></div>` : ''}
-            ${certificadas > 0 ? `<div style="width:100%; height:${(certificadas / totalProcesadas) * 100}%; background:${certColor};" title="Certificadas: ${certificadas}"></div>` : ''}
-            ${falsas > 0 ? `<div style="width:100%; height:${(falsas / totalProcesadas) * 100}%; background:${falsaColor};" title="Falsas: ${falsas}"></div>` : ''}
-            ${malRevisadas > 0 ? `<div style="width:100%; height:${(malRevisadas / totalProcesadas) * 100}%; background:${malRevColor};" title="Mal Revisadas: ${malRevisadas}"></div>` : ''}
-            </div>
-            ` : ''}
-            </div>
-            </div>
-
-            <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Calificación Promedio">
-            ${sup.countScore > 0 ? `<div style="position:absolute; bottom:0; left:0; width:100%; height:${avgScore}%; background:${colorScore};"></div>` : ''}
-            </div>
-
-            </div>
-
-            <div class="stats-columna-rotulo">Grupo de ${safeSup}</div>
-            </div>`;
+            html += window.columnaDeCriterio({
+                fila: sup,
+                escala: escala,
+                atributos: `onclick="verStatsDetalleSupervisor(this.dataset.dept, this.dataset.sup)" data-dept="${safeDept}" data-sup="${safeSup}"`,
+                titulo: window.globoDeFila(`Grupo de ${safeSup}`, sup),
+                rotulo: `<div class="stats-columna-rotulo">Grupo de ${safeSup}</div>`
+            });
         });
     }
     html += `</div>`;
@@ -2365,77 +2251,13 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
         </div>
         <div style="font-size:0.75rem; color:#64748b; margin-left:5px;">Subordinados evaluados: ${empStats.length}</div>
     </div>
-    <div style="display:flex; align-items:flex-end; gap:4px; overflow-x:auto; padding-bottom:5px; border-bottom:2px solid #e2e8f0; min-height:165px;" class="hide-scrollbar">`;
+    <div class="stats-barras hide-scrollbar">`;
 
     if (empStats.length === 0) {
         html += `<div style="padding:15px; text-align:center; color:#94a3b8; font-style:italic; width:100%;">No se encontraron subordinados activos en esta categoría.</div>`;
     } else {
-        empStats.forEach(emp => {
-            const totalProcesadas = emp.reviewedCount + emp.certificadasCount + emp.falsasCount + emp.malRevisadasCount;
-            const revisadasAltas = emp.revisadasAltasCount || 0;
-            
-            const pctParticipacion = window.pctTexto(emp.totalResp, emp.totalAssigned);
-            const avgScore = emp.countScore > 0 ? window.pctTexto(emp.sumScore / emp.countScore / 100) : 0;
-            const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
-
-            const partColor = '#3b82f6';
-            const revColor = '#10b981';
-            const certColor = '#eab308';
-            const falsaColor = '#ef4444';
-            const malRevColor = '#a855f7';
-            const opacity = emp.incompleto ? '0.6' : '1';
-
-            const safeName = window.sanitizeForHTML(emp.name);
-            const safeJob = window.sanitizeForHTML(emp.job);
-            const safeDeptUser = window.sanitizeForHTML(emp.dept);
-            const safeArea = window.sanitizeForHTML(emp.area);
-
-            html += `
-            <div title="${safeName}&#10;📍 Área: ${safeArea}&#10;Departamento: ${safeDeptUser}&#10;Puesto: ${safeJob}&#10;Asignadas: ${emp.totalAssigned}&#10;Respuestas: ${emp.totalResp}&#10;Revisadas: ${emp.reviewedCount}&#10;Certificadas: ${emp.certificadasCount}&#10;Falsas/Anuladas: ${emp.falsasCount}&#10;Mal Revisadas: ${emp.malRevisadasCount}&#10;⭐ Calificación: ${avgScore}%${emp.incompleto ? '&#10;¡Faltan Obligatorias!' : ''}" 
-            class="stats-columna" style="cursor:default; opacity:${opacity};" 
-            onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
-            onmouseout="this.style.background='transparent'; this.style.transform='none';">
-
-            <div style="font-size:0.65rem; color:#64748b; margin-bottom:4px; text-align:center; font-weight:700; line-height:1.2; display:flex; justify-content:center; gap:8px;">
-            <div>
-            <div style="color:${partColor}">${pctParticipacion}%</div>
-            <div style="color:${revColor}; font-size:0.6rem;">${window.pctTexto(totalProcesadas, emp.totalAssigned)}%</div>
-            </div>
-            ${emp.countScore > 0 ? `
-            <div style="display:flex; align-items:flex-end;">
-            <div style="color:${colorScore}; font-size:0.65rem; font-weight:800;">${avgScore}%</div>
-            </div>` : ''}
-            </div>
-
-            <div style="display:flex; align-items:flex-end; height:90px; width:100%; justify-content:center; gap:4px;">
-
-            <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Flujo de Revisión">
-            <div style="position:absolute; bottom:0; left:0; width:100%; height:${pctParticipacion}%; background:${partColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-            ${totalProcesadas > 0 ? `
-            <div style="width:100%; height:${(totalProcesadas / emp.totalResp) * 100}%; background:${revColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-            ${(Math.max(0, revisadasAltas - emp.certificadasCount - emp.falsasCount - emp.malRevisadasCount)) > 0 ? `<div style="width:100%; height:${(Math.max(0, revisadasAltas - emp.certificadasCount - emp.falsasCount - emp.malRevisadasCount) / totalProcesadas) * 100}%; background:#047857;"></div>` : ''}
-            ${emp.certificadasCount > 0 ? `<div style="width:100%; height:${(emp.certificadasCount / totalProcesadas) * 100}%; background:${certColor};"></div>` : ''}
-            ${emp.falsasCount > 0 ? `<div style="width:100%; height:${(emp.falsasCount / totalProcesadas) * 100}%; background:${falsaColor};"></div>` : ''}
-            ${emp.malRevisadasCount > 0 ? `<div style="width:100%; height:${(emp.malRevisadasCount / totalProcesadas) * 100}%; background:${malRevColor};"></div>` : ''}
-            </div>
-            ` : ''}
-            </div>
-            </div>
-
-            <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Calificación Promedio">
-            ${emp.countScore > 0 ? `<div style="position:absolute; bottom:0; left:0; width:100%; height:${avgScore}%; background:${colorScore};"></div>` : ''}
-            </div>
-
-            </div>
-
-            <div style="margin-top:8px; text-align:center; width:100%; padding:0 2px; height:55px; display:flex; flex-direction:column; justify-content:flex-start;">
-            <div style="font-size:0.6rem; font-weight:bold; color:#1e293b; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.1; word-break:break-word;">${safeName}</div>
-            <div style="font-size:0.5rem; color:#64748b; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600;" title="${safeJob}">${safeJob}</div>
-            <div style="font-size:0.5rem; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${safeDeptUser}">${safeDeptUser}</div>
-            <div style="font-size:0.45rem; color:#94a3b8; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${safeArea}">📍 ${safeArea}</div>
-            </div>
-            </div>`;
-        });
+        const escala = window.escalaDelNivel(empStats.map(emp => window.filaCanonica(emp)));
+        empStats.forEach(emp => { html += window.columnaDeColaborador(emp, escala); });
     }
     html += `</div>`;
     document.getElementById('desglose-container').innerHTML = html;
@@ -2580,77 +2402,13 @@ window.verStatsDetallePuesto = (puestoName) => {
         </div>
         <div style="font-size:0.75rem; color:#64748b; margin-left:5px;">Personal evaluado: ${empStats.length}</div>
     </div>
-    <div style="display:flex; align-items:flex-end; gap:4px; overflow-x:auto; padding-bottom:5px; border-bottom:2px solid #e2e8f0; min-height:165px;" class="hide-scrollbar">`;
+    <div class="stats-barras hide-scrollbar">`;
 
     if (empStats.length === 0) {
         html += `<div style="padding:15px; text-align:center; color:#94a3b8; font-style:italic; width:100%;">No se encontraron colaboradores activos en esta categoría.</div>`;
     } else {
-        empStats.forEach(emp => {
-            const totalProcesadas = emp.reviewedCount + emp.certificadasCount + emp.falsasCount + emp.malRevisadasCount;
-            const revisadasAltas = emp.revisadasAltasCount || 0;
-            
-            const pctParticipacion = window.pctTexto(emp.totalResp, emp.totalAssigned);
-            const avgScore = emp.countScore > 0 ? window.pctTexto(emp.sumScore / emp.countScore / 100) : 0;
-            const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
-
-            const partColor = '#3b82f6';
-            const revColor = '#10b981';
-            const certColor = '#eab308';
-            const falsaColor = '#ef4444';
-            const malRevColor = '#a855f7';
-            const opacity = emp.incompleto ? '0.6' : '1';
-
-            const safeName = window.sanitizeForHTML(emp.name);
-            const safeDept = window.sanitizeForHTML(emp.dept);
-            const safeJob = window.sanitizeForHTML(emp.job);
-            const safeArea = window.sanitizeForHTML(emp.area);
-
-            html += `
-            <div title="${safeName}&#10;📍 Área: ${safeArea}&#10;Departamento: ${safeDept}&#10;Puesto: ${safeJob}&#10;Asignadas: ${emp.totalAssigned}&#10;Respuestas: ${emp.totalResp}&#10;Revisadas: ${emp.reviewedCount}&#10;Certificadas: ${emp.certificadasCount}&#10;Falsas/Anuladas: ${emp.falsasCount}&#10;Mal Revisadas: ${emp.malRevisadasCount}&#10;⭐ Calificación: ${avgScore}%${emp.incompleto ? '&#10;¡Faltan Obligatorias!' : ''}" 
-            class="stats-columna" style="cursor:default; opacity:${opacity};" 
-            onmouseover="this.style.background='#f8fafc'; this.style.transform='translateY(-2px)';" 
-            onmouseout="this.style.background='transparent'; this.style.transform='none';">
-
-            <div style="font-size:0.65rem; color:#64748b; margin-bottom:4px; text-align:center; font-weight:700; line-height:1.2; display:flex; justify-content:center; gap:8px;">
-            <div>
-            <div style="color:${partColor}">${pctParticipacion}%</div>
-            <div style="color:${revColor}; font-size:0.6rem;">${window.pctTexto(totalProcesadas, emp.totalAssigned)}%</div>
-            </div>
-            ${emp.countScore > 0 ? `
-            <div style="display:flex; align-items:flex-end;">
-            <div style="color:${colorScore}; font-size:0.65rem; font-weight:800;">${avgScore}%</div>
-            </div>` : ''}
-            </div>
-
-            <div style="display:flex; align-items:flex-end; height:90px; width:100%; justify-content:center; gap:4px;">
-
-            <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Flujo de Revisión">
-            <div style="position:absolute; bottom:0; left:0; width:100%; height:${pctParticipacion}%; background:${partColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-            ${totalProcesadas > 0 ? `
-            <div style="width:100%; height:${(totalProcesadas / emp.totalResp) * 100}%; background:${revColor}; display:flex; flex-direction:column; justify-content:flex-end;">
-            ${(Math.max(0, revisadasAltas - emp.certificadasCount - emp.falsasCount - emp.malRevisadasCount)) > 0 ? `<div style="width:100%; height:${(Math.max(0, revisadasAltas - emp.certificadasCount - emp.falsasCount - emp.malRevisadasCount) / totalProcesadas) * 100}%; background:#047857;"></div>` : ''}
-            ${emp.certificadasCount > 0 ? `<div style="width:100%; height:${(emp.certificadasCount / totalProcesadas) * 100}%; background:${certColor};"></div>` : ''}
-            ${emp.falsasCount > 0 ? `<div style="width:100%; height:${(emp.falsasCount / totalProcesadas) * 100}%; background:${falsaColor};"></div>` : ''}
-            ${emp.malRevisadasCount > 0 ? `<div style="width:100%; height:${(emp.malRevisadasCount / totalProcesadas) * 100}%; background:${malRevColor};"></div>` : ''}
-            </div>
-            ` : ''}
-            </div>
-            </div>
-
-            <div style="width:12px; height:100%; background:#f1f5f9; border-radius:3px 3px 0 0; position:relative; overflow:hidden;" title="Calificación Promedio">
-            ${emp.countScore > 0 ? `<div style="position:absolute; bottom:0; left:0; width:100%; height:${avgScore}%; background:${colorScore};"></div>` : ''}
-            </div>
-
-            </div>
-
-            <div style="margin-top:8px; text-align:center; width:100%; padding:0 2px; height:55px; display:flex; flex-direction:column; justify-content:flex-start;">
-            <div style="font-size:0.6rem; font-weight:bold; color:#1e293b; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.1; word-break:break-word;">${safeName}</div>
-            <div style="font-size:0.5rem; color:#64748b; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600;" title="${safeJob}">${safeJob}</div>
-            <div style="font-size:0.5rem; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${safeDept}">${safeDept}</div>
-            <div style="font-size:0.45rem; color:#94a3b8; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${safeArea}">📍 ${safeArea}</div>
-            </div>
-            </div>`;
-        });
+        const escala = window.escalaDelNivel(empStats.map(emp => window.filaCanonica(emp)));
+        empStats.forEach(emp => { html += window.columnaDeColaborador(emp, escala); });
     }
     html += `</div>`;
     document.getElementById('desglose-container').innerHTML = html;
