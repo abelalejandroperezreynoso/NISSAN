@@ -236,6 +236,30 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     segundo argumento sólo lee, y al escribir devuelve el texto anterior para
     poder restaurarlo. Todo botón que anuncie su estado va así.
 
+  **Un formulario que no cabe de una vez desplaza su cuerpo, no la hoja.** La
+  hoja pasa a `overflow:hidden; padding:12px 0 0` y el formulario va dentro de
+  un `<div class="hoja-cuerpo-formulario">`, que pone el relleno lateral, el
+  fondo gris y el hueco del indicador de inicio. Así el encabezado —con el
+  botón de guardar— se queda a la vista en lugar de irse por arriba al primer
+  arrastre. Dentro, los campos se agrupan en tarjetas `.hoja-grupo` bajo un
+  rótulo `.hoja-grupo-titulo`, las casillas con explicación son filas
+  `.eval-opcion` y lo opcional se pliega con `<details class="hoja-plegable">`.
+  Es lo que se hizo con «Nueva evaluación», que eran doce bloques seguidos,
+  cada uno de un color, dentro de una hoja que se desplazaba entera.
+
+  Ojo con las rejillas de tarjetas ahí dentro: `flex-wrap` con
+  `min-width:150px` **no** da dos columnas en un teléfono —dos de 150 más el
+  hueco pasan de los 309px útiles—, así que las cinco tarjetas de destinatarios
+  se apilaban de una en una y se llevaban 800px de alto. Como filas de una
+  lista ocupan la mitad y se leen mejor.
+
+  Los campos que un módulo arma con `innerHTML` fuera de un `.form-group` —los
+  de cada pregunta, en `window.agregarCampoPregunta`— no heredan el
+  `box-sizing: border-box` de aquella regla y con `width:100%` más su padding
+  se salen de su tarjeta; y un `<select>` dentro de un flex necesita
+  `min-width:0` o se niega a encoger por debajo de su opción más larga. Las dos
+  reglas viven en `estilos.css` bajo `.pregunta-wrapper`.
+
   Queda a pantalla completa, y a propósito, sólo el visor de imágenes
   (`#modal-visor`).
 

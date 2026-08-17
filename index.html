@@ -328,138 +328,164 @@
     </div>
 
     <div id="modal-crear-eval" class="hoja-overlay" style="z-index:2000;">
-        <div class="form-content hoja-contenido" style="max-width: 500px; overflow-y:auto; touch-action: pan-y; -webkit-overflow-scrolling: touch;">
-            <div class="hoja-encabezado">
-                <h2 class="hoja-titulo">Nueva evaluación</h2>
-                <button onclick="document.getElementById('modal-crear-eval').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
-            </div>
-            <div class="form-group"><label>Título de la Evaluación:</label><input type="text" id="eval-title-input" placeholder="Ej. Encuesta de Clima Laboral"></div>
-            
-            <div class="form-group">
-                <label>Descripción / Instrucciones:</label>
-                <textarea id="eval-desc-input" rows="3" placeholder="Ej. Evalúa del 1 al 5 considerando los objetivos del mes..." style="width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:10px; background:#f9fafb; font-family:inherit;"></textarea>
-            </div>
-            
-            <div class="form-group">
-                <label>Clasificación / Categoría:</label>
-                <select id="eval-category-input" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#f9fafb;">
-                    <option value="General">General</option>
-                    <option value="Seguridad">Seguridad</option>
-                    <option value="Calidad">Calidad</option>
-                    <option value="RRHH">RRHH</option>
-                    <option value="Operaciones">Operaciones</option>
-                    <option value="Capacitación">Capacitación</option>
-                </select>
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 0;">
+
+            <!-- La acción principal va en el encabezado y no al pie: esta hoja
+                 tiene tres desplegables y al cerrarse una rueda iOS sintetiza un
+                 click donde estaba el dedo, justo encima del botón de guardar si
+                 estuviera debajo del último campo. Por lo mismo no lleva
+                 «Cancelar», que duplica la cruz. -->
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h2 class="hoja-titulo" id="titulo-crear-eval">Nueva evaluación</h2>
+                    <div class="hoja-subtitulo" id="subtitulo-crear-eval">Define el cuestionario y a quién le toca</div>
+                </div>
+                <div class="hoja-acciones">
+                    <button id="btn-guardar-eval" onclick="guardarNuevaEvaluacion()" class="ios-boton-icono" title="Publicar evaluación" aria-label="Publicar evaluación"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5.5 5.5L20 7"/></svg></button>
+                    <button onclick="document.getElementById('modal-crear-eval').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label>Frecuencia Sugerida:</label>
-                <select id="eval-frequency-input" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#f9fafb;">
-                    <option value="once">Sin repetición (Única vez)</option>
-                    <option value="weekly">📅 1 vez por semana</option>
-                    <option value="biweekly">🗓️ 1 vez por quincena</option>
-                    <option value="monthly">🈷️ 1 vez al mes</option>
-                    <option value="quarterly">🍂 Cada 3 meses (Trimestral)</option>
-                    <option value="semiannual">🌗 Cada 6 meses (Semestral)</option>
-                    <option value="yearly">🎂 Cada año (Anual)</option>
-                    <option value="biennial">⏳ Cada 2 años</option>
-                </select>
-            </div>
+            <div class="hoja-cuerpo-formulario">
 
-            <div class="form-group">
-                <label>Modo de Evaluación:</label>
-                <select id="eval-mode-input" onchange="window.verificarRestriccionesModo()" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; background:#f9fafb;">
-                    <option value="self">👤 Autoevaluación (El usuario responde)</option>
-                    <option value="boss">👔 Evaluación de Jefe (El supervisor responde)</option>
-                </select>
-                <p style="font-size:0.75rem; color:#64748b; margin:4px 0 0 0;">Define quién debe llenar el formulario.</p>
-            </div>
+                <div class="hoja-grupo-titulo">Datos</div>
+                <div class="hoja-grupo">
+                    <div class="form-group"><label>Título</label><input type="text" id="eval-title-input" placeholder="Ej. Encuesta de Clima Laboral"></div>
 
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
-                
-                <div class="form-group" style="flex: 1; min-width: 150px; background:#f0f9ff; padding:10px; border-radius:10px; border:1px solid #bae6fd; margin-bottom: 0;">
-                    <label style="color:#0284c7; font-weight:bold; font-size:0.8rem; margin-bottom:5px; display:block;">🎯 Puestos:</label>
-                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                        <input type="checkbox" id="chk-all-puestos" onchange="window.toggleSelectorPuestos()" checked style="width:16px; height:16px;">
-                        <span style="font-weight:600; color:#334155; font-size:0.85rem;">Todos</span>
+                    <div class="form-group">
+                        <label>Descripción / Instrucciones</label>
+                        <textarea id="eval-desc-input" rows="3" placeholder="Ej. Evalúa del 1 al 5 considerando los objetivos del mes..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Clasificación / Categoría</label>
+                        <select id="eval-category-input">
+                            <option value="General">General</option>
+                            <option value="Seguridad">Seguridad</option>
+                            <option value="Calidad">Calidad</option>
+                            <option value="RRHH">RRHH</option>
+                            <option value="Operaciones">Operaciones</option>
+                            <option value="Capacitación">Capacitación</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Frecuencia sugerida</label>
+                        <select id="eval-frequency-input">
+                            <option value="once">Sin repetición (Única vez)</option>
+                            <option value="weekly">📅 1 vez por semana</option>
+                            <option value="biweekly">🗓️ 1 vez por quincena</option>
+                            <option value="monthly">🈷️ 1 vez al mes</option>
+                            <option value="quarterly">🍂 Cada 3 meses (Trimestral)</option>
+                            <option value="semiannual">🌗 Cada 6 meses (Semestral)</option>
+                            <option value="yearly">🎂 Cada año (Anual)</option>
+                            <option value="biennial">⏳ Cada 2 años</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Quién la contesta</label>
+                        <select id="eval-mode-input" onchange="window.verificarRestriccionesModo()">
+                            <option value="self">👤 Autoevaluación</option>
+                            <option value="boss">👔 La contesta el jefe</option>
+                        </select>
+                        <p class="form-ayuda">Autoevaluación: la llena el propio colaborador. La otra, su supervisor.</p>
+                    </div>
+                </div>
+
+                <div class="hoja-grupo-titulo">A quién va dirigida</div>
+                <div class="hoja-grupo">
+                    <label class="eval-opcion">
+                        <input type="checkbox" id="chk-all-puestos" onchange="window.toggleSelectorPuestos()" checked>
+                        <span class="eval-opcion-texto">
+                            <span class="eval-opcion-titulo">🎯 Todos los puestos</span>
+                            <span class="eval-opcion-ayuda">Desmárcalo para elegir puestos concretos.</span>
+                        </span>
                     </label>
-                    <div id="container-lista-puestos" style="display:none; max-height:120px; overflow-y:auto; background:white; border:1px solid #cbd5e1; border-radius:8px; padding:8px; margin-top:5px;"></div>
-                </div>
+                    <div id="container-lista-puestos" class="eval-lista" style="display:none;"></div>
 
-                <div class="form-group" style="flex: 1; min-width: 150px; background:#f0fdf4; padding:10px; border-radius:10px; border:1px solid #bbf7d0; margin-bottom: 0;">
-                    <label style="color:#166534; font-weight:bold; font-size:0.8rem; margin-bottom:5px; display:block;">🏢 Deptos:</label>
-                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
-                        <input type="checkbox" id="chk-all-deptos" onchange="window.toggleSelectorDeptos()" checked style="width:16px; height:16px;">
-                        <span style="font-weight:600; color:#334155; font-size:0.85rem;">Todos</span>
+                    <label class="eval-opcion">
+                        <input type="checkbox" id="chk-all-deptos" onchange="window.toggleSelectorDeptos()" checked>
+                        <span class="eval-opcion-texto">
+                            <span class="eval-opcion-titulo">🏢 Todos los departamentos</span>
+                            <span class="eval-opcion-ayuda">Desmárcalo para elegir departamentos concretos.</span>
+                        </span>
                     </label>
-                    <div id="container-lista-deptos" style="display:none; max-height:120px; overflow-y:auto; background:white; border:1px solid #cbd5e1; border-radius:8px; padding:8px; margin-top:5px;"></div>
-                </div>
+                    <div id="container-lista-deptos" class="eval-lista" style="display:none;"></div>
 
-                <div class="form-group" style="flex: 1; min-width: 150px; background:#fdf4ff; padding:10px; border:1px solid #fbcfe8; border-radius:10px; display:flex; align-items:center; gap:8px; margin-bottom: 0;">
-                    <input type="checkbox" id="chk-eval-por-area" style="width:18px; height:18px; accent-color:#be185d; cursor:pointer;">
-                    <div>
-                        <label for="chk-eval-por-area" style="font-weight:bold; color:#be185d; cursor:pointer; display:block; font-size:0.85rem;">📍 Por Área</label>
-                        <div style="font-size:0.7rem; color:#64748b; line-height:1.1;">Agrupar resultados.</div>
+                    <label class="eval-opcion">
+                        <input type="checkbox" id="chk-all-empleados" onchange="window.toggleSelectorEmpleados()" checked>
+                        <span class="eval-opcion-texto">
+                            <span class="eval-opcion-titulo">👤 Todos los colaboradores</span>
+                            <span class="eval-opcion-ayuda">Desmárcalo para dirigirla a personas concretas.</span>
+                        </span>
+                    </label>
+                    <div id="container-selector-empleados" class="eval-lista eval-lista--alta" style="display:none;">
+                        <div style="position:relative; margin-bottom:10px;">
+                            <span style="position:absolute; left:10px; top:9px; font-size:0.9rem;">🔍</span>
+                            <input type="text" id="inp-buscar-empleado-eval" placeholder="Buscar por nombre o ID..." oninput="window.buscarEmpleadoParaEval(this.value)" autocomplete="off" style="padding-left:32px;">
+                        </div>
+                        <div id="lista-resultados-empleados-eval" style="max-height:140px; overflow-y:auto; margin-bottom:12px; border-radius:6px;"></div>
+                        <div style="font-size:0.8rem; font-weight:bold; color:#475569; margin-bottom:8px; border-top:1px solid #e2e8f0; padding-top:10px;">Colaboradores seleccionados:</div>
+                        <div id="lista-empleados-seleccionados-eval" style="display:flex; flex-wrap:wrap; gap:8px; min-height:30px;">
+                            <span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Ninguno seleccionado.</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="form-group" style="flex: 1; min-width: 150px; background:#fffbeb; padding:10px; border:1px solid #fde68a; border-radius:10px; display:flex; align-items:center; gap:8px; margin-bottom: 0;">
-                    <input type="checkbox" id="chk-eval-obligatoria" checked style="width:18px; height:18px; accent-color:#d97706; cursor:pointer;">
-                                                <div>
-                                                    <label for="chk-eval-obligatoria" style="font-weight:bold; color:#d97706; cursor:pointer; display:block; font-size:0.85rem;">⚠️ Obligatoria</label>
-                                                    <div style="font-size:0.7rem; color:#64748b; line-height:1.1;">Si se desactiva, será opcional.</div>
-                                                </div>
-                                            </div>
+                <div class="hoja-grupo-titulo">Opciones</div>
+                <div class="hoja-grupo">
+                    <label class="eval-opcion">
+                        <input type="checkbox" id="chk-eval-por-area">
+                        <span class="eval-opcion-texto">
+                            <span class="eval-opcion-titulo">📍 Por área</span>
+                            <span class="eval-opcion-ayuda">Agrupa los resultados por área.</span>
+                        </span>
+                    </label>
+                    <label class="eval-opcion">
+                        <input type="checkbox" id="chk-eval-obligatoria" checked>
+                        <span class="eval-opcion-texto">
+                            <span class="eval-opcion-titulo">⚠️ Obligatoria</span>
+                            <span class="eval-opcion-ayuda">Si se desactiva, será opcional.</span>
+                        </span>
+                    </label>
+                    <label class="eval-opcion">
+                        <input type="checkbox" id="chk-eval-activa" checked>
+                        <span class="eval-opcion-texto">
+                            <span class="eval-opcion-titulo">✅ Activa</span>
+                            <span class="eval-opcion-ayuda">Inactiva: sólo la ve el administrador y no genera pendientes.</span>
+                        </span>
+                    </label>
+                </div>
 
-                <div class="form-group" style="flex: 1; min-width: 150px; background:#eef2ff; padding:10px; border:1px solid #c7d2fe; border-radius:10px; display:flex; align-items:center; gap:8px; margin-bottom: 0;">
-                    <input type="checkbox" id="chk-eval-activa" checked style="width:18px; height:18px; accent-color:#4338ca; cursor:pointer;">
-                    <div>
-                        <label for="chk-eval-activa" style="font-weight:bold; color:#4338ca; cursor:pointer; display:block; font-size:0.85rem;">✅ Activa</label>
-                        <div style="font-size:0.7rem; color:#64748b; line-height:1.1;">Inactiva: sólo la ve el administrador y no genera pendientes.</div>
+                <!-- Plegable y cerrada: son campos opcionales que ocupaban casi
+                     media pantalla. window.editarEvaluacion la abre sola cuando
+                     la encuesta ya trae etiquetas guardadas. -->
+                <details id="div-rango-labels" class="hoja-plegable">
+                    <summary class="hoja-plegable-resumen">Escala de puntajes<span class="hoja-plegable-nota">opcional</span></summary>
+                    <div class="hoja-plegable-cuerpo">
+                        <div class="eval-escala-fila">
+                            <label for="eval-max-scale" style="margin:0;">Puntaje máximo</label>
+                            <input type="number" id="eval-max-scale" value="5" min="1" max="20" onchange="window.renderConfiguracionEscala()" style="width:80px;">
+                        </div>
+                        <label class="eval-opcion">
+                            <input type="checkbox" id="eval-half-points">
+                            <span class="eval-opcion-texto">
+                                <span class="eval-opcion-titulo">Permitir puntos medios</span>
+                                <span class="eval-opcion-ayuda">Deja calificar con 1.5, 2.5, etc.</span>
+                            </span>
+                        </label>
+                        <p class="form-ayuda" style="margin:10px 0 8px;">Define qué significa cada puntaje:</p>
+                        <div id="dynamic-labels-container" style="display:grid; gap:8px;"></div>
                     </div>
-                </div>
+                </details>
 
-                                        </div>
-
-                                        <div class="form-group" style="background:#f3e8ff; padding:15px; border-radius:10px; border:1px solid #d8b4fe; margin-bottom: 15px;">
-                                            <label style="color:#7e22ce; font-weight:bold; font-size:0.9rem; margin-bottom:5px; display:block;">👤 Dirigir a Colaboradores Específicos:</label>
-                                            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; margin-bottom: 8px;">
-                                                <input type="checkbox" id="chk-all-empleados" onchange="window.toggleSelectorEmpleados()" checked style="width:18px; height:18px; accent-color:#7e22ce;">
-                                                <span style="font-weight:600; color:#334155; font-size:0.85rem;">Todos</span>
-                                            </label>
-                                            <div id="container-selector-empleados" style="display:none; background:white; border:1px solid #cbd5e1; border-radius:8px; padding:12px; margin-top:10px;">
-                                                <div style="position:relative; margin-bottom: 10px;">
-                                                    <span style="position:absolute; left:10px; top:8px; font-size:0.9rem;">🔍</span>
-                                                    <input type="text" id="inp-buscar-empleado-eval" placeholder="Buscar por nombre o ID..." oninput="window.buscarEmpleadoParaEval(this.value)" autocomplete="off" style="width: 100%; padding: 8px 8px 8px 30px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; box-sizing: border-box; outline:none;">
-                                                </div>
-                                                <div id="lista-resultados-empleados-eval" style="max-height: 140px; overflow-y: auto; margin-bottom: 15px; border-radius: 6px;"></div>
-                                                <div style="font-size: 0.8rem; font-weight: bold; color: #475569; margin-bottom: 8px; border-top: 1px solid #e2e8f0; padding-top:10px;">Colaboradores Seleccionados:</div>
-                                                <div id="lista-empleados-seleccionados-eval" style="display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px;">
-                                                    <span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Ninguno seleccionado.</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div id="div-rango-labels" class="form-group" style="display:none; background:#fdf2f8; padding:15px; border-radius:10px; border:1px dashed #be185d;">
-                <label style="color:#be185d; font-weight:bold; margin-bottom:8px; display:block;">Configuración de Escala:</label>
-                <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
-                    <span style="font-size:0.85rem; color:#be185d;">Puntaje Máximo:</span>
-                    <input type="number" id="eval-max-scale" value="5" min="1" max="20" onchange="window.renderConfiguracionEscala()" style="width:60px; padding:6px; border-radius:6px; border:1px solid #fbcfe8;">
-                </div>
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-                    <input type="checkbox" id="eval-half-points" style="width:16px; height:16px; accent-color:#be185d; cursor:pointer;">
-                    <label for="eval-half-points" style="font-size:0.85rem; color:#be185d; cursor:pointer;">Permitir puntos medios (ej. 1.5, 2.5)</label>
-                </div>
-                <p style="font-size:0.75rem; color:#be185d; margin:0 0 10px 0;">Define qué significa cada puntaje (opcional):</p>
-                <div id="dynamic-labels-container" style="display:grid; gap:8px;">
-                    </div>
-            </div>
-
-            <div id="questions-container" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px; border: 1px solid #e2e8f0; padding: 10px; border-radius: 8px;"></div>
-            <button onclick="agregarCampoPregunta()" style="width:100%; background:#f5f3ff; color:#7c3aed; border:1px dashed #7c3aed; padding:8px; border-radius:6px; cursor:pointer; font-weight:bold; margin-bottom:15px;">+ Agregar Pregunta Abierta</button>
-            <div style="display:flex; justify-content:flex-end; gap:10px;">
-                <button onclick="document.getElementById('modal-crear-eval').style.display='none'" style="padding:10px; background:white; border:none; cursor:pointer; color:#64748b;">Cancelar</button>
-                <button onclick="guardarNuevaEvaluacion()" style="padding:10px 20px; background:#7c3aed; color:white; border:none; border-radius:8px; font-weight:bold; cursor:pointer;">Publicar Evaluación</button>
+                <div class="hoja-grupo-titulo">Preguntas</div>
+                <!-- Sin max-height: el contenedor crecía dentro de un scroll de
+                     300px metido en el scroll de la hoja, y en el teléfono se
+                     quedaba en una franja aplastada. Ahora se desplaza la hoja. -->
+                <div id="questions-container"></div>
+                <button id="btn-agregar-pregunta" onclick="agregarCampoPregunta()" class="eval-agregar-pregunta"><span data-texto>+ Agregar Pregunta</span></button>
             </div>
         </div>
     </div>
@@ -624,7 +650,7 @@
                  desplazarse hasta el final. -->
             <div id="contenedor-modal-admin" style="flex:1; overflow-y: auto; padding: 15px 15px calc(15px + env(safe-area-inset-bottom)); background: #f8fafc;">
                 <div class="admin-hoja-grupo">
-                    <div class="admin-hoja-titulo">Crear</div>
+                    <div class="hoja-grupo-titulo">Crear</div>
                     <div class="admin-hoja-lista">
                         <button id="btn-nuevo" class="admin-btn" onclick="window.abrirNuevoRegistro()"><span aria-hidden="true">📝</span><span data-texto>Nuevo Registro</span></button>
                         <button id="btn-nueva-eval" class="admin-btn" onclick="window.abrirNuevaEvaluacion()"><span aria-hidden="true">📋</span><span data-texto>Nueva Evaluación</span></button>
@@ -633,7 +659,7 @@
                 </div>
 
                 <div class="admin-hoja-grupo">
-                    <div class="admin-hoja-titulo">Datos</div>
+                    <div class="hoja-grupo-titulo">Datos</div>
                     <div class="admin-hoja-lista">
                         <!-- El estado lo escribe window.actualizarBotonAhorroVisual
                              en el <span data-texto>, así que el emoji se queda

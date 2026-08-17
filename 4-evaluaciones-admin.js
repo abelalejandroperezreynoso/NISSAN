@@ -1517,6 +1517,30 @@ window.aplicarEstadoEnLote = async (nuevoEstado) => {
 
 // --- 3. CREAR Y EDITAR EVALUACIONES ---
 
+// La misma hoja sirve para crear y para editar, así que lo que la distingue
+// tiene que decirlo el encabezado: el título, el subtítulo y la etiqueta del
+// botón de guardar, que al ser un botón de icono la lleva en el aria-label y
+// en el title. Antes decía «Nueva evaluación» también al editar una existente.
+window.prepararEncabezadoEval = (editando) => {
+    const titulo = document.getElementById('titulo-crear-eval');
+    const subtitulo = document.getElementById('subtitulo-crear-eval');
+    const guardar = document.getElementById('btn-guardar-eval');
+    const escala = document.getElementById('div-rango-labels');
+
+    if (titulo) titulo.innerText = editando ? 'Editar evaluación' : 'Nueva evaluación';
+    if (subtitulo) subtitulo.innerText = editando
+        ? 'Los cambios valen del periodo siguiente en adelante'
+        : 'Define el cuestionario y a quién le toca';
+    if (guardar) {
+        const etiqueta = editando ? 'Guardar cambios' : 'Publicar evaluación';
+        guardar.title = etiqueta;
+        guardar.setAttribute('aria-label', etiqueta);
+    }
+    // La escala arranca plegada; quien la necesite la abre, y al editar la
+    // abre window.editarEvaluacion si la encuesta ya trae etiquetas.
+    if (escala) escala.open = false;
+};
+
 window.renderConfiguracionEscala = () => {
     const maxVal = parseInt(document.getElementById('eval-max-scale').value) || 5;
     const container = document.getElementById('dynamic-labels-container');
@@ -1536,11 +1560,13 @@ window.verificarRestriccionesModo = () => {
     const modeEl = document.getElementById('eval-mode-input');
     const mode = modeEl ? modeEl.value : 'self';
     const allTypeSelects = document.querySelectorAll('.inp-tipo');
-    const btnAddQuestion = document.querySelector('button[onclick="agregarCampoPregunta()"]');
+    // Por id, y no por `button[onclick="agregarCampoPregunta()"]`: aquel
+    // selector comparaba el atributo carácter a carácter y se rompía con sólo
+    // reordenar el marcado del botón.
+    const btnAddQuestion = document.getElementById('btn-agregar-pregunta');
     const rangeLabelsDiv = document.getElementById('div-rango-labels');
 
     if(rangeLabelsDiv) {
-        rangeLabelsDiv.style.display = 'block';
         const container = document.getElementById('dynamic-labels-container');
         if(container && container.children.length === 0) window.renderConfiguracionEscala();
     }
@@ -1552,10 +1578,10 @@ window.verificarRestriccionesModo = () => {
             sel.disabled = true;
             window.toggleTipoPregunta(sel);
         });
-        if(btnAddQuestion) btnAddQuestion.innerText = `+ Agregar Pregunta Numérica (1-${maxVal})`;
+        window.textoBoton(btnAddQuestion, `+ Agregar Pregunta Numérica (1-${maxVal})`);
     } else {
         allTypeSelects.forEach(sel => { sel.disabled = false; });
-        if(btnAddQuestion) btnAddQuestion.innerText = "+ Agregar Pregunta";
+        window.textoBoton(btnAddQuestion, "+ Agregar Pregunta");
     }
 };
 
@@ -1567,12 +1593,10 @@ window.prepararInputCategorias = async (currentValue = '') => {
         newInput.id = 'eval-category-input';
         newInput.setAttribute('list', 'eval-category-list');
         newInput.placeholder = "Escribe o selecciona categoría...";
-        newInput.style.width = '100%';
-        newInput.style.padding = '12px';
-        newInput.style.border = '1px solid #e2e8f0';
-        newInput.style.borderRadius = '10px';
-        newInput.style.background = '#f9fafb';
-        newInput.style.boxSizing = 'border-box';
+        // Sin estilos en línea: los pone `.form-group input` y, dentro de una
+        // hoja, la regla de `.hoja-contenido input[type="text"]`. Con el
+        // padding de 12px que traía aquí, este campo quedaba más alto que
+        // todos los demás de la hoja.
         const dl = document.createElement('datalist');
         dl.id = 'eval-category-list';
         input.parentNode.replaceChild(newInput, input);
@@ -1752,6 +1776,7 @@ window.abrirModalCrearEval = async () => {
     if(modeInput) { modeInput.value = 'self'; modeInput.onchange = window.verificarRestriccionesModo; }
     document.getElementById('questions-container').innerHTML = '';
     window.agregarCampoPregunta();
+    window.prepararEncabezadoEval(false);
     document.getElementById('modal-crear-eval').style.display = 'flex';
     window.verificarRestriccionesModo();
 };
@@ -1768,6 +1793,9 @@ window.editarEvaluacion = async (id) => {
     if (!evaluacion) { alert("Error: No se encontró la evaluación."); return; }
 
     window.idEditandoEval = id;
+    // Antes de tocar la escala: prepararEncabezadoEval la deja plegada y el
+    // bloque de range_labels de más abajo la vuelve a abrir si hay etiquetas.
+    window.prepararEncabezadoEval(true);
     document.getElementById('eval-title-input').value = evaluacion.title;
 
     const descInput = document.getElementById('eval-desc-input');
@@ -1834,6 +1862,9 @@ window.editarEvaluacion = async (id) => {
                 if(maxInput) maxInput.value = maxScale;
                 window.renderConfiguracionEscala();
                 for(let i=0; i<=maxScale; i++) { const el = document.getElementById(`lbl-range-${i}`); if(el) el.value = labels[i] || ''; }
+                // Ya hay etiquetas puestas: se despliega para que se vean.
+                const escalaConEtiquetas = document.getElementById('div-rango-labels');
+                if(escalaConEtiquetas && keys.length > 0) escalaConEtiquetas.open = true;
             } else {
         const maxInput = document.getElementById('eval-max-scale');
         if(maxInput) maxInput.value = 5;

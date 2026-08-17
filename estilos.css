@@ -1234,15 +1234,6 @@ textarea:focus {
     margin-top: 18px;
 }
 
-.admin-hoja-titulo {
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: #64748b;
-    margin: 0 4px 8px;
-}
-
 .admin-hoja-lista {
     display: flex;
     flex-direction: column;
@@ -2119,6 +2110,217 @@ textarea:focus {
 
 .ios-boton-cerrar::before { transform: rotate(45deg); }
 .ios-boton-cerrar::after  { transform: rotate(-45deg); }
+
+/* --- Formularios largos dentro de una hoja -------------------------------
+   Cuando el formulario no cabe de una vez, lo que se desplaza es el cuerpo y
+   no la hoja entera: así el encabezado —con el botón de guardar— se queda a
+   la vista en lugar de irse por arriba al primer arrastre. La hoja pasa
+   entonces a `overflow:hidden; padding:12px 0 0` y el relleno lateral lo pone
+   este cuerpo, que además aparta el indicador de inicio para poder
+   desplazarse hasta el final. */
+.hoja-cuerpo-formulario {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    padding: 14px 16px calc(20px + env(safe-area-inset-bottom));
+    background: #f8fafc;
+}
+
+/* Rótulo de grupo. Lo comparten el panel de administración y la hoja de
+   crear encuesta. */
+.hoja-grupo-titulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    margin: 0 4px 8px;
+}
+
+.hoja-grupo-titulo:not(:first-child) {
+    margin-top: 20px;
+}
+
+/* Tarjeta blanca que agrupa los campos de una sección sobre el fondo gris del
+   cuerpo. Es lo que da la jerarquía que antes no había: doce bloques seguidos,
+   cada uno de un color distinto, sin nada que dijera dónde acaba un asunto y
+   empieza el siguiente. */
+.hoja-grupo {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 14px;
+}
+
+.hoja-grupo .form-group {
+    margin-bottom: 14px;
+}
+
+.hoja-grupo .form-group:last-child {
+    margin-bottom: 0;
+}
+
+/* Los campos que arma window.agregarCampoPregunta viven fuera de un
+   .form-group, así que no les llega el `box-sizing: border-box` de aquella
+   regla: con su `width:100%` y su padding propio se salían de la tarjeta de
+   la pregunta por la derecha. */
+.pregunta-wrapper input,
+.pregunta-wrapper textarea,
+.pregunta-wrapper select {
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+/* Un <select> mide por su opción más larga —aquí «Recall (Lista de
+   Memoria)»— y, sin `min-width:0`, un elemento flex se niega a encoger por
+   debajo de eso: en una pantalla de 320px empujaba al botón de quitar fuera
+   de la tarjeta. */
+.pregunta-wrapper .inp-tipo {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Fila de casilla con su explicación debajo, al estilo de una lista de
+   ajustes. Sustituye a las tarjetas de colores que se apilaban de una en una:
+   con `min-width:150px` y 309px de ancho útil no entraban dos por renglón, y
+   las cinco opciones se llevaban 800px de alto. */
+.eval-opcion {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 11px 0;
+    cursor: pointer;
+}
+
+.eval-opcion + .eval-opcion,
+.eval-lista + .eval-opcion {
+    border-top: 1px solid #f1f5f9;
+}
+
+.eval-opcion:first-child { padding-top: 2px; }
+.eval-opcion:last-child  { padding-bottom: 2px; }
+
+.eval-opcion input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin: 1px 0 0;
+    accent-color: #7c3aed;
+}
+
+.eval-opcion-texto { min-width: 0; }
+
+.eval-opcion-titulo {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #1e293b;
+}
+
+.eval-opcion-ayuda {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.75rem;
+    line-height: 1.3;
+    color: #64748b;
+}
+
+/* Lista que aparece al desmarcar «Todos». El alto tope la mantiene navegable
+   sin empujar el resto del formulario fuera de la pantalla; el display lo
+   manejan las funciones toggleSelector*, así que aquí no se toca. */
+.eval-lista {
+    max-height: 160px;
+    overflow-y: auto;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 8px;
+    margin: 0 0 10px;
+}
+
+.eval-lista--alta { max-height: none; }
+
+.eval-escala-fila {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0 10px;
+}
+
+.eval-agregar-pregunta {
+    width: 100%;
+    background: #f5f3ff;
+    color: #7c3aed;
+    border: 1px dashed #7c3aed;
+    padding: 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-top: 10px;
+}
+
+/* Texto de apoyo bajo un campo. */
+.form-ayuda {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: #64748b;
+    margin: 5px 0 0;
+}
+
+/* --- Plegable dentro de una hoja ----------------------------------------
+   Guarda su estado solo y no necesita ninguna función colgada de window. */
+.hoja-plegable {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 0 14px;
+    margin-top: 20px;
+}
+
+.hoja-plegable-resumen {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #1e293b;
+    cursor: pointer;
+    list-style: none;
+}
+
+.hoja-plegable-resumen::-webkit-details-marker { display: none; }
+
+/* Chevron propio, que gira al abrir. */
+.hoja-plegable-resumen::after {
+    content: '';
+    margin-left: auto;
+    width: 7px;
+    height: 7px;
+    border-right: 1.8px solid #94a3b8;
+    border-bottom: 1.8px solid #94a3b8;
+    transform: rotate(45deg);
+    transition: transform 0.2s;
+}
+
+.hoja-plegable[open] .hoja-plegable-resumen::after {
+    transform: rotate(-135deg);
+}
+
+.hoja-plegable-nota {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #94a3b8;
+}
+
+.hoja-plegable-cuerpo {
+    padding-bottom: 14px;
+    border-top: 1px solid #f1f5f9;
+}
 
 /* Los paneles que ya traían .form-content o .firma-content conservan de esas
    clases el ancho máximo y el scroll; lo que cambia es el relleno, porque el
