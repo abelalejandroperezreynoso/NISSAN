@@ -517,9 +517,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   El criterio antes era una leyenda de colores clicable que sólo ordenaba las
   barras. Ahora es un conmutador más y **manda también en los cuadros**: cada
   criterio de `CRITERIOS_STATS` trae su color y su `valor(fila)`, que es la
-  proporción con la que se llena el cuadro. Participación conserva su segunda
-  banda —contestado y, encima, lo ya revisado—; los demás criterios son una
-  sola cosa y una sola banda. Un treemap coloca por tamaño y no por medida, así
+  proporción con la que se llena el cuadro. **Un cuadro, una banda**: la del
+  criterio elegido y nada más. Participación llevaba encima una segunda con lo
+  ya revisado, de cuando eso no se podía ver en ningún otro sitio; desde que
+  «Avance de revisión» es un criterio con su propio cuadro, esa banda sólo
+  estorbaba —dos rellenos midiendo cosas distintas sobre el mismo cuadro no se
+  comparan con los de al lado—. Un treemap coloca por tamaño y no por medida, así
   que con valores parecidos los rellenos se ven iguales y no hay forma de ver
   quién va peor: para eso cada cuadro lleva su puesto en la tabla (`#3 · 6.5
   días`) y el encabezado señala al peor del nivel

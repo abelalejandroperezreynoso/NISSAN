@@ -1824,7 +1824,6 @@ window.dibujarCuadros = (nodos, alTocar) => {
         const pctCriterio = escala
             ? Math.min(100, Math.max((valorCriterio - escala.min) / (escala.max - escala.min) * 100, 0))
             : Math.min(100, Math.max(valorCriterio * 100, 0));
-        const pctProcesadas = n.asignadas > 0 ? Math.min(100, (n.procesadas / n.asignadas) * 100) : 0;
 
         const el = document.createElement('div');
         el.className = 'stats-cuadro';
@@ -1839,6 +1838,12 @@ window.dibujarCuadros = (nodos, alTocar) => {
         if (alTocar) el.onclick = () => alTocar(n.nombre);
         else el.style.cursor = 'default';
 
+        // Un cuadro, una banda: la del criterio elegido y nada más. Participación
+        // llevaba encima una segunda con lo ya revisado, de cuando no había
+        // dónde más verlo; hoy eso es «Avance de revisión» y su propio cuadro,
+        // así que aquí sólo estorbaba —dos rellenos midiendo cosas distintas
+        // sobre el mismo cuadro no se comparan con los de al lado—.
+        //
         // El relleno lleva la proporción sin redondear: con el 99% redondeado
         // a 100 el cuadro se vería lleno sin estarlo.
         const relleno = document.createElement('div');
@@ -1846,16 +1851,6 @@ window.dibujarCuadros = (nodos, alTocar) => {
         relleno.style.background = criterio.relleno;
         relleno.style.height = pctCriterio + '%';
         el.appendChild(relleno);
-
-        // Participación se lee en dos etapas —contestado y ya revisado—, que
-        // es como avanza el trabajo. Los demás criterios son una sola cosa.
-        if (criterio.clave === 'participacion') {
-            const revisadas = document.createElement('div');
-            revisadas.className = 'stats-cuadro-relleno';
-            revisadas.style.background = '#86efac';
-            revisadas.style.height = pctProcesadas + '%';
-            el.appendChild(revisadas);
-        }
 
         const cuerpo = document.createElement('div');
         cuerpo.className = 'stats-cuadro-cuerpo';
