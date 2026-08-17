@@ -526,6 +526,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   (`window.extremoDelCriterio`), que en falsas y mal revisadas es el de más y
   en los demás el de menos.
 
+  Casi todos los criterios miden **sobre las asignadas**, que es lo que hace
+  comparables las barras y los cuadros entre sí. Las dos excepciones son
+  calificación, que ya viene en porcentaje, y **avance de revisión**, que se
+  mide sobre las **contestadas**: dice qué parte de lo que ya entregaron lleva
+  calificada quien revisa, y meter en el denominador una encuesta que nadie
+  contestó volvería a medir participación en lugar del trabajo del revisor.
+  Su cifra son las dos cosas —`60% · 12/20`—, porque un porcentaje sobre
+  cuatro respuestas no dice lo mismo que sobre cuarenta. Quien no tiene ni una
+  respuesta dice «sin contestar» y **queda fuera del renglón del peor**: no
+  hay revisión atrasada que reprocharle. Lo que cuenta como revisado es
+  cualquier veredicto —revisada, certificada, falsa o mal revisada—, que es lo
+  que reúne `window.procesadasDe(fila)`.
+
   Prontitud además se llena en **escala relativa** (`escalaRelativa` en su
   criterio): en un mes de 31 días, contestar en 6 o en 7 son 81% y 77%, así que
   en absoluto los ocho cuadros salían igual de llenos. Con la escala del nivel,

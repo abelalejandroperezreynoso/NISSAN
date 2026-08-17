@@ -289,6 +289,12 @@ window.cargarStatsEncuestasGlobales = async () => {
 };
 
 
+// Una respuesta está procesada en cuanto alguien la calificó, sea cual sea el
+// veredicto: revisada, certificada, falsa o mal revisada. Lo que queda fuera
+// son las que nadie ha tocado todavía.
+window.procesadasDe = (d) => (d.reviewed || 0) + (d.certificadas || 0)
+    + (d.falsas || 0) + (d.malRevisadas || 0);
+
 // Lo que mide el desglose. Ordena las barras y es lo que pintan y dicen los
 // cuadros, así que el conmutador del encabezado gobierna las dos formas.
 // `valor` devuelve una proporción de 0 a 1 sobre las encuestas asignadas; la
@@ -297,6 +303,18 @@ window.CRITERIOS_STATS = [
     { clave: 'participacion', etiqueta: 'Participación', nombre: 'contestadas', color: '#3b82f6', relleno: '#bfdbfe',
       extremo: 'El que menos contesta',
       valor: (d) => d.assignedCount > 0 ? (d.responses || 0) / d.assignedCount : 0 },
+    // Cuánto lleva revisado quien califica, de todo lo que ya le contestaron.
+    // Es el único criterio que no se mide sobre las asignadas: una encuesta
+    // sin contestar no se le puede revisar a nadie, así que meterla en el
+    // denominador volvería a medir participación en lugar del trabajo del
+    // revisor. Por lo mismo, quien no tiene ni una respuesta no dice 0% sino
+    // «sin contestar», y queda fuera del renglón del peor.
+    { clave: 'avance_revision', etiqueta: 'Avance de revisión', nombre: 'de lo contestado', color: '#0891b2', relleno: '#a5f3fc',
+      extremo: 'El que menos lleva revisado',
+      valor: (d) => (d.responses || 0) > 0 ? window.procesadasDe(d) / d.responses : 0,
+      texto: (d) => (d.responses || 0) > 0
+          ? `${Math.round((window.procesadasDe(d) / d.responses) * 100)}% · ${window.procesadasDe(d)}/${d.responses}`
+          : 'sin contestar' },
     { clave: 'revisadas_altas', etiqueta: 'Revisadas ≥80%', nombre: 'revisadas ≥80%', color: '#047857', relleno: '#6ee7b7',
       extremo: 'El que menos revisadas altas tiene',
       valor: (d) => d.assignedCount > 0 ? (d.revisadasAltas || 0) / d.assignedCount : 0 },
@@ -342,6 +360,8 @@ window.extremoDelCriterio = (nodos) => {
     const conDatos = (nodos || []).filter(n => {
         if (criterio.clave === 'prontitud') return n.datos.countProntitud > 0;
         if (criterio.clave === 'calificacion') return n.datos.countScore > 0;
+        // Sin respuestas no hay revisión atrasada que reprocharle a nadie.
+        if (criterio.clave === 'avance_revision') return (n.datos.responses || 0) > 0;
         return (n.datos.assignedCount || 0) > 0;
     });
     if (conDatos.length < 2) return null;
@@ -1693,7 +1713,7 @@ window.nodosDeCuadros = (mapa) => {
             datos: d,
             asignadas: asignadas,
             respuestas: d.responses || 0,
-            procesadas: (d.reviewed || 0) + (d.certificadas || 0) + (d.falsas || 0) + (d.malRevisadas || 0),
+            procesadas: window.procesadasDe(d),
             calificacion: d.countScore > 0 ? Math.round(d.sumScore / d.countScore) : null
         });
     });
