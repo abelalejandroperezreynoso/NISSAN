@@ -205,6 +205,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   a `#simple-form-container`, o la hoja pierde tirador, esquinas y tope de
   altura.
 
+  El panel de administración es otro caso con su regla. La barra
+  `#admin-toolbar`, que aparece al encender el modo administrador, ya no
+  guarda las acciones: sólo trae el botón que abre la hoja `#modal-admin`
+  (`window.abrirPanelAdmin` y `window.cerrarPanelAdmin`, en `2a-core-nav.js`).
+  Los botones de dentro **se quedan en el marcado de `index.html`** y no se
+  inyectan al abrir, porque otros archivos se enganchan a ellos por id nada
+  más cargarse —`btn-nuevo` en `2a-core-nav.js`, `btn-nueva-eval` en
+  `4-evaluaciones-base.js`— y ese `getElementById` va sin comprobar si
+  encontró algo. Los tres que abren otra hoja la cierran antes: dos hojas
+  apiladas esconden la de abajo y dejan dos tiradores a la vista. Un botón
+  nuevo que abra panel tiene que llamar también a `cerrarPanelAdmin()`.
+  `btn-toggle-ahorro` y `btn-backup-download` cambian su texto con
+  `innerText`, así que no pueden llevar marcado dentro.
+
   Queda a pantalla completa, y a propósito, sólo el visor de imágenes
   (`#modal-visor`).
 

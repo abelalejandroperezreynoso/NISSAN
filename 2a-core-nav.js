@@ -196,9 +196,38 @@ if(btnEquipo) {
 
 document.getElementById('btn-nuevo').onclick = () => {
     if(!window.checkAdmin()) return;
+    window.cerrarPanelAdmin();
     window.idEditando=null;
     window.existingGallery=[];
     if(window.abrirModal) window.abrirModal();
+};
+
+// --- PANEL DE ADMINISTRACIÓN ---
+//
+// Se presenta como hoja inferior, igual que el resto de los paneles. La barra
+// `#admin-toolbar` que aparece en modo administrador ya sólo sirve de entrada;
+// las acciones viven en `#modal-admin`, en el marcado de index.html, porque
+// varias pantallas se enganchan a sus botones por id al cargarse.
+window.abrirPanelAdmin = () => {
+    if(!window.checkAdmin()) return;
+    const hoja = document.getElementById('modal-admin');
+    if(!hoja) return;
+
+    // El estado del modo ahorro llega de la base y puede resolverse después de
+    // que se pintara el botón por primera vez.
+    const btnAhorro = document.getElementById('btn-toggle-ahorro');
+    if(btnAhorro && window.actualizarBotonAhorroVisual) {
+        window.actualizarBotonAhorroVisual(btnAhorro);
+    }
+
+    hoja.style.display = 'flex';
+};
+
+// La llaman también las acciones que abren otra hoja: dos hojas apiladas
+// esconden la de abajo y dejan dos tiradores a la vista.
+window.cerrarPanelAdmin = () => {
+    const hoja = document.getElementById('modal-admin');
+    if(hoja) hoja.style.display = 'none';
 };
 
 window.volverAlDashboard = () => window.mostrarDashboard(JSON.parse(localStorage.getItem("usuarioLogueado")));
@@ -212,6 +241,7 @@ document.getElementById('app-title').onclick = () => {
         window.modoAdminActivo = false;
         sessionStorage.removeItem('adminSostenido'); // <-- LÍNEA AGREGADA
         if(adminToolbar) adminToolbar.style.display = 'none';
+        window.cerrarPanelAdmin();
         titleElem.style.color = '';
         window.volverAlDashboard();
     } else if(prompt("Contraseña Admin:") === window.PASSWORD_ADMIN) {

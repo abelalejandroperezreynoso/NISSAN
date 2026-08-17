@@ -116,24 +116,17 @@
         
         <div id="container-accesos-directos" style="margin-bottom: 20px;"></div>
 
+        <!-- La barra sólo abre la hoja. Las acciones viven en #modal-admin, más
+             abajo: son botones que otras pantallas buscan por id al cargarse,
+             así que tienen que estar en el marcado desde el principio, no
+             inyectados al abrir. -->
         <div id="admin-toolbar" class="admin-toolbar">
             <div class="admin-label">Panel de Administración</div>
             <div class="admin-actions-group">
-                <button id="btn-toggle-ahorro" class="admin-btn" onclick="window.toggleAhorroGlobal()" style="border-color: #64748b; color: #64748b;">
-                    📡 Cargando...
-                </button>
-                
-                <input type="file" id="inp-import-db" style="display:none" accept=".json" onchange="window.importarBaseDatos(this)">
-                <button id="btn-backup-download" class="admin-btn" onclick="window.exportarBaseDatos()">Respaldar</button>
-                <button id="btn-backup-upload" class="admin-btn" onclick="document.getElementById('inp-import-db').click()">Restaurar</button>
-                
-                <button class="admin-btn" onclick="window.abrirModalAccesos()" style="border-color: #eab308; color: #ca8a04;">⭐ Accesos Directos</button>
-                
-                <button id="btn-nueva-eval" class="admin-btn">Nueva Evaluación</button>
-                <button id="btn-nuevo" class="admin-btn">Nuevo Registro</button>
+                <button class="admin-btn" onclick="window.abrirPanelAdmin()">Abrir panel</button>
             </div>
         </div>
-        
+
         <!-- Modal Flotante para Stats Difusión -->
                 <div id="modal-stats-difusion" class="hoja-overlay" style="z-index:4000;">
                     <div class="form-content hoja-contenido" style="max-width: 800px; overflow: hidden; padding: 12px 0 0;">
@@ -609,6 +602,50 @@
             
             <div id="contenido-modal-detalle" style="flex:1; overflow-y: auto; padding: 20px;">
                 </div>
+        </div>
+    </div>
+
+    <!-- Panel de administración. El z-index va por debajo del de las hojas que
+         abren sus botones (formulario 2000, crear encuesta 2000, accesos 4000):
+         esas se cierran ésta antes de abrirse, y si alguna vez no lo hiciera,
+         quedaría delante y no detrás. -->
+    <div id="modal-admin" class="hoja-overlay" style="z-index:1700;">
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 0;">
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h2 class="hoja-titulo">Panel de administración</h2>
+                    <div class="hoja-subtitulo">Acciones reservadas al administrador</div>
+                </div>
+                <button onclick="window.cerrarPanelAdmin()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+            </div>
+
+            <!-- El indicador de inicio se aparta desde aquí, con el padding de
+                 la lista, y no desde el margen del overlay: así la lista puede
+                 desplazarse hasta el final. -->
+            <div id="contenedor-modal-admin" style="flex:1; overflow-y: auto; padding: 15px 15px calc(15px + env(safe-area-inset-bottom)); background: #f8fafc;">
+                <div class="admin-hoja-grupo">
+                    <div class="admin-hoja-titulo">Crear</div>
+                    <div class="admin-hoja-lista">
+                        <button id="btn-nuevo" class="admin-btn">Nuevo Registro</button>
+                        <button id="btn-nueva-eval" class="admin-btn">Nueva Evaluación</button>
+                        <button class="admin-btn" onclick="window.cerrarPanelAdmin(); window.abrirModalAccesos();" style="border-color: #eab308; color: #ca8a04;">⭐ Accesos Directos</button>
+                    </div>
+                </div>
+
+                <div class="admin-hoja-grupo">
+                    <div class="admin-hoja-titulo">Datos</div>
+                    <div class="admin-hoja-lista">
+                        <!-- El texto y los colores de este botón los pone
+                             window.actualizarBotonAhorroVisual con innerText,
+                             así que no puede llevar marcado dentro. -->
+                        <button id="btn-toggle-ahorro" class="admin-btn" onclick="window.toggleAhorroGlobal()" style="border-color: #64748b; color: #64748b;">📡 Cargando...</button>
+
+                        <input type="file" id="inp-import-db" style="display:none" accept=".json" onchange="window.importarBaseDatos(this)">
+                        <button id="btn-backup-download" class="admin-btn" onclick="window.exportarBaseDatos()">Respaldar</button>
+                        <button id="btn-backup-upload" class="admin-btn" onclick="document.getElementById('inp-import-db').click()">Restaurar</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
