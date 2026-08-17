@@ -6,11 +6,9 @@ window.encuestasRawData = null;
 window.encuestasStatsCacheForDrilldown = null;
 window.statsRadarChart = null;
 
-// --- FUNCIÓN DE SEGURIDAD PARA NOMBRES CON COMILLAS O CARACTERES ESPECIALES ---
-window.sanitizeForHTML = (str) => {
-    if (str === null || str === undefined) return '';
-    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-};
+// `window.sanitizeForHTML` vivía aquí, pero lo usan también las pantallas del
+// administrador de `4-evaluaciones-admin.js`, que se carga antes: se mudó a
+// `1-config.js`, que es el primero de todos.
 
 // --- DESDE CUÁNDO LE CORRÍA EL PENDIENTE ---
 // La base no guarda en ningún lado el momento en que una encuesta apareció en

@@ -401,6 +401,29 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `window.normalizarClasificacion()`. Aun así, renombrarla en una sola encuesta
   parte el grupo y deja las actas viejas colgando de un nombre que ya no existe.
 
+  Se certifica desde dos sitios, y los dos son del modo administrador:
+  **«⭐ Certificar por Clasificación»** (`abrirCertificacionPorClasificacion`)
+  toma una clasificación y enseña a toda la gente a la que le toca, agrupada
+  por estado, para sellar a varios de una vez; y el **expediente por empleado**
+  trae el mismo botón en su bloque de «listas para certificar», para resolver a
+  una persona sin salir de ahí. El primero acota la consulta con
+  `.in('evaluation_id', …)` y un `.gte('submitted_at', …)` calculado del
+  periodo más temprano en juego: sin eso se traería el historial completo de
+  toda la empresa. Una encuesta de `once` no se puede acotar —su periodo es
+  «desde siempre»— y entonces no se filtra por fecha.
+
+  **A quién le toca una encuesta también vive en `1-config.js`**
+  (`window.leTocaEstaEncuesta(ev, empleado, tieneEquipo)`), y por lo mismo: el
+  administrador tiene que preguntarlo de otras personas, y dos copias de la
+  regla acabarían certificando un juego de encuestas distinto del que ve el
+  interesado. Ojo con que esa regla **no** mira `target_departments`, que sí usa
+  la pantalla de estadísticas para contar asignadas; la discrepancia ya existía
+  y se respeta porque es la que decide lo que la gente ve en su panel.
+
+  `window.sanitizeForHTML` se mudó de `4b-evaluaciones-stats.js` a
+  `1-config.js`: lo usan las pantallas del administrador, que se cargan antes,
+  y un ayudante de escapado no puede depender del orden de carga.
+
 - **Una encuesta inactiva sigue existiendo, pero sólo para el administrador.**
   La columna `active` de `evaluations` decide quién la ve: apagada, la encuesta
   desaparece de la lista, de los pendientes, de las encuestas atrasadas y de

@@ -1544,40 +1544,54 @@ window.aplicarEstadoEnLote = async (nuevoEstado) => {
 // no del acta: si mañana se anula una, la clasificación deja de estar
 // certificada aunque el acta siga guardada.
 
-// Guarda el acta. Si la tabla todavía no existe —el script de `sql/` se corre a
-// mano— no pasa nada: la certificación ya quedó hecha en las respuestas, que es
-// lo que ve todo el mundo. Se avisa por consola y se sigue.
-window.registrarActaCertificacion = async ({ clasificacion, empleadoId, resumen, cubiertas, nota }) => {
+// La fila del acta a partir de un resumen ya recalculado.
+window.filaDeActa = ({ clasificacion, empleadoId, resumen, cubiertas, nota }) => {
     const periodo = resumen && resumen.periodoFechas;
-    if (!periodo) return { guardada: false, motivo: 'sin periodo' };
+    if (!periodo) return null;
 
     const aFecha = (d) => d ? new Date(d).toISOString().slice(0, 10) : null;
     const usuario = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+
+    return {
+        clasificacion: window.normalizarClasificacion(clasificacion),
+        employee_id: empleadoId,
+        periodo_inicio: aFecha(periodo.inicio),
+        periodo_fin: aFecha(periodo.fin),
+        periodo_nombre: resumen.periodo,
+        certificado_por: usuario ? usuario.id : null,
+        certificado_en: new Date().toISOString(),
+        respuestas_cubiertas: cubiertas,
+        nota: nota || null
+    };
+};
+
+// Guarda las actas. Si la tabla todavía no existe —el script de `sql/` se corre
+// a mano— no pasa nada: la certificación ya quedó hecha en las respuestas, que
+// es lo que ve todo el mundo. Se avisa por consola y se sigue.
+window.registrarActasCertificacion = async (filas) => {
+    const utiles = (filas || []).filter(Boolean);
+    if (utiles.length === 0) return { guardadas: 0, motivo: 'sin periodo' };
 
     try {
         // Se encadena `.select()` porque un insert que RLS rechaza responde con
         // éxito y cero filas: sin contar lo que vuelve, la pantalla diría que
         // guardó sin haber guardado.
         const { data, error } = await sb.from('certificaciones_clasificacion')
-            .upsert({
-                clasificacion: window.normalizarClasificacion(clasificacion),
-                employee_id: empleadoId,
-                periodo_inicio: aFecha(periodo.inicio),
-                periodo_fin: aFecha(periodo.fin),
-                periodo_nombre: resumen.periodo,
-                certificado_por: usuario ? usuario.id : null,
-                certificado_en: new Date().toISOString(),
-                respuestas_cubiertas: cubiertas,
-                nota: nota || null
-            }, { onConflict: 'clasificacion,employee_id,periodo_inicio' })
+            .upsert(utiles, { onConflict: 'clasificacion,employee_id,periodo_inicio' })
             .select();
 
         if (error) throw error;
-        return { guardada: (data || []).length > 0, motivo: (data || []).length ? '' : 'RLS no dejó escribir' };
+        const guardadas = (data || []).length;
+        return { guardadas, motivo: guardadas ? '' : 'la base no dejó escribir' };
     } catch (e) {
         console.warn('No se pudo guardar el acta de certificación:', e.message);
-        return { guardada: false, motivo: e.message };
+        return { guardadas: 0, motivo: e.message };
     }
+};
+
+window.registrarActaCertificacion = async (datos) => {
+    const res = await window.registrarActasCertificacion([window.filaDeActa(datos)]);
+    return { guardada: res.guardadas > 0, motivo: res.motivo };
 };
 
 // Certifica de una vez todo lo certificable de una clasificación para la
@@ -1674,6 +1688,373 @@ window.certificarClasificacionExpediente = async (clasificacion) => {
 
     } catch (e) {
         alert("Ocurrió un error al certificar la clasificación: " + e.message);
+    }
+};
+
+// --- 2D. CERTIFICAR UNA CLASIFICACIÓN A VARIAS PERSONAS ---
+// La transpuesta del expediente: en vez de una persona y todas sus
+// clasificaciones, una clasificación y toda la gente a la que le toca. Es lo
+// que quita el «uno por uno» cuando son cuarenta personas.
+
+window.certificacionActual = null;
+
+window.abrirCertificacionPorClasificacion = async () => {
+    const container = document.getElementById('contenido-modal-evaluaciones');
+    if (!container) return;
+
+    if (!window.modoAdminActivo) {
+        alert("Esta vista está reservada para el modo administrador.");
+        return;
+    }
+
+    container.scrollTop = 0;
+    container.style.display = 'block';
+    container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner" style="margin: 0 auto 15px auto;"></div>Cargando clasificaciones...</div>';
+
+    if (!window.todosLosEmpleadosData || window.todosLosEmpleadosData.length === 0) {
+        if (window.cargarDatosEmpleados) await window.cargarDatosEmpleados();
+    }
+
+    const { data: evaluaciones, error } = await sb.from('evaluations')
+        .select('id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions');
+
+    if (error) {
+        container.innerHTML = `<div style="padding:40px; text-align:center; color:#ef4444;">No se pudieron cargar las encuestas: ${error.message}</div>`;
+        return;
+    }
+
+    // Sólo las encendidas: una apagada no le aparece a nadie, así que tampoco
+    // hay nada que certificarle.
+    const activas = (evaluaciones || []).filter(window.encuestaActiva);
+    const clasificaciones = Array.from(new Set(activas.map(ev => ev.category || 'General')))
+        .sort((a, b) => a.localeCompare(b));
+
+    window.certificacionActual = {
+        evaluaciones: activas,
+        clasificaciones: clasificaciones,
+        elegida: '',
+        filas: [],
+        seleccion: []
+    };
+
+    container.innerHTML = `
+        <div style="display:flex; align-items:center; margin-bottom:20px; flex-wrap: wrap; gap: 10px;">
+            <button onclick="window.certificacionActual=null; window.cargarVistaEvaluaciones()" style="background:#f1f5f9; border:none; color:#334155; font-weight:bold; cursor:pointer; font-size:1.2rem; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;" title="Volver a la lista">←</button>
+            <div style="min-width:0;">
+                <h2 style="margin:0; font-size:1.2rem; color:#1d4ed8;">⭐ Certificar por clasificación</h2>
+                <div style="font-size:0.85rem; color:#64748b;">Da fe de una clasificación entera para varias personas a la vez</div>
+            </div>
+        </div>
+
+        <select id="selector-clasificacion-cert" onchange="window.cargarClasificacionParaCertificar(this.value)"
+                style="width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white; margin-bottom:15px; color:#0f172a; font-weight:600;">
+            <option value="">Elige una clasificación…</option>
+            ${clasificaciones.map(c => `<option value="${window.sanitizeForHTML(c)}">${window.sanitizeForHTML(c)}</option>`).join('')}
+        </select>
+
+        <div id="cuerpo-certificacion"></div>
+    `;
+
+    if (clasificaciones.length === 0) {
+        document.getElementById('cuerpo-certificacion').innerHTML =
+            `<div style="padding:30px; text-align:center; color:#94a3b8;">No hay encuestas activas.</div>`;
+    }
+};
+
+window.cargarClasificacionParaCertificar = async (clasificacion) => {
+    const cuerpo = document.getElementById('cuerpo-certificacion');
+    const estado = window.certificacionActual;
+    if (!cuerpo || !estado) return;
+
+    if (!clasificacion) {
+        estado.elegida = ''; estado.filas = []; estado.seleccion = [];
+        cuerpo.innerHTML = '';
+        return;
+    }
+
+    cuerpo.innerHTML = '<div style="padding:30px; text-align:center;"><div class="spinner" style="margin: 0 auto 12px auto;"></div>Reuniendo respuestas…</div>';
+
+    const clave = window.normalizarClasificacion(clasificacion);
+    const encuestas = estado.evaluaciones
+        .filter(ev => window.normalizarClasificacion(ev.category || 'General') === clave);
+
+    // Sólo hacen falta las respuestas del periodo que corre. Se acota por la
+    // fecha más temprana de todos los periodos en juego, que en una
+    // clasificación mensual son unas semanas en vez de todo el historial. Si hay
+    // alguna de una sola vez no se puede acotar: su periodo es «desde siempre».
+    let desde = null;
+    encuestas.forEach(ev => {
+        const p = window.periodoDeEncuesta(ev);
+        if (!p.fin) { desde = false; return; }          // una `once` manda
+        if (desde === false) return;
+        if (desde === null || p.inicio < desde) desde = p.inicio;
+    });
+
+    let consulta = sb.from('evaluation_responses')
+        .select('id, evaluation_id, employee_id, review_status, grades_json, submitted_at')
+        .in('evaluation_id', encuestas.map(ev => ev.id));
+    if (desde) consulta = consulta.gte('submitted_at', new Date(desde).toISOString());
+
+    const { data: respuestas, error } = await consulta;
+
+    if (error) {
+        cuerpo.innerHTML = `<div style="padding:30px; text-align:center; color:#ef4444;">No se pudieron cargar las respuestas: ${error.message}</div>`;
+        return;
+    }
+
+    const porEmpleado = {};
+    (respuestas || []).forEach(r => {
+        const id = String(r.employee_id);
+        if (!porEmpleado[id]) porEmpleado[id] = [];
+        porEmpleado[id].push(r);
+    });
+
+    // Un empleado dado de baja no cuenta: ni se le certifica ni se le reprocha.
+    const filas = (window.todosLosEmpleadosData || [])
+        .filter(window.empleadoActivo)
+        .map(emp => {
+            const suyas = encuestas.filter(ev =>
+                window.leTocaEstaEncuesta(ev, emp, window.tieneEquipoDirecto(emp.id)));
+            if (suyas.length === 0) return null;
+
+            const resumen = window.estadoCertificacion(suyas, porEmpleado[String(emp.id)] || []);
+            return { empleado: emp, resumen: resumen };
+        })
+        .filter(Boolean);
+
+    estado.elegida = clasificacion;
+    estado.encuestas = encuestas;
+    estado.filas = filas;
+    // Vienen marcadas las que están listas, que es a lo que se entra a esta
+    // pantalla; lo demás se marca a mano.
+    estado.seleccion = filas
+        .filter(f => f.resumen.estado === window.ESTADOS_CERTIFICACION.LISTA)
+        .map(f => String(f.empleado.id));
+
+    window.renderizarCertificacionClasificacion();
+};
+
+window.alternarSeleccionEmpleadoCert = (empId) => {
+    const estado = window.certificacionActual;
+    if (!estado) return;
+    const i = estado.seleccion.indexOf(String(empId));
+    if (i === -1) estado.seleccion.push(String(empId)); else estado.seleccion.splice(i, 1);
+    window.renderizarCertificacionClasificacion();
+};
+
+window.seleccionarGrupoCert = (ids, marcar) => {
+    const estado = window.certificacionActual;
+    if (!estado) return;
+    String(ids).split(',').filter(Boolean).forEach(id => {
+        const i = estado.seleccion.indexOf(id);
+        if (marcar && i === -1) estado.seleccion.push(id);
+        if (!marcar && i !== -1) estado.seleccion.splice(i, 1);
+    });
+    window.renderizarCertificacionClasificacion();
+};
+
+window.renderizarCertificacionClasificacion = () => {
+    const cuerpo = document.getElementById('cuerpo-certificacion');
+    const estado = window.certificacionActual;
+    if (!cuerpo || !estado || !estado.elegida) return;
+
+    const E = window.ESTADOS_CERTIFICACION;
+    const { filas, seleccion } = estado;
+
+    // Quien no ha contestado nada no sale en la lista: no hay nada que
+    // certificarle y llenaría la pantalla de gente sin caso.
+    const conCaso = filas.filter(f => f.resumen.estado !== E.VACIO);
+    const sinActividad = filas.length - conCaso.length;
+
+    if (conCaso.length === 0) {
+        cuerpo.innerHTML = `<div style="padding:30px; text-align:center; color:#94a3b8;">
+            Nadie ha contestado todavía nada de «${window.sanitizeForHTML(estado.elegida)}» en el periodo vigente.
+            ${sinActividad > 0 ? `<div style="margin-top:6px; font-size:0.8rem;">Le toca a ${sinActividad} persona(s).</div>` : ''}
+        </div>`;
+        return;
+    }
+
+    const grupos = [
+        { clave: E.LISTA, titulo: '⭐ Listas para certificar', color: '#166534', fondo: '#dcfce7', certificable: true },
+        { clave: E.PROCESO, titulo: '⏳ En proceso', color: '#b45309', fondo: '#fef3c7', certificable: true,
+          nota: 'Se puede certificar lo que ya esté revisado, pero la clasificación no quedará cerrada.' },
+        { clave: E.OBSERVACIONES, titulo: '⚠️ Con observaciones', color: '#7e22ce', fondo: '#faf5ff', certificable: false,
+          nota: 'Hay respuestas anuladas o mal revisadas. Hay que resolverlas antes de dar fe de la clasificación.' },
+        { clave: E.CERTIFICADA, titulo: '✅ Ya certificadas', color: '#1d4ed8', fondo: '#eff6ff', certificable: false }
+    ];
+
+    const filaHtml = (f, certificable) => {
+        const id = String(f.empleado.id);
+        const marcada = seleccion.includes(id);
+        const insignia = window.insigniaCertificacion(f.resumen);
+        const puedeAlgo = certificable && f.resumen.certificables.length > 0;
+        const safeName = window.sanitizeForHTML(f.empleado.name || 'Sin nombre');
+        const puesto = window.sanitizeForHTML(
+            [f.empleado.puesto, f.empleado.dept].filter(Boolean).join(' · ') || 'Sin puesto');
+
+        // La insignia va debajo y no al lado: como no encoge, en un teléfono
+        // dejaba el nombre en «ANA LIS…».
+        return `
+        <div style="display:flex; align-items:flex-start; gap:10px; background:${marcada ? '#eff6ff' : 'white'}; border:1px solid ${marcada ? '#93c5fd' : '#e2e8f0'}; border-radius:10px; padding:10px 12px; margin-bottom:8px;">
+            ${puedeAlgo
+                ? `<input type="checkbox" ${marcada ? 'checked' : ''} onclick="window.alternarSeleccionEmpleadoCert('${id}')"
+                          style="width:20px; height:20px; flex-shrink:0; margin-top:2px; accent-color:#1d4ed8; cursor:pointer;">`
+                : `<span style="width:20px; flex-shrink:0;"></span>`}
+            <div style="flex:1; min-width:0;">
+                <div style="color:#0f172a; font-weight:600; font-size:0.92rem; line-height:1.25; word-break:break-word;">${safeName}</div>
+                <div style="color:#64748b; font-size:0.78rem; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${puesto}</div>
+                ${insignia ? `<div style="margin-top:6px;"><span style="display:inline-block; background:${insignia.fondo}; color:${insignia.color}; border:1px solid ${insignia.borde}; padding:3px 8px; border-radius:20px; font-size:0.68rem; font-weight:700;">${insignia.texto}</span></div>` : ''}
+            </div>
+            <button onclick="window.abrirExpedienteEmpleado('${id}')"
+                    style="flex-shrink:0; background:#f1f5f9; border:none; color:#475569; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;">Abrir</button>
+        </div>`;
+    };
+
+    let html = '';
+    grupos.forEach(g => {
+        const deEsteGrupo = conCaso.filter(f => f.resumen.estado === g.clave);
+        if (deEsteGrupo.length === 0) return;
+
+        const marcables = deEsteGrupo
+            .filter(f => g.certificable && f.resumen.certificables.length > 0)
+            .map(f => String(f.empleado.id));
+        const todasMarcadas = marcables.length > 0 && marcables.every(id => seleccion.includes(id));
+
+        const botonGrupo = marcables.length > 0
+            ? `<button onclick="window.seleccionarGrupoCert('${marcables.join(',')}', ${todasMarcadas ? 'false' : 'true'})"
+                       style="background:white; border:1px solid ${g.color}; color:${g.color}; padding:4px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; flex-shrink:0;">
+                   ${todasMarcadas ? 'Quitar' : 'Marcar todas'}
+               </button>`
+            : '';
+
+        html += `
+        <div style="margin-top:18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:${g.fondo}; color:${g.color}; padding:8px 12px; border-radius:8px; font-weight:700; font-size:0.85rem;">
+                <span>${g.titulo} (${deEsteGrupo.length})</span>
+                ${botonGrupo}
+            </div>
+            ${g.nota ? `<div style="font-size:0.75rem; color:${g.color}; padding:6px 4px 0 4px;">${g.nota}</div>` : ''}
+            <div style="margin-top:8px;">${deEsteGrupo.map(f => filaHtml(f, g.certificable)).join('')}</div>
+        </div>`;
+    });
+
+    let barra = '';
+    if (seleccion.length > 0) {
+        const cubiertas = conCaso
+            .filter(f => seleccion.includes(String(f.empleado.id)))
+            .reduce((n, f) => n + f.resumen.certificables.length, 0);
+
+        barra = `
+        <div style="position:sticky; bottom:0; margin-top:20px; background:white; border:1px solid #e2e8f0; border-radius:12px; padding:12px; box-shadow:0 -4px 12px rgba(0,0,0,0.06);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="font-weight:700; color:#0f172a; font-size:0.9rem;">${seleccion.length} persona${seleccion.length === 1 ? '' : 's'} · ${cubiertas} respuesta${cubiertas === 1 ? '' : 's'}</span>
+                <button onclick="window.seleccionarGrupoCert('${seleccion.join(',')}', false)" style="background:none; border:none; color:#64748b; font-size:0.8rem; font-weight:700; cursor:pointer; text-decoration:underline;">Limpiar</button>
+            </div>
+            <button onclick="window.certificarSeleccionClasificacion()"
+                    style="width:100%; background:#eff6ff; color:#1d4ed8; border:1px solid #3b82f6; padding:12px; border-radius:10px; font-size:0.95rem; font-weight:700; cursor:pointer;">
+                ⭐ Certificar «${window.sanitizeForHTML(estado.elegida)}»
+            </button>
+        </div>`;
+    }
+
+    cuerpo.innerHTML = `
+        <div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
+            Certificar da fe de las respuestas del <b>periodo vigente</b> de cada encuesta.
+            ${sinActividad > 0 ? `A ${sinActividad} persona(s) más le toca esta clasificación pero no ha contestado nada.` : ''}
+        </div>
+        ${html}
+        ${barra}`;
+};
+
+window.certificarSeleccionClasificacion = async () => {
+    const estado = window.certificacionActual;
+    if (!estado || estado.seleccion.length === 0) return;
+    if (!window.modoAdminActivo) { alert("Solo el modo administrador puede certificar."); return; }
+
+    const elegidas = estado.filas.filter(f => estado.seleccion.includes(String(f.empleado.id)));
+    const idsRespuesta = elegidas.reduce((acc, f) => acc.concat(f.resumen.certificables), []);
+
+    if (idsRespuesta.length === 0) {
+        alert("Ninguna de las personas seleccionadas tiene respuestas que se puedan certificar.");
+        return;
+    }
+
+    const incompletas = elegidas.filter(f => f.resumen.estado !== window.ESTADOS_CERTIFICACION.LISTA);
+
+    let msg = `Se van a certificar ${idsRespuesta.length} respuesta(s) de ${elegidas.length} persona(s) `
+        + `en «${estado.elegida}».`;
+    if (incompletas.length > 0) {
+        msg += `\n\n${incompletas.length} quedará(n) sin cerrar porque todavía les falta algo:`;
+        incompletas.slice(0, 5).forEach(f => {
+            const r = f.resumen;
+            const falta = [];
+            if (r.sinContestar) falta.push(`${r.sinContestar} sin contestar`);
+            if (r.sinCalificar) falta.push(`${r.sinCalificar} sin calificar`);
+            if (r.bajoUmbral) falta.push(`${r.bajoUmbral} bajo ${window.UMBRAL_CERTIFICACION}%`);
+            msg += `\n  • ${f.empleado.name}: ${falta.join(', ') || 'pendiente'}`;
+        });
+        if (incompletas.length > 5) msg += `\n  • …y ${incompletas.length - 5} más`;
+    }
+    msg += `\n\n¿Confirmas?`;
+
+    if (!confirm(msg)) return;
+
+    try {
+        // El `.select()` no es opcional: un update que RLS rechaza responde con
+        // éxito y cero filas.
+        const { data, error } = await sb.from('evaluation_responses')
+            .update({ review_status: 'Certificada' })
+            .in('id', idsRespuesta)
+            .select('id');
+
+        if (error) throw error;
+
+        const sellados = new Set((data || []).map(r => String(r.id)));
+        if (sellados.size === 0) {
+            alert("No se certificó ninguna respuesta: la base rechazó la escritura.");
+            return;
+        }
+
+        // Se recalcula cada persona con lo que de verdad quedó sellado, y de ahí
+        // sale el acta: así no dice haber cubierto más de lo que cubrió.
+        let cerradas = 0;
+        const actas = [];
+        elegidas.forEach(f => {
+            f.resumen.certificables.forEach(id => {
+                if (!sellados.has(String(id))) return;
+                f.resumen.certificadas++;
+                f.resumen.calificadas--;
+            });
+            f.resumen.certificables = f.resumen.certificables.filter(id => !sellados.has(String(id)));
+            if (f.resumen.certificadas === f.resumen.total) {
+                f.resumen.estado = window.ESTADOS_CERTIFICACION.CERTIFICADA;
+                cerradas++;
+            }
+            actas.push(window.filaDeActa({
+                clasificacion: estado.elegida,
+                empleadoId: f.empleado.id,
+                resumen: f.resumen,
+                cubiertas: f.resumen.certificadas
+            }));
+        });
+
+        const acta = await window.registrarActasCertificacion(actas);
+
+        estado.seleccion = [];
+        window.evalCache = null;
+        if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+
+        let aviso = `Listo: ${sellados.size} respuesta(s) certificada(s) en «${estado.elegida}».`;
+        if (cerradas > 0) aviso += `\n\n${cerradas} persona(s) quedan con la clasificación certificada.`;
+        if (acta.guardadas === 0) {
+            aviso += `\n\n(No se pudo dejar constancia de las actas: ${acta.motivo}. Las respuestas sí quedaron certificadas.)`;
+        }
+        alert(aviso);
+
+        window.renderizarCertificacionClasificacion();
+
+    } catch (e) {
+        alert("Ocurrió un error al certificar: " + e.message);
     }
 };
 

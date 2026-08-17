@@ -178,6 +178,62 @@ window.encuestaActiva = (ev) => {
 // (`4-evaluaciones-admin.js`): ninguna vuelve a escribir la comparación de
 // estados ni la de fechas.
 
+// Escapa un texto que va a meterse en el marcado. Vivía en
+// `4b-evaluaciones-stats.js`, pero lo usan también las pantallas del
+// administrador, que se cargan antes que ese archivo: un ayudante de escapado
+// no puede depender del orden de carga, así que vive aquí, en el primero.
+window.sanitizeForHTML = (str) => {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+};
+
+// A quién le toca contestar una encuesta. Estaba escrito dentro del filtro de
+// la lista de `4-evaluaciones-base.js`, atado al usuario de la sesión. La
+// pantalla que certifica por clasificación tiene que preguntar lo mismo de
+// otras personas, y si cada una escribiera su versión el administrador podría
+// certificar un juego de encuestas distinto del que ve el interesado.
+//
+// `tieneEquipo` es si esa persona tiene subordinados directos: las encuestas de
+// modo `boss` sólo le tocan a quien tenga a quién evaluar.
+//
+// Ojo: esta regla **no** mira `target_departments`, que sí usa la pantalla de
+// estadísticas para contar asignadas. Es una discrepancia que ya existía; se
+// respeta tal cual porque es la que decide lo que la gente ve en su panel, y
+// cambiarla movería las encuestas de sitio a todo el mundo.
+window.leTocaEstaEncuesta = (ev, empleado, tieneEquipo) => {
+    if (!ev || !empleado) return false;
+    if (ev.mode === 'boss' && !tieneEquipo) return false;
+
+    const comoLista = (valor) => {
+        let v = valor;
+        if (typeof v === 'string') {
+            try { v = JSON.parse(v); } catch (e) { v = ['ALL']; }
+        }
+        return Array.isArray(v) ? v : ['ALL'];
+    };
+
+    // Dirigida a personas concretas: manda sobre todo lo demás.
+    const destinatarios = comoLista(ev.target_employees);
+    if (destinatarios.length > 0 && !destinatarios.includes('ALL')) {
+        return destinatarios.includes(String(empleado.id));
+    }
+
+    if (ev.is_obligatory !== false) return true;
+
+    const puestos = comoLista(ev.target_positions);
+    if (puestos.length > 0 && !puestos.includes('ALL')) {
+        const miPuesto = empleado.puesto ? String(empleado.puesto).trim().toUpperCase() : 'SIN PUESTO';
+        return puestos.map(t => String(t).toUpperCase().trim()).includes(miPuesto);
+    }
+
+    return true;
+};
+
+// Si esa persona tiene subordinados directos, que es lo que decide si le tocan
+// las encuestas de modo `boss`.
+window.tieneEquipoDirecto = (empleadoId) =>
+    (window.todosLosEmpleadosData || []).some(e => String(e.supId) === String(empleadoId));
+
 // La clasificación es texto libre —un `input` con datalist, no un catálogo—,
 // así que «Seguridad», «SEGURIDAD» y «seguridad » serían tres grupos distintos
 // al guardar un acta. Se compara siempre normalizada.

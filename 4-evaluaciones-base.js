@@ -340,6 +340,9 @@ window.cargarVistaEvaluaciones = async () => {
     let botonPorEmpleado = window.modoAdminActivo ? `
             <button onclick="if(window.abrirRevisionPorEmpleado) window.abrirRevisionPorEmpleado(); else alert('Módulo en actualización');" style="background:#ccfbf1; color:#0f766e; padding:8px 16px; border-radius:8px; border:1px solid #5eead4; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(13, 148, 136, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#99f6e4'" onmouseout="this.style.background='#ccfbf1'">
                 🔎 Revisar por Empleado
+            </button>
+            <button onclick="if(window.abrirCertificacionPorClasificacion) window.abrirCertificacionPorClasificacion(); else alert('Módulo en actualización');" style="background:#eff6ff; color:#1d4ed8; padding:8px 16px; border-radius:8px; border:1px solid #93c5fd; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(29, 78, 216, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+                ⭐ Certificar por Clasificación
             </button>` : '';
 
     container.insertAdjacentHTML('beforeend', `
@@ -392,47 +395,14 @@ window.cargarVistaEvaluaciones = async () => {
     const sortedKeys = Object.keys(groups).sort();
     const freqMap = { 'once': 'Única vez', 'weekly': 'Semanal', 'biweekly': 'Quincenal', 'monthly': 'Mensual', 'quarterly': 'Trimestral', 'semiannual': 'Semestral', 'yearly': 'Anual', 'biennial': 'Cada 2 años' };
 
-    // A quién le toca una encuesta. Estaba escrito dentro del filtro de la
-    // lista, que en modo administrador devolvía todo: por eso la insignia de
-    // clasificación certificada no significaba nada para un administrador —se
-    // calculaba sobre encuestas que no eran suyas—. La lista sigue enseñándolo
-    // todo en ese modo; la insignia usa siempre esta regla.
-    const leTocaEstaEncuesta = (ev) => {
-                if (ev.mode === 'boss' && !tengoEquipo) return false;
-
-                let targetEmps = ev.target_employees;
-                if (typeof targetEmps === 'string') {
-                    try { targetEmps = JSON.parse(targetEmps); } catch(e) { targetEmps = ['ALL']; }
-                }
-                if (!Array.isArray(targetEmps)) targetEmps = ['ALL'];
-
-                if (targetEmps.length > 0 && !targetEmps.includes('ALL')) {
-                    const myIdStr = String(user.id);
-                    if (targetEmps.includes(myIdStr)) {
-                        return true;
-                    } else {
-                        return false;
-                    }
-                }
-
-                const esObligatoria = (ev.is_obligatory !== false);
-                if (esObligatoria) return true;
-
-                const miPuestoNorm = user.puesto ? user.puesto.trim().toUpperCase() : "SIN PUESTO";
-                let targets = ev.target_positions;
-                
-                if (typeof targets === 'string') {
-                    try { targets = JSON.parse(targets); } catch(e) { targets = ['ALL']; }
-                }
-                if (!Array.isArray(targets)) targets = ['ALL'];
-
-                if (targets.length > 0 && !targets.includes('ALL')) {
-                    const targetsNorm = targets.map(t => String(t).toUpperCase().trim());
-                    if (!targetsNorm.includes(miPuestoNorm)) return false;
-                }
-
-                return true;
-    };
+    // A quién le toca una encuesta vive en `1-config.js`: la pantalla que
+    // certifica por clasificación tiene que preguntar lo mismo de otras
+    // personas, y dos copias de la regla acabarían discrepando. Antes estaba
+    // aquí dentro y en modo administrador devolvía todo, que es por lo que la
+    // insignia de clasificación certificada no significaba nada para un
+    // administrador: se calculaba sobre encuestas que no eran suyas. La lista
+    // sigue enseñándolo todo en ese modo; la insignia usa siempre la regla.
+    const leTocaEstaEncuesta = (ev) => window.leTocaEstaEncuesta(ev, user, tengoEquipo);
 
     sortedKeys.forEach(catName => {
         const evalsVisibles = window.modoAdminActivo
