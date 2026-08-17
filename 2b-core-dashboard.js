@@ -709,8 +709,8 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
                     </div>
                 </div>
 
-                <div style="width: 100%; padding-top: 10px; overflow-x: auto; overflow-y: visible; display: flex; justify-content: center;">
-                     <div id="header-radar-container" style="display:block; width: 450px; min-width: 450px; height: 260px; position: relative; flex-shrink: 0;">
+                <div style="width: 100%; padding-top: 10px;">
+                     <div id="header-radar-container" style="display:block; width: 100%; max-width: 450px; height: 260px; margin: 0 auto; position: relative;">
                         <div id="radar-loading-skeleton" class="skeleton" style="width: 190px; height: 190px; border-radius: 50%; opacity: 0.5; position: absolute; top:20px; left: 50%; transform: translateX(-50%); z-index:10;"></div>
                         <canvas id="dashboard-main-radar"></canvas>
                      </div>

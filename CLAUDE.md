@@ -411,6 +411,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   estadísticas de encuestas en un iPhone 12 mini, que con 375 px es el más
   estrecho que se usa en campo.
 
+  Un `width` con `!important` tampoco basta cuando el elemento trae
+  `min-width`: el mínimo manda siempre, venga de donde venga, así que la regla
+  de `estilos.css` gana la pelea del alto y pierde la del ancho y el elemento
+  acaba con unas medidas que no quiso nadie. Es lo que le pasaba al radar del
+  encabezado del panel: `@media (max-width:600px)` le imponía 220×180 mientras
+  el marcado de `window.mostrarDashboard` pedía 450×260 con `min-width`, y el
+  resultado era 450 de ancho —desbordando la tarjeta de 313 px, con el sobrante
+  izquierdo fuera del alcance del dedo por culpa del `justify-content:center`
+  del contenedor desplazable— y 180 de alto, que recortaba por abajo el círculo
+  gris de carga, de 190 px y apoyado a 20 px del borde. Las medidas del radar
+  viven hoy sólo en el marcado y son fluidas (`width:100%` con `max-width`);
+  ese bloque del `@media` ya no lleva ninguna.
+
   Esa pantalla ya no se estila a mano: sus bloques repetidos —`.stats-filtros`,
   `.stats-resumen`, `.stats-tarjeta`, `.stats-seccion`, `.stats-conmutador`,
   `.stats-columna`— viven al final de `estilos.css` con su variante para

@@ -1694,12 +1694,14 @@ textarea:focus {
         margin: 0 15px 0 0 !important; /* Margen solo a la derecha */
     }
 
-    /* La GRÁFICA la mantenemos centrada porque se ve mejor así */
-    #header-radar-container {
-        width: 220px !important;
-        height: 180px !important;
-        margin: 5px auto !important; /* 'auto' aquí mantiene la gráfica al centro */
-    }
+    /* La GRÁFICA no lleva medidas aquí a propósito. Las pone el marcado que
+       arma window.mostrarDashboard, y son fluidas: ancho al 100% de la
+       tarjeta con un tope de 450px. Este bloque le imponía 220x180 con
+       !important y el resultado no era ni una cosa ni la otra: el alto sí
+       se aplicaba —y recortaba por abajo el círculo gris de carga, de 190px
+       a 20px del borde—, pero el ancho no, porque el marcado trae también
+       min-width y min-width manda sobre width. El contenedor acababa
+       midiendo 450px dentro de una tarjeta de 313px en un iPhone 12 mini. */
 }
 
 
