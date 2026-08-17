@@ -349,6 +349,58 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   esa caché, deja que el helper los consulte. El modo administrador es aparte y
   viaja en `sessionStorage.adminSostenido`, así que sigue valiendo al pasar de
   una pantalla a la otra.
+- **Certificar es de una persona y de un periodo.** Certificar quiere decir dar
+  fe de que las respuestas de alguien son verídicas, así que la unidad es
+  **clasificación × empleado × periodo**. Sin el periodo, el sello de enero
+  seguiría valiendo en diciembre, que es justo lo que hacía la insignia vieja:
+  tomaba la última respuesta calificada que hubiera —`.find()` sobre la lista
+  ordenada por fecha— sin mirar en qué periodo caía, así que la certificada de
+  julio tapaba la de agosto sin revisar, y una anulada reciente ni siquiera la
+  tumbaba porque `.find()` también se la saltaba.
+
+  La regla vive en `1-config.js` porque la usan el panel del usuario y las
+  pantallas del administrador:
+
+  ```js
+  window.estadoCertificacion(encuestasQueLeTocan, susRespuestas, fecha)
+  // → { estado, total, contestadas, certificadas, observadas, calificadas,
+  //     bajoUmbral, sinCalificar, sinContestar, periodo, periodoFechas,
+  //     certificables }
+  window.insigniaCertificacion(resumen)   // el mismo texto en todas las pantallas
+  ```
+
+  Una clasificación puede mezclar frecuencias, así que **no hay un periodo de la
+  clasificación**: cada encuesta se mira en el suyo con
+  `window.periodoDeEncuesta(ev, fecha)`, que se apoya en el `periodoVigente` de
+  `7-pendientes.js` —se carga después que `1-config.js`, pero para cuando
+  alguien llama ya está puesto—. Las de `once` cuentan «alguna vez». El nombre
+  del periodo que se enseña sale de la encuesta más frecuente del grupo, que es
+  la que marca el ritmo de revisión.
+
+  Los cinco estados son `vacio`, `proceso`, `lista`, `certificada` y
+  `observaciones`. El último manda sobre todos: una anulada o mal revisada hay
+  que resolverla antes de dar nada por bueno, y antes se veía igual que
+  «todavía no».
+
+  **La verdad sigue en `evaluation_responses.review_status`**, que es lo que
+  leen estadísticas, pendientes y dashboard. Certificar una clasificación
+  (`window.certificarClasificacionExpediente`) sella esas respuestas una por
+  una, con las mismas reglas que `motivoNoAplicable()` —nada que no se pudiera
+  hacer respuesta por respuesta, y el umbral de
+  `window.UMBRAL_CERTIFICACION`—. Lo que añade la tabla
+  `certificaciones_clasificacion` (script en `sql/`) es el **acta**: quién dio
+  fe, cuándo y de qué periodo, que antes no quedaba en ningún lado. La insignia
+  **no** se lee del acta sino de las respuestas: si mañana se anula una, la
+  clasificación deja de estar certificada aunque el acta siga guardada, que es
+  lo correcto para una auditoría. Si la tabla todavía no existe porque el
+  script no se ha corrido, la certificación se hace igual y sólo se avisa de
+  que no hubo constancia.
+
+  La clasificación es texto libre —un `input` con datalist, sin catálogo—, así
+  que todo lo que la compare o la guarde pasa por
+  `window.normalizarClasificacion()`. Aun así, renombrarla en una sola encuesta
+  parte el grupo y deja las actas viejas colgando de un nombre que ya no existe.
+
 - **Una encuesta inactiva sigue existiendo, pero sólo para el administrador.**
   La columna `active` de `evaluations` decide quién la ve: apagada, la encuesta
   desaparece de la lista, de los pendientes, de las encuestas atrasadas y de

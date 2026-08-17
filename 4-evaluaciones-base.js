@@ -392,9 +392,12 @@ window.cargarVistaEvaluaciones = async () => {
     const sortedKeys = Object.keys(groups).sort();
     const freqMap = { 'once': 'Única vez', 'weekly': 'Semanal', 'biweekly': 'Quincenal', 'monthly': 'Mensual', 'quarterly': 'Trimestral', 'semiannual': 'Semestral', 'yearly': 'Anual', 'biennial': 'Cada 2 años' };
 
-    sortedKeys.forEach(catName => {
-        const evalsVisibles = groups[catName].filter(ev => {
-                if (window.modoAdminActivo) return true;
+    // A quién le toca una encuesta. Estaba escrito dentro del filtro de la
+    // lista, que en modo administrador devolvía todo: por eso la insignia de
+    // clasificación certificada no significaba nada para un administrador —se
+    // calculaba sobre encuestas que no eran suyas—. La lista sigue enseñándolo
+    // todo en ese modo; la insignia usa siempre esta regla.
+    const leTocaEstaEncuesta = (ev) => {
                 if (ev.mode === 'boss' && !tengoEquipo) return false;
 
                 let targetEmps = ev.target_employees;
@@ -429,33 +432,35 @@ window.cargarVistaEvaluaciones = async () => {
                 }
 
                 return true;
-            });
+    };
+
+    sortedKeys.forEach(catName => {
+        const evalsVisibles = window.modoAdminActivo
+            ? groups[catName]
+            : groups[catName].filter(leTocaEstaEncuesta);
 
         if (evalsVisibles.length === 0) return;
 
-       let categoriaCertificada = true;
-        evalsVisibles.forEach(ev => {
-            const respuestasDeEstaEval = misRespuestas.filter(r => r.evaluation_id === ev.id);
-            const ultimaValida = respuestasDeEstaEval.find(r => r.review_status === 'Revisado' || r.review_status === 'Certificada');
-            
-            if (!ultimaValida || ultimaValida.review_status !== 'Certificada') {
-                categoriaCertificada = false;
-            }
-        });
+        // La insignia habla de lo que le toca a quien mira, y de su periodo en
+        // curso. Antes se calculaba con la última respuesta calificada que
+        // hubiera, sin mirar fechas: la certificada de julio tapaba la de
+        // agosto sin revisar, y una anulada reciente ni siquiera la tumbaba.
+        const resumenCert = window.estadoCertificacion(
+            groups[catName].filter(leTocaEstaEncuesta),
+            misRespuestas
+        );
+        const insignia = window.insigniaCertificacion(resumenCert);
 
-        let badgeCatHtml = '';
-        let bordeCat = '3px solid #cbd5e1';
-        let colorCat = '#64748b';
-
-        if (categoriaCertificada) {
-            badgeCatHtml = `<span style="margin-left: 10px; background: #eff6ff; color: #1d4ed8; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: bold; border: 1px solid #3b82f6; vertical-align: middle; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">⭐ CLASIFICACIÓN CERTIFICADA</span>`;
-            bordeCat = '3px solid #3b82f6';
-            colorCat = '#1e3a8a';
-        }
+        const bordeCat = insignia ? `3px solid ${insignia.borde}` : '3px solid #cbd5e1';
+        const colorCat = insignia ? insignia.color : '#64748b';
+        const badgeCatHtml = insignia
+            ? `<span title="${resumenCert.contestadas} de ${resumenCert.total} contestadas en ${resumenCert.periodo}"
+                     style="margin-left: 10px; background: ${insignia.fondo}; color: ${insignia.color}; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: bold; border: 1px solid ${insignia.borde}; vertical-align: middle; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">${insignia.texto}</span>`
+            : '';
 
         // Título de Categoría
         container.insertAdjacentHTML('beforeend', `
-            <div style="display:flex; align-items:center; margin-top:25px; margin-bottom:15px; padding-left:5px; border-left:${bordeCat}; line-height:1;">
+            <div style="display:flex; align-items:center; margin-top:25px; margin-bottom:15px; padding-left:5px; border-left:${bordeCat}; line-height:1; flex-wrap:wrap; gap:6px 0;">
                 <h3 style="color:${colorCat}; font-size:0.9rem; text-transform:uppercase; letter-spacing:1px; margin:0;">${catName}</h3>
                 ${badgeCatHtml}
             </div>

@@ -161,6 +161,179 @@ window.encuestaActiva = (ev) => {
 };
 
 // =========================================================
+// --- CERTIFICACIÓN POR CLASIFICACIÓN ---
+// =========================================================
+// Certificar es dar fe de que las respuestas de alguien son verídicas, así que
+// una certificación es siempre **de una persona y de un periodo**. Sin el
+// periodo, el sello de enero seguiría valiendo en diciembre.
+//
+// Una clasificación puede mezclar frecuencias —una encuesta mensual y una anual
+// bajo el mismo rótulo—, así que no hay un periodo de la clasificación: cada
+// encuesta se mira en **su** periodo vigente, el mismo con el que
+// `7-pendientes.js` decide qué te toca contestar. Las de una sola vez (`once`)
+// no tienen periodo que cerrar y cuentan «alguna vez».
+//
+// La regla vive aquí porque la usan el panel del usuario
+// (`4-evaluaciones-base.js`) y las pantallas del administrador
+// (`4-evaluaciones-admin.js`): ninguna vuelve a escribir la comparación de
+// estados ni la de fechas.
+
+// La clasificación es texto libre —un `input` con datalist, no un catálogo—,
+// así que «Seguridad», «SEGURIDAD» y «seguridad » serían tres grupos distintos
+// al guardar un acta. Se compara siempre normalizada.
+window.normalizarClasificacion = (nombre) =>
+    String(nombre == null ? '' : nombre).trim().toUpperCase().replace(/\s+/g, ' ') || 'GENERAL';
+
+// Lo que puede pasarle a una clasificación. El orden importa: es el de
+// severidad con que se resuelven los empates al resumir.
+window.ESTADOS_CERTIFICACION = {
+    VACIO: 'vacio',                 // no le toca ninguna, o no ha contestado nada
+    OBSERVACIONES: 'observaciones', // hay alguna anulada o mal revisada
+    PROCESO: 'proceso',             // faltan por contestar o por calificar
+    LISTA: 'lista',                 // todas calificadas y por encima del umbral
+    CERTIFICADA: 'certificada'      // todas las del periodo certificadas
+};
+
+// Sólo se puede certificar a partir de este puntaje. Es el mismo umbral que
+// aplica `motivoNoAplicable()` respuesta por respuesta.
+window.UMBRAL_CERTIFICACION = 80;
+
+// El periodo vigente de una encuesta. `periodoVigente` vive en
+// `7-pendientes.js`, que se carga después de este archivo: para cuando alguien
+// llama aquí ya está puesto. Si no estuviera —o si la encuesta es de una sola
+// vez— se cuenta desde siempre, que es lo que hacía la pantalla antes de que
+// existieran los periodos.
+window.periodoDeEncuesta = (ev, fecha) => {
+    const referencia = fecha || new Date();
+    const frecuencia = (ev && ev.frequency) || 'once';
+
+    if (frecuencia === 'once' || typeof window.periodoVigente !== 'function') {
+        return { inicio: new Date(0), fin: null, nombre: 'alguna vez' };
+    }
+    return window.periodoVigente(frecuencia, referencia) ||
+        { inicio: new Date(0), fin: null, nombre: 'alguna vez' };
+};
+
+// La respuesta que cuenta para una encuesta en el periodo que corre: la última
+// que se entregó dentro de él. Fuera del periodo no cuenta ninguna, que es lo
+// que impedía que el sello del mes pasado tapara el mes en curso.
+window.respuestaDelPeriodo = (ev, respuestas, fecha) => {
+    const periodo = window.periodoDeEncuesta(ev, fecha);
+    const delPeriodo = (respuestas || []).filter(r => {
+        if (String(r.evaluation_id) !== String(ev.id)) return false;
+        const enviada = new Date(r.submitted_at);
+        if (isNaN(enviada)) return false;
+        if (enviada < periodo.inicio) return false;
+        return periodo.fin ? enviada < periodo.fin : true;
+    });
+
+    if (delPeriodo.length === 0) return null;
+    return delPeriodo.reduce((masNueva, r) =>
+        new Date(r.submitted_at) > new Date(masNueva.submitted_at) ? r : masNueva);
+};
+
+// El estado de una clasificación para una persona. `encuestas` son las de esa
+// clasificación que le tocan a ella —cada pantalla sabe filtrarlas—, y
+// `respuestas` las suyas.
+//
+// Devuelve además el desglose, que es lo que la pantalla del administrador
+// necesita para decidir a quién le puede dar al botón.
+window.estadoCertificacion = (encuestas, respuestas, fecha) => {
+    const E = window.ESTADOS_CERTIFICACION;
+    const lista = (encuestas || []).filter(window.encuestaActiva);
+
+    const resumen = {
+        estado: E.VACIO,
+        total: lista.length,
+        contestadas: 0,
+        certificadas: 0,
+        observadas: 0,
+        calificadas: 0,     // calificadas y por encima del umbral, sin certificar
+        bajoUmbral: 0,      // calificadas pero no alcanzan para certificar
+        sinCalificar: 0,
+        sinContestar: 0,
+        periodo: '',
+        periodoFechas: null, // { inicio, fin } — lo que sella el acta
+        certificables: []   // los ids de respuesta que un lote sí podría certificar
+    };
+
+    if (lista.length === 0) return resumen;
+
+    // El nombre del periodo se toma de la encuesta más frecuente de la
+    // clasificación, que es la que marca el ritmo con el que se revisa.
+    const peso = { once: 0, biennial: 1, yearly: 2, semiannual: 3, quarterly: 4, monthly: 5, biweekly: 6, weekly: 7 };
+    const masFrecuente = lista.reduce((a, b) =>
+        (peso[(b.frequency || 'once')] || 0) > (peso[(a.frequency || 'once')] || 0) ? b : a);
+    const periodoRitmo = window.periodoDeEncuesta(masFrecuente, fecha);
+    resumen.periodo = periodoRitmo.nombre;
+    resumen.periodoFechas = { inicio: periodoRitmo.inicio, fin: periodoRitmo.fin };
+
+    lista.forEach(ev => {
+        const resp = window.respuestaDelPeriodo(ev, respuestas, fecha);
+
+        if (!resp) { resumen.sinContestar++; return; }
+        resumen.contestadas++;
+
+        const estado = resp.review_status;
+        if (estado === 'Falsa' || estado === 'Mal Revisada') { resumen.observadas++; return; }
+        if (estado === 'Certificada') { resumen.certificadas++; return; }
+        if (estado !== 'Revisado') { resumen.sinCalificar++; return; }
+
+        const puntaje = typeof window.calcularScoreRespuesta === 'function'
+            ? window.calcularScoreRespuesta(resp) : 0;
+        if (puntaje >= window.UMBRAL_CERTIFICACION) {
+            resumen.calificadas++;
+            resumen.certificables.push(resp.id);
+        } else {
+            resumen.bajoUmbral++;
+        }
+    });
+
+    // Nada contestado todavía: no hay nada que certificar ni que reprochar.
+    if (resumen.contestadas === 0) { resumen.estado = E.VACIO; return resumen; }
+
+    // Una anulada o mal revisada manda sobre todo lo demás: es lo que hay que
+    // resolver antes de poder dar por buena la clasificación.
+    if (resumen.observadas > 0) { resumen.estado = E.OBSERVACIONES; return resumen; }
+
+    if (resumen.certificadas === resumen.total) { resumen.estado = E.CERTIFICADA; return resumen; }
+
+    if (resumen.certificadas + resumen.calificadas === resumen.total) { resumen.estado = E.LISTA; return resumen; }
+
+    resumen.estado = E.PROCESO;
+    return resumen;
+};
+
+// Cómo se enseña ese estado. El texto es el mismo en el panel del usuario y en
+// la lista del administrador, para que no se llamen distinto en cada pantalla.
+window.insigniaCertificacion = (resumen) => {
+    const E = window.ESTADOS_CERTIFICACION;
+    if (!resumen || resumen.estado === E.VACIO) return null;
+
+    if (resumen.estado === E.CERTIFICADA) {
+        return { texto: `⭐ CERTIFICADA · ${resumen.periodo}`, color: '#1d4ed8', fondo: '#eff6ff', borde: '#3b82f6' };
+    }
+    if (resumen.estado === E.OBSERVACIONES) {
+        const n = resumen.observadas;
+        return { texto: `⚠️ ${n} ${n === 1 ? 'respuesta observada' : 'respuestas observadas'}`, color: '#7e22ce', fondo: '#faf5ff', borde: '#a855f7' };
+    }
+    if (resumen.estado === E.LISTA) {
+        return { texto: `✅ Lista para certificar`, color: '#166534', fondo: '#dcfce7', borde: '#22c55e' };
+    }
+
+    // Si ya está todo revisado y aun así no se puede certificar, lo que falta
+    // es el umbral y hay que decirlo: «3 de 3 revisadas» en un estado que no
+    // es «lista» se lee como una contradicción.
+    const revisadas = resumen.certificadas + resumen.calificadas + resumen.bajoUmbral;
+    if (revisadas === resumen.total && resumen.bajoUmbral > 0) {
+        const n = resumen.bajoUmbral;
+        return { texto: `📉 ${n} por debajo de ${window.UMBRAL_CERTIFICACION}%`, color: '#b45309', fondo: '#fef3c7', borde: '#f59e0b' };
+    }
+
+    return { texto: `⏳ ${revisadas} de ${resumen.total} revisadas`, color: '#b45309', fondo: '#fef3c7', borde: '#f59e0b' };
+};
+
+// =========================================================
 // --- QUIÉN PUEDE VER Y REPARTIR TODAS LAS REFACCIONES ---
 // =========================================================
 // El permiso no va por puesto sino por encargo extra: en «Configurar

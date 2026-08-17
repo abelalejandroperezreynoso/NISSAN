@@ -1260,7 +1260,10 @@ window.abrirExpedienteEmpleado = async (empId) => {
 
     // Título y clasificación se consultan aquí porque evalCache se invalida cada
     // vez que cambia un estado, y sin ellos las filas quedarían sin nombre.
-    const { data: evaluaciones } = await sb.from('evaluations').select('id, title, category');
+    // `frequency` y `active` los pide la certificación por clasificación, que
+    // necesita saber en qué periodo cae cada encuesta y cuáles ya no cuentan.
+    const { data: evaluaciones } = await sb.from('evaluations')
+        .select('id, title, category, frequency, active');
     const titulos = {};
     (evaluaciones || []).forEach(ev => {
         titulos[String(ev.id)] = { title: ev.title, category: (ev.category || 'General') };
@@ -1270,6 +1273,7 @@ window.abrirExpedienteEmpleado = async (empId) => {
         empleado: empleado || { id: empId, name: (window.employeeNameMap || {})[empId] || `ID: ${empId}` },
         respuestas: respuestas || [],
         titulos: titulos,
+        evaluaciones: evaluaciones || [],
         seleccion: []
     };
     // La ficha individual y cambiarEstadoRespuesta trabajan sobre esta caché.
@@ -1390,11 +1394,24 @@ window.renderizarExpedienteEmpleado = () => {
         const bloques = clasificaciones.map(cat => {
             const deLaCat = porClasificacion[cat];
             const idsCat = deLaCat.map(r => String(r.id));
+
+            // El atajo de certificar la clasificación entera sólo tiene sentido
+            // en el bloque de las que están listas: es ahí donde el
+            // administrador ve que ya se puede dar fe de todas.
+            const btnCertificar = g.clave === 'porCertificar'
+                ? `<button onclick="window.certificarClasificacionExpediente('${escapar(cat).replace(/'/g, "\\'")}')"
+                           style="background:#eff6ff; border:1px solid #3b82f6; color:#1d4ed8; padding:4px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; flex-shrink:0;"
+                           title="Certificar de una vez todo lo certificable de esta clasificación en el periodo vigente">⭐ Certificar clasificación</button>`
+                : '';
+
             return `
             <div class="clasificacion-expediente" data-grupo="${g.clave}" data-clasificacion="${escapar(cat)}" style="margin-top:12px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:0 4px 6px 4px; border-bottom:1px dashed #e2e8f0; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:0 4px 6px 4px; border-bottom:1px dashed #e2e8f0; margin-bottom:8px; flex-wrap:wrap;">
                     <span style="color:#475569; font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.03em;">${cat} (${deLaCat.length})</span>
-                    ${botonSeleccion(idsCat, g.color, 'Marcar', 'Quitar')}
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        ${btnCertificar}
+                        ${botonSeleccion(idsCat, g.color, 'Marcar', 'Quitar')}
+                    </div>
                 </div>
                 ${deLaCat.map(filaHtml).join('')}
             </div>`;
@@ -1512,6 +1529,151 @@ window.aplicarEstadoEnLote = async (nuevoEstado) => {
 
     } catch (e) {
         alert("Ocurrió un error al aplicar el cambio en lote: " + e.message);
+    }
+};
+
+// --- 2C. CERTIFICAR UNA CLASIFICACIÓN COMPLETA ---
+// Certificar respuesta por respuesta no escala: una clasificación con seis
+// encuestas son seis confirmaciones para una sola persona. Esto lo hace de una,
+// y de paso deja constancia de quién dio fe y de qué periodo, que antes no
+// quedaba en ningún lado.
+//
+// La verdad sigue estando en la respuesta: esto sella las que cubre a
+// 'Certificada', igual que si se hubieran marcado a mano. El acta es lo que se
+// añade, y por eso el badge del usuario se sigue calculando de las respuestas y
+// no del acta: si mañana se anula una, la clasificación deja de estar
+// certificada aunque el acta siga guardada.
+
+// Guarda el acta. Si la tabla todavía no existe —el script de `sql/` se corre a
+// mano— no pasa nada: la certificación ya quedó hecha en las respuestas, que es
+// lo que ve todo el mundo. Se avisa por consola y se sigue.
+window.registrarActaCertificacion = async ({ clasificacion, empleadoId, resumen, cubiertas, nota }) => {
+    const periodo = resumen && resumen.periodoFechas;
+    if (!periodo) return { guardada: false, motivo: 'sin periodo' };
+
+    const aFecha = (d) => d ? new Date(d).toISOString().slice(0, 10) : null;
+    const usuario = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+
+    try {
+        // Se encadena `.select()` porque un insert que RLS rechaza responde con
+        // éxito y cero filas: sin contar lo que vuelve, la pantalla diría que
+        // guardó sin haber guardado.
+        const { data, error } = await sb.from('certificaciones_clasificacion')
+            .upsert({
+                clasificacion: window.normalizarClasificacion(clasificacion),
+                employee_id: empleadoId,
+                periodo_inicio: aFecha(periodo.inicio),
+                periodo_fin: aFecha(periodo.fin),
+                periodo_nombre: resumen.periodo,
+                certificado_por: usuario ? usuario.id : null,
+                certificado_en: new Date().toISOString(),
+                respuestas_cubiertas: cubiertas,
+                nota: nota || null
+            }, { onConflict: 'clasificacion,employee_id,periodo_inicio' })
+            .select();
+
+        if (error) throw error;
+        return { guardada: (data || []).length > 0, motivo: (data || []).length ? '' : 'RLS no dejó escribir' };
+    } catch (e) {
+        console.warn('No se pudo guardar el acta de certificación:', e.message);
+        return { guardada: false, motivo: e.message };
+    }
+};
+
+// Certifica de una vez todo lo certificable de una clasificación para la
+// persona del expediente abierto.
+window.certificarClasificacionExpediente = async (clasificacion) => {
+    const exp = window.expedienteActual;
+    if (!exp) return;
+    if (!window.modoAdminActivo) { alert("Solo el modo administrador puede certificar."); return; }
+
+    const clave = window.normalizarClasificacion(clasificacion);
+    const encuestasDeLaCat = (exp.evaluaciones || [])
+        .filter(ev => window.normalizarClasificacion(ev.category || 'General') === clave);
+
+    const resumen = window.estadoCertificacion(encuestasDeLaCat, exp.respuestas);
+    const E = window.ESTADOS_CERTIFICACION;
+
+    if (resumen.estado === E.CERTIFICADA) {
+        alert(`«${clasificacion}» ya está certificada por completo en ${resumen.periodo}.`);
+        return;
+    }
+    if (resumen.certificables.length === 0) {
+        alert(`No hay nada que certificar en «${clasificacion}» (${resumen.periodo}).\n\n`
+            + `De ${resumen.total} encuesta(s): ${resumen.certificadas} ya certificada(s), `
+            + `${resumen.sinContestar} sin contestar, ${resumen.sinCalificar} sin calificar, `
+            + `${resumen.bajoUmbral} por debajo de ${window.UMBRAL_CERTIFICACION}% y `
+            + `${resumen.observadas} observada(s).`);
+        return;
+    }
+
+    // Certificar una clasificación no puede hacer nada que no se pudiera hacer
+    // respuesta por respuesta, así que lo que no aplique se queda fuera y se
+    // dice cuánto y por qué.
+    const pendientesDeCubrir = resumen.total - resumen.certificadas - resumen.certificables.length;
+
+    let msg = `Se van a certificar ${resumen.certificables.length} respuesta(s) de `
+        + `${exp.empleado.name} en «${clasificacion}» (${resumen.periodo}).`;
+    if (pendientesDeCubrir > 0) {
+        msg += `\n\nQuedarán ${pendientesDeCubrir} sin cubrir:`;
+        if (resumen.sinContestar) msg += `\n  • ${resumen.sinContestar} sin contestar`;
+        if (resumen.sinCalificar) msg += `\n  • ${resumen.sinCalificar} sin calificar`;
+        if (resumen.bajoUmbral) msg += `\n  • ${resumen.bajoUmbral} por debajo de ${window.UMBRAL_CERTIFICACION}%`;
+        if (resumen.observadas) msg += `\n  • ${resumen.observadas} anulada(s) o mal revisada(s)`;
+        msg += `\n\nLa clasificación no quedará certificada mientras falten.`;
+    }
+    msg += `\n\n¿Confirmas?`;
+
+    if (!confirm(msg)) return;
+
+    try {
+        // El `.select()` no es opcional: un update que RLS rechaza responde con
+        // éxito y cero filas.
+        const { data, error } = await sb.from('evaluation_responses')
+            .update({ review_status: 'Certificada' })
+            .in('id', resumen.certificables)
+            .select('id');
+
+        if (error) throw error;
+
+        const selladas = (data || []).length;
+        if (selladas === 0) {
+            alert("No se certificó ninguna respuesta: la base rechazó la escritura.");
+            return;
+        }
+
+        const idsSellados = new Set((data || []).map(r => String(r.id)));
+        exp.respuestas.forEach(r => {
+            if (idsSellados.has(String(r.id))) r.review_status = 'Certificada';
+        });
+
+        // El acta se guarda con el estado ya recalculado, para que refleje lo
+        // que de verdad quedó cubierto.
+        const despues = window.estadoCertificacion(encuestasDeLaCat, exp.respuestas);
+        const acta = await window.registrarActaCertificacion({
+            clasificacion: clasificacion,
+            empleadoId: exp.empleado.id,
+            resumen: despues,
+            cubiertas: despues.certificadas
+        });
+
+        exp.seleccion = [];
+        window.evalCache = null;
+        if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+
+        let aviso = `Listo: ${selladas} respuesta(s) certificada(s) en «${clasificacion}».`;
+        if (despues.estado === window.ESTADOS_CERTIFICACION.CERTIFICADA) {
+            aviso += `\n\nLa clasificación queda certificada para ${exp.empleado.name} en ${despues.periodo}.`;
+        }
+        if (!acta.guardada) {
+            aviso += `\n\n(No se pudo dejar constancia del acta: ${acta.motivo}. Las respuestas sí quedaron certificadas.)`;
+        }
+        alert(aviso);
+
+        window.renderizarExpedienteEmpleado();
+
+    } catch (e) {
+        alert("Ocurrió un error al certificar la clasificación: " + e.message);
     }
 };
 
