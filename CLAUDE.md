@@ -539,6 +539,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   cualquier veredicto —revisada, certificada, falsa o mal revisada—, que es lo
   que reúne `window.procesadasDe(fila)`.
 
+  **Todo porcentaje que se imprima pasa por `window.pctTexto()`**, nunca por
+  `Math.round` a secas. Con 478 de 480 el redondeo decía 100% —faltando dos— y
+  con 1 de 480 decía 0% —habiendo uno—, que son justo las dos cifras que no
+  pueden estar mal: el 100% es el cierre total y el 0% es no haber empezado.
+  El ayudante reserva los dos extremos para lo exacto y aparca lo de en medio
+  en 99 y en 1; en todo lo demás coincide con `Math.round`, así que los cortes
+  de color (el ≥80 de `getColorScore`) no se mueven. Admite la proporción ya
+  hecha —`pctTexto(0.995)`— o la cuenta y su total —`pctTexto(478, 480)`—.
+
+  Es sólo para el texto: **la geometría se calcula con la proporción sin
+  redondear**. El relleno de un cuadro al 99.6% se ve lleno y no pasa nada;
+  un rótulo que dice 100% sin serlo da por cerrado lo que no lo está.
+
   Prontitud además se llena en **escala relativa** (`escalaRelativa` en su
   criterio): en un mes de 31 días, contestar en 6 o en 7 son 81% y 77%, así que
   en absoluto los ocho cuadros salían igual de llenos. Con la escala del nivel,

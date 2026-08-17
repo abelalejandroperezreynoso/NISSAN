@@ -295,6 +295,33 @@ window.cargarStatsEncuestasGlobales = async () => {
 window.procesadasDe = (d) => (d.reviewed || 0) + (d.certificadas || 0)
     + (d.falsas || 0) + (d.malRevisadas || 0);
 
+// El porcentaje que se lee en pantalla. `Math.round` decía 100% con 478 de
+// 480 —faltando dos— y 0% con 1 de 480, que son las dos cifras que nadie
+// quiere ver mal: el 100% es el cierre total y el 0% es no haber empezado.
+// Así que los dos extremos se reservan para lo exacto y lo de en medio se
+// aparca en 99 y en 1.
+//
+// Admite las dos formas en que aparece la medida por la pantalla: una
+// proporción ya hecha —`pctTexto(0.995)`— o la cuenta y su total
+// —`pctTexto(478, 480)`—.
+//
+// Sólo vale para el texto. La geometría —el alto de un relleno, el de una
+// barra— se sigue calculando con la proporción sin redondear, que para eso
+// no tiene que caber en dos cifras.
+window.pctTexto = (parte, total) => {
+    const p = total === undefined
+        ? Number(parte)
+        : (Number(total) > 0 ? Number(parte) / Number(total) : 0);
+
+    if (!isFinite(p) || p <= 0) return 0;
+    if (p >= 1) return 100;
+
+    const pct = Math.round(p * 100);
+    if (pct >= 100) return 99;  // Le falta algo: no es cierre total.
+    if (pct <= 0) return 1;     // Algo hay: no es no haber empezado.
+    return pct;
+};
+
 // Lo que mide el desglose. Ordena las barras y es lo que pintan y dicen los
 // cuadros, así que el conmutador del encabezado gobierna las dos formas.
 // `valor` devuelve una proporción de 0 a 1 sobre las encuestas asignadas; la
@@ -313,7 +340,7 @@ window.CRITERIOS_STATS = [
       extremo: 'El que menos lleva revisado',
       valor: (d) => (d.responses || 0) > 0 ? window.procesadasDe(d) / d.responses : 0,
       texto: (d) => (d.responses || 0) > 0
-          ? `${Math.round((window.procesadasDe(d) / d.responses) * 100)}% · ${window.procesadasDe(d)}/${d.responses}`
+          ? `${window.pctTexto(window.procesadasDe(d), d.responses)}% · ${window.procesadasDe(d)}/${d.responses}`
           : 'sin contestar' },
     { clave: 'revisadas_altas', etiqueta: 'Revisadas ≥80%', nombre: 'revisadas ≥80%', color: '#047857', relleno: '#6ee7b7',
       extremo: 'El que menos revisadas altas tiene',
@@ -383,7 +410,7 @@ window.extremoDelCriterio = (nodos) => {
 window.cifraDelCriterio = (fila) => {
     const criterio = window.criterioStats();
     if (criterio.texto) return criterio.texto(fila);
-    return `${Math.round(criterio.valor(fila) * 100)}% ${criterio.nombre}`;
+    return `${window.pctTexto(criterio.valor(fila))}% ${criterio.nombre}`;
 };
 
 window.criterioStats = () => window.CRITERIOS_STATS.find(c => c.clave === window.currentStatsSortCriterion)
@@ -874,7 +901,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     }else{
     Object.keys(radarPerfMap).sort().forEach(key=>{
     const d=radarPerfMap[key];
-    const avg=d.count>0?Math.round(d.sum/d.count):0;
+    const avg=d.count>0?window.pctTexto(d.sum/d.count/100):0;
     const uniqueParticipating=d.users.size;
     const uniqueAssigned=radarGroupingUsersAssigned[key]?radarGroupingUsersAssigned[key].size:0;
     radarLabels.push(key);
@@ -908,9 +935,9 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     }
 
     try {
-        const participacionGlobal = Math.min(100, totalAsignadasGlobal > 0 ? Math.round((totalContestadas / totalAsignadasGlobal) * 100) : 0);
-        const porcentajeRevision = totalContestadas > 0 ? Math.round((totalRevisadas / totalContestadas) * 100) : 0;
-        const globalAvgScore = totalRevisadas > 0 ? Math.round(totalScoreSum / totalRevisadas) : 0;
+        const participacionGlobal = window.pctTexto(totalContestadas, totalAsignadasGlobal);
+        const porcentajeRevision = window.pctTexto(totalRevisadas, totalContestadas);
+        const globalAvgScore = totalRevisadas > 0 ? window.pctTexto(totalScoreSum / totalRevisadas / 100) : 0;
         const promedioDias = countDiasAtencion > 0 ? (totalDiasAtencion / countDiasAtencion) : null;
         
         const getColor = window.getColorScore || ((s) => s >= 80 ? '#166534' : '#ef4444');
@@ -1323,7 +1350,7 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
     } else {
         Object.keys(radarMap).sort().forEach(key => {
             const d = radarMap[key];
-            const avg = d.count > 0 ? Math.round(d.sum / d.count) : 0;
+            const avg = d.count > 0 ? window.pctTexto(d.sum / d.count / 100) : 0;
             const uniqueParticipating = d.users.size;
             const uniqueAssigned = assignedMap[key] ? assignedMap[key].size : 0;
             
@@ -1403,7 +1430,7 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
             plugins: [{
                 afterDatasetsDraw(chart) {
                     const { ctx } = chart;
-                    const avg = conteoRecorte > 0 ? Math.round(sumaRecorte / conteoRecorte) : 0;
+                    const avg = conteoRecorte > 0 ? window.pctTexto(sumaRecorte / conteoRecorte / 100) : 0;
 
                     const totalU=new Set();
                     const totalA=new Set();
@@ -1454,7 +1481,7 @@ window.renderMiniTable = (dataMap) => {
     keys.forEach(k => {
         const d = dataMap[k];
         if (d.countRevisadas === 0) return;
-        const avg = Math.round(d.sum / d.countRevisadas);
+        const avg = window.pctTexto(d.sum / d.countRevisadas / 100);
         const col = getColor(avg);
         h += `
         <div style="background:white; border:1px solid #f1f5f9; padding:15px; border-radius:10px; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
@@ -1484,7 +1511,7 @@ const getColor=window.getColorScore||((s)=>s>=80?'#166534':'#ef4444');
 let h='';
 keys.forEach((k,index)=>{
 const d=areaMap[k];
-const avg=d.count>0?Math.round(d.sum/d.count):0;
+const avg=d.count>0?window.pctTexto(d.sum/d.count/100):0;
 const col=d.count>0?getColor(avg):'#94a3b8';
 const medal=d.count>0?`#${index+1}`:'-';
 let usersHtml='';
@@ -1498,7 +1525,7 @@ return avgB-avgA;
 });
 userKeys.forEach(uid=>{
 const u=d.userStats[uid];
-const uAvg=Math.round(u.sum/u.count);
+const uAvg=window.pctTexto(u.sum/u.count/100);
 const uCol=getColor(uAvg);
 const puestoText=u.puesto?u.puesto:'Sin Puesto';
 usersHtml+=`
@@ -1714,7 +1741,7 @@ window.nodosDeCuadros = (mapa) => {
             asignadas: asignadas,
             respuestas: d.responses || 0,
             procesadas: window.procesadasDe(d),
-            calificacion: d.countScore > 0 ? Math.round(d.sumScore / d.countScore) : null
+            calificacion: d.countScore > 0 ? window.pctTexto(d.sumScore / d.countScore / 100) : null
         });
     });
     return nodos;
@@ -1915,13 +1942,10 @@ window.renderDeptDetailed = (dataMap) => {
         
         const totalProcesadas = reviewed + certificadas + falsas + malRevisadas;
 
-        const pctParticipacion = Math.min(100, assigned > 0 ? Math.round((responses / assigned) * 100) : 0);
-        const pctRevision = Math.min(100, assigned > 0 ? Math.round((totalProcesadas / assigned) * 100) : 0);
-        const avgScore = d.countScore > 0 ? Math.round(d.sumScore / d.countScore) : 0;
+        const pctParticipacion = window.pctTexto(responses, assigned);
+        const pctRevision = window.pctTexto(totalProcesadas, assigned);
+        const avgScore = d.countScore > 0 ? window.pctTexto(d.sumScore / d.countScore / 100) : 0;
         const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
-        const pctCertificada = Math.min(100, assigned > 0 ? Math.round((certificadas / assigned) * 100) : 0);
-        const pctFalsa = Math.min(100, assigned > 0 ? Math.round((falsas / assigned) * 100) : 0);
-        const pctMalRevisada = Math.min(100, assigned > 0 ? Math.round((malRevisadas / assigned) * 100) : 0);
 
         const partColor = '#3b82f6';
         const revColor = '#10b981';
@@ -2022,13 +2046,10 @@ window.renderPuestoDetailed = (dataMap) => {
         
         const totalProcesadas = reviewed + certificadas + falsas + malRevisadas;
 
-        const pctParticipacion = Math.min(100, assigned > 0 ? Math.round((responses / assigned) * 100) : 0);
-        const pctRevision = Math.min(100, assigned > 0 ? Math.round((totalProcesadas / assigned) * 100) : 0);
-        const avgScore = d.countScore > 0 ? Math.round(d.sumScore / d.countScore) : 0;
+        const pctParticipacion = window.pctTexto(responses, assigned);
+        const pctRevision = window.pctTexto(totalProcesadas, assigned);
+        const avgScore = d.countScore > 0 ? window.pctTexto(d.sumScore / d.countScore / 100) : 0;
         const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
-        const pctCertificada = Math.min(100, assigned > 0 ? Math.round((certificadas / assigned) * 100) : 0);
-        const pctFalsa = Math.min(100, assigned > 0 ? Math.round((falsas / assigned) * 100) : 0);
-        const pctMalRevisada = Math.min(100, assigned > 0 ? Math.round((malRevisadas / assigned) * 100) : 0);
 
         const partColor = '#3b82f6';
         const revColor = '#10b981';
@@ -2146,13 +2167,10 @@ window.verStatsDetalleDepto = (deptName) => {
             
             const totalProcesadas = reviewed + certificadas + falsas + malRevisadas;
                         
-            const pctParticipacion = Math.min(100, assigned > 0 ? Math.round((responses / assigned) * 100) : 0);
-            const pctRevision = Math.min(100, assigned > 0 ? Math.round((totalProcesadas / assigned) * 100) : 0);
-            const avgScore = sup.countScore > 0 ? Math.round(sup.sumScore / sup.countScore) : 0;
+            const pctParticipacion = window.pctTexto(responses, assigned);
+            const pctRevision = window.pctTexto(totalProcesadas, assigned);
+            const avgScore = sup.countScore > 0 ? window.pctTexto(sup.sumScore / sup.countScore / 100) : 0;
             const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
-            const pctCertificada = Math.min(100, assigned > 0 ? Math.round((certificadas / assigned) * 100) : 0);
-            const pctFalsa = Math.min(100, assigned > 0 ? Math.round((falsas / assigned) * 100) : 0);
-            const pctMalRevisada = Math.min(100, assigned > 0 ? Math.round((malRevisadas / assigned) * 100) : 0);
 
             const partColor = '#3b82f6';
             const revColor = '#10b981';
@@ -2361,8 +2379,8 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
             const totalProcesadas = emp.reviewedCount + emp.certificadasCount + emp.falsasCount + emp.malRevisadasCount;
             const revisadasAltas = emp.revisadasAltasCount || 0;
             
-            const pctParticipacion = Math.min(100, emp.totalAssigned > 0 ? Math.round((emp.totalResp / emp.totalAssigned) * 100) : 0);
-            const avgScore = emp.countScore > 0 ? Math.round(emp.sumScore / emp.countScore) : 0;
+            const pctParticipacion = window.pctTexto(emp.totalResp, emp.totalAssigned);
+            const avgScore = emp.countScore > 0 ? window.pctTexto(emp.sumScore / emp.countScore / 100) : 0;
             const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
 
             const partColor = '#3b82f6';
@@ -2386,7 +2404,7 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
             <div style="font-size:0.65rem; color:#64748b; margin-bottom:4px; text-align:center; font-weight:700; line-height:1.2; display:flex; justify-content:center; gap:8px;">
             <div>
             <div style="color:${partColor}">${pctParticipacion}%</div>
-            <div style="color:${revColor}; font-size:0.6rem;">${Math.min(100, emp.totalAssigned > 0 ? Math.round((totalProcesadas / emp.totalAssigned) * 100) : 0)}%</div>
+            <div style="color:${revColor}; font-size:0.6rem;">${window.pctTexto(totalProcesadas, emp.totalAssigned)}%</div>
             </div>
             ${emp.countScore > 0 ? `
             <div style="display:flex; align-items:flex-end;">
@@ -2576,8 +2594,8 @@ window.verStatsDetallePuesto = (puestoName) => {
             const totalProcesadas = emp.reviewedCount + emp.certificadasCount + emp.falsasCount + emp.malRevisadasCount;
             const revisadasAltas = emp.revisadasAltasCount || 0;
             
-            const pctParticipacion = Math.min(100, emp.totalAssigned > 0 ? Math.round((emp.totalResp / emp.totalAssigned) * 100) : 0);
-            const avgScore = emp.countScore > 0 ? Math.round(emp.sumScore / emp.countScore) : 0;
+            const pctParticipacion = window.pctTexto(emp.totalResp, emp.totalAssigned);
+            const avgScore = emp.countScore > 0 ? window.pctTexto(emp.sumScore / emp.countScore / 100) : 0;
             const colorScore = '#86efac'; // Color verde claro fijo para la barra de resultados
 
             const partColor = '#3b82f6';
@@ -2601,7 +2619,7 @@ window.verStatsDetallePuesto = (puestoName) => {
             <div style="font-size:0.65rem; color:#64748b; margin-bottom:4px; text-align:center; font-weight:700; line-height:1.2; display:flex; justify-content:center; gap:8px;">
             <div>
             <div style="color:${partColor}">${pctParticipacion}%</div>
-            <div style="color:${revColor}; font-size:0.6rem;">${Math.min(100, emp.totalAssigned > 0 ? Math.round((totalProcesadas / emp.totalAssigned) * 100) : 0)}%</div>
+            <div style="color:${revColor}; font-size:0.6rem;">${window.pctTexto(totalProcesadas, emp.totalAssigned)}%</div>
             </div>
             ${emp.countScore > 0 ? `
             <div style="display:flex; align-items:flex-end;">
