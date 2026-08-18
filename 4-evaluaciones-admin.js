@@ -1261,9 +1261,11 @@ window.abrirExpedienteEmpleado = async (empId) => {
     // Título y clasificación se consultan aquí porque evalCache se invalida cada
     // vez que cambia un estado, y sin ellos las filas quedarían sin nombre.
     // `frequency` y `active` los pide la certificación por clasificación, que
-    // necesita saber en qué periodo cae cada encuesta y cuáles ya no cuentan.
+    // necesita saber en qué periodo cae cada encuesta y cuáles ya no cuentan;
+    // los de destinatarios, para no contarle a esta persona encuestas que no
+    // van dirigidas a su puesto ni a su departamento.
     const { data: evaluaciones } = await sb.from('evaluations')
-        .select('id, title, category, frequency, active');
+        .select('id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
     const titulos = {};
     (evaluaciones || []).forEach(ev => {
         titulos[String(ev.id)] = { title: ev.title, category: (ev.category || 'General') };
@@ -1602,8 +1604,12 @@ window.certificarClasificacionExpediente = async (clasificacion) => {
     if (!window.modoAdminActivo) { alert("Solo el modo administrador puede certificar."); return; }
 
     const clave = window.normalizarClasificacion(clasificacion);
+    // Sólo las de esta clasificación **que le tocan a esta persona**: sin lo
+    // segundo, una encuesta dirigida a otro puesto engordaba el total y el
+    // aviso decía que quedaba una sin contestar que nunca le tocó.
     const encuestasDeLaCat = (exp.evaluaciones || [])
-        .filter(ev => window.normalizarClasificacion(ev.category || 'General') === clave);
+        .filter(ev => window.normalizarClasificacion(ev.category || 'General') === clave)
+        .filter(ev => window.leTocaEstaEncuesta(ev, exp.empleado, window.tieneEquipoDirecto(exp.empleado.id)));
 
     const resumen = window.estadoCertificacion(encuestasDeLaCat, exp.respuestas);
     const E = window.ESTADOS_CERTIFICACION;
@@ -1716,7 +1722,7 @@ window.abrirCertificacionPorClasificacion = async () => {
     }
 
     const { data: evaluaciones, error } = await sb.from('evaluations')
-        .select('id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions');
+        .select('id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
 
     if (error) {
         container.innerHTML = `<div style="padding:40px; text-align:center; color:#ef4444;">No se pudieron cargar las encuestas: ${error.message}</div>`;

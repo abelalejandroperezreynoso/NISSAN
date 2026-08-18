@@ -438,9 +438,27 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   (`window.leTocaEstaEncuesta(ev, empleado, tieneEquipo)`), y por lo mismo: el
   administrador tiene que preguntarlo de otras personas, y dos copias de la
   regla acabarían certificando un juego de encuestas distinto del que ve el
-  interesado. Ojo con que esa regla **no** mira `target_departments`, que sí usa
-  la pantalla de estadísticas para contar asignadas; la discrepancia ya existía
-  y se respeta porque es la que decide lo que la gente ve en su panel.
+  interesado. Acota por destinatarios concretos (`target_employees`, que manda
+  sobre todo lo demás), por puesto y por departamento; una lista vacía o con
+  `'ALL'` no acota nada.
+
+  **`is_obligatory` no tiene nada que ver con a quién le toca.** Significa que
+  no se puede dejar sin contestar —así lo dice la casilla del formulario, «Si
+  se desactiva, será opcional»—, y lo usan las estadísticas para el aviso de
+  «¡Faltan Obligatorias!». Esta regla llevaba un `if (ev.is_obligatory !==
+  false) return true;` que salía **antes** de mirar el puesto, así que una
+  encuesta obligatoria dirigida a ciertos puestos se le contaba a todo el
+  mundo: de ahí que el avance de una clasificación dijera «6 de 7» a quien
+  sólo tenía seis. Era la única regla del proyecto que lo hacía —el dashboard,
+  los pendientes y las estadísticas siempre respetaron puesto y
+  departamento—, y ya no.
+
+  Quien pregunte por una persona concreta tiene que filtrar con ella: el
+  expediente por empleado contaba todas las encuestas de la clasificación sin
+  mirar si le tocaban, y por eso su aviso de certificación decía que quedaba
+  una sin contestar que esa persona nunca tuvo asignada. Toda consulta que
+  vaya a usar esta regla necesita traerse `mode`, `is_obligatory`,
+  `target_employees`, `target_positions` y `target_departments`.
 
   `window.sanitizeForHTML` se mudó de `4b-evaluaciones-stats.js` a
   `1-config.js`: lo usan las pantallas del administrador, que se cargan antes,

@@ -218,13 +218,30 @@ window.leTocaEstaEncuesta = (ev, empleado, tieneEquipo) => {
         return destinatarios.includes(String(empleado.id));
     }
 
-    if (ev.is_obligatory !== false) return true;
+    // Una lista vacía o con 'ALL' no acota nada; si acota, hay que estar en ella.
+    const acota = (valor, valorDelEmpleado, siFalta) => {
+        const lista = comoLista(valor);
+        if (lista.length === 0 || lista.includes('ALL')) return true;
+        const mio = String(valorDelEmpleado === null || valorDelEmpleado === undefined ? '' : valorDelEmpleado)
+            .trim().toUpperCase() || siFalta;
+        return lista.map(t => String(t).toUpperCase().trim()).includes(mio);
+    };
 
-    const puestos = comoLista(ev.target_positions);
-    if (puestos.length > 0 && !puestos.includes('ALL')) {
-        const miPuesto = empleado.puesto ? String(empleado.puesto).trim().toUpperCase() : 'SIN PUESTO';
-        return puestos.map(t => String(t).toUpperCase().trim()).includes(miPuesto);
-    }
+    // Aquí estaba `if (ev.is_obligatory !== false) return true;`, que salía
+    // antes de mirar el puesto: una encuesta obligatoria dirigida a ciertos
+    // puestos se le contaba a todo el mundo, y por eso el avance de una
+    // clasificación decía «6 de 7» a quien sólo tenía seis. Obligatoria
+    // significa que no se puede dejar sin contestar —así lo dice la casilla del
+    // formulario, «Si se desactiva, será opcional»—, no que sea para todos, y
+    // el resto de la aplicación (dashboard, pendientes, estadísticas) siempre
+    // respetó el puesto. Ésta era la única regla que no.
+    if (!acota(ev.target_positions, empleado.puesto, 'SIN PUESTO')) return false;
+
+    // El departamento se mira igual, que es lo que ya hacían el dashboard y los
+    // pendientes; esta regla era también la única que lo ignoraba.
+    const deptoDelEmpleado = empleado.dept !== undefined ? empleado.dept
+        : (empleado.department !== undefined ? empleado.department : empleado.departamento);
+    if (!acota(ev.target_departments, deptoDelEmpleado, 'SIN DEPARTAMENTO')) return false;
 
     return true;
 };
