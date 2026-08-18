@@ -403,10 +403,21 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   Se certifica desde dos sitios, y los dos son del modo administrador:
   **«⭐ Certificar por Clasificación»** (`abrirCertificacionPorClasificacion`)
-  toma una clasificación y enseña a toda la gente a la que le toca, agrupada
-  por estado, para sellar a varios de una vez; y el **expediente por empleado**
-  trae el mismo botón en su bloque de «listas para certificar», para resolver a
-  una persona sin salir de ahí. El primero acota la consulta con
+  toma una clasificación y enseña a quien la tiene lista; y el **expediente por
+  empleado** trae el mismo botón en su bloque de «listas para certificar», para
+  resolver a una persona sin salir de ahí.
+
+  Esa pantalla **sólo lista a los que están listos**, con un buscador por
+  nombre, puesto o departamento. Los demás estados se cuentan en el encabezado
+  pero no se listan: se certifica de una persona en una persona, y ver a los
+  cuarenta que aún no han contestado no ayuda a encontrar al que sí. El
+  buscador vive **fuera** de `#cuerpo-certificacion` porque repintar la lista
+  se lo llevaría por delante y el foco se perdería a cada letra. Nada viene
+  marcado de entrada y «Marcar todas» sólo alcanza a lo que se está viendo: con
+  el filtro puesto, marcar a los que quedaron fuera sería marcar a ciegas.
+  `window.certificarSoloA(id)` es el atajo de un toque y entra por la misma
+  función que el lote —devolviendo su promesa, o nadie podría esperar a que
+  termine ni enterarse de un fallo—. El primero acota la consulta con
   `.in('evaluation_id', …)` y un `.gte('submitted_at', …)` calculado del
   periodo más temprano en juego: sin eso se traería el historial completo de
   toda la empresa. Una encuesta de `once` no se puede acotar —su periodo es

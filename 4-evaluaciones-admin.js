@@ -1742,7 +1742,7 @@ window.abrirCertificacionPorClasificacion = async () => {
             <button onclick="window.certificacionActual=null; window.cargarVistaEvaluaciones()" style="background:#f1f5f9; border:none; color:#334155; font-weight:bold; cursor:pointer; font-size:1.2rem; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;" title="Volver a la lista">←</button>
             <div style="min-width:0;">
                 <h2 style="margin:0; font-size:1.2rem; color:#1d4ed8;">⭐ Certificar por clasificación</h2>
-                <div style="font-size:0.85rem; color:#64748b;">Da fe de una clasificación entera para varias personas a la vez</div>
+                <div style="font-size:0.85rem; color:#64748b;">Busca a la persona y da fe de su clasificación entera</div>
             </div>
         </div>
 
@@ -1751,6 +1751,10 @@ window.abrirCertificacionPorClasificacion = async () => {
             <option value="">Elige una clasificación…</option>
             ${clasificaciones.map(c => `<option value="${window.sanitizeForHTML(c)}">${window.sanitizeForHTML(c)}</option>`).join('')}
         </select>
+
+        <input type="text" id="buscador-cert" placeholder="🔍 Buscar empleado…"
+               oninput="window.filtrarEmpleadosCert(this.value)"
+               style="display:none; width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white; margin-bottom:15px;">
 
         <div id="cuerpo-certificacion"></div>
     `;
@@ -1766,11 +1770,17 @@ window.cargarClasificacionParaCertificar = async (clasificacion) => {
     const estado = window.certificacionActual;
     if (!cuerpo || !estado) return;
 
+    const buscador = document.getElementById('buscador-cert');
+
     if (!clasificacion) {
-        estado.elegida = ''; estado.filas = []; estado.seleccion = [];
+        estado.elegida = ''; estado.filas = []; estado.seleccion = []; estado.busqueda = '';
+        if (buscador) { buscador.style.display = 'none'; buscador.value = ''; }
         cuerpo.innerHTML = '';
         return;
     }
+
+    if (buscador) { buscador.style.display = 'block'; buscador.value = ''; }
+    estado.busqueda = '';
 
     cuerpo.innerHTML = '<div style="padding:30px; text-align:center;"><div class="spinner" style="margin: 0 auto 12px auto;"></div>Reuniendo respuestas…</div>';
 
@@ -1825,11 +1835,10 @@ window.cargarClasificacionParaCertificar = async (clasificacion) => {
     estado.elegida = clasificacion;
     estado.encuestas = encuestas;
     estado.filas = filas;
-    // Vienen marcadas las que están listas, que es a lo que se entra a esta
-    // pantalla; lo demás se marca a mano.
-    estado.seleccion = filas
-        .filter(f => f.resumen.estado === window.ESTADOS_CERTIFICACION.LISTA)
-        .map(f => String(f.empleado.id));
+    // Nada viene marcado de entrada: con el buscador de por medio, una
+    // selección hecha antes de teclear acabaría certificando a gente que ya no
+    // está a la vista.
+    estado.seleccion = [];
 
     window.renderizarCertificacionClasificacion();
 };
@@ -1853,6 +1862,27 @@ window.seleccionarGrupoCert = (ids, marcar) => {
     window.renderizarCertificacionClasificacion();
 };
 
+window.filtrarEmpleadosCert = (termino) => {
+    const estado = window.certificacionActual;
+    if (!estado) return;
+    estado.busqueda = String(termino || '');
+    // El buscador vive fuera de #cuerpo-certificacion, así que repintar la
+    // lista no se lo lleva por delante y el foco aguanta entre letra y letra.
+    window.renderizarCertificacionClasificacion();
+};
+
+// Certificar a una sola persona sin pasar por las casillas: es el camino
+// normal —se busca a alguien y se le da fe—, y entra por la misma función que
+// el lote para no tener dos maneras de certificar.
+window.certificarSoloA = (empId) => {
+    const estado = window.certificacionActual;
+    if (!estado) return Promise.resolve();
+    estado.seleccion = [String(empId)];
+    // Se devuelve la promesa: sin ella nadie puede esperar a que termine ni
+    // enterarse de un fallo, que es justo lo que hace una escritura.
+    return window.certificarSeleccionClasificacion();
+};
+
 window.renderizarCertificacionClasificacion = () => {
     const cuerpo = document.getElementById('cuerpo-certificacion');
     const estado = window.certificacionActual;
@@ -1860,89 +1890,114 @@ window.renderizarCertificacionClasificacion = () => {
 
     const E = window.ESTADOS_CERTIFICACION;
     const { filas, seleccion } = estado;
+    const safeClas = window.sanitizeForHTML(estado.elegida);
 
-    // Quien no ha contestado nada no sale en la lista: no hay nada que
-    // certificarle y llenaría la pantalla de gente sin caso.
-    const conCaso = filas.filter(f => f.resumen.estado !== E.VACIO);
-    const sinActividad = filas.length - conCaso.length;
+    // La lista sólo enseña a quien se puede certificar entero. Los demás
+    // estados se cuentan pero no se listan: se certifica de una persona en una
+    // persona, y ver a los cuarenta que todavía no han contestado no ayuda a
+    // encontrar al que sí. El recuento queda para no esconder que existen.
+    const listos = filas.filter(f => f.resumen.estado === E.LISTA);
+    const cuenta = {
+        proceso: filas.filter(f => f.resumen.estado === E.PROCESO).length,
+        observaciones: filas.filter(f => f.resumen.estado === E.OBSERVACIONES).length,
+        certificadas: filas.filter(f => f.resumen.estado === E.CERTIFICADA).length,
+        sinActividad: filas.filter(f => f.resumen.estado === E.VACIO).length
+    };
 
-    if (conCaso.length === 0) {
-        cuerpo.innerHTML = `<div style="padding:30px; text-align:center; color:#94a3b8;">
-            Nadie ha contestado todavía nada de «${window.sanitizeForHTML(estado.elegida)}» en el periodo vigente.
-            ${sinActividad > 0 ? `<div style="margin-top:6px; font-size:0.8rem;">Le toca a ${sinActividad} persona(s).</div>` : ''}
+    const termino = (estado.busqueda || '').toLowerCase().trim();
+    const visibles = termino
+        ? listos.filter(f => {
+            const e = f.empleado;
+            return (e.name || '').toLowerCase().includes(termino)
+                || (e.puesto || '').toLowerCase().includes(termino)
+                || (e.dept || '').toLowerCase().includes(termino);
+          })
+        : listos;
+
+    const resto = [];
+    if (cuenta.proceso) resto.push(`${cuenta.proceso} en proceso`);
+    if (cuenta.observaciones) resto.push(`${cuenta.observaciones} con observaciones`);
+    if (cuenta.certificadas) resto.push(`${cuenta.certificadas} ya certificada(s)`);
+    if (cuenta.sinActividad) resto.push(`${cuenta.sinActividad} sin contestar`);
+
+    const encabezado = `
+        <div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
+            Sólo aparece quien tiene <b>toda la clasificación revisada</b> y lista para certificar,
+            del periodo vigente de cada encuesta.
+            ${resto.length ? `<div style="margin-top:6px;">Del resto: ${resto.join(' · ')}. Se resuelven desde «Revisar por Empleado».</div>` : ''}
         </div>`;
+
+    if (listos.length === 0) {
+        cuerpo.innerHTML = encabezado + `
+            <div style="padding:30px; text-align:center; color:#94a3b8;">
+                Nadie tiene «${safeClas}» lista para certificar en el periodo vigente.
+            </div>`;
         return;
     }
 
-    const grupos = [
-        { clave: E.LISTA, titulo: '⭐ Listas para certificar', color: '#166534', fondo: '#dcfce7', certificable: true },
-        { clave: E.PROCESO, titulo: '⏳ En proceso', color: '#b45309', fondo: '#fef3c7', certificable: true,
-          nota: 'Se puede certificar lo que ya esté revisado, pero la clasificación no quedará cerrada.' },
-        { clave: E.OBSERVACIONES, titulo: '⚠️ Con observaciones', color: '#7e22ce', fondo: '#faf5ff', certificable: false,
-          nota: 'Hay respuestas anuladas o mal revisadas. Hay que resolverlas antes de dar fe de la clasificación.' },
-        { clave: E.CERTIFICADA, titulo: '✅ Ya certificadas', color: '#1d4ed8', fondo: '#eff6ff', certificable: false }
-    ];
+    if (visibles.length === 0) {
+        cuerpo.innerHTML = encabezado + `
+            <div style="padding:30px; text-align:center; color:#94a3b8;">
+                Ninguno de los ${listos.length} listos coincide con la búsqueda.
+            </div>`;
+        return;
+    }
 
-    const filaHtml = (f, certificable) => {
+    const filaHtml = (f) => {
         const id = String(f.empleado.id);
         const marcada = seleccion.includes(id);
-        const insignia = window.insigniaCertificacion(f.resumen);
-        const puedeAlgo = certificable && f.resumen.certificables.length > 0;
+        const cuantas = f.resumen.certificables.length;
         const safeName = window.sanitizeForHTML(f.empleado.name || 'Sin nombre');
         const puesto = window.sanitizeForHTML(
             [f.empleado.puesto, f.empleado.dept].filter(Boolean).join(' · ') || 'Sin puesto');
 
-        // La insignia va debajo y no al lado: como no encoge, en un teléfono
-        // dejaba el nombre en «ANA LIS…».
+        // Aquí ya no va la insignia: en esta lista todos están listos y
+        // repetirlo en cada renglón no dice nada. En su lugar, lo que se va a
+        // certificar.
         return `
-        <div style="display:flex; align-items:flex-start; gap:10px; background:${marcada ? '#eff6ff' : 'white'}; border:1px solid ${marcada ? '#93c5fd' : '#e2e8f0'}; border-radius:10px; padding:10px 12px; margin-bottom:8px;">
-            ${puedeAlgo
-                ? `<input type="checkbox" ${marcada ? 'checked' : ''} onclick="window.alternarSeleccionEmpleadoCert('${id}')"
-                          style="width:20px; height:20px; flex-shrink:0; margin-top:2px; accent-color:#1d4ed8; cursor:pointer;">`
-                : `<span style="width:20px; flex-shrink:0;"></span>`}
-            <div style="flex:1; min-width:0;">
-                <div style="color:#0f172a; font-weight:600; font-size:0.92rem; line-height:1.25; word-break:break-word;">${safeName}</div>
-                <div style="color:#64748b; font-size:0.78rem; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${puesto}</div>
-                ${insignia ? `<div style="margin-top:6px;"><span style="display:inline-block; background:${insignia.fondo}; color:${insignia.color}; border:1px solid ${insignia.borde}; padding:3px 8px; border-radius:20px; font-size:0.68rem; font-weight:700;">${insignia.texto}</span></div>` : ''}
+        <div style="background:${marcada ? '#eff6ff' : 'white'}; border:1px solid ${marcada ? '#93c5fd' : '#e2e8f0'}; border-radius:10px; padding:10px 12px; margin-bottom:8px;">
+            <div style="display:flex; align-items:flex-start; gap:10px;">
+                <input type="checkbox" ${marcada ? 'checked' : ''} onclick="window.alternarSeleccionEmpleadoCert('${id}')"
+                       style="width:20px; height:20px; flex-shrink:0; margin-top:2px; accent-color:#1d4ed8; cursor:pointer;"
+                       title="Marcar para certificar a varios de una vez">
+                <div style="flex:1; min-width:0;">
+                    <div style="color:#0f172a; font-weight:600; font-size:0.92rem; line-height:1.25; word-break:break-word;">${safeName}</div>
+                    <div style="color:#64748b; font-size:0.78rem; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${puesto}</div>
+                </div>
             </div>
-            <button onclick="window.abrirExpedienteEmpleado('${id}')"
-                    style="flex-shrink:0; background:#f1f5f9; border:none; color:#475569; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;">Abrir</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                <span style="color:#166534; font-size:0.75rem; font-weight:700;">${cuantas} encuesta${cuantas === 1 ? '' : 's'} por certificar</span>
+                <div style="display:flex; gap:6px; flex-shrink:0;">
+                    <button onclick="window.abrirExpedienteEmpleado('${id}')"
+                            style="background:#f1f5f9; border:none; color:#475569; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;">Abrir</button>
+                    <button onclick="window.certificarSoloA('${id}')"
+                            style="background:#eff6ff; border:1px solid #3b82f6; color:#1d4ed8; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;">⭐ Certificar</button>
+                </div>
+            </div>
         </div>`;
     };
 
-    let html = '';
-    grupos.forEach(g => {
-        const deEsteGrupo = conCaso.filter(f => f.resumen.estado === g.clave);
-        if (deEsteGrupo.length === 0) return;
+    // «Marcar todas» sólo alcanza a lo que se está viendo: con el buscador
+    // puesto, marcar a los que quedaron fuera del filtro sería marcar a ciegas.
+    const idsVisibles = visibles.map(f => String(f.empleado.id));
+    const todasMarcadas = idsVisibles.every(id => seleccion.includes(id));
 
-        const marcables = deEsteGrupo
-            .filter(f => g.certificable && f.resumen.certificables.length > 0)
-            .map(f => String(f.empleado.id));
-        const todasMarcadas = marcables.length > 0 && marcables.every(id => seleccion.includes(id));
-
-        const botonGrupo = marcables.length > 0
-            ? `<button onclick="window.seleccionarGrupoCert('${marcables.join(',')}', ${todasMarcadas ? 'false' : 'true'})"
-                       style="background:white; border:1px solid ${g.color}; color:${g.color}; padding:4px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; flex-shrink:0;">
-                   ${todasMarcadas ? 'Quitar' : 'Marcar todas'}
-               </button>`
-            : '';
-
-        html += `
+    const lista = `
         <div style="margin-top:18px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:${g.fondo}; color:${g.color}; padding:8px 12px; border-radius:8px; font-weight:700; font-size:0.85rem;">
-                <span>${g.titulo} (${deEsteGrupo.length})</span>
-                ${botonGrupo}
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:#dcfce7; color:#166534; padding:8px 12px; border-radius:8px; font-weight:700; font-size:0.85rem;">
+                <span>⭐ Listas para certificar (${visibles.length}${termino ? ` de ${listos.length}` : ''})</span>
+                <button onclick="window.seleccionarGrupoCert('${idsVisibles.join(',')}', ${todasMarcadas ? 'false' : 'true'})"
+                        style="background:white; border:1px solid #166534; color:#166534; padding:4px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; flex-shrink:0;">
+                    ${todasMarcadas ? 'Quitar' : 'Marcar todas'}
+                </button>
             </div>
-            ${g.nota ? `<div style="font-size:0.75rem; color:${g.color}; padding:6px 4px 0 4px;">${g.nota}</div>` : ''}
-            <div style="margin-top:8px;">${deEsteGrupo.map(f => filaHtml(f, g.certificable)).join('')}</div>
+            <div style="margin-top:8px;">${visibles.map(filaHtml).join('')}</div>
         </div>`;
-    });
 
     let barra = '';
     if (seleccion.length > 0) {
-        const cubiertas = conCaso
-            .filter(f => seleccion.includes(String(f.empleado.id)))
-            .reduce((n, f) => n + f.resumen.certificables.length, 0);
+        const marcadas = filas.filter(f => seleccion.includes(String(f.empleado.id)));
+        const cubiertas = marcadas.reduce((n, f) => n + f.resumen.certificables.length, 0);
 
         barra = `
         <div style="position:sticky; bottom:0; margin-top:20px; background:white; border:1px solid #e2e8f0; border-radius:12px; padding:12px; box-shadow:0 -4px 12px rgba(0,0,0,0.06);">
@@ -1952,18 +2007,12 @@ window.renderizarCertificacionClasificacion = () => {
             </div>
             <button onclick="window.certificarSeleccionClasificacion()"
                     style="width:100%; background:#eff6ff; color:#1d4ed8; border:1px solid #3b82f6; padding:12px; border-radius:10px; font-size:0.95rem; font-weight:700; cursor:pointer;">
-                ⭐ Certificar «${window.sanitizeForHTML(estado.elegida)}»
+                ⭐ Certificar «${safeClas}»
             </button>
         </div>`;
     }
 
-    cuerpo.innerHTML = `
-        <div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
-            Certificar da fe de las respuestas del <b>periodo vigente</b> de cada encuesta.
-            ${sinActividad > 0 ? `A ${sinActividad} persona(s) más le toca esta clasificación pero no ha contestado nada.` : ''}
-        </div>
-        ${html}
-        ${barra}`;
+    cuerpo.innerHTML = encabezado + lista + barra;
 };
 
 window.certificarSeleccionClasificacion = async () => {
