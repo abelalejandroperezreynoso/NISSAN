@@ -1752,9 +1752,13 @@ window.abrirCertificacionPorClasificacion = async () => {
             ${clasificaciones.map(c => `<option value="${window.sanitizeForHTML(c)}">${window.sanitizeForHTML(c)}</option>`).join('')}
         </select>
 
-        <input type="text" id="buscador-cert" placeholder="🔍 Buscar empleado…"
-               oninput="window.filtrarEmpleadosCert(this.value)"
-               style="display:none; width:100%; box-sizing:border-box; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white; margin-bottom:15px;">
+        <div id="filtros-cert" style="display:none; gap:8px; flex-wrap:wrap; margin-bottom:15px;">
+            <input type="text" id="buscador-cert" placeholder="🔍 Buscar empleado…"
+                   oninput="window.filtrarEmpleadosCert(this.value)"
+                   style="flex:1 1 100%; box-sizing:border-box; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white;">
+            <select id="depto-cert" onchange="window.filtrarDeptoCert(this.value)"
+                    style="flex:1 1 100%; box-sizing:border-box; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white; color:#0f172a;"></select>
+        </div>
 
         <div id="cuerpo-certificacion"></div>
     `;
@@ -1771,16 +1775,21 @@ window.cargarClasificacionParaCertificar = async (clasificacion) => {
     if (!cuerpo || !estado) return;
 
     const buscador = document.getElementById('buscador-cert');
+    const cajaFiltros = document.getElementById('filtros-cert');
 
     if (!clasificacion) {
-        estado.elegida = ''; estado.filas = []; estado.seleccion = []; estado.busqueda = '';
-        if (buscador) { buscador.style.display = 'none'; buscador.value = ''; }
+        estado.elegida = ''; estado.filas = []; estado.seleccion = [];
+        estado.busqueda = ''; estado.departamento = '';
+        if (cajaFiltros) cajaFiltros.style.display = 'none';
+        if (buscador) buscador.value = '';
         cuerpo.innerHTML = '';
         return;
     }
 
-    if (buscador) { buscador.style.display = 'block'; buscador.value = ''; }
+    if (cajaFiltros) cajaFiltros.style.display = 'flex';
+    if (buscador) buscador.value = '';
     estado.busqueda = '';
+    estado.departamento = '';
 
     cuerpo.innerHTML = '<div style="padding:30px; text-align:center;"><div class="spinner" style="margin: 0 auto 12px auto;"></div>Reuniendo respuestas…</div>';
 
@@ -1840,6 +1849,21 @@ window.cargarClasificacionParaCertificar = async (clasificacion) => {
     // está a la vista.
     estado.seleccion = [];
 
+    // Los departamentos salen de toda la gente a la que le toca la
+    // clasificación, no sólo de los listos: así el desplegable no se vacía
+    // según se van certificando.
+    const deptos = Array.from(new Set(filas.map(f => window.deptoDeEmpleado(f.empleado))))
+        .sort((a, b) => a.localeCompare(b));
+    const selDepto = document.getElementById('depto-cert');
+    if (selDepto) {
+        selDepto.innerHTML = `<option value="">Todos los departamentos (${filas.length})</option>`
+            + deptos.map(d => {
+                const cuantos = filas.filter(f => window.deptoDeEmpleado(f.empleado) === d).length;
+                return `<option value="${window.sanitizeForHTML(d)}">${window.sanitizeForHTML(d)} (${cuantos})</option>`;
+            }).join('');
+        selDepto.value = '';
+    }
+
     window.renderizarCertificacionClasificacion();
 };
 
@@ -1862,12 +1886,23 @@ window.seleccionarGrupoCert = (ids, marcar) => {
     window.renderizarCertificacionClasificacion();
 };
 
+// El departamento tal como se agrupa en esta pantalla. Se saca aparte porque
+// lo usan el desplegable y el filtrado, y tienen que coincidir.
+window.deptoDeEmpleado = (emp) => String((emp && emp.dept) || '').trim() || 'Sin departamento';
+
 window.filtrarEmpleadosCert = (termino) => {
     const estado = window.certificacionActual;
     if (!estado) return;
     estado.busqueda = String(termino || '');
     // El buscador vive fuera de #cuerpo-certificacion, así que repintar la
     // lista no se lo lleva por delante y el foco aguanta entre letra y letra.
+    window.renderizarCertificacionClasificacion();
+};
+
+window.filtrarDeptoCert = (depto) => {
+    const estado = window.certificacionActual;
+    if (!estado) return;
+    estado.departamento = String(depto || '');
     window.renderizarCertificacionClasificacion();
 };
 
@@ -1892,27 +1927,33 @@ window.renderizarCertificacionClasificacion = () => {
     const { filas, seleccion } = estado;
     const safeClas = window.sanitizeForHTML(estado.elegida);
 
-    // La lista sólo enseña a quien se puede certificar entero. Los demás
-    // estados se cuentan pero no se listan: se certifica de una persona en una
-    // persona, y ver a los cuarenta que todavía no han contestado no ayuda a
-    // encontrar al que sí. El recuento queda para no esconder que existen.
+    const termino = (estado.busqueda || '').toLowerCase().trim();
+    const depto = estado.departamento || '';
+    const buscando = termino.length > 0;
+
+    const coincide = (f) => {
+        const e = f.empleado;
+        return (e.name || '').toLowerCase().includes(termino)
+            || (e.puesto || '').toLowerCase().includes(termino)
+            || (e.dept || '').toLowerCase().includes(termino);
+    };
+
+    // Buscando, aparece cualquiera y en el estado que sea: si escribes un
+    // nombre es porque quieres ver a esa persona, no que te digan que no
+    // califica. Sin búsqueda, la lista es la de los listos —acotada al
+    // departamento elegido—, que es a lo que se entra a esta pantalla.
     const listos = filas.filter(f => f.resumen.estado === E.LISTA);
+    const enDepto = (f) => !depto || window.deptoDeEmpleado(f.empleado) === depto;
+    const visibles = buscando ? filas.filter(coincide) : listos.filter(enDepto);
+
     const cuenta = {
+        listos: listos.length,
+        listosAqui: listos.filter(enDepto).length,
         proceso: filas.filter(f => f.resumen.estado === E.PROCESO).length,
         observaciones: filas.filter(f => f.resumen.estado === E.OBSERVACIONES).length,
         certificadas: filas.filter(f => f.resumen.estado === E.CERTIFICADA).length,
         sinActividad: filas.filter(f => f.resumen.estado === E.VACIO).length
     };
-
-    const termino = (estado.busqueda || '').toLowerCase().trim();
-    const visibles = termino
-        ? listos.filter(f => {
-            const e = f.empleado;
-            return (e.name || '').toLowerCase().includes(termino)
-                || (e.puesto || '').toLowerCase().includes(termino)
-                || (e.dept || '').toLowerCase().includes(termino);
-          })
-        : listos;
 
     const resto = [];
     if (cuenta.proceso) resto.push(`${cuenta.proceso} en proceso`);
@@ -1920,76 +1961,97 @@ window.renderizarCertificacionClasificacion = () => {
     if (cuenta.certificadas) resto.push(`${cuenta.certificadas} ya certificada(s)`);
     if (cuenta.sinActividad) resto.push(`${cuenta.sinActividad} sin contestar`);
 
-    const encabezado = `
-        <div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
-            Sólo aparece quien tiene <b>toda la clasificación revisada</b> y lista para certificar,
-            del periodo vigente de cada encuesta.
-            ${resto.length ? `<div style="margin-top:6px;">Del resto: ${resto.join(' · ')}. Se resuelven desde «Revisar por Empleado».</div>` : ''}
-        </div>`;
-
-    if (listos.length === 0) {
-        cuerpo.innerHTML = encabezado + `
-            <div style="padding:30px; text-align:center; color:#94a3b8;">
-                Nadie tiene «${safeClas}» lista para certificar en el periodo vigente.
-            </div>`;
-        return;
-    }
+    const encabezado = buscando
+        ? `<div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
+               Buscando entre <b>las ${filas.length} personas</b> a las que les toca «${safeClas}», estén listas o no.
+               ${depto ? '<div style="margin-top:4px;">El filtro de departamento no se aplica mientras buscas.</div>' : ''}
+           </div>`
+        : `<div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
+               Sólo aparece quien tiene <b>toda la clasificación revisada</b> y lista para certificar,
+               del periodo vigente de cada encuesta. Busca por nombre para ver a cualquiera y saber qué le falta.
+               ${resto.length ? `<div style="margin-top:6px;">Del resto: ${resto.join(' · ')}.</div>` : ''}
+           </div>`;
 
     if (visibles.length === 0) {
-        cuerpo.innerHTML = encabezado + `
-            <div style="padding:30px; text-align:center; color:#94a3b8;">
-                Ninguno de los ${listos.length} listos coincide con la búsqueda.
-            </div>`;
+        const vacio = buscando
+            ? `Nadie de «${safeClas}» coincide con la búsqueda.`
+            : (depto
+                ? `Nadie de ${window.sanitizeForHTML(depto)} tiene «${safeClas}» lista para certificar.`
+                : `Nadie tiene «${safeClas}» lista para certificar en el periodo vigente.`);
+        cuerpo.innerHTML = encabezado + `<div style="padding:30px; text-align:center; color:#94a3b8;">${vacio}</div>`;
         return;
     }
 
     const filaHtml = (f) => {
         const id = String(f.empleado.id);
         const marcada = seleccion.includes(id);
+        const lista = f.resumen.estado === E.LISTA;
         const cuantas = f.resumen.certificables.length;
+        const falta = window.faltaParaCertificar(f.resumen);
+        const insignia = window.insigniaCertificacion(f.resumen);
         const safeName = window.sanitizeForHTML(f.empleado.name || 'Sin nombre');
         const puesto = window.sanitizeForHTML(
-            [f.empleado.puesto, f.empleado.dept].filter(Boolean).join(' · ') || 'Sin puesto');
+            [f.empleado.puesto, window.deptoDeEmpleado(f.empleado)].filter(Boolean).join(' · '));
 
-        // Aquí ya no va la insignia: en esta lista todos están listos y
-        // repetirlo en cada renglón no dice nada. En su lugar, lo que se va a
-        // certificar.
+        // A quien no está listo se le dice qué le falta y no se le ofrece
+        // certificar: el botón daría fe de algo que todavía no está revisado.
+        // Se resuelve entrando a su expediente, que es a donde lleva «Abrir».
+        const abajo = lista
+            ? `<span style="color:#166534; font-size:0.75rem; font-weight:700;">${cuantas} encuesta${cuantas === 1 ? '' : 's'} por certificar</span>`
+            : (falta.length
+                ? `<span style="color:#b45309; font-size:0.75rem; font-weight:700; min-width:0;">Falta: ${window.sanitizeForHTML(falta.join(' · '))}</span>`
+                : `<span style="color:#1d4ed8; font-size:0.75rem; font-weight:700;">Ya está certificada</span>`);
+
         return `
         <div style="background:${marcada ? '#eff6ff' : 'white'}; border:1px solid ${marcada ? '#93c5fd' : '#e2e8f0'}; border-radius:10px; padding:10px 12px; margin-bottom:8px;">
             <div style="display:flex; align-items:flex-start; gap:10px;">
-                <input type="checkbox" ${marcada ? 'checked' : ''} onclick="window.alternarSeleccionEmpleadoCert('${id}')"
-                       style="width:20px; height:20px; flex-shrink:0; margin-top:2px; accent-color:#1d4ed8; cursor:pointer;"
-                       title="Marcar para certificar a varios de una vez">
+                ${lista
+                    ? `<input type="checkbox" ${marcada ? 'checked' : ''} onclick="window.alternarSeleccionEmpleadoCert('${id}')"
+                              style="width:20px; height:20px; flex-shrink:0; margin-top:2px; accent-color:#1d4ed8; cursor:pointer;"
+                              title="Marcar para certificar a varios de una vez">`
+                    : `<span style="width:20px; flex-shrink:0;"></span>`}
                 <div style="flex:1; min-width:0;">
                     <div style="color:#0f172a; font-weight:600; font-size:0.92rem; line-height:1.25; word-break:break-word;">${safeName}</div>
                     <div style="color:#64748b; font-size:0.78rem; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${puesto}</div>
+                    ${(buscando && insignia && !lista)
+                        ? `<div style="margin-top:6px;"><span style="display:inline-block; background:${insignia.fondo}; color:${insignia.color}; border:1px solid ${insignia.borde}; padding:3px 8px; border-radius:20px; font-size:0.68rem; font-weight:700;">${insignia.texto}</span></div>`
+                        : ''}
                 </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
-                <span style="color:#166534; font-size:0.75rem; font-weight:700;">${cuantas} encuesta${cuantas === 1 ? '' : 's'} por certificar</span>
+                ${abajo}
                 <div style="display:flex; gap:6px; flex-shrink:0;">
                     <button onclick="window.abrirExpedienteEmpleado('${id}')"
                             style="background:#f1f5f9; border:none; color:#475569; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;">Abrir</button>
-                    <button onclick="window.certificarSoloA('${id}')"
-                            style="background:#eff6ff; border:1px solid #3b82f6; color:#1d4ed8; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;">⭐ Certificar</button>
+                    ${lista
+                        ? `<button onclick="window.certificarSoloA('${id}')"
+                                   style="background:#eff6ff; border:1px solid #3b82f6; color:#1d4ed8; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;">⭐ Certificar</button>`
+                        : ''}
                 </div>
             </div>
         </div>`;
     };
 
-    // «Marcar todas» sólo alcanza a lo que se está viendo: con el buscador
-    // puesto, marcar a los que quedaron fuera del filtro sería marcar a ciegas.
-    const idsVisibles = visibles.map(f => String(f.empleado.id));
-    const todasMarcadas = idsVisibles.every(id => seleccion.includes(id));
+    // «Marcar todas» sólo alcanza a lo que se está viendo y sólo a los listos:
+    // con un filtro puesto, marcar a los que quedaron fuera sería marcar a
+    // ciegas.
+    const idsMarcables = visibles.filter(f => f.resumen.estado === E.LISTA).map(f => String(f.empleado.id));
+    const todasMarcadas = idsMarcables.length > 0 && idsMarcables.every(id => seleccion.includes(id));
+
+    const rotulo = buscando
+        ? `🔍 Resultados (${visibles.length})`
+        : `⭐ Listas para certificar (${visibles.length}${depto && cuenta.listos !== visibles.length ? ` de ${cuenta.listos}` : ''})`;
 
     const lista = `
         <div style="margin-top:18px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:#dcfce7; color:#166534; padding:8px 12px; border-radius:8px; font-weight:700; font-size:0.85rem;">
-                <span>⭐ Listas para certificar (${visibles.length}${termino ? ` de ${listos.length}` : ''})</span>
-                <button onclick="window.seleccionarGrupoCert('${idsVisibles.join(',')}', ${todasMarcadas ? 'false' : 'true'})"
-                        style="background:white; border:1px solid #166534; color:#166534; padding:4px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; flex-shrink:0;">
-                    ${todasMarcadas ? 'Quitar' : 'Marcar todas'}
-                </button>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:${buscando ? '#f1f5f9' : '#dcfce7'}; color:${buscando ? '#334155' : '#166534'}; padding:8px 12px; border-radius:8px; font-weight:700; font-size:0.85rem;">
+                <span>${rotulo}</span>
+                ${idsMarcables.length > 0
+                    ? `<button onclick="window.seleccionarGrupoCert('${idsMarcables.join(',')}', ${todasMarcadas ? 'false' : 'true'})"
+                               style="background:white; border:1px solid #166534; color:#166534; padding:4px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer; flex-shrink:0;">
+                           ${todasMarcadas ? 'Quitar' : 'Marcar todas'}
+                       </button>`
+                    : ''}
             </div>
             <div style="margin-top:8px;">${visibles.map(filaHtml).join('')}</div>
         </div>`;

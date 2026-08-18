@@ -407,17 +407,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   empleado** trae el mismo botón en su bloque de «listas para certificar», para
   resolver a una persona sin salir de ahí.
 
-  Esa pantalla **sólo lista a los que están listos**, con un buscador por
-  nombre, puesto o departamento. Los demás estados se cuentan en el encabezado
-  pero no se listan: se certifica de una persona en una persona, y ver a los
-  cuarenta que aún no han contestado no ayuda a encontrar al que sí. El
-  buscador vive **fuera** de `#cuerpo-certificacion` porque repintar la lista
-  se lo llevaría por delante y el foco se perdería a cada letra. Nada viene
-  marcado de entrada y «Marcar todas» sólo alcanza a lo que se está viendo: con
-  el filtro puesto, marcar a los que quedaron fuera sería marcar a ciegas.
-  `window.certificarSoloA(id)` es el atajo de un toque y entra por la misma
-  función que el lote —devolviendo su promesa, o nadie podría esperar a que
-  termine ni enterarse de un fallo—. El primero acota la consulta con
+  Esa pantalla tiene **dos modos**. En reposo lista **sólo a los que están
+  listos**, acotables por departamento; los demás estados se cuentan en el
+  encabezado pero no se listan, porque se certifica de una persona en una
+  persona y ver a los cuarenta que aún no han contestado no ayuda a encontrar
+  al que sí. **En cuanto se escribe algo en el buscador aparece cualquiera**,
+  en el estado que sea y de cualquier departamento —si escribes un nombre es
+  porque quieres ver a esa persona, no que te digan que no califica—, y su
+  renglón dice qué le falta con `window.faltaParaCertificar(resumen)`. La
+  búsqueda **se salta el filtro de departamento** a propósito y lo avisa en el
+  encabezado.
+
+  A quien no está listo no se le ofrece el botón de certificar ni casilla: se
+  entra a su expediente desde «Abrir» y se resuelve allí. El buscador y el
+  desplegable viven **fuera** de `#cuerpo-certificacion` porque repintar la
+  lista se los llevaría por delante y el foco se perdería a cada letra; el
+  desplegable se arma con los departamentos de toda la gente a la que le toca
+  la clasificación, no sólo de los listos, para que no se vacíe según se van
+  certificando. Nada viene marcado de entrada y «Marcar todas» sólo alcanza a
+  los listos que se están viendo: con un filtro puesto, marcar a los que
+  quedaron fuera sería marcar a ciegas. `window.certificarSoloA(id)` es el
+  atajo de un toque y entra por la misma función que el lote —devolviendo su
+  promesa, o nadie podría esperar a que termine ni enterarse de un fallo—. El primero acota la consulta con
   `.in('evaluation_id', …)` y un `.gte('submitted_at', …)` calculado del
   periodo más temprano en juego: sin eso se traería el historial completo de
   toda la empresa. Una encuesta de `once` no se puede acotar —su periodo es

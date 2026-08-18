@@ -389,6 +389,29 @@ window.insigniaCertificacion = (resumen) => {
     return { texto: `⏳ ${revisadas} de ${resumen.total} revisadas`, color: '#b45309', fondo: '#fef3c7', borde: '#f59e0b' };
 };
 
+// Qué le falta a una clasificación para poder certificarse, en trozos sueltos
+// para que cada pantalla los junte como quiera. La insignia dice en qué estado
+// está; esto dice qué hay que resolver, que es lo que el administrador
+// necesita cuando busca a alguien y no aparece entre los listos.
+window.faltaParaCertificar = (resumen) => {
+    const E = window.ESTADOS_CERTIFICACION;
+    if (!resumen) return [];
+    if (resumen.total === 0) return ['no le toca ninguna encuesta de esta clasificación'];
+    if (resumen.estado === E.CERTIFICADA) return [];
+
+    const falta = [];
+    // Lo observado va primero: es lo que hay que resolver antes que nada.
+    if (resumen.observadas) {
+        falta.push(resumen.observadas === 1
+            ? '1 anulada o mal revisada'
+            : `${resumen.observadas} anuladas o mal revisadas`);
+    }
+    if (resumen.sinContestar) falta.push(`${resumen.sinContestar} sin contestar`);
+    if (resumen.sinCalificar) falta.push(`${resumen.sinCalificar} sin calificar`);
+    if (resumen.bajoUmbral) falta.push(`${resumen.bajoUmbral} por debajo del ${window.UMBRAL_CERTIFICACION}%`);
+    return falta;
+};
+
 // =========================================================
 // --- QUIÉN PUEDE VER Y REPARTIR TODAS LAS REFACCIONES ---
 // =========================================================
