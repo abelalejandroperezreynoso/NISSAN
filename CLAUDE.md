@@ -418,6 +418,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   búsqueda **se salta el filtro de departamento** a propósito y lo avisa en el
   encabezado.
 
+  Tiene además **dos vistas** (`#vista-cert`): «Por certificar», que es lo de
+  arriba, y «Certificadas», que lista a quien ya tiene la clasificación cerrada
+  en ese periodo. Y un **selector de periodo** para mirar hacia atrás, que sale
+  de `window.periodosDeClasificacion(encuestas, cuantos)`: los últimos doce
+  periodos del ritmo de la clasificación —el de su encuesta más frecuente,
+  `window.encuestaQueMarcaElRitmo()`—, cada uno con la **fecha de referencia**
+  que hay que pasarle a `estadoCertificacion`, que es el último instante del
+  periodo y no su inicio, para que caiga dentro aunque ya esté cerrado. Los
+  periodos pasados se nombran por su fecha (`window.etiquetaDePeriodo`) porque
+  `periodoVigente` los llama a todos «este mes».
+
+  Cambiar de periodo **recarga**, porque cambian las respuestas que hay que
+  traerse: la consulta lleva `gte` y también `lt`, o mirando atrás se traería
+  todo lo posterior para nada. Certificar un periodo cerrado se puede, y el
+  aviso de confirmación lo dice.
+
+  La vista de certificadas es la única que lee la tabla de actas
+  (`window.actasDeClasificacion`), y sólo para el renglón de «Dio fe Fulano ·
+  fecha»: quién sale en la lista se sigue decidiendo por las respuestas. Sin la
+  tabla, la lista se dibuja igual y ese renglón dice sólo cuántas encuestas
+  cubre.
+
   A quien no está listo no se le ofrece el botón de certificar ni casilla: se
   entra a su expediente desde «Abrir» y se resuelve allí. El buscador y el
   desplegable viven **fuera** de `#cuerpo-certificacion` porque repintar la

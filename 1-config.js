@@ -311,6 +311,85 @@ window.respuestaDelPeriodo = (ev, respuestas, fecha) => {
 //
 // Devuelve además el desglose, que es lo que la pantalla del administrador
 // necesita para decidir a quién le puede dar al botón.
+// Cuál de las encuestas marca el ritmo de una clasificación: la más frecuente.
+// Es la que da nombre al periodo y con la que se puede viajar hacia atrás,
+// porque una clasificación puede mezclar frecuencias y no hay un periodo de la
+// clasificación como tal.
+window.PESO_FRECUENCIA = { once: 0, biennial: 1, yearly: 2, semiannual: 3, quarterly: 4, monthly: 5, biweekly: 6, weekly: 7 };
+
+window.encuestaQueMarcaElRitmo = (encuestas) => {
+    const lista = encuestas || [];
+    if (lista.length === 0) return null;
+    const peso = window.PESO_FRECUENCIA;
+    return lista.reduce((a, b) =>
+        (peso[(b.frequency || 'once')] || 0) > (peso[(a.frequency || 'once')] || 0) ? b : a);
+};
+
+// Los últimos `cuantos` periodos de una clasificación, del más reciente al más
+// antiguo, para poder mirar atrás. Cada uno trae la fecha con la que hay que
+// preguntarle a `estadoCertificacion`: el instante anterior al cierre, que cae
+// dentro del periodo pase lo que pase.
+//
+// Una clasificación de una sola vez no tiene periodos que recorrer: su periodo
+// es «alguna vez» y es siempre el mismo.
+window.periodosDeClasificacion = (encuestas, cuantos, hasta) => {
+    const ritmo = window.encuestaQueMarcaElRitmo(encuestas);
+    if (!ritmo) return [];
+
+    const frecuencia = ritmo.frequency || 'once';
+    if (frecuencia === 'once' || typeof window.periodoVigente !== 'function') {
+        return [{ nombre: 'alguna vez', referencia: hasta || new Date(), inicio: new Date(0), fin: null, actual: true }];
+    }
+
+    const periodos = [];
+    let cursor = hasta || new Date();
+    for (let i = 0; i < (cuantos || 12); i++) {
+        const p = window.periodoVigente(frecuencia, cursor);
+        if (!p) break;
+        periodos.push({
+            nombre: p.nombre,
+            etiqueta: window.etiquetaDePeriodo(p, frecuencia),
+            inicio: p.inicio,
+            fin: p.fin,
+            // Se pregunta con el último instante del periodo, no con su inicio:
+            // así la fecha cae dentro aunque el periodo ya esté cerrado.
+            referencia: p.fin ? new Date(p.fin.getTime() - 1) : p.inicio,
+            actual: i === 0
+        });
+        if (!p.inicio || !(p.inicio instanceof Date)) break;
+        cursor = new Date(p.inicio.getTime() - 1);
+    }
+    return periodos;
+};
+
+// Cómo se llama un periodo cerrado. `periodoVigente` los nombra en presente
+// («este mes»), que sólo vale para el que corre; los de atrás se nombran por su
+// fecha para que no digan todos lo mismo.
+window.etiquetaDePeriodo = (periodo, frecuencia) => {
+    if (!periodo || !periodo.inicio) return '';
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const d = periodo.inicio;
+
+    switch (frecuencia) {
+        case 'weekly':
+            return `semana del ${d.getDate()} ${meses[d.getMonth()]} ${d.getFullYear()}`;
+        case 'biweekly':
+            return `${d.getDate() <= 15 ? '1ª' : '2ª'} quincena de ${meses[d.getMonth()]} ${d.getFullYear()}`;
+        case 'monthly':
+            return `${meses[d.getMonth()]} ${d.getFullYear()}`;
+        case 'quarterly':
+            return `T${Math.floor(d.getMonth() / 3) + 1} ${d.getFullYear()}`;
+        case 'semiannual':
+            return `${Math.floor(d.getMonth() / 6) + 1}er semestre ${d.getFullYear()}`;
+        case 'yearly':
+            return String(d.getFullYear());
+        case 'biennial':
+            return `${d.getFullYear()}-${d.getFullYear() + 1}`;
+        default:
+            return periodo.nombre || '';
+    }
+};
+
 window.estadoCertificacion = (encuestas, respuestas, fecha) => {
     const E = window.ESTADOS_CERTIFICACION;
     const lista = (encuestas || []).filter(window.encuestaActiva);
@@ -332,12 +411,7 @@ window.estadoCertificacion = (encuestas, respuestas, fecha) => {
 
     if (lista.length === 0) return resumen;
 
-    // El nombre del periodo se toma de la encuesta más frecuente de la
-    // clasificación, que es la que marca el ritmo con el que se revisa.
-    const peso = { once: 0, biennial: 1, yearly: 2, semiannual: 3, quarterly: 4, monthly: 5, biweekly: 6, weekly: 7 };
-    const masFrecuente = lista.reduce((a, b) =>
-        (peso[(b.frequency || 'once')] || 0) > (peso[(a.frequency || 'once')] || 0) ? b : a);
-    const periodoRitmo = window.periodoDeEncuesta(masFrecuente, fecha);
+    const periodoRitmo = window.periodoDeEncuesta(window.encuestaQueMarcaElRitmo(lista), fecha);
     resumen.periodo = periodoRitmo.nombre;
     resumen.periodoFechas = { inicio: periodoRitmo.inicio, fin: periodoRitmo.fin };
 

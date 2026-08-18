@@ -1740,7 +1740,14 @@ window.abrirCertificacionPorClasificacion = async () => {
         clasificaciones: clasificaciones,
         elegida: '',
         filas: [],
-        seleccion: []
+        seleccion: [],
+        busqueda: '',
+        departamento: '',
+        vista: 'pendientes',
+        fecha: null,
+        periodos: [],
+        periodoElegido: null,
+        actas: {}
     };
 
     container.innerHTML = `
@@ -1763,7 +1770,13 @@ window.abrirCertificacionPorClasificacion = async () => {
                    oninput="window.filtrarEmpleadosCert(this.value)"
                    style="flex:1 1 100%; box-sizing:border-box; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white;">
             <select id="depto-cert" onchange="window.filtrarDeptoCert(this.value)"
-                    style="flex:1 1 100%; box-sizing:border-box; padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white; color:#0f172a;"></select>
+                    style="flex:1 1 calc(50% - 4px); min-width:0; box-sizing:border-box; padding:12px 10px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white; color:#0f172a;"></select>
+            <select id="periodo-cert" onchange="window.cambiarPeriodoCert(this.value)"
+                    style="flex:1 1 calc(50% - 4px); min-width:0; box-sizing:border-box; padding:12px 10px; border:1px solid #cbd5e1; border-radius:10px; font-size:16px; outline:none; background:white; color:#0f172a;"></select>
+            <div class="stats-conmutador" style="flex:1 1 100%;" id="vista-cert">
+                <button data-vista="pendientes" onclick="window.cambiarVistaCert('pendientes')">⭐ Por certificar</button>
+                <button data-vista="certificadas" onclick="window.cambiarVistaCert('certificadas')">✅ Certificadas</button>
+            </div>
         </div>
 
         <div id="cuerpo-certificacion"></div>
@@ -1775,7 +1788,7 @@ window.abrirCertificacionPorClasificacion = async () => {
     }
 };
 
-window.cargarClasificacionParaCertificar = async (clasificacion) => {
+window.cargarClasificacionParaCertificar = async (clasificacion, fechaRef) => {
     const cuerpo = document.getElementById('cuerpo-certificacion');
     const estado = window.certificacionActual;
     if (!cuerpo || !estado) return;
@@ -1786,6 +1799,7 @@ window.cargarClasificacionParaCertificar = async (clasificacion) => {
     if (!clasificacion) {
         estado.elegida = ''; estado.filas = []; estado.seleccion = [];
         estado.busqueda = ''; estado.departamento = '';
+        estado.vista = 'pendientes'; estado.fecha = null; estado.periodos = [];
         if (cajaFiltros) cajaFiltros.style.display = 'none';
         if (buscador) buscador.value = '';
         cuerpo.innerHTML = '';
@@ -1803,22 +1817,36 @@ window.cargarClasificacionParaCertificar = async (clasificacion) => {
     const encuestas = estado.evaluaciones
         .filter(ev => window.normalizarClasificacion(ev.category || 'General') === clave);
 
-    // Sólo hacen falta las respuestas del periodo que corre. Se acota por la
+    // El periodo que se está mirando. Sin fecha es el que corre; con ella, uno
+    // de atrás. Todo lo que sigue —qué respuestas se traen, en qué periodo cae
+    // cada encuesta y qué acta se busca— cuelga de esta fecha.
+    const periodos = window.periodosDeClasificacion(encuestas, 12);
+    const fecha = fechaRef ? new Date(fechaRef) : (periodos[0] ? periodos[0].referencia : new Date());
+    const periodoElegido = periodos.find(p => Math.abs(p.referencia - fecha) < 1000) || periodos[0] || null;
+
+    // Sólo hacen falta las respuestas del periodo que se mira. Se acota por la
     // fecha más temprana de todos los periodos en juego, que en una
     // clasificación mensual son unas semanas en vez de todo el historial. Si hay
     // alguna de una sola vez no se puede acotar: su periodo es «desde siempre».
     let desde = null;
+    let hasta = null;
     encuestas.forEach(ev => {
-        const p = window.periodoDeEncuesta(ev);
+        const p = window.periodoDeEncuesta(ev, fecha);
         if (!p.fin) { desde = false; return; }          // una `once` manda
         if (desde === false) return;
         if (desde === null || p.inicio < desde) desde = p.inicio;
+        if (hasta === null || p.fin > hasta) hasta = p.fin;
     });
 
     let consulta = sb.from('evaluation_responses')
         .select('id, evaluation_id, employee_id, review_status, grades_json, submitted_at')
         .in('evaluation_id', encuestas.map(ev => ev.id));
-    if (desde) consulta = consulta.gte('submitted_at', new Date(desde).toISOString());
+    if (desde) {
+        consulta = consulta.gte('submitted_at', new Date(desde).toISOString());
+        // Mirando atrás también hay que poner techo, o se traería todo lo
+        // posterior para nada.
+        if (hasta) consulta = consulta.lt('submitted_at', new Date(hasta).toISOString());
+    }
 
     const { data: respuestas, error } = await consulta;
 
@@ -1842,7 +1870,7 @@ window.cargarClasificacionParaCertificar = async (clasificacion) => {
                 window.leTocaEstaEncuesta(ev, emp, window.tieneEquipoDirecto(emp.id)));
             if (suyas.length === 0) return null;
 
-            const resumen = window.estadoCertificacion(suyas, porEmpleado[String(emp.id)] || []);
+            const resumen = window.estadoCertificacion(suyas, porEmpleado[String(emp.id)] || [], fecha);
             return { empleado: emp, resumen: resumen };
         })
         .filter(Boolean);
@@ -1850,6 +1878,10 @@ window.cargarClasificacionParaCertificar = async (clasificacion) => {
     estado.elegida = clasificacion;
     estado.encuestas = encuestas;
     estado.filas = filas;
+    estado.fecha = fecha;
+    estado.periodos = periodos;
+    estado.periodoElegido = periodoElegido;
+    estado.actas = await window.actasDeClasificacion(clave, periodoElegido);
     // Nada viene marcado de entrada: con el buscador de por medio, una
     // selección hecha antes de teclear acabaría certificando a gente que ya no
     // está a la vista.
@@ -1868,6 +1900,14 @@ window.cargarClasificacionParaCertificar = async (clasificacion) => {
                 return `<option value="${window.sanitizeForHTML(d)}">${window.sanitizeForHTML(d)} (${cuantos})</option>`;
             }).join('');
         selDepto.value = '';
+    }
+
+    const selPeriodo = document.getElementById('periodo-cert');
+    if (selPeriodo) {
+        selPeriodo.innerHTML = periodos.map(p =>
+            `<option value="${p.referencia.getTime()}">${p.actual ? '⏳ Periodo actual' : '🕒 ' + window.sanitizeForHTML(p.etiqueta || p.nombre)}</option>`
+        ).join('');
+        if (periodoElegido) selPeriodo.value = String(periodoElegido.referencia.getTime());
     }
 
     window.renderizarCertificacionClasificacion();
@@ -1894,6 +1934,50 @@ window.seleccionarGrupoCert = (ids, marcar) => {
 
 // El departamento tal como se agrupa en esta pantalla. Se saca aparte porque
 // lo usan el desplegable y el filtrado, y tienen que coincidir.
+// Las actas del periodo que se está mirando, indexadas por empleado. Son un
+// extra: dicen quién dio fe y cuándo, que es lo único que no se puede deducir
+// de las respuestas. Si la tabla todavía no existe —el script de `sql/` se
+// corre a mano— se sigue sin ellas y la lista se dibuja igual.
+window.actasDeClasificacion = async (clave, periodo) => {
+    if (!periodo || !periodo.inicio) return {};
+    const aFecha = (d) => new Date(d).toISOString().slice(0, 10);
+
+    try {
+        const { data, error } = await sb.from('certificaciones_clasificacion')
+            .select('employee_id, certificado_por, certificado_en, respuestas_cubiertas, nota')
+            .eq('clasificacion', clave)
+            .eq('periodo_inicio', aFecha(periodo.inicio));
+
+        if (error) throw error;
+
+        const porEmpleado = {};
+        (data || []).forEach(a => { porEmpleado[String(a.employee_id)] = a; });
+        return porEmpleado;
+    } catch (e) {
+        console.warn('No se pudieron leer las actas de certificación:', e.message);
+        return {};
+    }
+};
+
+window.cambiarPeriodoCert = (referencia) => {
+    const estado = window.certificacionActual;
+    if (!estado || !estado.elegida) return Promise.resolve();
+    // Se recarga porque cambian las respuestas que hay que traerse: las del
+    // periodo nuevo, no las del que estaba. Se devuelve la promesa para que
+    // quien la llame pueda esperar a que la lista esté puesta.
+    return window.cargarClasificacionParaCertificar(estado.elegida, new Date(Number(referencia)));
+};
+
+window.cambiarVistaCert = (vista) => {
+    const estado = window.certificacionActual;
+    if (!estado) return;
+    estado.vista = vista === 'certificadas' ? 'certificadas' : 'pendientes';
+    // Lo marcado es de la vista de certificar; al cambiar de vista se suelta
+    // para que la barra de abajo no siga ofreciendo sellar lo que ya no se ve.
+    estado.seleccion = [];
+    window.renderizarCertificacionClasificacion();
+};
+
 window.deptoDeEmpleado = (emp) => String((emp && emp.dept) || '').trim() || 'Sin departamento';
 
 window.filtrarEmpleadosCert = (termino) => {
@@ -1932,6 +2016,15 @@ window.renderizarCertificacionClasificacion = () => {
     const E = window.ESTADOS_CERTIFICACION;
     const { filas, seleccion } = estado;
     const safeClas = window.sanitizeForHTML(estado.elegida);
+    const vista = estado.vista === 'certificadas' ? 'certificadas' : 'pendientes';
+    const periodo = estado.periodoElegido;
+    const nombrePeriodo = periodo
+        ? (periodo.actual ? (periodo.nombre || 'el periodo actual') : (periodo.etiqueta || periodo.nombre))
+        : 'el periodo actual';
+
+    document.querySelectorAll('#vista-cert button').forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.vista === vista));
+    });
 
     const termino = (estado.busqueda || '').toLowerCase().trim();
     const depto = estado.departamento || '';
@@ -1943,23 +2036,97 @@ window.renderizarCertificacionClasificacion = () => {
             || (e.puesto || '').toLowerCase().includes(termino)
             || (e.dept || '').toLowerCase().includes(termino);
     };
+    const enDepto = (f) => !depto || window.deptoDeEmpleado(f.empleado) === depto;
 
+    const listos = filas.filter(f => f.resumen.estado === E.LISTA);
+    const certificadas = filas.filter(f => f.resumen.estado === E.CERTIFICADA);
+
+    const cuenta = {
+        listos: listos.length,
+        proceso: filas.filter(f => f.resumen.estado === E.PROCESO).length,
+        observaciones: filas.filter(f => f.resumen.estado === E.OBSERVACIONES).length,
+        certificadas: certificadas.length,
+        sinActividad: filas.filter(f => f.resumen.estado === E.VACIO).length
+    };
+
+    const rotuloPeriodo = `<span style="display:inline-block; background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:700;">${window.sanitizeForHTML(nombrePeriodo)}</span>`;
+
+    // --- Vista de certificadas: quién ya tiene la clasificación cerrada ---
+    if (vista === 'certificadas') {
+        const visibles = buscando
+            ? certificadas.filter(coincide)
+            : certificadas.filter(enDepto);
+
+        const encabezado = `
+            <div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
+                Quien tiene «${safeClas}» <b>certificada por completo</b> en ${rotuloPeriodo}.
+                ${cuenta.certificadas > 0 ? `<div style="margin-top:6px;">${cuenta.certificadas} de ${filas.length} persona(s) a las que les toca.</div>` : ''}
+            </div>`;
+
+        if (visibles.length === 0) {
+            const vacio = certificadas.length === 0
+                ? `Todavía no hay nadie con «${safeClas}» certificada en ${window.sanitizeForHTML(nombrePeriodo)}.`
+                : (buscando ? 'Ninguna de las certificadas coincide con la búsqueda.'
+                            : `Nadie de ${window.sanitizeForHTML(depto)} tiene «${safeClas}» certificada en este periodo.`);
+            cuerpo.innerHTML = encabezado + `<div style="padding:30px; text-align:center; color:#94a3b8;">${vacio}</div>`;
+            return;
+        }
+
+        const nombreDe = (id) => {
+            const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(id));
+            return emp ? emp.name : null;
+        };
+
+        const filaCert = (f) => {
+            const id = String(f.empleado.id);
+            const acta = (estado.actas || {})[id];
+            const safeName = window.sanitizeForHTML(f.empleado.name || 'Sin nombre');
+            const puesto = window.sanitizeForHTML(
+                [f.empleado.puesto, window.deptoDeEmpleado(f.empleado)].filter(Boolean).join(' · '));
+
+            // El acta es lo único que dice quién dio fe y cuándo; sin ella —o
+            // sin la tabla— se enseña igual, que la certificación vive en las
+            // respuestas.
+            let firma = `<span style="color:#64748b; font-size:0.75rem;">Certificada · ${f.resumen.total} encuesta${f.resumen.total === 1 ? '' : 's'}</span>`;
+            if (acta) {
+                const quien = nombreDe(acta.certificado_por);
+                const cuando = acta.certificado_en ? new Date(acta.certificado_en).toLocaleDateString() : '';
+                firma = `<span style="color:#64748b; font-size:0.75rem;">Dio fe ${quien ? '<b>' + window.sanitizeForHTML(quien) + '</b>' : 'alguien'}${cuando ? ' · ' + cuando : ''}</span>`;
+            }
+
+            return `
+            <div style="background:white; border:1px solid #bfdbfe; border-radius:10px; padding:10px 12px; margin-bottom:8px;">
+                <div style="display:flex; align-items:flex-start; gap:10px;">
+                    <span style="flex-shrink:0; font-size:1.1rem; margin-top:1px;">⭐</span>
+                    <div style="flex:1; min-width:0;">
+                        <div style="color:#0f172a; font-weight:600; font-size:0.92rem; line-height:1.25; word-break:break-word;">${safeName}</div>
+                        <div style="color:#64748b; font-size:0.78rem; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${puesto}</div>
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;">
+                    ${firma}
+                    <button onclick="window.abrirExpedienteEmpleado('${id}')"
+                            style="flex-shrink:0; background:#f1f5f9; border:none; color:#475569; padding:6px 10px; border-radius:8px; font-size:0.75rem; font-weight:700; cursor:pointer;">Abrir</button>
+                </div>
+            </div>`;
+        };
+
+        cuerpo.innerHTML = encabezado + `
+            <div style="margin-top:18px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:#eff6ff; color:#1d4ed8; padding:8px 12px; border-radius:8px; font-weight:700; font-size:0.85rem;">
+                    <span>${buscando ? '🔍 Resultados' : '✅ Certificadas'} (${visibles.length}${!buscando && visibles.length !== certificadas.length ? ` de ${certificadas.length}` : ''})</span>
+                </div>
+                <div style="margin-top:8px;">${visibles.map(filaCert).join('')}</div>
+            </div>`;
+        return;
+    }
+
+    // --- Vista de por certificar ---
     // Buscando, aparece cualquiera y en el estado que sea: si escribes un
     // nombre es porque quieres ver a esa persona, no que te digan que no
     // califica. Sin búsqueda, la lista es la de los listos —acotada al
     // departamento elegido—, que es a lo que se entra a esta pantalla.
-    const listos = filas.filter(f => f.resumen.estado === E.LISTA);
-    const enDepto = (f) => !depto || window.deptoDeEmpleado(f.empleado) === depto;
     const visibles = buscando ? filas.filter(coincide) : listos.filter(enDepto);
-
-    const cuenta = {
-        listos: listos.length,
-        listosAqui: listos.filter(enDepto).length,
-        proceso: filas.filter(f => f.resumen.estado === E.PROCESO).length,
-        observaciones: filas.filter(f => f.resumen.estado === E.OBSERVACIONES).length,
-        certificadas: filas.filter(f => f.resumen.estado === E.CERTIFICADA).length,
-        sinActividad: filas.filter(f => f.resumen.estado === E.VACIO).length
-    };
 
     const resto = [];
     if (cuenta.proceso) resto.push(`${cuenta.proceso} en proceso`);
@@ -1969,12 +2136,12 @@ window.renderizarCertificacionClasificacion = () => {
 
     const encabezado = buscando
         ? `<div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
-               Buscando entre <b>las ${filas.length} personas</b> a las que les toca «${safeClas}», estén listas o no.
+               Buscando entre <b>las ${filas.length} personas</b> a las que les toca «${safeClas}», estén listas o no, en ${rotuloPeriodo}.
                ${depto ? '<div style="margin-top:4px;">El filtro de departamento no se aplica mientras buscas.</div>' : ''}
            </div>`
         : `<div style="font-size:0.8rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px;">
-               Sólo aparece quien tiene <b>toda la clasificación revisada</b> y lista para certificar,
-               del periodo vigente de cada encuesta. Busca por nombre para ver a cualquiera y saber qué le falta.
+               Sólo aparece quien tiene <b>toda la clasificación revisada</b> y lista para certificar en ${rotuloPeriodo}.
+               Busca por nombre para ver a cualquiera y saber qué le falta.
                ${resto.length ? `<div style="margin-top:6px;">Del resto: ${resto.join(' · ')}.</div>` : ''}
            </div>`;
 
@@ -1983,7 +2150,7 @@ window.renderizarCertificacionClasificacion = () => {
             ? `Nadie de «${safeClas}» coincide con la búsqueda.`
             : (depto
                 ? `Nadie de ${window.sanitizeForHTML(depto)} tiene «${safeClas}» lista para certificar.`
-                : `Nadie tiene «${safeClas}» lista para certificar en el periodo vigente.`);
+                : `Nadie tiene «${safeClas}» lista para certificar en ${window.sanitizeForHTML(nombrePeriodo)}.`);
         cuerpo.innerHTML = encabezado + `<div style="padding:30px; text-align:center; color:#94a3b8;">${vacio}</div>`;
         return;
     }
@@ -2098,8 +2265,13 @@ window.certificarSeleccionClasificacion = async () => {
 
     const incompletas = elegidas.filter(f => f.resumen.estado !== window.ESTADOS_CERTIFICACION.LISTA);
 
+    const periodo = estado.periodoElegido;
+    const deQuePeriodo = periodo && !periodo.actual
+        ? ` del periodo ${periodo.etiqueta || periodo.nombre}`
+        : '';
+
     let msg = `Se van a certificar ${idsRespuesta.length} respuesta(s) de ${elegidas.length} persona(s) `
-        + `en «${estado.elegida}».`;
+        + `en «${estado.elegida}»${deQuePeriodo}.`;
     if (incompletas.length > 0) {
         msg += `\n\n${incompletas.length} quedará(n) sin cerrar porque todavía les falta algo:`;
         incompletas.slice(0, 5).forEach(f => {
@@ -2156,6 +2328,13 @@ window.certificarSeleccionClasificacion = async () => {
         });
 
         const acta = await window.registrarActasCertificacion(actas);
+
+        // Las actas recién levantadas se meten en la caché para que la vista de
+        // certificadas las enseñe sin recargar la pantalla.
+        actas.filter(Boolean).forEach(a => {
+            estado.actas = estado.actas || {};
+            estado.actas[String(a.employee_id)] = a;
+        });
 
         estado.seleccion = [];
         window.evalCache = null;
