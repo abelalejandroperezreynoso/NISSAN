@@ -482,6 +482,21 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   vaya a usar esta regla necesita traerse `mode`, `is_obligatory`,
   `target_employees`, `target_positions` y `target_departments`.
 
+  **Las estadísticas usan esta misma regla, en los cinco sitios donde deciden
+  qué está asignado**: el conteo de asignadas, el filtro de respuestas, el
+  radar y los dos desgloses por colaborador. Antes cada uno miraba sólo puesto
+  y departamento, así que una encuesta dirigida a tres personas concretas —o
+  una de modo jefe— se le contaba como asignada a la plantilla entera. Eso
+  engordaba el denominador y hacía que «Certificadas» del desglose no cuadrara
+  con el panel de certificación: con los mismos datos, uno decía 50% y el otro
+  100%. `tieneEquipoDirecto` recorre la plantilla, así que se resuelve una vez
+  por persona y no una vez por encuesta.
+
+  Queda una diferencia a propósito: en modo administrador las estadísticas
+  incluyen las encuestas apagadas y el panel de certificación nunca. Es la
+  regla de `active` de más arriba, y por eso un administrador puede ver
+  números distintos en las dos pantallas si hay encuestas inactivas.
+
   `window.sanitizeForHTML` se mudó de `4b-evaluaciones-stats.js` a
   `1-config.js`: lo usan las pantallas del administrador, que se cargan antes,
   y un ayudante de escapado no puede depender del orden de carga.

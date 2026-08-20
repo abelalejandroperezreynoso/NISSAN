@@ -652,15 +652,14 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         if (!puestoCache[empPuestoKey]) puestoCache[empPuestoKey] = { employeesCount: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0 };
         puestoCache[empPuestoKey].employeesCount++;
         
+        // Se calcula una vez por persona y no por encuesta: `tieneEquipoDirecto`
+        // recorre la plantilla entera.
+        const tieneEquipoEste = window.tieneEquipoDirecto(e.id);
+
         evalsList.forEach(ev => {
              const info = evalMap[ev.id];
-             const targetsNorm = info.targets ? info.targets.map(t => String(t).toUpperCase().trim()) : ['ALL'];
-             const deptosNorm = info.target_departments ? info.target_departments.map(t => String(t).toUpperCase().trim()) : ['ALL'];
 
-             const matchesPuesto = targetsNorm.includes('ALL') || targetsNorm.includes(empPuestoNorm);
-             const matchesDepto = deptosNorm.includes('ALL') || deptosNorm.includes(empDeptoNorm);
-             
-             if (matchesPuesto && matchesDepto) {
+             if (window.leTocaEstaEncuesta(ev, e, tieneEquipoEste)) {
                  empAssignments++;
                  const radarKey = categoriaFiltro === 'GLOBAL' ? info.category : info.title;
                  if (!radarGroupingUsersAssigned[radarKey]) radarGroupingUsersAssigned[radarKey] = new Set();
@@ -690,14 +689,8 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             const empPuestoNorm = getPuesto(empObj).toUpperCase();
             const empDeptoNorm = getDept(empObj).toUpperCase();
             
-            const targetsNorm = info.targets ? info.targets.map(t => String(t).toUpperCase().trim()) : ['ALL'];
-            const deptosNorm = info.target_departments ? info.target_departments.map(t => String(t).toUpperCase().trim()) : ['ALL'];
-
-            const matchesPuesto = targetsNorm.includes('ALL') || targetsNorm.includes(empPuestoNorm);
-            const matchesDepto = deptosNorm.includes('ALL') || deptosNorm.includes(empDeptoNorm);
-
-            if (!matchesPuesto || !matchesDepto) {
-                return; // ⛔ El usuario contestó, pero la encuesta no era para su Puesto/Depto. Se ignora.
+            if (!window.leTocaEstaEncuesta(ev, empObj, window.tieneEquipoDirecto(empObj.id))) {
+                return; // ⛔ Contestó, pero la encuesta no iba dirigida a esta persona. Se ignora.
             }
             // -------------------------------------------------------------------
 
@@ -1345,13 +1338,7 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
                      try { targetDeptos = JSON.parse(ev.target_departments); } catch(err) { targetDeptos = ['ALL']; }
                  }
              }
-             const targetsNorm = targets.map(t => String(t).toUpperCase().trim());
-             const deptosNorm = targetDeptos.map(t => String(t).toUpperCase().trim());
-             
-             const matchesPuesto = targetsNorm.includes('ALL') || targetsNorm.includes(empPuestoNorm);
-             const matchesDepto = deptosNorm.includes('ALL') || deptosNorm.includes(empDeptoNorm);
-
-             if (matchesPuesto && matchesDepto) {
+             if (window.leTocaEstaEncuesta(ev, e, window.tieneEquipoDirecto(e.id))) {
                  const radarKey = currentFilter === 'GLOBAL' ? (ev.category || 'General') : ev.title;
                  if (!assignedMap[radarKey]) assignedMap[radarKey] = new Set();
                  assignedMap[radarKey].add(String(e.id));
@@ -2133,6 +2120,7 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
         let totalAssigned = 0;
         let obligatoryAssigned = 0;
         let obligatoryCompleted = 0;
+        const tieneEquipoEsteEmp = window.tieneEquipoDirecto(emp.id);
 
         activeEvals.forEach(ev => {
             let targets = ['ALL'];
@@ -2149,13 +2137,8 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
             }
             
             const isObligatory = (ev.is_obligatory !== false);
-            const targetsNorm = targets.map(t => String(t).toUpperCase().trim());
-            const deptosNorm = targetDeptos.map(t => String(t).toUpperCase().trim());
 
-            const matchesPuesto = targetsNorm.includes('ALL') || targetsNorm.includes(empPuestoNorm);
-            const matchesDepto = deptosNorm.includes('ALL') || deptosNorm.includes(empDeptoNorm);
-
-            if (matchesPuesto && matchesDepto) {
+            if (window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp)) {
                 totalAssigned++;
                 if (isObligatory) {
                     obligatoryAssigned++;
@@ -2287,6 +2270,7 @@ window.verStatsDetallePuesto = (puestoName) => {
         let totalAssigned = 0;
         let obligatoryAssigned = 0;
         let obligatoryCompleted = 0;
+        const tieneEquipoEsteEmp = window.tieneEquipoDirecto(emp.id);
 
         activeEvals.forEach(ev => {
             let targets = ['ALL'];
@@ -2301,13 +2285,8 @@ window.verStatsDetallePuesto = (puestoName) => {
             }
             
             const isObligatory = (ev.is_obligatory !== false);
-            const targetsNorm = targets.map(t => String(t).toUpperCase().trim());
-            const deptosNorm = targetDeptos.map(t => String(t).toUpperCase().trim());
 
-            const matchesPuesto = targetsNorm.includes('ALL') || targetsNorm.includes(empPuestoNorm);
-            const matchesDepto = deptosNorm.includes('ALL') || deptosNorm.includes(empDeptoNorm);
-
-            if (matchesPuesto && matchesDepto) {
+            if (window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp)) {
                 totalAssigned++;
                 if (isObligatory) {
                     obligatoryAssigned++;
