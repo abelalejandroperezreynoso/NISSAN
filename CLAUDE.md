@@ -367,6 +367,46 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   que las pantallas que deciden sobre el usuario actual miran su ficha en
   `window.todosLosEmpleadosData` y no en `usuarioLogueado`, que no trae el
   campo.
+- **Quién califica una respuesta.** Tampoco lo dice ninguna tabla por defecto:
+  la califica el **jefe inmediato** de quien contestó, y esa regla la sostiene
+  el código. Una encuesta puede en cambio nombrar a sus propios revisores en
+  `reviewer_employees`, y entonces deja de ser cosa del jefe. La regla vive en
+  `1-config.js` porque la usan cinco pantallas —la lista de encuestas, el
+  historial, el detalle de una respuesta, los pendientes y el badge del panel—
+  y cinco copias acabarían discrepando:
+
+  ```js
+  window.leTocaRevisar(ev, empleadoQueContesto, revisorId)
+  window.revisoresDeEncuesta(ev)        // vacío = el jefe inmediato
+  window.encuestasQueRevisa(encuestas, revisorId)
+  ```
+
+  **Nadie califica su propia respuesta.** La de un revisor se la quedan los
+  demás revisores; si no hay más, la lista sale vacía y vuelve a su jefe
+  inmediato, que es preferible a dejarla sin nadie que pueda tocarla. Por eso
+  las consultas **no** filtran por encuesta —`.in('evaluation_id', …)` no sabe
+  de ese caso—: se traen las respuestas del equipo directo como siempre y es
+  `leTocaRevisar` quien decide, con lo que la lista de pendientes y el badge no
+  pueden separarse de la regla.
+
+  El nombramiento **no depende de ser jefe de nadie**, así que quien revisa una
+  encuesta la ve en su lista aunque no le toque contestarla —si no, no tendría
+  por dónde entrar una vez resuelto el pendiente— y ahí no le sale el botón de
+  responder, sino el aviso de que le toca revisarla. La insignia de
+  clasificación certificada sigue contando sólo lo que le tocaría contestar:
+  habla de otra cosa.
+
+  El modo `boss` es aparte: esa encuesta la contesta el jefe y
+  `4-evaluaciones-base.js` la guarda ya como `'Revisado'`, así que no hay nada
+  que repartir y el bloque de revisores se esconde en la hoja.
+
+  **La columna es nueva y el script se corre a mano** (`sql/revisores-por-encuesta.sql`).
+  Pedirle a PostgREST una columna que no existe no devuelve la fila sin ese
+  campo: revienta la consulta entera. Por eso toda consulta que la pida arma su
+  lista de columnas con `window.camposConRevisores(campos)`, que se apoya en
+  `window.hayColumnaRevisores()` —una sola pregunta por sesión, guardada como
+  promesa—. Sin la columna todo se comporta como antes, la casilla se queda
+  apagada y la hoja dice qué script falta.
 - **Quién manda en las refacciones.** El permiso para ver todas las
   solicitudes de la empresa —y para repartirlas entre atendedores desde el
   mapa— no va por puesto sino por **encargo extra**: en «Configurar permisos»

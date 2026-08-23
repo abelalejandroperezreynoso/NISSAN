@@ -318,16 +318,22 @@ window.cargarVistaEvaluaciones = async () => {
         window.evalCache = { evals, misRespuestas, allPending, teamResponses };
     }
 
+    // Cuántas respuestas espera calificar cada encuesta. Quién califica qué lo
+    // decide la regla de `1-config.js`: el jefe inmediato, salvo que la
+    // encuesta haya nombrado a sus propios revisores.
     let pendingMap = {};
     if (allPending) {
-        allPending.forEach(item => {
-            const empData = window.todosLosEmpleadosData.find(e => String(e.id) === String(item.employee_id));
-            const esDirecto = empData && String(empData.supId) === String(user.id);
+        const evalPorId = {};
+        (evals || []).forEach(ev => { evalPorId[String(ev.id)] = ev; });
 
-            if (window.modoAdminActivo || esDirecto) {
-                if (item.employee_id !== user.id) {
-                    pendingMap[item.evaluation_id] = (pendingMap[item.evaluation_id] || 0) + 1;
-                }
+        allPending.forEach(item => {
+            if (String(item.employee_id) === String(user.id)) return;
+
+            const meToca = window.modoAdminActivo ||
+                window.leTocaRevisar(evalPorId[String(item.evaluation_id)], item.employee_id, user.id);
+
+            if (meToca) {
+                pendingMap[item.evaluation_id] = (pendingMap[item.evaluation_id] || 0) + 1;
             }
         });
     }
@@ -404,10 +410,16 @@ window.cargarVistaEvaluaciones = async () => {
     // sigue enseñándolo todo en ese modo; la insignia usa siempre la regla.
     const leTocaEstaEncuesta = (ev) => window.leTocaEstaEncuesta(ev, user, tengoEquipo);
 
+    // Quien revisa una encuesta la ve en la lista aunque no le toque
+    // contestarla: si no, no tendría por dónde entrar a calificar una vez que
+    // el pendiente se resuelve. La insignia de clasificación de más abajo
+    // sigue contando sólo las que le tocan, que es de lo que habla.
+    const laReviso = (ev) => window.revisoresDeEncuesta(ev).includes(String(user.id));
+
     sortedKeys.forEach(catName => {
         const evalsVisibles = window.modoAdminActivo
             ? groups[catName]
-            : groups[catName].filter(leTocaEstaEncuesta);
+            : groups[catName].filter(ev => leTocaEstaEncuesta(ev) || laReviso(ev));
 
         if (evalsVisibles.length === 0) return;
 

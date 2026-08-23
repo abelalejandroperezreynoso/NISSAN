@@ -414,7 +414,7 @@
                     <div id="container-lista-deptos" class="eval-lista" style="display:none;"></div>
 
                     <label class="eval-opcion">
-                        <input type="checkbox" id="chk-all-empleados" onchange="window.toggleSelectorEmpleados()" checked>
+                        <input type="checkbox" id="chk-all-empleados" onchange="window.toggleSelectorPersonas('destinatarios')" checked>
                         <span class="eval-opcion-texto">
                             <span class="eval-opcion-titulo">👤 Todos los colaboradores</span>
                             <span class="eval-opcion-ayuda">Desmárcalo para dirigirla a personas concretas.</span>
@@ -423,7 +423,7 @@
                     <div id="container-selector-empleados" class="eval-lista eval-lista--alta" style="display:none;">
                         <div style="position:relative; margin-bottom:10px;">
                             <span style="position:absolute; left:10px; top:9px; font-size:0.9rem;">🔍</span>
-                            <input type="text" id="inp-buscar-empleado-eval" placeholder="Buscar por nombre o ID..." oninput="window.buscarEmpleadoParaEval(this.value)" autocomplete="off" style="padding-left:32px;">
+                            <input type="text" id="inp-buscar-empleado-eval" placeholder="Buscar por nombre o ID..." oninput="window.buscarPersonaEval('destinatarios', this.value)" autocomplete="off" style="padding-left:32px;">
                         </div>
                         <div id="lista-resultados-empleados-eval" style="max-height:140px; overflow-y:auto; margin-bottom:12px; border-radius:6px;"></div>
                         <div style="font-size:0.8rem; font-weight:bold; color:#475569; margin-bottom:8px; border-top:1px solid #e2e8f0; padding-top:10px;">Colaboradores seleccionados:</div>
@@ -431,6 +431,30 @@
                             <span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Ninguno seleccionado.</span>
                         </div>
                     </div>
+                </div>
+
+                <div id="grupo-revisores" class="hoja-grupo-titulo">Quién la revisa</div>
+                <div id="grupo-revisores-cuerpo" class="hoja-grupo">
+                    <label class="eval-opcion">
+                        <input type="checkbox" id="chk-revisa-jefe" onchange="window.toggleSelectorPersonas('revisores')" checked>
+                        <span class="eval-opcion-texto">
+                            <span class="eval-opcion-titulo">👔 La revisa el jefe inmediato</span>
+                            <span class="eval-opcion-ayuda">Desmárcalo para nombrar a quién le toca calificarla.</span>
+                        </span>
+                    </label>
+                    <div id="container-selector-revisores" class="eval-lista eval-lista--alta" style="display:none;">
+                        <div style="position:relative; margin-bottom:10px;">
+                            <span style="position:absolute; left:10px; top:9px; font-size:0.9rem;">🔍</span>
+                            <input type="text" id="inp-buscar-revisor-eval" placeholder="Buscar por nombre o ID..." oninput="window.buscarPersonaEval('revisores', this.value)" autocomplete="off" style="padding-left:32px;">
+                        </div>
+                        <div id="lista-resultados-revisores-eval" style="max-height:140px; overflow-y:auto; margin-bottom:12px; border-radius:6px;"></div>
+                        <div style="font-size:0.8rem; font-weight:bold; color:#475569; margin-bottom:8px; border-top:1px solid #e2e8f0; padding-top:10px;">Revisores:</div>
+                        <div id="lista-revisores-seleccionados-eval" style="display:flex; flex-wrap:wrap; gap:8px; min-height:30px;">
+                            <span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Ninguno seleccionado.</span>
+                        </div>
+                        <p class="form-ayuda" style="margin-top:10px;">Nombrados los revisores, el jefe inmediato deja de verla entre sus pendientes. Nadie califica su propia respuesta: la de un revisor la revisan los demás, y si no hay más vuelve a su jefe.</p>
+                    </div>
+                    <p id="aviso-revisores-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/revisores-por-encuesta.sql</code> en Supabase para poder nombrar revisores.</p>
                 </div>
 
                 <div class="hoja-grupo-titulo">Opciones</div>

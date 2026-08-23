@@ -251,6 +251,89 @@ window.leTocaEstaEncuesta = (ev, empleado, tieneEquipo) => {
 window.tieneEquipoDirecto = (empleadoId) =>
     (window.todosLosEmpleadosData || []).some(e => String(e.supId) === String(empleadoId));
 
+// Quién es jefe inmediato de quién. `esSupervisorDirecto` de
+// `4-evaluaciones-admin.js` es esto mismo dando por hecho que el revisor es el
+// usuario de la sesión; el panel principal recorre a mucha gente y necesita
+// preguntarlo de cualquiera.
+window.esSupervisorDirectoDe = (empleadoId, supervisorId) => {
+    if (!empleadoId || !supervisorId) return false;
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(empleadoId));
+    return !!emp && String(emp.supId) === String(supervisorId);
+};
+
+// ==========================================
+// QUIÉN CALIFICA UNA RESPUESTA
+// ==========================================
+// Por defecto la califica el jefe inmediato de quien contestó, y eso no lo
+// dice ninguna tabla: la regla la sostiene el código, igual que la de quién
+// firma un registro. Una encuesta puede en cambio nombrar a sus propios
+// revisores en `reviewer_employees`, y entonces deja de ser cosa del jefe.
+//
+// La lista llega como `jsonb` o como texto, según cómo se creara la columna, y
+// puede traer el 'ALL' que el resto de los selectores usa para «sin acotar»;
+// aquí eso es lo mismo que no haber nombrado a nadie.
+window.revisoresDeEncuesta = (ev) => {
+    if (!ev) return [];
+    let v = ev.reviewer_employees;
+    if (typeof v === 'string') {
+        try { v = JSON.parse(v); } catch (e) { return []; }
+    }
+    if (!Array.isArray(v)) return [];
+    return v.map(x => String(x).trim()).filter(x => x !== '' && x.toUpperCase() !== 'ALL');
+};
+
+window.tieneRevisoresPropios = (ev) => window.revisoresDeEncuesta(ev).length > 0;
+
+// Los revisores que le quedan a UNA respuesta. Nadie se califica a sí mismo,
+// así que la respuesta de un revisor se la quedan los demás revisores; si no
+// hay más, la lista sale vacía y la revisión vuelve a su jefe inmediato, que
+// es preferible a dejarla sin nadie que pueda tocarla.
+window.revisoresDeLaRespuesta = (ev, empleadoQueContesto) =>
+    window.revisoresDeEncuesta(ev).filter(id => String(id) !== String(empleadoQueContesto));
+
+// La pregunta que hacen todas las pantallas: ¿le toca a esta persona calificar
+// esta respuesta? El modo administrador es aparte y lo resuelve cada pantalla.
+window.leTocaRevisar = (ev, empleadoQueContesto, revisorId) => {
+    if (!revisorId || !empleadoQueContesto) return false;
+    if (String(empleadoQueContesto) === String(revisorId)) return false;
+
+    const propios = window.revisoresDeLaRespuesta(ev, empleadoQueContesto);
+    if (propios.length > 0) return propios.includes(String(revisorId));
+
+    return window.esSupervisorDirectoDe(empleadoQueContesto, revisorId);
+};
+
+// Los nombres de una lista de ids, para decir en pantalla a quién le toca. Un
+// id que ya no esté en la plantilla se enseña tal cual en vez de desaparecer.
+window.nombresDeEmpleados = (ids) => (ids || []).map(id => {
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(id));
+    return emp && emp.name ? emp.name : `ID ${id}`;
+}).join(', ');
+
+// De todas las encuestas, las que esta persona revisa por nombramiento. Es lo
+// que convierte a alguien en revisor sin ser jefe de nadie.
+window.encuestasQueRevisa = (encuestas, revisorId) =>
+    (encuestas || []).filter(ev => window.revisoresDeEncuesta(ev).includes(String(revisorId)));
+
+// La columna es nueva y el script de `sql/` se corre a mano, así que puede no
+// estar todavía. Se pregunta una sola vez por sesión —y se guarda la promesa,
+// no el resultado, para que dos pantallas a la vez no la pidan dos veces—; sin
+// ella todo se comporta como antes y la hoja de la encuesta lo avisa.
+let promesaColumnaRevisores = null;
+window.hayColumnaRevisores = () => {
+    if (!promesaColumnaRevisores) {
+        promesaColumnaRevisores = sb.from('evaluations').select('reviewer_employees').limit(1)
+            .then(({ error }) => !error)
+            .catch(() => false);
+    }
+    return promesaColumnaRevisores;
+};
+
+// Para las consultas que piden columnas por nombre: pedir una que no existe no
+// devuelve la fila sin ese campo, revienta la consulta entera.
+window.camposConRevisores = async (campos) =>
+    (await window.hayColumnaRevisores()) ? campos + ', reviewer_employees' : campos;
+
 // La clasificación es texto libre —un `input` con datalist, no un catálogo—,
 // así que «Seguridad», «SEGURIDAD» y «seguridad » serían tres grupos distintos
 // al guardar un acta. Se compara siempre normalizada.

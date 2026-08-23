@@ -1092,8 +1092,10 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
     }
 
     try {
+        const camposEvals = await window.camposConRevisores(
+            'id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency');
         const { data: activeEvalsDb } = await sb.from('evaluations')
-            .select('id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency')
+            .select(camposEvals)
             .eq('active', true);
             
         const activeEvals = activeEvalsDb ? activeEvalsDb : [];
@@ -1195,6 +1197,21 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
             }
 
             let countPorCalificar = 0;
+
+            // Lo que esta persona revisa por nombramiento: no depende de ser
+            // jefe de nadie. Al descartar sus propias respuestas —nadie se
+            // califica a sí mismo— todo lo que quede le toca, así que basta
+            // contarlo.
+            const evalsQueRevisa = window.encuestasQueRevisa(activeEvals, empStrId);
+            if (evalsQueRevisa.length > 0) {
+                const { count: countNombrado } = await sb.from('evaluation_responses')
+                    .select('id', { count: 'exact', head: true })
+                    .in('review_status', ['Pendiente', 'Mal Revisada'])
+                    .in('evaluation_id', evalsQueRevisa.map(e => e.id))
+                    .neq('employee_id', empStrId);
+                countPorCalificar += (countNombrado || 0);
+            }
+
             const esJefe = window.todosLosEmpleadosData.some(e => String(e.supId) === empStrId);
             
             if (esJefe) {
@@ -1205,12 +1222,29 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                     // Sólo cuentan las respuestas de encuestas encendidas: si
                     // no, el badge seguiría pidiendo calificar algo que ya no
                     // aparece en la lista de pendientes.
-                    const { count: countExacto } = await sb.from('evaluation_responses')
-                        .select('id', { count: 'exact', head: true })
+                    //
+                    // Ya no se cuentan de un plumazo: una encuesta con
+                    // revisores propios deja de ser cosa del jefe, así que hace
+                    // falta mirar respuesta por respuesta con la misma regla
+                    // que usa el panel de pendientes.
+                    const evalPorId = {};
+                    activeEvals.forEach(ev => { evalPorId[String(ev.id)] = ev; });
+
+                    const { data: delEquipo } = await sb.from('evaluation_responses')
+                        .select('id, employee_id, evaluation_id')
                         .in('review_status', ['Pendiente', 'Mal Revisada'])
                         .in('employee_id', misSubsIds)
                         .in('evaluation_id', activeEvals.map(e => e.id));
-                    countPorCalificar += (countExacto || 0);
+
+                    // Las encuestas que además revisa por nombramiento ya se
+                    // contaron arriba, y las de su equipo entran en ese conteo:
+                    // sin esto sumarían dos veces.
+                    const yaContadas = new Set(evalsQueRevisa.map(e => String(e.id)));
+
+                    countPorCalificar += (delEquipo || []).filter(r =>
+                        !yaContadas.has(String(r.evaluation_id)) &&
+                        window.leTocaRevisar(evalPorId[String(r.evaluation_id)], r.employee_id, empStrId)
+                    ).length;
 
                     const teamObligatorias = activeEvalsDb ? activeEvalsDb.filter(ev => ev.is_obligatory !== false) : [];
                     

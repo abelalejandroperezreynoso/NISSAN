@@ -371,8 +371,10 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
                 }
             }
 
+            const camposEvals = await window.camposConRevisores(
+                'id, title, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at');
             const { data: activeEvalsDb } = await sb.from('evaluations')
-                        .select('id, title, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')
+                        .select(camposEvals)
                         .eq('active', true);
             
             // Removemos el filtro .filter() para que también pasen las encuestas con mode === 'boss'
@@ -467,6 +469,41 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 });
             }
 
+            // Los dos orígenes de «esto está esperando tu calificación» —el
+            // equipo directo y el nombramiento— arman el mismo pendiente, y
+            // quién califica cada una lo decide siempre la misma regla en vez
+            // de dos filtros de consulta que podrían no coincidir con ella. Se
+            // descartan los repetidos: una respuesta llega por los dos caminos
+            // si el jefe es además revisor nombrado.
+            const yaAgregados = new Set();
+            const porId = {};
+            (activeEvals || []).forEach(ev => { porId[String(ev.id)] = ev; });
+
+            const agregarPendientesDeRevision = (filas) => {
+                (filas || []).forEach(e => {
+                    if (yaAgregados.has(String(e.id))) return;
+
+                    // Una encuesta apagada deja de pedir calificación: la
+                    // respuesta se queda guardada y el pendiente vuelve si
+                    // se vuelve a encender. Si la encuesta ya no existe se
+                    // deja pasar, que es como estaba antes.
+                    if (e.evaluations && !window.encuestaActiva(e.evaluations)) return;
+
+                    // Con revisores nombrados esto deja de ser del jefe; y la
+                    // respuesta de un revisor vuelve a su jefe, que es lo que
+                    // evita que quede sin nadie que pueda calificarla.
+                    if (!window.leTocaRevisar(porId[String(e.evaluation_id)], e.employee_id, user.id)) return;
+
+                    yaAgregados.add(String(e.id));
+                    const prefijo = e.review_status === 'Mal Revisada' ? '⚠️ Corregir:' : 'Revisión:';
+                    items.push({
+                        id: e.id, title: `${prefijo} ${e.evaluations?.title || 'Evaluación'}`, date: e.submitted_at.split('T')[0],
+                        tipo: 'Evaluación', grado: e.review_status, employee_id: e.employee_id,
+                        original_data: e, virtual_type: 'review'
+                    });
+                });
+            };
+
             const misDirectosFull = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id));
             const equipoDirectoIds = misDirectosFull.map(e => String(e.id));
             
@@ -545,28 +582,32 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                         });
                 }
 
+                // Lo del equipo directo. Cuáles de éstas siguen siendo suyas
+                // lo decide `agregarPendientesDeRevision`.
                 const { data: evalsPorRevisar } = await sb.from('evaluation_responses')
                     .select('id, submitted_at, employee_id, evaluation_id, answers_json, grades_json, review_status, evaluations(title, category, active)')
                     .in('review_status', ['Pendiente', 'Mal Revisada'])
                     .in('employee_id', equipoDirectoIds)
                     .order('submitted_at', { ascending: true });
 
-                if (evalsPorRevisar) {
-                    evalsPorRevisar.forEach(e => {
-                        // Una encuesta apagada deja de pedir calificación: la
-                        // respuesta se queda guardada y el pendiente vuelve si
-                        // se vuelve a encender. Si la encuesta ya no existe se
-                        // deja pasar, que es como estaba antes.
-                        if (e.evaluations && !window.encuestaActiva(e.evaluations)) return;
+                agregarPendientesDeRevision(evalsPorRevisar);
+            }
 
-                        const prefijo = e.review_status === 'Mal Revisada' ? '⚠️ Corregir:' : 'Revisión:';
-                        items.push({
-                            id: e.id, title: `${prefijo} ${e.evaluations?.title || 'Evaluación'}`, date: e.submitted_at.split('T')[0],
-                            tipo: 'Evaluación', grado: e.review_status, employee_id: e.employee_id,
-                            original_data: e, virtual_type: 'review'
-                        });
-                    });
-                }
+            // --- LO QUE ME TOCA REVISAR POR NOMBRAMIENTO ---
+            // No depende de ser jefe de nadie: la encuesta dice quién la
+            // califica, y entonces son todas sus respuestas, de quien sean.
+            // Menos las propias, que nadie se califica a sí mismo.
+            const encuestasQueRevisoYo = window.encuestasQueRevisa(activeEvals, user.id);
+
+            if (encuestasQueRevisoYo.length > 0) {
+                const { data: porNombramiento } = await sb.from('evaluation_responses')
+                    .select('id, submitted_at, employee_id, evaluation_id, answers_json, grades_json, review_status, evaluations(title, category, active)')
+                    .in('review_status', ['Pendiente', 'Mal Revisada'])
+                    .in('evaluation_id', encuestasQueRevisoYo.map(ev => ev.id))
+                    .neq('employee_id', user.id)
+                    .order('submitted_at', { ascending: true });
+
+                agregarPendientesDeRevision(porNombramiento);
             }
 
         } else {

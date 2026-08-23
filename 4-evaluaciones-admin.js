@@ -5,12 +5,52 @@
 // Variable global para caché de preguntas
 window.preguntasCacheActual = null;
 
-// --- HELPER: VERIFICAR SUPERVISOR DIRECTO (fwindow.borrarRespuestaIndividual = async (id) => {NO RECURSIVO) ---
+// --- HELPER: VERIFICAR SUPERVISOR DIRECTO (NO RECURSIVO) ---
+// La comparación vive en `1-config.js`, que la necesita para preguntarlo de
+// cualquiera; aquí sólo se le pone el usuario de la sesión.
 window.esSupervisorDirecto = (empleadoId) => {
     const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
-    if (!user || !empleadoId || !window.todosLosEmpleadosData) return false;
-    const empleado = window.todosLosEmpleadosData.find(e => String(e.id) === String(empleadoId));
-    return empleado && String(empleado.supId) === String(user.id);
+    return !!user && window.esSupervisorDirectoDe(empleadoId, user.id);
+};
+
+// ==========================================
+// QUIÉN PUEDE CALIFICAR UNA RESPUESTA
+// ==========================================
+// La regla está en `1-config.js` (`window.leTocaRevisar`): el jefe inmediato,
+// salvo que la encuesta nombre a sus propios revisores. Lo que hace falta aquí
+// es la encuesta de la respuesta, que no siempre está a mano: a esta pantalla
+// se llega también desde el panel de pendientes, sin haber abierto la lista de
+// encuestas.
+window.cacheEncuestasRevision = {};
+
+window.encuestaEnCache = (evaluationId) => {
+    if (!evaluationId) return null;
+    const id = String(evaluationId);
+    if (window.evalCache && window.evalCache.evals) {
+        const enCache = window.evalCache.evals.find(e => String(e.id) === id);
+        if (enCache) return enCache;
+    }
+    return window.cacheEncuestasRevision[id] || null;
+};
+
+window.encuestaDeLaRespuesta = async (evaluationId) => {
+    if (!evaluationId) return null;
+    const yaEsta = window.encuestaEnCache(evaluationId);
+    if (yaEsta) return yaEsta;
+
+    // Sólo lo que hace falta para saber quién la revisa.
+    const campos = await window.camposConRevisores('id, title, mode');
+    const { data } = await sb.from('evaluations').select(campos).eq('id', evaluationId).single();
+    if (data) window.cacheEncuestasRevision[String(evaluationId)] = data;
+    return data || null;
+};
+
+// Con la encuesta ya en la mano. El modo administrador puede con todo.
+window.puedeCalificar = (ev, empleadoQueContesto) => {
+    if (window.modoAdminActivo) return true;
+    const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
+    if (!user) return false;
+    return window.leTocaRevisar(ev, empleadoQueContesto, user.id);
 };
 
 // --- 1. HISTORIAL Y LISTA DE RESPUESTAS ---
@@ -33,15 +73,20 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
 
     const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
     
+    // Hace falta antes de filtrar: es lo que dice si a esta persona le toca
+    // revisar la encuesta aunque no sea jefe de nadie.
+    const encuestaDeLaLista = await window.encuestaDeLaRespuesta(evalId);
+
     let responses = [];
+    const { data: todasLasRespuestas } = await sb.from('evaluation_responses').select('*').eq('evaluation_id', evalId).order('submitted_at', {ascending: false});
     if (window.modoAdminActivo) {
-        const { data } = await sb.from('evaluation_responses').select('*').eq('evaluation_id', evalId).order('submitted_at', {ascending: false});
-        responses = data || [];
-    } else {
-        const { data } = await sb.from('evaluation_responses').select('*').eq('evaluation_id', evalId).order('submitted_at', {ascending: false});
-        if (data) {
-            responses = data.filter(r => (r.employee_id === user.id) || window.esSupervisorDirecto(r.employee_id));
-        }
+        responses = todasLasRespuestas || [];
+    } else if (todasLasRespuestas) {
+        responses = todasLasRespuestas.filter(r =>
+            r.employee_id === user.id ||
+            window.esSupervisorDirecto(r.employee_id) ||
+            window.leTocaRevisar(encuestaDeLaLista, r.employee_id, user.id)
+        );
     }
     
     window.respuestasCacheActual = responses || [];
@@ -49,22 +94,26 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     
     
     let infoHtml = '';
-    let evalData = null;
+    let evalData = encuestaDeLaLista;
 
-    if (window.evalCache && window.evalCache.evals) {
-        evalData = window.evalCache.evals.find(e => String(e.id) === String(evalId));
-        if (evalData) {
-            const desc = evalData.description ? `<div style="margin-bottom:5px;"><b>Descripción:</b> ${evalData.description}</div>` : '';
-            
-            const freqMap = { 'once': 'Única vez', 'weekly': 'Semanal', 'biweekly': 'Quincenal', 'monthly': 'Mensual', 'quarterly': 'Trimestral', 'semiannual': 'Semestral', 'yearly': 'Anual', 'biennial': 'Cada 2 años' };
-            const freq = evalData.frequency ? freqMap[evalData.frequency] || evalData.frequency : 'Única vez';
-            const freqHtml = `<div style="font-size:0.8rem; color:#64748b;"><b>Frecuencia:</b> ${freq}</div>`;
-            const obligHtml = (evalData.is_obligatory === false) ? `<div style="font-size:0.8rem; color:#22c55e; font-weight:bold; margin-top:4px;">✨ Encuesta Opcional</div>` : '';
-            const areaHtml = (evalData.evaluates_area === true) ? `<div style="font-size:0.8rem; color:#be185d; font-weight:bold; margin-top:4px;">📍 Mide resultados por Área</div>` : '';
+    if (evalData) {
+        const desc = evalData.description ? `<div style="margin-bottom:5px;"><b>Descripción:</b> ${evalData.description}</div>` : '';
+        
+        const freqMap = { 'once': 'Única vez', 'weekly': 'Semanal', 'biweekly': 'Quincenal', 'monthly': 'Mensual', 'quarterly': 'Trimestral', 'semiannual': 'Semestral', 'yearly': 'Anual', 'biennial': 'Cada 2 años' };
+        const freq = evalData.frequency ? freqMap[evalData.frequency] || evalData.frequency : 'Única vez';
+        const freqHtml = `<div style="font-size:0.8rem; color:#64748b;"><b>Frecuencia:</b> ${freq}</div>`;
+        const obligHtml = (evalData.is_obligatory === false) ? `<div style="font-size:0.8rem; color:#22c55e; font-weight:bold; margin-top:4px;">✨ Encuesta Opcional</div>` : '';
+        const areaHtml = (evalData.evaluates_area === true) ? `<div style="font-size:0.8rem; color:#be185d; font-weight:bold; margin-top:4px;">📍 Mide resultados por Área</div>` : '';
 
-            if(desc || freq) {
-                infoHtml = `<div style="font-size:0.9rem; color:#475569; margin-top:5px; margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0;">${desc}${freqHtml}${obligHtml}${areaHtml}</div>`;
-            }
+        // Quién la califica sólo se dice cuando no es lo de siempre: con el
+        // jefe inmediato no hay nada que aclarar.
+        const nombrados = window.revisoresDeEncuesta(evalData);
+        const revisoresHtml = nombrados.length > 0
+            ? `<div style="font-size:0.8rem; color:#7e22ce; font-weight:bold; margin-top:4px;">👁️ La revisa ${window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))}</div>`
+            : '';
+
+        if(desc || freq) {
+            infoHtml = `<div style="font-size:0.9rem; color:#475569; margin-top:5px; margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0;">${desc}${freqHtml}${obligHtml}${areaHtml}${revisoresHtml}</div>`;
         }
     }
 
@@ -75,10 +124,14 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     let actionButtonHtml = '';
     if (mode === 'boss') {
         actionButtonHtml = `<button onclick="window.abrirSeleccionSubordinado('${evalId}', '${safeTitle}', 'boss')" style="width: 100%; padding:12px 20px; background:#be185d; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(190, 24, 93, 0.25); transition: transform 0.1s;">👥 Evaluar a un Colaborador...</button>`;
-    } else {
+    } else if (window.modoAdminActivo || window.leTocaEstaEncuesta(evalData, user, window.tieneEquipoDirecto(user.id))) {
         const misRespuestas = responses.filter(r => String(r.employee_id) === String(user.id));
         const btnText = misRespuestas.length > 0 ? "Volver a Responder" : "Responder Encuesta";
         actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" style="width: 100%; padding:12px 20px; background:#2563eb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(37,99,235,0.25); transition: transform 0.1s;">📝 ${btnText}</button>`;
+    } else if (window.revisoresDeEncuesta(evalData).includes(String(user.id))) {
+        // Se está aquí para calificarla, no para contestarla: la encuesta no va
+        // dirigida a esta persona y el botón de responder sobra.
+        actionButtonHtml = `<div style="text-align:center; color:#7e22ce; font-size:0.9rem; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px;">👁️ Te toca revisar esta encuesta.</div>`;
     }
 
     const bannerHtml = `
@@ -357,7 +410,7 @@ window.renderizarListaRespuestas = () => {
 
     const pendientesDeRevisar = responses.filter(r =>
         r.review_status !== 'Revisado' && r.review_status !== 'Falsa' && r.review_status !== 'Certificada' &&
-        (window.modoAdminActivo || (r.employee_id !== user.id && window.esSupervisorDirecto(r.employee_id)))
+        window.puedeCalificar(window.encuestaEnCache(r.evaluation_id), r.employee_id)
     );
     
     const resto = responses.filter(r => !pendientesDeRevisar.includes(r));
@@ -378,9 +431,11 @@ window.verDetalleRespuesta = async (resp) => {
     const modal = document.getElementById('modal-responder-eval');
     const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
 
-    const soySupervisorDirecto = window.esSupervisorDirecto(resp.employee_id);
-    const esMiRespuesta = (resp.employee_id === user.id);
-    const puedeCalificar = window.modoAdminActivo || (soySupervisorDirecto && !esMiRespuesta);
+    // Quién revisa esto no siempre es el jefe: la encuesta puede haber
+    // nombrado a los suyos. Se pide antes de dibujar nada.
+    const encuestaDeLaRespuesta = await window.encuestaDeLaRespuesta(resp.evaluation_id);
+    const puedeCalificar = window.puedeCalificar(encuestaDeLaRespuesta, resp.employee_id);
+    const esMiRespuesta = (String(resp.employee_id) === String(user.id));
     const esAdminTotal = window.modoAdminActivo;
 
     if (modal.parentElement !== document.body) document.body.appendChild(modal);
@@ -399,7 +454,13 @@ window.verDetalleRespuesta = async (resp) => {
     } else {
         dateInputHtml = `<div style="margin-top:5px; color:#64748b; font-size:0.9rem;">Fecha: ${new Date(resp.submitted_at).toLocaleDateString()}</div>`;
         if (resp.review_status !== 'Revisado' && resp.review_status !== 'Certificada' && !esMiRespuesta) {
-             dateInputHtml += `<div style="margin-top:10px; padding:10px; background:#fef3c7; color:#b45309; border-radius:6px; font-size:0.85rem;">Nota: Solo el supervisor directo puede calificar.</div>`;
+             // Decir quién sí puede ahorra la pregunta: con revisores
+             // nombrados, el supervisor directo ya no es la respuesta.
+             const nombrados = window.revisoresDeLaRespuesta(encuestaDeLaRespuesta, resp.employee_id);
+             const quien = nombrados.length > 0
+                ? 'Esta encuesta la revisa ' + window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))
+                : 'Solo el supervisor directo puede calificar';
+             dateInputHtml += `<div style="margin-top:10px; padding:10px; background:#fef3c7; color:#b45309; border-radius:6px; font-size:0.85rem;">Nota: ${quien}.</div>`;
         }
     }
 
@@ -2395,6 +2456,24 @@ window.renderConfiguracionEscala = () => {
     }
 };
 
+// Sin la columna en la base no se puede nombrar a nadie: se deja la casilla
+// como está —revisa el jefe— y se dice por qué, en lugar de ofrecer un
+// selector que no va a guardar nada.
+window.avisarSiFaltaColumnaRevisores = async () => {
+    const aviso = document.getElementById('aviso-revisores-no-disponible');
+    const hay = await window.hayColumnaRevisores();
+    if (aviso) aviso.style.display = hay ? 'none' : 'block';
+
+    const chk = document.getElementById('chk-revisa-jefe');
+    if (chk) {
+        chk.disabled = !hay;
+        if (!hay) {
+            chk.checked = true;
+            window.toggleSelectorPersonas('revisores');
+        }
+    }
+};
+
 window.verificarRestriccionesModo = () => {
     const modeEl = document.getElementById('eval-mode-input');
     const mode = modeEl ? modeEl.value : 'self';
@@ -2422,6 +2501,15 @@ window.verificarRestriccionesModo = () => {
         allTypeSelects.forEach(sel => { sel.disabled = false; });
         window.textoBoton(btnAddQuestion, "+ Agregar Pregunta");
     }
+
+    // La que contesta el jefe llega ya calificada —`4-evaluaciones-base.js` la
+    // guarda como 'Revisado' al enviarla—, así que no hay nada que repartir y
+    // el bloque de revisores sobra.
+    const esModoJefe = (mode === 'boss');
+    ['grupo-revisores', 'grupo-revisores-cuerpo'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = esModoJefe ? 'none' : '';
+    });
 };
 
 window.prepararInputCategorias = async (currentValue = '') => {
@@ -2601,14 +2689,9 @@ window.abrirModalCrearEval = async () => {
     const chkActiva = document.getElementById('chk-eval-activa');
     if(chkActiva) chkActiva.checked = true;
 
-    const chkAllEmpleados = document.getElementById('chk-all-empleados');
-        if(chkAllEmpleados) chkAllEmpleados.checked = true;
-        window.empleadosSeleccionadosEval = [];
-        if(window.toggleSelectorEmpleados) window.toggleSelectorEmpleados();
-        const inpBuscar = document.getElementById('inp-buscar-empleado-eval');
-        if(inpBuscar) inpBuscar.value = '';
-        const resDiv = document.getElementById('lista-resultados-empleados-eval');
-        if(resDiv) resDiv.innerHTML = '';
+    window.prepararSelectorPersonas('destinatarios', null);
+        window.prepararSelectorPersonas('revisores', null);
+        await window.avisarSiFaltaColumnaRevisores();
 
         await window.prepararInputCategorias('General');
         const modeInput = document.getElementById('eval-mode-input');
@@ -2658,24 +2741,20 @@ window.editarEvaluacion = async (id) => {
         }
         await window.renderizarSelectorDeptos(targetDepartments);
 
-        const chkAllEmpleados = document.getElementById('chk-all-empleados');
         let targetEmployeesData = null;
-
         if (evaluacion.target_employees) {
-            targetEmployeesData = typeof evaluacion.target_employees === 'string' ? JSON.parse(evaluacion.target_employees) : evaluacion.target_employees;
+            try {
+                targetEmployeesData = typeof evaluacion.target_employees === 'string'
+                    ? JSON.parse(evaluacion.target_employees)
+                    : evaluacion.target_employees;
+            } catch (e) { targetEmployeesData = null; }
         }
+        window.prepararSelectorPersonas('destinatarios', targetEmployeesData);
 
-        if (targetEmployeesData && Array.isArray(targetEmployeesData) && !targetEmployeesData.includes('ALL')) {
-            if (chkAllEmpleados) chkAllEmpleados.checked = false;
-            window.empleadosSeleccionadosEval = targetEmployeesData.map(id => {
-                const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(id));
-                return { id: id, name: emp ? emp.name : `ID: ${id}` };
-            });
-        } else {
-            if (chkAllEmpleados) chkAllEmpleados.checked = true;
-            window.empleadosSeleccionadosEval = [];
-        }
-        if(window.toggleSelectorEmpleados) window.toggleSelectorEmpleados();
+        // Los revisores propios se leen con el mismo helper que usan las demás
+        // pantallas, que es el que aguanta que la columna venga como texto.
+        window.prepararSelectorPersonas('revisores', window.revisoresDeEncuesta(evaluacion));
+        await window.avisarSiFaltaColumnaRevisores();
 
         const chkOblig = document.getElementById('chk-eval-obligatoria');
     if(chkOblig) {
@@ -2953,16 +3032,18 @@ window.guardarNuevaEvaluacion = async () => {
                 const chkActiva = document.getElementById('chk-eval-activa');
                 const estaActiva = chkActiva ? chkActiva.checked : true;
 
-                const chkAllEmpleados = document.getElementById('chk-all-empleados');
-                let targetEmployees = ['ALL'];
+                const targetEmployees = window.idsDelSelector('destinatarios');
+                if (targetEmployees === null) {
+                    alert("Desmarcaste 'Todos los colaboradores' pero no agregaste a nadie a la lista.");
+                    return;
+                }
 
-                if (chkAllEmpleados && !chkAllEmpleados.checked) {
-                    if (window.empleadosSeleccionadosEval.length > 0) {
-                        targetEmployees = window.empleadosSeleccionadosEval.map(e => e.id);
-                    } else {
-                        alert("Seleccionaste 'Personas Específicas' pero no agregaste a nadie a la lista.");
-                        return;
-                    }
+                // Nombrar revisores es opcional: ['ALL'] significa lo de
+                // siempre, que la revisa el jefe inmediato.
+                const revisores = window.idsDelSelector('revisores');
+                if (revisores === null) {
+                    alert("Desmarcaste 'La revisa el jefe inmediato' pero no agregaste a ningún revisor.");
+                    return;
                 }
 
                 const payload = {
@@ -2979,6 +3060,12 @@ window.guardarNuevaEvaluacion = async () => {
                     is_obligatory: isObligatory,
                     active: estaActiva
                 };
+
+                // Sin la columna en la base no se puede guardar el
+                // nombramiento; el resto de la encuesta sí, y la hoja ya avisó.
+                if (await window.hayColumnaRevisores()) {
+                    payload.reviewer_employees = revisores;
+                }
 
                 if(eid) {
             const { error } = await sb.from('evaluations').update(payload).eq('id', eid);
@@ -3031,40 +3118,78 @@ window.guardarNuevaEvaluacion = async () => {
             }catch(e){ alert("❌ Error: " + e.message); console.error(e); }
         };
 
-        // --- LÓGICA DE PERSONAS ESPECÍFICAS PARA EVALUACIONES ---
-        window.empleadosSeleccionadosEval = [];
-
-        window.toggleSelectorEmpleados = () => {
-            const chkAll = document.getElementById('chk-all-empleados');
-            const container = document.getElementById('container-selector-empleados');
-            if (chkAll.checked) {
-                container.style.display = 'none';
-            } else {
-                container.style.display = 'block';
-                window.renderizarEmpleadosSeleccionadosEval();
+        // --- LOS DOS SELECTORES DE PERSONAS DE LA HOJA ---
+        // «A quién va dirigida» y «quién la revisa» son el mismo control con
+        // distintos ids: una casilla que lo despliega, un buscador y las
+        // fichas de los elegidos. En vez de repetir las cuatro funciones, cada
+        // una recibe de qué selector se trata.
+        window.SELECTORES_PERSONAS = {
+            destinatarios: {
+                casilla: 'chk-all-empleados',
+                caja: 'container-selector-empleados',
+                buscador: 'inp-buscar-empleado-eval',
+                resultados: 'lista-resultados-empleados-eval',
+                fichas: 'lista-empleados-seleccionados-eval',
+                elegidos: []
+            },
+            revisores: {
+                casilla: 'chk-revisa-jefe',
+                caja: 'container-selector-revisores',
+                buscador: 'inp-buscar-revisor-eval',
+                resultados: 'lista-resultados-revisores-eval',
+                fichas: 'lista-revisores-seleccionados-eval',
+                elegidos: []
             }
         };
 
-        window.buscarEmpleadoParaEval = (term) => {
-            const resDiv = document.getElementById('lista-resultados-empleados-eval');
+        // Los elegidos se guardan como {id, name}: el nombre es para las
+        // fichas, y hace falta guardarlo porque la lista se pinta antes de que
+        // se pueda buscar a nadie.
+        window.personasElegidas = (clave) => window.SELECTORES_PERSONAS[clave].elegidos;
+
+        window.ponerPersonasElegidas = (clave, lista) => {
+            window.SELECTORES_PERSONAS[clave].elegidos = lista || [];
+        };
+
+        window.toggleSelectorPersonas = (clave) => {
+            const cfg = window.SELECTORES_PERSONAS[clave];
+            const chk = document.getElementById(cfg.casilla);
+            const caja = document.getElementById(cfg.caja);
+            if (!chk || !caja) return;
+
+            // La casilla dice lo de siempre —todos, o el jefe—, así que el
+            // selector aparece justo cuando se desmarca.
+            if (chk.checked) {
+                caja.style.display = 'none';
+            } else {
+                caja.style.display = 'block';
+                window.pintarPersonasEval(clave);
+            }
+        };
+
+        window.buscarPersonaEval = (clave, term) => {
+            const cfg = window.SELECTORES_PERSONAS[clave];
+            const resDiv = document.getElementById(cfg.resultados);
+            if (!resDiv) return;
             if (!term.trim()) { resDiv.innerHTML = ''; return; }
-            
+
             const termLow = term.toLowerCase();
             const matches = (window.todosLosEmpleadosData || []).filter(e =>
                 (e.name && e.name.toLowerCase().includes(termLow)) || String(e.id).includes(termLow)
             ).slice(0, 8);
-            
+
             if (matches.length === 0) {
                 resDiv.innerHTML = '<div style="font-size:0.85rem; color:#64748b; padding:5px;">No se encontraron coincidencias.</div>';
                 return;
             }
 
             resDiv.innerHTML = matches.map(m => {
-                const isSelected = window.empleadosSeleccionadosEval.some(s => String(s.id) === String(m.id));
+                const isSelected = cfg.elegidos.some(s => String(s.id) === String(m.id));
+                const nombre = String(m.name || '').replace(/'/g, "\\'");
                 const btnState = isSelected ?
                     `<button disabled style="background:#f1f5f9; color:#94a3b8; border:none; padding:4px 10px; border-radius:4px; font-size:0.75rem; font-weight:bold;">Agregado</button>` :
-                    `<button onclick="window.agregarEmpleadoEval('${m.id}', '${m.name.replace(/'/g, "\\'")}')" style="background:#7e22ce; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:0.75rem; font-weight:bold; cursor:pointer;">+ Agregar</button>`;
-                    
+                    `<button onclick="window.agregarPersonaEval('${clave}', '${m.id}', '${nombre}')" style="background:#7e22ce; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:0.75rem; font-weight:bold; cursor:pointer;">+ Agregar</button>`;
+
                 return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 5px; border-bottom:1px solid #f1f5f9; transition:background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
                     <span style="font-size:0.85rem; color:#334155; font-weight:500;">${m.name} <small style="color:#94a3b8; font-weight:normal;">(${m.id})</small></span>
                     ${btnState}
@@ -3072,35 +3197,78 @@ window.guardarNuevaEvaluacion = async () => {
             }).join('');
         };
 
-        window.agregarEmpleadoEval = (id, nombre) => {
-            if (!window.empleadosSeleccionadosEval.some(e => String(e.id) === String(id))) {
-                window.empleadosSeleccionadosEval.push({ id: String(id), name: nombre });
-                window.renderizarEmpleadosSeleccionadosEval();
-                const inp = document.getElementById('inp-buscar-empleado-eval');
-                if(inp) window.buscarEmpleadoParaEval(inp.value);
+        window.agregarPersonaEval = (clave, id, nombre) => {
+            const cfg = window.SELECTORES_PERSONAS[clave];
+            if (!cfg.elegidos.some(e => String(e.id) === String(id))) {
+                cfg.elegidos.push({ id: String(id), name: nombre });
+                window.pintarPersonasEval(clave);
+                const inp = document.getElementById(cfg.buscador);
+                if (inp) window.buscarPersonaEval(clave, inp.value);
             }
         };
 
-        window.quitarEmpleadoEval = (id) => {
-            window.empleadosSeleccionadosEval = window.empleadosSeleccionadosEval.filter(e => String(e.id) !== String(id));
-            window.renderizarEmpleadosSeleccionadosEval();
-            const inp = document.getElementById('inp-buscar-empleado-eval');
-            if(inp) window.buscarEmpleadoParaEval(inp.value);
+        window.quitarPersonaEval = (clave, id) => {
+            const cfg = window.SELECTORES_PERSONAS[clave];
+            cfg.elegidos = cfg.elegidos.filter(e => String(e.id) !== String(id));
+            window.pintarPersonasEval(clave);
+            const inp = document.getElementById(cfg.buscador);
+            if (inp) window.buscarPersonaEval(clave, inp.value);
         };
 
-        window.renderizarEmpleadosSeleccionadosEval = () => {
-            const container = document.getElementById('lista-empleados-seleccionados-eval');
-            if (window.empleadosSeleccionadosEval.length === 0) {
+        window.pintarPersonasEval = (clave) => {
+            const cfg = window.SELECTORES_PERSONAS[clave];
+            const container = document.getElementById(cfg.fichas);
+            if (!container) return;
+
+            if (cfg.elegidos.length === 0) {
                 container.innerHTML = '<span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Ninguno seleccionado.</span>';
                 return;
             }
-            
-            container.innerHTML = window.empleadosSeleccionadosEval.map(e => `
+
+            container.innerHTML = cfg.elegidos.map(e => `
                 <div style="display:flex; align-items:center; background:#f3e8ff; border:1px solid #d8b4fe; color:#6b21a8; padding:4px 10px; border-radius:20px; font-size:0.85rem; font-weight:500; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
-                    ${e.name}
-                    <button onclick="window.quitarEmpleadoEval('${e.id}')" style="background:none; border:none; color:#d946ef; font-weight:bold; margin-left:6px; cursor:pointer; font-size:1rem; line-height:1;">✕</button>
+                    ${window.sanitizeForHTML(e.name)}
+                    <button onclick="window.quitarPersonaEval('${clave}', '${e.id}')" style="background:none; border:none; color:#d946ef; font-weight:bold; margin-left:6px; cursor:pointer; font-size:1rem; line-height:1;">✕</button>
                 </div>
             `).join('');
+        };
+
+        // Deja el selector como si se abriera la hoja de cero, con la lista de
+        // ids que traiga la encuesta. `null` o con 'ALL' es lo de siempre.
+        window.prepararSelectorPersonas = (clave, ids) => {
+            const cfg = window.SELECTORES_PERSONAS[clave];
+            const chk = document.getElementById(cfg.casilla);
+            const concretos = Array.isArray(ids)
+                ? ids.map(String).filter(x => x.trim() !== '' && x.toUpperCase() !== 'ALL')
+                : [];
+
+            if (concretos.length > 0) {
+                if (chk) chk.checked = false;
+                cfg.elegidos = concretos.map(id => {
+                    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(id));
+                    return { id: String(id), name: emp ? emp.name : `ID: ${id}` };
+                });
+            } else {
+                if (chk) chk.checked = true;
+                cfg.elegidos = [];
+            }
+
+            const inp = document.getElementById(cfg.buscador);
+            if (inp) inp.value = '';
+            const res = document.getElementById(cfg.resultados);
+            if (res) res.innerHTML = '';
+            window.toggleSelectorPersonas(clave);
+        };
+
+        // Lo que hay que guardar: la lista de ids, o ['ALL'] si manda la
+        // casilla. Devuelve null si se desmarcó sin elegir a nadie, que es un
+        // descuido y no una configuración.
+        window.idsDelSelector = (clave) => {
+            const cfg = window.SELECTORES_PERSONAS[clave];
+            const chk = document.getElementById(cfg.casilla);
+            if (!chk || chk.checked) return ['ALL'];
+            if (cfg.elegidos.length === 0) return null;
+            return cfg.elegidos.map(e => String(e.id));
         };
 
         console.log("✅ Evaluaciones Admin v52: INTEGRACIÓN DE VISTA Y CALIFICACIÓN.");
