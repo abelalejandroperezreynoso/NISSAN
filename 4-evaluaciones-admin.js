@@ -748,7 +748,23 @@ window.verDetalleRespuesta = async (resp) => {
             cardBorderColor = '#bbf7d0';
         }
 
-        container.insertAdjacentHTML('beforeend', `<div style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid ${cardBorderColor};"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;"><label style="font-weight:700; color:#1e293b; font-size:1.1rem; line-height:1.4; flex:1;">${index+1}. ${q.question_text}</label>${resultBadge}</div>${contentHtml}</div>`);
+        // El porqué de una pregunta con opciones. Es lo que hay que leer para
+        // calificarla, así que va pegado a la respuesta y no en otra pantalla.
+        const motivo = window.motivoDePregunta(resp, q.id);
+        let motivoHtml = '';
+        if (motivo) {
+            motivoHtml = `
+                <div style="margin-top:12px; background:#faf5ff; border:1px solid #e9d5ff; border-left:3px solid #a855f7; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:0.75rem; font-weight:700; color:#7e22ce; margin-bottom:4px;">💬 Por qué</div>
+                    <div style="font-size:0.95rem; color:#334155; white-space:pre-wrap;">${window.sanitizeForHTML(motivo)}</div>
+                </div>`;
+        } else if (window.PREGUNTAS_CON_MOTIVO.includes(q.question_type) && rawRespuesta) {
+            // Las respuestas anteriores a que se pidiera el motivo no lo traen;
+            // decirlo evita buscarlo.
+            motivoHtml = `<div style="margin-top:12px; font-size:0.8rem; color:#94a3b8; font-style:italic;">Sin explicación: se contestó antes de que se pidiera.</div>`;
+        }
+
+        container.insertAdjacentHTML('beforeend', `<div style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid ${cardBorderColor};"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;"><label style="font-weight:700; color:#1e293b; font-size:1.1rem; line-height:1.4; flex:1;">${index+1}. ${q.question_text}</label>${resultBadge}</div>${contentHtml}${motivoHtml}</div>`);
     });
     setTimeout(() => {
         document.querySelectorAll('.admin-edit-answer[data-type="text"], .auto-resize-text').forEach(ta => {

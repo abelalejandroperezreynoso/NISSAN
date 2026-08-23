@@ -851,7 +851,24 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             inputHtml = rangeHtml;
         }
 
-        container.insertAdjacentHTML('beforeend', `<div style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${q.question_text}</label>${inputHtml}</div>`);
+        // Una opción marcada no dice por qué: en una encuesta de seguridad, «no»
+        // a secas y «no, porque la máquina estaba en paro» son hallazgos
+        // distintos. Las preguntas con opciones piden el motivo, y sin él no se
+        // envía —eso lo comprueba `enviarRespuestasEval`—.
+        let comentarioHtml = '';
+        if (window.PREGUNTAS_CON_MOTIVO.includes(q.question_type)) {
+            comentarioHtml = `
+                <div style="margin-top:16px; border-top:1px solid #f1f5f9; padding-top:14px;">
+                    <label style="display:block; font-weight:600; color:#475569; margin-bottom:8px; font-size:0.9rem;">
+                        ¿Por qué? <span style="color:#ef4444;">*</span>
+                    </label>
+                    <textarea class="resp-comentario" data-id="${q.id}" placeholder="Explica el motivo de tu respuesta..."
+                              style="${commonStyle} resize:none; overflow-y:hidden; min-height:70px;"
+                              oninput="this.style.height=''; this.style.height=this.scrollHeight+'px'"></textarea>
+                </div>`;
+        }
+
+        container.insertAdjacentHTML('beforeend', `<div style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${q.question_text}</label>${inputHtml}${comentarioHtml}</div>`);
     });
 };
 
@@ -930,7 +947,10 @@ window.enviarRespuestasEval = async () => {
         let answeredCount = 0;
         let autoGradedCount = 0;
 
-        window.preguntasCacheActual.forEach(q => {
+        const motivos = {};
+        const faltanMotivos = [];
+
+        window.preguntasCacheActual.forEach((q, indice) => {
             let val = null;
             if (q.question_type === 'text') {
                 const el = document.querySelector(`.resp-input[data-id="${q.id}"]`);
@@ -953,7 +973,28 @@ window.enviarRespuestasEval = async () => {
             
             answersMap[q.id] = val;
 
-            if (val !== null && val !== "" && !(Array.isArray(val) && val.length === 0)) {
+            const contestada = val !== null && val !== "" && !(Array.isArray(val) && val.length === 0);
+
+            // El motivo se pide sólo de lo que sí se contestó: sin opción
+            // marcada no hay nada que explicar, y la encuesta se puede entregar
+            // a medias como siempre.
+            if (window.PREGUNTAS_CON_MOTIVO.includes(q.question_type)) {
+                const campo = document.querySelector(`.resp-comentario[data-id="${q.id}"]`);
+                const motivo = campo ? campo.value.trim() : '';
+                if (contestada) {
+                    if (!motivo) {
+                        faltanMotivos.push({ numero: indice + 1, texto: q.question_text || '', campo });
+                    } else {
+                        motivos[q.id] = motivo;
+                    }
+                } else if (motivo) {
+                    // Escribió el porqué y se le olvidó marcar: se guarda igual
+                    // para no tirarle lo escrito.
+                    motivos[q.id] = motivo;
+                }
+            }
+
+            if (contestada) {
                 answeredCount++;
 
                 if (q.question_type === 'range') {
@@ -983,6 +1024,19 @@ window.enviarRespuestasEval = async () => {
 
         const keys = Object.keys(answersMap);
         if (keys.length === 0) throw new Error("No hay preguntas para responder.");
+
+        if (faltanMotivos.length > 0) {
+            const lista = faltanMotivos.map(f => `${f.numero}. ${f.texto}`).join('\n');
+            alert(`Falta explicar por qué en ${faltanMotivos.length === 1 ? 'esta pregunta' : 'estas preguntas'}:\n\n${lista}`);
+            const primero = faltanMotivos[0].campo;
+            if (primero) { primero.scrollIntoView({ behavior: 'smooth', block: 'center' }); primero.focus(); }
+            if (btn) { btn.disabled = false; btn.innerText = "Enviar Respuestas"; }
+            return;
+        }
+
+        // Los motivos van bajo su llave reservada, después de contar las
+        // preguntas: no es una respuesta más.
+        if (Object.keys(motivos).length > 0) answersMap[window.LLAVE_MOTIVOS] = motivos;
         
         const finalStatus = (isBossMode || (answeredCount > 0 && answeredCount === autoGradedCount)) ? 'Revisado' : 'Pendiente';
         const finalGrades = autoGradesMap;

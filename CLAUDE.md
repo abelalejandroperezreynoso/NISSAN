@@ -390,6 +390,36 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   que las pantallas que deciden sobre el usuario actual miran su ficha en
   `window.todosLosEmpleadosData` y no en `usuarioLogueado`, que no trae el
   campo.
+- **Una pregunta con opciones pide además el porqué.** Marcar una casilla no
+  dice por qué se marcó, y en una encuesta de seguridad eso es justo lo que hay
+  que saber: «no» a secas y «no, porque la máquina estaba en paro» son
+  hallazgos distintos. Los tipos de `window.PREGUNTAS_CON_MOTIVO` —hoy
+  `multiple` y `checklist`— llevan un campo de texto obligatorio debajo de las
+  opciones, y `enviarRespuestasEval` no deja enviar sin él. Fuera quedan `text`
+  —que ya es texto libre—, `list_match` y `range`, que es una calificación
+  numérica y se califica sola al enviarse.
+
+  Se pide **sólo de lo que se contestó**: sin opción marcada no hay nada que
+  explicar, y la encuesta se sigue pudiendo entregar a medias como siempre. Al
+  revés sí se guarda —quien escribe el motivo y olvida marcar no pierde lo
+  escrito—.
+
+  Los motivos viajan **dentro de `answers_json`**, bajo la llave reservada
+  `window.LLAVE_MOTIVOS` (`__comentarios`), no en una columna nueva: así no hay
+  otro script que correr a mano. Las demás llaves de ese objeto son ids de
+  pregunta, siempre numéricos, de modo que no pueden chocar, y todo lo que ya
+  lee `answers_json` lo hace por id y no se entera. Se leen con
+  `window.motivoDePregunta(respuesta, idPregunta)`.
+
+  Ojo con `guardarCalificacionAdmin`, que en modo administrador **reescribe
+  `answers_json` entero** a partir de los campos de la pantalla: parte de una
+  copia de lo que había (`{ ...window.respuestasTempAdmin }`) y por eso el
+  motivo sobrevive. Quien toque ese bloque tiene que seguir partiendo de la
+  copia, o calificar borraría las explicaciones. El motivo se enseña al
+  calificar pero no se edita ahí: lo escribió quien contestó.
+
+  Lo contestado antes de que existiera esta regla no trae motivo, y la pantalla
+  de calificar lo dice en lugar de dejar el hueco en blanco.
 - **Quién califica una respuesta.** Tampoco lo dice ninguna tabla por defecto:
   la califica el **jefe inmediato** de quien contestó, y esa regla la sostiene
   el código. Una encuesta puede en cambio nombrar a sus propios revisores en

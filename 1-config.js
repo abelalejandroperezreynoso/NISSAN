@@ -262,6 +262,36 @@ window.esSupervisorDirectoDe = (empleadoId, supervisorId) => {
 };
 
 // ==========================================
+// EL MOTIVO DE UNA RESPUESTA CON OPCIONES
+// ==========================================
+// Marcar una opción no dice por qué se marcó, y en una encuesta de seguridad
+// eso es justo lo que hay que saber: «no» a secas y «no, porque la máquina
+// estaba en paro» son hallazgos distintos. Los tipos de pregunta que se
+// contestan eligiendo piden además el motivo, y sin él no se envía.
+//
+// Fuera quedan `text` —que ya es texto libre—, `list_match` —una lista de
+// elementos, no una elección— y `range`, que es una calificación numérica y se
+// califica sola al enviarla.
+window.PREGUNTAS_CON_MOTIVO = ['multiple', 'checklist'];
+
+// Los motivos viajan dentro de `answers_json`, bajo una llave reservada: las
+// demás son ids de pregunta, siempre numéricos, así que no pueden chocar. Se
+// hace así y no con una columna nueva para no obligar a correr otro script en
+// la base; todo lo que ya lee `answers_json` lo hace por id de pregunta y no
+// se entera de ésta.
+window.LLAVE_MOTIVOS = '__comentarios';
+
+window.motivosDeRespuesta = (respuesta) => {
+    const mapa = respuesta && respuesta.answers_json ? respuesta.answers_json[window.LLAVE_MOTIVOS] : null;
+    return (mapa && typeof mapa === 'object' && !Array.isArray(mapa)) ? mapa : {};
+};
+
+window.motivoDePregunta = (respuesta, preguntaId) => {
+    const texto = window.motivosDeRespuesta(respuesta)[String(preguntaId)];
+    return typeof texto === 'string' ? texto.trim() : '';
+};
+
+// ==========================================
 // QUIÉN CALIFICA UNA RESPUESTA
 // ==========================================
 // Por defecto la califica el jefe inmediato de quien contestó, y eso no lo
