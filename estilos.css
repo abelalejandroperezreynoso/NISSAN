@@ -3063,3 +3063,18 @@ html.modal-abierto {
         padding: 5px 8px;
     }
 }
+
+/* ==========================================================================
+   TARJETA DE UNA PREGUNTA AL RESPONDER
+   ========================================================================== */
+/* Las opciones las arma `window.prepararRespuesta` con innerHTML y fuera de un
+   `.form-group`, así que no les llega el `box-sizing: border-box` de aquella
+   regla: con `width:100%` más su relleno y su borde se comían los 25px de
+   relleno derecho de la tarjeta y quedaban pegadas al borde, con el hueco sólo
+   a la izquierda. Es la misma trampa que ya tenía `.pregunta-wrapper` en la
+   hoja de crear la encuesta. */
+.pregunta-card label,
+.pregunta-card input,
+.pregunta-card textarea {
+    box-sizing: border-box;
+}

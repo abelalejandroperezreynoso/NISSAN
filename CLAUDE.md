@@ -390,6 +390,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   que las pantallas que deciden sobre el usuario actual miran su ficha en
   `window.todosLosEmpleadosData` y no en `usuarioLogueado`, que no trae el
   campo.
+- **Una encuesta se entrega completa.** No se puede enviar dejando preguntas en
+  blanco: `enviarRespuestasEval` reúne lo que falta —lo sin contestar y los
+  motivos sin escribir—, lo dice todo junto en un solo aviso, señala en rojo
+  las tarjetas `.pregunta-card` que faltan y lleva la pantalla a la primera. Ir
+  descubriendo pega a pega en qué pregunta se quedó uno es lo que hace que se
+  abandone a medio llenar.
+
+  A una pregunta sin contestar se le reclama la respuesta y **no** además el
+  motivo: pedir las dos cosas a la vez de la misma pregunta se lee como si
+  fueran dos fallos. Lo que ya estaba guardado a medias se queda como está;
+  esto sólo mira lo que se envía de aquí en adelante.
+
+  `is_obligatory` es otra cosa: dice que la encuesta no se puede dejar sin
+  contestar, no que haya que llenar todas sus preguntas.
 - **Una pregunta con opciones pide además el porqué.** Marcar una casilla no
   dice por qué se marcó, y en una encuesta de seguridad eso es justo lo que hay
   que saber: «no» a secas y «no, porque la máquina estaba en paro» son
@@ -399,10 +413,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   —que ya es texto libre—, `list_match` y `range`, que es una calificación
   numérica y se califica sola al enviarse.
 
-  Se pide **sólo de lo que se contestó**: sin opción marcada no hay nada que
-  explicar, y la encuesta se sigue pudiendo entregar a medias como siempre. Al
-  revés sí se guarda —quien escribe el motivo y olvida marcar no pierde lo
-  escrito—.
+  Se pide **sólo de lo que se contestó**: a lo que aún no tiene opción marcada
+  se le reclama antes la respuesta. Al revés sí se guarda —quien escribe el
+  motivo y olvida marcar no pierde lo escrito—.
 
   Los motivos viajan **dentro de `answers_json`**, bajo la llave reservada
   `window.LLAVE_MOTIVOS` (`__comentarios`), no en una columna nueva: así no hay

@@ -749,7 +749,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         modal.style.cssText = 'display:flex; z-index:999999;';
         
         let headerTitle = title;
-    let subTitle = currentDesc ? currentDesc : "Responde las siguientes preguntas:";
+    let subTitle = currentDesc ? currentDesc : "Responde las siguientes preguntas. Todas son obligatorias.";
     let headerStyle = "color:#1e293b;";
     
     if (window.targetUserForEval) {
@@ -868,7 +868,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                 </div>`;
         }
 
-        container.insertAdjacentHTML('beforeend', `<div style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${q.question_text}</label>${inputHtml}${comentarioHtml}</div>`);
+        container.insertAdjacentHTML('beforeend', `<div id="pregunta-card-${q.id}" class="pregunta-card" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${q.question_text}</label>${inputHtml}${comentarioHtml}</div>`);
     });
 };
 
@@ -949,6 +949,7 @@ window.enviarRespuestasEval = async () => {
 
         const motivos = {};
         const faltanMotivos = [];
+        const faltanRespuestas = [];
 
         window.preguntasCacheActual.forEach((q, indice) => {
             let val = null;
@@ -975,15 +976,18 @@ window.enviarRespuestasEval = async () => {
 
             const contestada = val !== null && val !== "" && !(Array.isArray(val) && val.length === 0);
 
-            // El motivo se pide sólo de lo que sí se contestó: sin opción
-            // marcada no hay nada que explicar, y la encuesta se puede entregar
-            // a medias como siempre.
+            // Una encuesta a medias no dice nada: se contestan todas.
+            if (!contestada) faltanRespuestas.push({ numero: indice + 1, texto: q.question_text || '', id: q.id });
+
+            // El motivo se pide sólo de lo que sí se contestó: a lo que aún no
+            // tiene opción marcada se le pide antes la respuesta, y sería
+            // confuso reclamar las dos cosas a la vez.
             if (window.PREGUNTAS_CON_MOTIVO.includes(q.question_type)) {
                 const campo = document.querySelector(`.resp-comentario[data-id="${q.id}"]`);
                 const motivo = campo ? campo.value.trim() : '';
                 if (contestada) {
                     if (!motivo) {
-                        faltanMotivos.push({ numero: indice + 1, texto: q.question_text || '', campo });
+                        faltanMotivos.push({ numero: indice + 1, texto: q.question_text || '', id: q.id, campo });
                     } else {
                         motivos[q.id] = motivo;
                     }
@@ -1025,11 +1029,38 @@ window.enviarRespuestasEval = async () => {
         const keys = Object.keys(answersMap);
         if (keys.length === 0) throw new Error("No hay preguntas para responder.");
 
-        if (faltanMotivos.length > 0) {
-            const lista = faltanMotivos.map(f => `${f.numero}. ${f.texto}`).join('\n');
-            alert(`Falta explicar por qué en ${faltanMotivos.length === 1 ? 'esta pregunta' : 'estas preguntas'}:\n\n${lista}`);
-            const primero = faltanMotivos[0].campo;
-            if (primero) { primero.scrollIntoView({ behavior: 'smooth', block: 'center' }); primero.focus(); }
+        // Lo que falte se dice todo junto y se señala en el formulario: ir
+        // descubriendo pega a pega en qué pregunta se quedó uno es lo que hace
+        // que se abandone a medio llenar.
+        document.querySelectorAll('.pregunta-card').forEach(c => {
+            c.style.border = '1px solid #e2e8f0';
+            c.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+        });
+
+        if (faltanRespuestas.length > 0 || faltanMotivos.length > 0) {
+            const lista = (titulo, faltas) => faltas.length === 0 ? ''
+                : `${titulo}\n${faltas.map(f => `   ${f.numero}. ${f.texto}`).join('\n')}\n\n`;
+
+            [...faltanRespuestas, ...faltanMotivos].forEach(f => {
+                const card = document.getElementById(`pregunta-card-${f.id}`);
+                if (card) {
+                    card.style.border = '2px solid #ef4444';
+                    card.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.12)';
+                }
+            });
+
+            alert(
+                'Para enviar hay que completar toda la encuesta.\n\n' +
+                lista('Falta contestar:', faltanRespuestas) +
+                lista('Falta explicar por qué:', faltanMotivos)
+            );
+
+            // Al primero que falte, que con diez preguntas no se encuentra solo.
+            const primeroId = (faltanRespuestas[0] || faltanMotivos[0]).id;
+            const card = document.getElementById(`pregunta-card-${primeroId}`);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (faltanRespuestas.length === 0 && faltanMotivos[0].campo) faltanMotivos[0].campo.focus();
+
             if (btn) { btn.disabled = false; btn.innerText = "Enviar Respuestas"; }
             return;
         }
