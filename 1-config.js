@@ -278,6 +278,31 @@ window.esSupervisorDirectoDe = (empleadoId, supervisorId) => {
 // de elementos y no una elección.
 window.PREGUNTAS_CON_MOTIVO = ['multiple', 'checklist', 'range'];
 
+// El tope de una escala. Va aquí porque lo preguntan tres sitios —el
+// formulario al dibujarla, el envío al calificarla y la regla de más abajo— y
+// tres copias del parseo acabarían discrepando. Sin `options` la escala es de 5.
+window.maximoDeEscala = (pregunta) => {
+    let opts = pregunta ? pregunta.options : null;
+    if (typeof opts === 'string') { try { opts = JSON.parse(opts); } catch (e) { opts = null; } }
+    if (Array.isArray(opts) && opts.length >= 2) {
+        const max = parseFloat(opts[1]);
+        if (!isNaN(max)) return max;
+    }
+    return 5;
+};
+
+// El tope de la escala es el «todo bien»: no hay nada que explicar. Cualquier
+// valor por debajo sí, que es donde está el hallazgo. Las demás preguntas con
+// opciones piden el motivo siempre: ahí ninguna respuesta es la buena.
+window.pideMotivo = (pregunta, valor) => {
+    if (!pregunta || !window.PREGUNTAS_CON_MOTIVO.includes(pregunta.question_type)) return false;
+    if (pregunta.question_type !== 'range') return true;
+
+    const numero = parseFloat(valor);
+    if (isNaN(numero)) return true;
+    return numero < window.maximoDeEscala(pregunta);
+};
+
 // Los motivos viajan dentro de `answers_json`, bajo una llave reservada: las
 // demás son ids de pregunta, siempre numéricos, así que no pueden chocar. Se
 // hace así y no con una columna nueva para no obligar a correr otro script en

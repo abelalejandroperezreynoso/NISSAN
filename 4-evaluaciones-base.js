@@ -833,11 +833,12 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             inputHtml = `<div id="recall-list-${q.id}">${listHtml}</div>`;
         }
         else if (q.question_type === 'range') {
-            let min = 0, max = 5, step = 1;
+            let min = 0, step = 1;
+            const max = window.maximoDeEscala(q);
             let opts = q.options;
             if (typeof opts === 'string') { try { opts = JSON.parse(opts); } catch(e) { opts = []; } }
             if (Array.isArray(opts) && opts.length >= 2) {
-                min = parseInt(opts[0]); max = parseInt(opts[1]);
+                min = parseInt(opts[0]);
                 if (opts.length > 2 && (String(opts[2]) === '0.5')) step = 0.5;
             }
             let rangeHtml = '<div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;">';
@@ -847,7 +848,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                 if (rangeLabels[val]) { labelText = `<div style="font-size:0.7rem; color:#64748b; margin-top:4px; max-width:60px; text-align:center; line-height:1.1; word-wrap:break-word;">${rangeLabels[val]}</div>`; }
                 rangeHtml += `
                 <label style="cursor:pointer; display:flex; flex-direction:column; align-items:center;">
-                    <input type="radio" name="range-${q.id}" value="${val}" class="resp-range" data-id="${q.id}" style="display:none;" onchange="updateRangeVisual(this)">
+                    <input type="radio" name="range-${q.id}" value="${val}" class="resp-range" data-id="${q.id}" data-max="${max}" style="display:none;" onchange="updateRangeVisual(this)">
                     <div class="range-circle" style="width:42px; height:42px; border-radius:50%; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; font-weight:bold; color:#64748b; background:white; transition:all 0.2s; font-size:0.85rem;">${val}</div>
                     ${labelText}
                 </label>`;
@@ -865,7 +866,9 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             comentarioHtml = `
                 <div style="margin-top:16px; border-top:1px solid #f1f5f9; padding-top:14px;">
                     <label style="display:block; font-weight:600; color:#475569; margin-bottom:8px; font-size:0.9rem;">
-                        ¿Por qué? <span style="color:#ef4444;">*</span>
+                        ¿Por qué?
+                        <span id="motivo-obligatorio-${q.id}" style="color:#ef4444;">*</span>
+                        <span id="motivo-opcional-${q.id}" style="display:none; color:#94a3b8; font-weight:500;">(opcional)</span>
                     </label>
                     <textarea class="resp-comentario" data-id="${q.id}" placeholder="${q.question_type === 'range' ? 'Explica el motivo de tu calificación...' : 'Explica el motivo de tu respuesta...'}"
                               style="${commonStyle} resize:none; overflow-y:hidden; min-height:70px;"
@@ -884,6 +887,15 @@ window.updateRangeVisual = (input) => {
     });
     const label = input.nextElementSibling;
     label.style.background = '#2563eb'; label.style.color = 'white'; label.style.borderColor = '#2563eb'; label.style.transform = 'scale(1.1)';
+
+    // El tope de la escala es el «todo bien» y no pide explicación; el rótulo
+    // lo dice en cuanto se elige, para no reclamarla al enviar.
+    const qid = input.dataset.id;
+    const esElTope = parseFloat(input.value) >= parseFloat(input.dataset.max);
+    const marcaObligatorio = document.getElementById(`motivo-obligatorio-${qid}`);
+    const marcaOpcional = document.getElementById(`motivo-opcional-${qid}`);
+    if (marcaObligatorio) marcaObligatorio.style.display = esElTope ? 'none' : 'inline';
+    if (marcaOpcional) marcaOpcional.style.display = esElTope ? 'inline' : 'none';
 };
 
 window.cancelarRespuesta = (mode = 'history') => {
@@ -991,9 +1003,9 @@ window.enviarRespuestasEval = async () => {
                 const campo = document.querySelector(`.resp-comentario[data-id="${q.id}"]`);
                 const motivo = campo ? campo.value.trim() : '';
                 if (contestada) {
-                    if (!motivo) {
+                    if (!motivo && window.pideMotivo(q, val)) {
                         faltanMotivos.push({ numero: indice + 1, texto: q.question_text || '', id: q.id, campo });
-                    } else {
+                    } else if (motivo) {
                         motivos[q.id] = motivo;
                     }
                 } else if (motivo) {

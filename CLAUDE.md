@@ -420,6 +420,16 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `boss`— se sigue guardando ya como `'Revisado'`. Su motivo se lee abriendo la
   respuesta.
 
+  **En una escala, el tope no pide explicación.** Es el «todo bien»: no hay
+  hallazgo que contar. Cualquier valor por debajo sí, y ahí está lo que hay que
+  corregir. Lo decide `window.pideMotivo(pregunta, valor)`, que para todo lo
+  que no sea `range` responde siempre que sí —en una pregunta de opciones
+  ninguna respuesta es la buena—. El tope sale de `window.maximoDeEscala()`,
+  que también usan el formulario al dibujar los círculos y el envío al
+  calificar: tres copias del parseo de `options` acabarían discrepando. El
+  rótulo lo dice en cuanto se elige, con el asterisco o un «(opcional)», para
+  no reclamar al enviar algo que no hacía falta.
+
   Se pide **sólo de lo que se contestó**: a lo que aún no tiene opción marcada
   se le reclama antes la respuesta. Al revés sí se guarda —quien escribe el
   motivo y olvida marcar no pierde lo escrito—.
