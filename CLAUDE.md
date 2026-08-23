@@ -286,6 +286,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   botón del ojo alterna `type` entre `password` y `text` y cuenta lo que hace
   en su `aria-label` y su `title`, que es lo que le queda a un botón sin
   texto.
+
+  **El modo encendido viaja entre pantallas**, y por eso sólo se pide la
+  contraseña una vez: las tres páginas son documentos distintos y al saltar de
+  una a otra `window.modoAdminActivo` volvería a false —el mapa de activos ni
+  siquiera pide la contraseña en ningún sitio—. Se sostiene en `sessionStorage`,
+  que dura lo que la pestaña y no sobrevive a cerrar la aplicación.
+
+  ```js
+  window.sostenerModoAdmin(true)   // enciende y deja la marca
+  window.sostenerModoAdmin(false)  // apaga y la quita
+  window.modoAdminSostenido()      // lo que dejó puesto la pantalla anterior
+  ```
+
+  **Nadie toca `sessionStorage.adminSostenido` a mano**: encender por un lado y
+  no apagar por el otro es exactamente lo que pasaba antes —refacciones apagaba
+  el modo sin quitar la marca, y al volver al panel principal seguías siendo
+  administrador—. Cada documento lee el estado al cargar (`index.html` en
+  `2b-core-dashboard.js`, que deja las visuales a `mostrarDashboard`) y cerrar
+  sesión lo apaga.
 - **El `id_interno` identifica al equipo y el nombre va pegado a él.** La
   misma máquina suele estar dada de alta varias veces en `equipos`, una fila
   por línea, todas con el mismo `id_interno`. La base no tiene restricción de
@@ -364,9 +383,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Los encargos del usuario **no se leen de `usuarioLogueado`**: la sesión dura
   treinta días y un encargo asignado después no aparecería ahí. El panel los
   saca de su caché de empleados y se los pasa al helper; el mapa, que no tiene
-  esa caché, deja que el helper los consulte. El modo administrador es aparte y
-  viaja en `sessionStorage.adminSostenido`, así que sigue valiendo al pasar de
-  una pantalla a la otra.
+  esa caché, deja que el helper los consulte. El modo administrador es aparte:
+  viaja en `sessionStorage` y sigue valiendo al pasar de una pantalla a la
+  otra (ver más arriba).
 - **Certificar es de una persona y de un periodo.** Certificar quiere decir dar
   fe de que las respuestas de alguien son verídicas, así que la unidad es
   **clasificación × empleado × periodo**. Sin el periodo, el sello de enero

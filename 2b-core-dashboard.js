@@ -4,9 +4,12 @@
 // ==========================================
 
 // ==========================================
-// AUTO-RESTAURAR MODO ADMIN AL SIMULAR SESIÓN
+// AUTO-RESTAURAR EL MODO ADMINISTRADOR
 // ==========================================
-if (sessionStorage.getItem('adminSostenido') === 'true') {
+// Lo que dejó puesto la pantalla anterior —o esta misma antes de simular la
+// sesión de alguien—. Las visuales las aplica `mostrarDashboard`, que mira
+// `modoAdminActivo`.
+if (window.modoAdminSostenido()) {
     window.modoAdminActivo = true;
 }
 
@@ -1379,7 +1382,7 @@ window.iniciarSesionComo = (empId) => {
         };
         
         localStorage.setItem("usuarioLogueado", JSON.stringify(userObj));
-        sessionStorage.setItem("adminSostenido", "true");
+        window.sostenerModoAdmin(true);
         
         setTimeout(() => {
             location.reload();

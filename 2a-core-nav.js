@@ -248,8 +248,7 @@ document.getElementById('app-title').onclick = () => {
     const adminToolbar = document.getElementById('admin-toolbar');
 
     if(window.modoAdminActivo) {
-        window.modoAdminActivo = false;
-        sessionStorage.removeItem('adminSostenido'); // <-- LÍNEA AGREGADA
+        window.sostenerModoAdmin(false);
         if(adminToolbar) adminToolbar.style.display = 'none';
         window.cerrarPanelAdmin();
         titleElem.style.color = '';
@@ -258,7 +257,7 @@ document.getElementById('app-title').onclick = () => {
     }
 
     window.abrirClaveAdmin(() => {
-        window.modoAdminActivo = true;
+        window.sostenerModoAdmin(true);
         if(adminToolbar) adminToolbar.style.display = 'flex';
         titleElem.style.color = '#d32f2f';
         const btnAhorro = document.getElementById('btn-toggle-ahorro');
@@ -302,7 +301,7 @@ window.cerrarSesionForzada = (mensaje) => {
     alert(mensaje);
     localStorage.removeItem("usuarioLogueado");
     localStorage.removeItem("loginTimestamp");
-    sessionStorage.removeItem("adminSostenido");
+    window.sostenerModoAdmin(false);
     location.reload();
 };
 
@@ -369,8 +368,7 @@ if(btnLoginAction) {
 document.getElementById('btn-logout').onclick = () => {
     localStorage.removeItem("usuarioLogueado");
     localStorage.removeItem("loginTimestamp"); // Limpiamos también el timestamp al salir manualmente
-    window.modoAdminActivo = false;
-    sessionStorage.removeItem("adminSostenido");
+    window.sostenerModoAdmin(false);
     window.invalidarCacheDashboard();
     location.reload();
 };

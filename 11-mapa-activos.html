@@ -797,7 +797,7 @@
                 try {
                     encargosAutorizados = await window.encargosAutorizadosRefacciones();
                     miFicha = fichaDeLaSesion();
-                    puedoAdministrar = sessionStorage.getItem("adminSostenido") === 'true' ||
+                    puedoAdministrar = window.modoAdminSostenido() ||
                         (miFicha ? atiendeRefacciones(miFicha) : false);
                 } catch (e) {
                     console.error("No se pudo comprobar el permiso de refacciones:", e);

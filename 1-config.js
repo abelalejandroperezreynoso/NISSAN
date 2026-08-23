@@ -913,6 +913,29 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
 })();
 
 // ==========================================
+// EL MODO ADMINISTRADOR VIAJA ENTRE PANTALLAS
+// ==========================================
+// `index.html`, `10-refacciones.html` y `11-mapa-activos.html` son tres
+// documentos distintos: al pasar de uno a otro se recarga todo y
+// `window.modoAdminActivo` vuelve a false. Quien lo encendió tendría que
+// volver a teclear la contraseña en cada salto, y de hecho no podía: el mapa
+// no la pide en ningún sitio.
+//
+// Por eso el modo se sostiene en `sessionStorage`, que dura lo que la pestaña
+// y no sobrevive a cerrar la aplicación. Se enciende y se apaga siempre por
+// aquí para que no se quede un lado sin el otro: apagarlo en refacciones
+// dejaba la marca puesta y al volver al panel principal seguías de
+// administrador.
+window.sostenerModoAdmin = (activo) => {
+    window.modoAdminActivo = !!activo;
+    if (activo) sessionStorage.setItem('adminSostenido', 'true');
+    else sessionStorage.removeItem('adminSostenido');
+};
+
+// Lo que dejó puesto la pantalla anterior. Se lee al cargar cada documento.
+window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === 'true';
+
+// ==========================================
 // CONTRASEÑA DEL MODO ADMINISTRADOR
 // ==========================================
 // La misma hoja para las dos pantallas que encienden el modo administrador.

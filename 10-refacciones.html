@@ -4248,12 +4248,12 @@
             if(tituloAdmin) {
                 tituloAdmin.onclick = () => {
                     if(window.modoAdminActivo) {
-                        window.modoAdminActivo = false;
+                        window.sostenerModoAdmin(false);
                         tituloAdmin.style.color = '#0f172a';
                         window.abrirStatsRefacciones();
                     } else {
                         window.abrirClaveAdmin(() => {
-                            window.modoAdminActivo = true;
+                            window.sostenerModoAdmin(true);
                             tituloAdmin.style.color = '#d32f2f';
                             window.abrirStatsRefacciones();
                         });
@@ -4261,7 +4261,7 @@
                 };
             }
 
-            window.modoAdminActivo = sessionStorage.getItem("adminSostenido") === 'true';
+            window.modoAdminActivo = window.modoAdminSostenido();
             if (window.modoAdminActivo && tituloAdmin) {
                 tituloAdmin.style.color = '#d32f2f';
             }
