@@ -564,6 +564,9 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         if (freqWeight[f] > freqWeight[maxFreq]) maxFreq = f;
 
         evalMap[e.id] = {
+            // La fila entera, para las reglas que necesitan `mode`,
+            // `target_employees` y demás campos que este resumen no copia.
+            encuesta: e,
             title: e.title,
             category: e.category || "General",
             targets: targets,
@@ -634,7 +637,6 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         if (e.isActive === false) return; // <-- NUEVO: Excluir inactivos del universo asignado
         const dept = getDept(e);
         const sup = getSup(e);
-        const empPuesto = (e.puesto || e.Puesto || "").trim();
         const empId = String(e.id);
 
         // NUEVO: Agregado contador "certificadas", "malRevisadas" y "revisadasAltas"
@@ -644,8 +646,6 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         statsCache[dept].employeesCount++;
         statsCache[dept].supervisors[sup].employeesCount++;
 
-        const empPuestoNorm = empPuesto.toUpperCase();
-        const empDeptoNorm = dept.toUpperCase();
         let empAssignments = 0;
 
         const empPuestoKey = getPuesto(e);
@@ -686,10 +686,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             const empObj = window.todosLosEmpleadosData.find(e => String(e.id) === String(r.employee_id));
             if (!empObj || empObj.isActive === false) return; // Ignoramos si no existe o está inactivo
 
-            const empPuestoNorm = getPuesto(empObj).toUpperCase();
-            const empDeptoNorm = getDept(empObj).toUpperCase();
-            
-            if (!window.leTocaEstaEncuesta(ev, empObj, window.tieneEquipoDirecto(empObj.id))) {
+            if (!window.leTocaEstaEncuesta(info.encuesta, empObj, window.tieneEquipoDirecto(empObj.id))) {
                 return; // ⛔ Contestó, pero la encuesta no iba dirigida a esta persona. Se ignora.
             }
             // -------------------------------------------------------------------
@@ -1320,24 +1317,7 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
     window.todosLosEmpleadosData.forEach(e => {
         if (e.isActive === false) return; // <-- NUEVO: Doble filtro por seguridad
         if (!validEmpIds.has(String(e.id))) return;
-        const empPuestoNorm = (e.puesto || e.Puesto || "").trim().toUpperCase();
-        const empDeptoNorm = getDept(e).toUpperCase();
-        
         cache.activeEvalsList.forEach(ev => {
-             let targets = ['ALL'];
-             if (ev.target_positions) {
-                 if (Array.isArray(ev.target_positions)) targets = ev.target_positions;
-                 else if (typeof ev.target_positions === 'string') {
-                     try { targets = JSON.parse(ev.target_positions); } catch(err) { targets = ['ALL']; }
-                 }
-             }
-             let targetDeptos = ['ALL'];
-             if (ev.target_departments) {
-                 if (Array.isArray(ev.target_departments)) targetDeptos = ev.target_departments;
-                 else if (typeof ev.target_departments === 'string') {
-                     try { targetDeptos = JSON.parse(ev.target_departments); } catch(err) { targetDeptos = ['ALL']; }
-                 }
-             }
              if (window.leTocaEstaEncuesta(ev, e, window.tieneEquipoDirecto(e.id))) {
                  const radarKey = currentFilter === 'GLOBAL' ? (ev.category || 'General') : ev.title;
                  if (!assignedMap[radarKey]) assignedMap[radarKey] = new Set();
@@ -2113,29 +2093,12 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
     const subordinates = allEmps.filter(e => e.isActive !== false && getDept(e) === deptName && getSup(e) === supName);
 
     let empStats = subordinates.map(emp => {
-        const empPuesto = (emp.puesto || emp.Puesto || "").trim();
-        const empPuestoNorm = empPuesto.toUpperCase();
-        const empDeptoNorm = getDept(emp).toUpperCase();
-
         let totalAssigned = 0;
         let obligatoryAssigned = 0;
         let obligatoryCompleted = 0;
         const tieneEquipoEsteEmp = window.tieneEquipoDirecto(emp.id);
 
         activeEvals.forEach(ev => {
-            let targets = ['ALL'];
-            if (ev.target_positions) {
-                 if(Array.isArray(ev.target_positions)) targets=ev.target_positions;
-                 else if(typeof ev.target_positions==='string') try{targets=JSON.parse(ev.target_positions)}catch(e){}
-            }
-            let targetDeptos = ['ALL'];
-            if (ev.target_departments) {
-                 if (Array.isArray(ev.target_departments)) targetDeptos = ev.target_departments;
-                 else if (typeof ev.target_departments === 'string') {
-                     try { targetDeptos = JSON.parse(ev.target_departments); } catch(err) { targetDeptos = ['ALL']; }
-                 }
-            }
-            
             const isObligatory = (ev.is_obligatory !== false);
 
             if (window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp)) {
@@ -2264,26 +2227,12 @@ window.verStatsDetallePuesto = (puestoName) => {
     const employeesInRole = allEmps.filter(e => e.isActive !== false && getPuesto(e) === puestoName);
 
     let empStats = employeesInRole.map(emp => {
-        const empPuestoNorm = puestoName.toUpperCase();
-        const empDeptoNorm = getDept(emp).toUpperCase();
-        
         let totalAssigned = 0;
         let obligatoryAssigned = 0;
         let obligatoryCompleted = 0;
         const tieneEquipoEsteEmp = window.tieneEquipoDirecto(emp.id);
 
         activeEvals.forEach(ev => {
-            let targets = ['ALL'];
-            if (ev.target_positions) {
-                 if(Array.isArray(ev.target_positions)) targets=ev.target_positions;
-                 else if(typeof ev.target_positions==='string') try{targets=JSON.parse(ev.target_positions)}catch(e){}
-            }
-            let targetDeptos = ['ALL'];
-            if (ev.target_departments) {
-                 if(Array.isArray(ev.target_departments)) targetDeptos=ev.target_departments;
-                 else if(typeof ev.target_departments==='string') try{targetDeptos=JSON.parse(ev.target_departments)}catch(e){}
-            }
-            
             const isObligatory = (ev.is_obligatory !== false);
 
             if (window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp)) {
