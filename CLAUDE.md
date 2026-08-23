@@ -390,6 +390,36 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   que las pantallas que deciden sobre el usuario actual miran su ficha en
   `window.todosLosEmpleadosData` y no en `usuarioLogueado`, que no trae el
   campo.
+- **Una evaluación por área lleva foto, y la foto se encoge antes de subir.**
+  Las encuestas con `evaluates_area` piden una fotografía del área que se está
+  evaluando: sin ella la evaluación es la palabra de quien la llenó contra
+  nada. Es obligatoria y el envío se planta igual que con el área.
+
+  La cuenta de Supabase es gratuita y una foto de teléfono son varios MB, así
+  que **ninguna se sube tal cual**: `window.optimizarImagen(file, { maxLado,
+  maxBytes })` en `1-config.js` la reescala por su lado más largo y la comprime
+  —WebP, y JPEG si el navegador no lo da— hasta caber. Las de evaluación van a
+  `window.MAX_LADO_FOTO_EVAL` (600px) y 300 KB de tope; medido con una imagen
+  de ruido de 2400×1800 y 4.2 MB, que es el peor caso posible para comprimir,
+  salen 600×450 y 66 KB. El ayudante estaba en `10-refacciones.html` y se mudó
+  aquí en cuanto lo necesitaron dos documentos.
+
+  Se encoge **al elegirla, no al enviar**: así se ve el tamaño real de lo que
+  se va a subir y el envío no se queda pensando. El blob espera en
+  `window.fotoAreaLista`.
+
+  Se sube **después** de validar toda la encuesta, o cada arrepentimiento
+  dejaría un archivo huérfano en el bucket. La URL se guarda dentro de
+  `answers_json`, bajo `window.LLAVE_FOTO_AREA` (`__foto_area`), igual que los
+  motivos y por lo mismo: así no hay columna nueva que crear. Lo que sí hace
+  falta es el bucket `fotos-evaluaciones`, y su script está en
+  `sql/fotos-evaluaciones.sql`; sin correrlo la foto se toma y se encoge igual
+  pero el envío avisa de que falta. Ese script no da permiso de borrado a
+  propósito.
+
+  El campo se abre con un `<label for>` y no con un `.click()` sobre el input
+  escondido: en iOS ese click programático es indistinguible del toque fantasma
+  de las ruedas (ver más arriba).
 - **Una encuesta se entrega completa.** No se puede enviar dejando preguntas en
   blanco: `enviarRespuestasEval` reúne lo que falta —lo sin contestar y los
   motivos sin escribir—, lo dice todo junto en un solo aviso, señala en rojo

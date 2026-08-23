@@ -517,6 +517,17 @@ window.verDetalleRespuesta = async (resp) => {
             badgeCalificacionHtml = `<span style="background:#f1f5f9; color:#64748b; border: 1px solid #cbd5e1; padding:4px 12px; border-radius:12px; font-size:0.85rem; font-weight:bold; white-space:nowrap;">Calificando...</span>`;
         }
 
+        // La foto del área, cuando la encuesta la pidió. Va arriba del todo: es
+        // el contexto con el que se leen las respuestas de abajo.
+        const urlFoto = window.fotoDeArea(resp);
+        const fotoAreaHtml = urlFoto ? `
+                <div style="margin-bottom:20px; background:white; border:1px solid #e2e8f0; border-radius:12px; padding:12px;">
+                    <div style="font-size:0.8rem; font-weight:700; color:#be185d; margin-bottom:8px;">📷 Fotografía del área</div>
+                    <img src="${window.sanitizeForHTML(urlFoto)}" alt="Fotografía del área"
+                         onclick="window.abrirVisorImagen('${window.sanitizeForHTML(urlFoto)}')"
+                         style="width:100%; border-radius:10px; display:block; cursor:pointer;" title="Toca para ampliar">
+                </div>` : '';
+
         modal.innerHTML = `
             <div class="hoja-contenido" style="max-width:900px; background:#f8fafc; overflow:hidden; padding:12px 0 0;">
             <div class="hoja-encabezado-lista">
@@ -533,6 +544,7 @@ window.verDetalleRespuesta = async (resp) => {
                 <div style="margin-bottom:20px;">
                     ${dateInputHtml}
                 </div>
+                ${fotoAreaHtml}
                 ${descHtml}
                 <div id="responder-questions-list"></div>
                 ${saveButton}${invalidarButton}${deleteButton}

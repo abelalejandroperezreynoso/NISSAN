@@ -781,6 +781,16 @@ window.abrirVisor = async (incidentId) => {
     });
 };
 
+// El visor de arriba busca las imágenes de un incidente; a veces sólo hay una
+// url y nada que consultar —la foto del área de una evaluación—.
+window.abrirVisorImagen = (url) => {
+    const modal = document.getElementById('modal-visor');
+    const content = document.getElementById('visor-content');
+    if (!modal || !content || !url) return;
+    modal.style.display = 'block';
+    content.innerHTML = `<div class="visor-image-wrapper"><img src="${url}" class="visor-img-item"></div>`;
+};
+
 document.getElementById('txt-cerrar').onclick = () => document.getElementById('modal-visor').style.display = 'none';
 if(document.getElementById('btn-mas')) document.getElementById('btn-mas').onclick = () => window.cargarIncidentes();
 

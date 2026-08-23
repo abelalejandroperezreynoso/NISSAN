@@ -262,6 +262,101 @@ window.esSupervisorDirectoDe = (empleadoId, supervisorId) => {
 };
 
 // ==========================================
+// FOTOGRAFÍAS: ENCOGER ANTES DE SUBIR
+// ==========================================
+// La cuenta de Supabase es gratuita y una foto de teléfono pesa varios MB, así
+// que ninguna se sube tal cual: se reescala por su lado más largo y se comprime
+// hasta caber en el tope de bytes. Vive aquí porque la usan el panel de
+// refacciones y el de evaluaciones, que son documentos distintos y no comparten
+// más JavaScript que este archivo.
+//
+//     await window.optimizarImagen(file)                       // 800px, 1 MB
+//     await window.optimizarImagen(file, { maxLado: 600, maxBytes: 300 * 1024 })
+//
+// WebP primero, que pesa la mitad; si el navegador no lo da —iOS viejo— cae a
+// JPEG. Si aun a calidad mínima no cabe, falla en vez de subir un archivo
+// enorme a espaldas de quien lo mandó.
+window.optimizarImagen = async (file, opciones) => {
+    const { maxLado = 800, maxBytes = 1048576 } = opciones || {};
+
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                // Se limita el lado más largo, sea el ancho o el alto.
+                let escala = 1;
+                if (img.width > maxLado || img.height > maxLado) {
+                    escala = maxLado / Math.max(img.width, img.height);
+                }
+
+                let ancho = img.width * escala;
+                let alto = img.height * escala;
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                let calidad = 0.7;
+
+                const intentarCompresion = (w, h, q, formato) => new Promise(res => {
+                    canvas.width = w;
+                    canvas.height = h;
+                    ctx.clearRect(0, 0, w, h);
+                    ctx.drawImage(img, 0, 0, w, h);
+                    canvas.toBlob(b => res(b), formato, q);
+                });
+
+                const procesar = async () => {
+                    let formato = 'image/webp';
+                    let blob = await intentarCompresion(ancho, alto, calidad, formato);
+
+                    // Fallback a JPEG si WebP falla en iOS
+                    if (!blob) {
+                        formato = 'image/jpeg';
+                        blob = await intentarCompresion(ancho, alto, calidad, formato);
+                    }
+
+                    if (!blob) return reject(new Error("Tu navegador no permitió procesar la imagen."));
+
+                    // Si no cabe, se baja calidad y medidas a la vez.
+                    while (blob.size > maxBytes && calidad > 0.1) {
+                        calidad = Math.max(0.1, calidad - 0.15);
+                        ancho *= 0.8;
+                        alto *= 0.8;
+                        blob = await intentarCompresion(ancho, alto, calidad, formato);
+                    }
+
+                    if (blob.size > maxBytes) {
+                        return reject(new Error(`No se pudo comprimir lo suficiente. Tamaño final: ${(blob.size / 1024).toFixed(0)} KB.`));
+                    }
+
+                    resolve(blob);
+                };
+
+                procesar();
+            };
+            img.onerror = () => reject(new Error("El formato del archivo no es soportado."));
+            img.src = e.target.result;
+        };
+
+        reader.onerror = () => reject(new Error("Hubo un problema al leer el archivo en tu dispositivo."));
+        reader.readAsDataURL(file);
+    });
+};
+
+// La foto del área que se evalúa. Viaja donde los motivos, dentro de
+// `answers_json` y bajo su propia llave reservada, para no obligar a correr
+// otro script en la base; lo que sí hace falta es el bucket.
+window.LLAVE_FOTO_AREA = '__foto_area';
+window.BUCKET_FOTOS_EVAL = 'fotos-evaluaciones';
+window.MAX_LADO_FOTO_EVAL = 600;
+
+window.fotoDeArea = (respuesta) => {
+    const url = respuesta && respuesta.answers_json ? respuesta.answers_json[window.LLAVE_FOTO_AREA] : null;
+    return typeof url === 'string' && url ? url : '';
+};
+
+// ==========================================
 // EL MOTIVO DE UNA RESPUESTA CON OPCIONES
 // ==========================================
 // Marcar una opción no dice por qué se marcó, y en una encuesta de seguridad

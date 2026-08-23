@@ -4368,92 +4368,9 @@
         };
         
         
-        window.optimizarImagen = async (file) => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        // 1. Limitar basándonos en el lado más largo (ancho o alto)
-                        const MAX_DIMENSION = 800;
-                        let scaleSize = 1;
-                        
-                        if (img.width > MAX_DIMENSION || img.height > MAX_DIMENSION) {
-                            if (img.width > img.height) {
-                                scaleSize = MAX_DIMENSION / img.width;
-                            } else {
-                                scaleSize = MAX_DIMENSION / img.height;
-                            }
-                        }
-                        
-                        let currentWidth = img.width * scaleSize;
-                        let currentHeight = img.height * scaleSize;
-                        
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        
-                        let quality = 0.7; // Calidad inicial
-                        const MAX_BYTES = 1048576; // 1 MB exacto
+        // `window.optimizarImagen` vive en `1-config.js`: la comparten esta
+        // pantalla y la de evaluaciones, que son documentos distintos.
 
-                        // Función auxiliar para redibujar y comprimir
-                        const intentarCompresion = (w, h, q, formato) => {
-                            return new Promise(res => {
-                                canvas.width = w;
-                                canvas.height = h;
-                                ctx.clearRect(0, 0, w, h);
-                                ctx.drawImage(img, 0, 0, w, h);
-                                canvas.toBlob(b => res(b), formato, q);
-                            });
-                        };
-
-                        const procesar = async () => {
-                            let formato = 'image/webp';
-                            let blob = await intentarCompresion(currentWidth, currentHeight, quality, formato);
-
-                            // Fallback a JPEG si WebP falla en iOS
-                            if (!blob) {
-                                formato = 'image/jpeg';
-                                blob = await intentarCompresion(currentWidth, currentHeight, quality, formato);
-                            }
-
-                            if (!blob) {
-                                return reject(new Error("Tu navegador no permitió procesar la imagen."));
-                            }
-
-                            // 2. Ciclo de compresión extrema: bajamos calidad Y dimensiones
-                            while (blob.size > MAX_BYTES && quality > 0.1) {
-                                quality -= 0.15; // Bajamos calidad rápidamente
-                                
-                                // Reducimos la resolución un 20% en cada intento
-                                currentWidth *= 0.8;
-                                currentHeight *= 0.8;
-                                
-                                if (quality < 0.1) quality = 0.1; // Límite para que no quede irreconocible
-
-                                blob = await intentarCompresion(currentWidth, currentHeight, quality, formato);
-                            }
-
-                            if (blob.size > MAX_BYTES) {
-                                return reject(new Error(`No se pudo comprimir lo suficiente. Tamaño final: ${(blob.size / 1024 / 1024).toFixed(2)} MB.`));
-                            }
-
-                            resolve(blob);
-                        };
-
-                        procesar();
-                    };
-                    img.onerror = () => reject(new Error("El formato del archivo no es soportado."));
-                    img.src = e.target.result;
-                };
-                
-                reader.onerror = () => reject(new Error("Hubo un problema al leer el archivo en tu dispositivo."));
-                reader.readAsDataURL(file);
-            });
-        };
-        
-        
-        
     </script>
     
 
