@@ -38,16 +38,6 @@ window.esSupervisorDe = (empleadoId) => {
     return miEstructura.has(String(empleadoId));
 };
 
-// --- HELPER 3: GENERAR COLOR POR STRING (HASH) ---
-window.getColorByString = (str) => {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-    return '#' + '00000'.substring(0, 6 - c.length) + c;
-};
-
 // --- HELPER 4: CALCULAR SCORE ---
 window.calcularScoreRespuesta = (r) => {
     const grades = r.grades_json || {};
@@ -262,13 +252,12 @@ window.cargarVistaEvaluaciones = async () => {
     const misDirectos = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id));
     const tengoEquipo = misDirectos.length > 0;
 
-    let evals = [], misRespuestas = [], teamResponses = [], allPending = [];
+    let evals = [], misRespuestas = [], allPending = [];
 
     if (window.evalCache) {
         evals = window.evalCache.evals;
         misRespuestas = window.evalCache.misRespuestas;
         allPending = window.evalCache.allPending;
-        teamResponses = window.evalCache.teamResponses || misRespuestas;
     } else {
         // Se traen también las inactivas: la lista las esconde más abajo a
         // quien no esté en modo administrador. Filtrar aquí dejaría la caché
@@ -284,26 +273,16 @@ window.cargarVistaEvaluaciones = async () => {
         }
         evals = eData;
 
-        const hierarchyIds = window.obtenerJerarquiaCompletaEvaluaciones(user.id);
-        const idsArray = Array.from(hierarchyIds);
+        // Sólo las propias. Antes se traía las de toda la jerarquía porque la
+        // cronología dibujaba una línea por cada persona del equipo; quitado el
+        // gráfico, esas filas se descartaban acto seguido y en una estructura
+        // grande eran casi toda la descarga de abrir la pantalla.
+        const { data: rData } = await sb.from('evaluation_responses')
+            .select('evaluation_id, review_status, grades_json, submitted_at, employee_id')
+            .eq('employee_id', user.id)
+            .order('submitted_at', { ascending: false });
 
-        let rData = [];
-        if (idsArray.length > 0) {
-             const { data } = await sb.from('evaluation_responses')
-                .select('evaluation_id, review_status, grades_json, submitted_at, employee_id')
-                .in('employee_id', idsArray)
-                .order('submitted_at', { ascending: false });
-             rData = data || [];
-        } else {
-             const { data } = await sb.from('evaluation_responses')
-                .select('evaluation_id, review_status, grades_json, submitted_at, employee_id')
-                .eq('employee_id', user.id)
-                .order('submitted_at', { ascending: false });
-             rData = data || [];
-        }
-
-        misRespuestas = rData.filter(r => String(r.employee_id) === String(user.id));
-        teamResponses = rData;
+        misRespuestas = rData || [];
 
         const { data: pData } = await sb.from('evaluation_responses')
             .select('evaluation_id, employee_id, review_status');
@@ -315,7 +294,7 @@ window.cargarVistaEvaluaciones = async () => {
             item.review_status !== 'Falsa'
         );
 
-        window.evalCache = { evals, misRespuestas, allPending, teamResponses };
+        window.evalCache = { evals, misRespuestas, allPending };
     }
 
     // Cuántas respuestas espera calificar cada encuesta. Quién califica qué lo
@@ -363,23 +342,6 @@ window.cargarVistaEvaluaciones = async () => {
         </div>
     `);
     
-    if (teamResponses && teamResponses.length > 0) {
-        const tituloGrafico = (misRespuestas.length === teamResponses.length) ? "📈 Mi Historial de Desempeño" : "📈 Desempeño: Mi Equipo y Yo";
-        
-        container.insertAdjacentHTML('beforeend', `
-            <div id="global-timeline-wrapper" style="margin-bottom:25px; background:white; padding:15px; border-radius:16px; border:1px solid #e2e8f0; box-shadow:0 2px 4px rgba(0,0,0,0.02); animation: fadeIn 0.5s;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <h3 style="margin:0; color:#334155; font-size:0.9rem; font-weight:700;">${tituloGrafico}</h3>
-                    <span style="font-size:0.7rem; color:#94a3b8;">Cronología General</span>
-                </div>
-                <div style="position: relative; height:220px; width:100%;">
-                    <canvas id="global-timeline-chart"></canvas>
-                </div>
-            </div>
-        `);
-        setTimeout(() => window.renderizarCronologiaGlobal(teamResponses, evals), 100);
-    }
-
     // Las encuestas inactivas sólo se listan en modo administrador. La
     // cronología de arriba sí recibe la lista completa: sirve para saber de
     // qué clasificación era cada respuesta ya contestada, y apagar una
@@ -533,134 +495,7 @@ window.cargarVistaEvaluaciones = async () => {
     });
 };
 
-window.renderizarCronologiaGlobal = (respuestas, evaluaciones) => {
-    const ctx = document.getElementById('global-timeline-chart');
-    if (!ctx) return;
-    
-    if (window.globalTimelineChart) window.globalTimelineChart.destroy();
-
-    // 1. Mapear qué categoría tiene cada evaluación
-    const evalCatMap = {};
-    evaluaciones.forEach(e => {
-        evalCatMap[e.id] = e.category || 'General';
-    });
-
-    // 2. Ordenar TODAS las respuestas cronológicamente (de la más vieja a la más nueva)
-    const validResponses = respuestas
-        .filter(r => r.review_status === 'Revisado')
-        .sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
-
-    // 3. Estructuras para la "Memoria Viva" (Running State)
-    const categoryState = {};      // Guarda el último puntaje de cada empleado por categoría
-    const categoryDataPoints = {}; // Guarda los puntos a graficar por categoría
-
-    validResponses.forEach(r => {
-        const cat = evalCatMap[r.evaluation_id] || 'General';
-        const dateObj = new Date(r.submitted_at);
-        dateObj.setHours(12, 0, 0, 0); // Estandarizamos al mediodía para evitar duplicados en el mismo día
-        const timestamp = dateObj.getTime();
-        const dateLabel = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
-
-        const score = window.calcularScoreRespuesta(r);
-
-        // Inicializar estructuras si no existen para esta categoría
-        if (!categoryState[cat]) categoryState[cat] = {};
-        if (!categoryDataPoints[cat]) categoryDataPoints[cat] = [];
-
-        // ACTUALIZACIÓN CLAVE: Sobrescribimos la calificación del usuario con su último intento
-        categoryState[cat][r.employee_id] = score;
-
-        // Calculamos el promedio actual tomando el último puntaje de TODOS los que han participado hasta ahora
-        const scoresActuales = Object.values(categoryState[cat]);
-        const sumatoria = scoresActuales.reduce((sum, val) => sum + val, 0);
-        const promedioEquipo = Math.round(sumatoria / scoresActuales.length);
-
-        // Buscar si ya insertamos un punto HOY para esta categoría
-        const arrPuntos = categoryDataPoints[cat];
-        const lastPoint = arrPuntos[arrPuntos.length - 1];
-
-        if (lastPoint && lastPoint.x === timestamp) {
-            // Si el mismo día hubo varios intentos, actualizamos el promedio del día
-            lastPoint.y = promedioEquipo;
-            lastPoint.miembrosActivos = scoresActuales.length;
-        } else {
-            // Si es un día nuevo, creamos un nuevo punto en la gráfica
-            arrPuntos.push({
-                x: timestamp,
-                y: promedioEquipo,
-                dateLabel: dateLabel,
-                miembrosActivos: scoresActuales.length
-            });
-        }
-    });
-
-    // 4. Crear los datasets (las líneas) para Chart.js
-    const datasets = [];
-    Object.keys(categoryDataPoints).forEach(cat => {
-        const puntos = categoryDataPoints[cat];
-        if (puntos.length === 0) return;
-
-        const color = window.getColorByString(cat);
-        datasets.push({
-            label: cat,
-            data: puntos,
-            backgroundColor: color,
-            borderColor: color,
-            pointRadius: 2,
-            pointHoverRadius: 4,
-            borderWidth: 2,
-            showLine: true,
-            tension: 0.3
-        });
-    });
-
-    if (datasets.length === 0) {
-        document.getElementById('global-timeline-wrapper').style.display = 'none';
-        return;
-    }
-    
-    document.getElementById('global-timeline-wrapper').style.display = 'block';
-
-    // 5. Renderizar el Chart
-    window.globalTimelineChart = new Chart(ctx, {
-        type: 'scatter',
-        data: { datasets: datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { 
-                    display: true,
-                    position: 'bottom',
-                    labels: { usePointStyle: true, boxWidth: 8, font: { size: 10 } }
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
-                    titleColor: '#e2e8f0',
-                    bodyColor: '#cbd5e1',
-                    padding: 10,
-                    cornerRadius: 8,
-                    callbacks: {
-                        label: function(context) {
-                            return `${context.dataset.label}: ${context.parsed.y}%`;
-                        },
-                        afterLabel: function(context) {
-                            const p = context.raw;
-                            return `📅 ${p.dateLabel}\n👥 Promedio de ${p.miembrosActivos} miembro(s)`;
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: { beginAtZero: true, max: 105, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 } } },
-                x: {
-                    type: 'linear', position: 'bottom', grid: { display: false },
-                    ticks: { callback: function(value) { return new Date(value).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }); }, maxRotation: 45, minRotation: 0, autoSkip: true, maxTicksLimit: 6, font: { size: 10 } }
-                }
-            }
-        }
-    });
-};window.abrirSeleccionSubordinado = (evalId, title, mode) => {
+window.abrirSeleccionSubordinado = (evalId, title, mode) => {
     const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
     let subs = [];
 
