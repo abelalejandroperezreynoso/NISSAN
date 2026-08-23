@@ -154,15 +154,6 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             ${infoHtml}
         
         ${bannerHtml} <div id="stats-dashboard" style="display:none; margin-top:20px;"></div>
-        <div id="timeline-wrapper" style="margin-top:20px; background:white; padding:15px; border-radius:12px; border:1px solid #e2e8f0; display:none; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h3 style="margin:0; color:#334155; font-size:1rem; display:flex; align-items:center; gap:6px;">📅 Cronología de Participación</h3>
-                <span style="font-size:0.7rem; color:#94a3b8;">Fecha vs Calificación</span>
-            </div>
-            <div style="position: relative; height:250px; width:100%;">
-                <canvas id="timeline-chart"></canvas>
-            </div>
-        </div>
         <div id="lista-wrapper">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom: 10px; flex-wrap:wrap; gap:10px;">
                 <h3 style="color:#64748b; font-size:1rem; margin:0;">
@@ -175,7 +166,6 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     `;
     
     window.renderizarListaRespuestas();
-    window.renderizarCronologia();
 
     if(maintainScroll && window.lastScrollPosition) window.scrollTo(0, window.lastScrollPosition);
 };
@@ -229,103 +219,6 @@ window.abrirHistorialGlobal = async () => {
     `;
     
     window.renderizarListaRespuestas();
-};
-
-
-window.renderizarCronologia = () => {
-    const ctx = document.getElementById('timeline-chart');
-    const wrapper = document.getElementById('timeline-wrapper');
-    if(!ctx || !wrapper) return;
-    
-    // 1. Clonar y ordenar cronológicamente para que la línea no haga zig-zag hacia atrás
-    const responses = [...(window.respuestasCacheActual || [])].sort((a, b) => new Date(a.submitted_at) - new Date(b.submitted_at));
-    
-    if(responses.length === 0) { wrapper.style.display = 'none'; return; }
-    wrapper.style.display = 'block';
-    
-    if(window.timelineChartInstance) { 
-        window.timelineChartInstance.destroy(); 
-        window.timelineChartInstance = null; 
-    }
-
-    // 2. Agrupar las respuestas por empleado para tener una línea por cada uno
-    const datasetsMap = {};
-
-    responses.forEach(r => {
-        const dateObj = new Date(r.submitted_at);
-        const timestamp = dateObj.getTime();
-        const dateLabel = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute:'2-digit' });
-        const empName = window.employeeNameMap[r.employee_id] || `ID: ${r.employee_id}`;
-        const score = window.calcularScoreRespuesta(r);
-        
-        // Usar la función existente para asignar un color consistente al usuario
-        const userColor = window.getColorByString(empName); 
-        
-       if(!datasetsMap[empName]) {
-            datasetsMap[empName] = {
-                label: empName,
-                data: [],
-                backgroundColor: userColor,
-                borderColor: userColor, // Color de la línea de conexión
-                pointRadius: 2,
-                pointHoverRadius: 4,
-                borderWidth: 2,       // Grosor de la línea
-                showLine: true,       // ¡Esto conecta los puntos!
-                tension: 0.2          // Le da una curvatura suave a la línea (0 = recta)
-            };
-        }
-        
-        datasetsMap[empName].data.push({ x: timestamp, y: score, empName: empName, dateLabel: dateLabel });
-    });
-
-    // Convertir el mapa a un arreglo de datasets para Chart.js
-    const datasets = Object.values(datasetsMap);
-
-    window.timelineChartInstance = new Chart(ctx, {
-        type: 'scatter', 
-        data: { datasets: datasets },
-        options: {
-            responsive: true, 
-            maintainAspectRatio: false,
-            plugins: { 
-                // Se activa la leyenda inferior para distinguir quién es quién fácilmente
-                legend: { 
-                    display: true, 
-                    position: 'bottom',
-                    labels: { usePointStyle: true, boxWidth: 8, font: { size: 10 } }
-                }, 
-                tooltip: { 
-                    callbacks: { 
-                        label: function(context) { 
-                            const p = context.raw; 
-                            return `${p.empName}: ${context.parsed.y}% (${p.dateLabel})`; 
-                        } 
-                    } 
-                } 
-            },
-            scales: { 
-                y: { 
-                    beginAtZero: true, 
-                    max: 105, 
-                    title: { display: true, text: 'Calificación (%)' }, 
-                    grid: { color: '#f1f5f9' } 
-                }, 
-                x: { 
-                    type: 'linear', 
-                    position: 'bottom', 
-                    title: { display: true, text: 'Cronología' }, 
-                    grid: { display: false }, 
-                    ticks: { 
-                        callback: function(value) { 
-                            return new Date(value).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }); 
-                        }, 
-                        maxRotation: 45, 
-                        minRotation: 0 
-                    } 
-                } 
-            }
-        }
-    });
 };
 
 
@@ -1056,7 +949,6 @@ window.guardarCalificacionAdmin = async () => {
             document.getElementById('modal-responder-eval').style.display = 'none';
             document.body.style.overflow = '';
             if (window.renderizarListaRespuestas) window.renderizarListaRespuestas();
-            if (window.renderizarCronologia) window.renderizarCronologia();
         }
         
     } catch (e) {
@@ -1093,7 +985,6 @@ window.borrarRespuestaIndividual = async (id) => {
             document.getElementById('modal-responder-eval').style.display = 'none';
             document.body.style.overflow = '';
             if (window.renderizarListaRespuestas) window.renderizarListaRespuestas();
-            if (window.renderizarCronologia) window.renderizarCronologia();
         }
     } catch (e) { alert(e.message); }
 };
@@ -1137,7 +1028,6 @@ window.cambiarEstadoRespuesta = async (id, nuevoEstado) => {
         document.getElementById('modal-responder-eval').style.display = 'none';
         document.body.style.overflow = '';
         if (window.renderizarListaRespuestas) window.renderizarListaRespuestas();
-        if (window.renderizarCronologia) window.renderizarCronologia();
         // Si el cambio salió de una ficha abierta desde el expediente por
         // empleado, hay que repintar esa pantalla y no la lista de la evaluación.
         if (window.expedienteActual && window.renderizarExpedienteEmpleado) window.renderizarExpedienteEmpleado();
