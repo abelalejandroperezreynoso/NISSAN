@@ -408,10 +408,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   dice por qué se marcó, y en una encuesta de seguridad eso es justo lo que hay
   que saber: «no» a secas y «no, porque la máquina estaba en paro» son
   hallazgos distintos. Los tipos de `window.PREGUNTAS_CON_MOTIVO` —hoy
-  `multiple` y `checklist`— llevan un campo de texto obligatorio debajo de las
-  opciones, y `enviarRespuestasEval` no deja enviar sin él. Fuera quedan `text`
-  —que ya es texto libre—, `list_match` y `range`, que es una calificación
-  numérica y se califica sola al enviarse.
+  `multiple`, `checklist` y `range`— llevan un campo de texto obligatorio
+  debajo de las opciones, y `enviarRespuestasEval` no deja enviar sin él. Fuera
+  quedan `text` —que ya es texto libre— y `list_match`, que es una lista de
+  elementos y no una elección.
+
+  **`range` lleva motivo y sigue calificándose sola.** Un 0 en «existe un
+  estándar de 5S» vale como hallazgo sólo si dice qué se encontró, pero eso no
+  toca su calificación automática: el estado lo decide `autoGradedCount` al
+  enviar, así que una encuesta toda de escala —las de 5S, y las de modo
+  `boss`— se sigue guardando ya como `'Revisado'`. Su motivo se lee abriendo la
+  respuesta.
 
   Se pide **sólo de lo que se contestó**: a lo que aún no tiene opción marcada
   se le reclama antes la respuesta. Al revés sí se guarda —quien escribe el

@@ -867,7 +867,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                     <label style="display:block; font-weight:600; color:#475569; margin-bottom:8px; font-size:0.9rem;">
                         ¿Por qué? <span style="color:#ef4444;">*</span>
                     </label>
-                    <textarea class="resp-comentario" data-id="${q.id}" placeholder="Explica el motivo de tu respuesta..."
+                    <textarea class="resp-comentario" data-id="${q.id}" placeholder="${q.question_type === 'range' ? 'Explica el motivo de tu calificación...' : 'Explica el motivo de tu respuesta...'}"
                               style="${commonStyle} resize:none; overflow-y:hidden; min-height:70px;"
                               oninput="this.style.height=''; this.style.height=this.scrollHeight+'px'"></textarea>
                 </div>`;

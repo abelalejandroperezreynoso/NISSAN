@@ -269,10 +269,14 @@ window.esSupervisorDirectoDe = (empleadoId, supervisorId) => {
 // estaba en paro» son hallazgos distintos. Los tipos de pregunta que se
 // contestan eligiendo piden además el motivo, y sin él no se envía.
 //
-// Fuera quedan `text` —que ya es texto libre—, `list_match` —una lista de
-// elementos, no una elección— y `range`, que es una calificación numérica y se
-// califica sola al enviarla.
-window.PREGUNTAS_CON_MOTIVO = ['multiple', 'checklist'];
+// `range` entra aunque se califique sola: un 0 en «existe un estándar de 5S»
+// vale como hallazgo sólo si dice qué se encontró. Que lleve motivo no cambia
+// su calificación automática —eso lo decide `autoGradedCount` al enviar—, así
+// que una encuesta toda de escala se sigue guardando ya revisada.
+//
+// Fuera quedan `text` —que ya es texto libre— y `list_match`, que es una lista
+// de elementos y no una elección.
+window.PREGUNTAS_CON_MOTIVO = ['multiple', 'checklist', 'range'];
 
 // Los motivos viajan dentro de `answers_json`, bajo una llave reservada: las
 // demás son ids de pregunta, siempre numéricos, así que no pueden chocar. Se
