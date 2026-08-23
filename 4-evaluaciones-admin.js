@@ -134,8 +134,54 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         actionButtonHtml = `<div style="text-align:center; color:#7e22ce; font-size:0.9rem; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px;">👁️ Te toca revisar esta encuesta.</div>`;
     }
 
+    // --- LO ÚLTIMO QUE SACÓ ESTA PERSONA AQUÍ ---
+    // Es lo que viene a mirar quien abre su propia encuesta, y estaba enterrado
+    // en la lista de respuestas de todo el equipo. `responses` ya viene ordenada
+    // de la más reciente a la más vieja.
+    const miUltima = responses.find(r => String(r.employee_id) === String(user.id));
+    let ultimoResultadoHtml = '';
+
+    if (miUltima) {
+        const calificada = ['Revisado', 'Certificada'].includes(miUltima.review_status);
+        const score = window.calcularScoreRespuesta(miUltima);
+        const colorScore = calificada ? window.getColorScore(score) : '#94a3b8';
+        const fecha = new Date(miUltima.submitted_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+        const estados = {
+            'Certificada': { texto: '⭐ Certificada', color: '#1d4ed8' },
+            'Revisado':    { texto: '✓ Revisada',    color: '#166534' },
+            'Falsa':       { texto: 'Anulada',       color: '#991b1b' },
+            'Mal Revisada':{ texto: '⚠️ Mal revisada', color: '#7e22ce' }
+        };
+        const estado = estados[miUltima.review_status] || { texto: 'En espera de revisión', color: '#ea580c' };
+
+        // Sin calificar todavía no hay cifra que enseñar: un 0% se leería como
+        // que la falló entera.
+        const cifraHtml = calificada
+            ? `<div style="font-size:1.6rem; font-weight:800; color:${colorScore}; line-height:1;">${score}%</div>`
+            : `<div style="font-size:1rem; font-weight:700; color:#94a3b8; line-height:1;">—</div>`;
+
+        // El mismo escapado que las tarjetas de la lista, que van con el atributo
+        // entre comillas simples.
+        const jsonUltima = JSON.stringify(miUltima).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+
+        ultimoResultadoHtml = `
+            <div onclick='verDetalleRespuesta(${jsonUltima})' style="display:flex; align-items:center; gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:15px; cursor:pointer;">
+                <div style="text-align:center; min-width:52px;">
+                    ${cifraHtml}
+                </div>
+                <div style="min-width:0; flex:1;">
+                    <div style="font-size:0.8rem; color:#64748b; font-weight:600;">Tu último resultado</div>
+                    <div style="font-size:0.85rem; color:${estado.color}; font-weight:700;">${estado.texto}</div>
+                    <div style="font-size:0.75rem; color:#94a3b8;">${fecha}</div>
+                </div>
+                <div style="color:#64748b; font-size:1.1rem;">👉</div>
+            </div>`;
+    }
+
     const bannerHtml = `
         <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+            ${ultimoResultadoHtml}
             <div style="color: #334155; font-size: 0.95rem; margin-bottom: 15px; font-weight: 500; text-align: center;">
                 ¿Deseas registrar una nueva respuesta para esta evaluación?
             </div>
@@ -143,26 +189,39 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         </div>
     `;
 
+    // El nombre de la encuesta manda en el encabezado de la hoja, y la cruz se
+    // vuelve la flecha de volver: dentro de una encuesta lo que quiere el dedo
+    // es retroceder, no cerrarlo todo.
+    window.encabezadoHojaEvaluaciones(title, () => window.cargarVistaEvaluaciones());
+
+    // La lista arranca plegada: quien abre su encuesta viene a ver lo suyo y a
+    // responder, no las respuestas de los demás. Se despliega sola cuando hay
+    // algo esperando la calificación de quien mira, que es el caso en el que la
+    // lista sí es a lo que vino.
+    const cuantasMeTocan = (window.respuestasCacheActual || []).filter(r =>
+        r.review_status !== 'Revisado' && r.review_status !== 'Falsa' && r.review_status !== 'Certificada' &&
+        window.puedeCalificar(window.encuestaEnCache(r.evaluation_id), r.employee_id)
+    ).length;
+
+    const avisoRevision = cuantasMeTocan > 0
+        ? `<span style="background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; border-radius:20px; padding:2px 8px; font-size:0.72rem; font-weight:700;">${cuantasMeTocan} por revisar</span>`
+        : '';
+
     // --- CONSTRUCCIÓN DEL CONTENEDOR FINAL ---
         container.innerHTML = `
-            <div style="display:flex; align-items:center; margin-bottom:20px; flex-wrap: wrap; gap: 10px;">
-                <button onclick="window.cargarVistaEvaluaciones()" style="background:#f1f5f9; border:none; color:#334155; font-weight:bold; cursor:pointer; font-size:1.2rem; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background 0.2s;" title="Volver a la lista">←</button>
-                <div>
-                    <h2 style="margin:0; font-size:1.2rem; color:#7c3aed;">${title}</h2>
-                </div>
-            </div>
             ${infoHtml}
         
         ${bannerHtml} <div id="stats-dashboard" style="display:none; margin-top:20px;"></div>
-        <div id="lista-wrapper">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom: 10px; flex-wrap:wrap; gap:10px;">
-                <h3 style="color:#64748b; font-size:1rem; margin:0;">
-                    ${window.modoAdminActivo ? 'Todas las Respuestas' : 'Mi Historial y Equipo Directo'} (<span id="contador-respuestas">${window.respuestasCacheActual.length}</span>)
-                </h3>
-                <input type="text" id="buscador-historial" placeholder="🔍 Buscar usuario..." oninput="window.renderizarListaRespuestas()" style="padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; width: 250px; font-size: 0.9rem; outline:none; background:#f8fafc;">
+        <details id="lista-wrapper" class="hoja-plegable" ${cuantasMeTocan > 0 ? 'open' : ''}>
+            <summary class="hoja-plegable-resumen">
+                <span>📋 Respuestas (<span id="contador-respuestas">${window.respuestasCacheActual.length}</span>)</span>
+                ${avisoRevision}
+            </summary>
+            <div class="hoja-plegable-cuerpo">
+                <input type="text" id="buscador-historial" placeholder="🔍 Buscar usuario..." oninput="window.renderizarListaRespuestas()" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:16px; outline:none; background:#f8fafc; margin:12px 0;">
+                <div id="lista-respuestas-historial">Cargando...</div>
             </div>
-            <div id="lista-respuestas-historial">Cargando...</div>
-        </div>
+        </details>
     `;
     
     window.renderizarListaRespuestas();
@@ -174,6 +233,10 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
 window.abrirHistorialGlobal = async () => {
     const container = document.getElementById('contenido-modal-evaluaciones');
     if(container) { container.scrollTop = 0; container.style.display = 'block'; }
+    // Estas pantallas llevan su propia flecha en el cuerpo; el encabezado de
+    // la hoja vuelve al de la lista para no quedarse con el título de la
+    // encuesta que se estuviera viendo.
+    window.encabezadoHojaEvaluaciones();
     
     container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner" style="margin: 0 auto 15px auto;"></div>Obteniendo todas las respuestas...</div>';
     
@@ -1065,6 +1128,10 @@ window.motivoNoAplicable = (resp, nuevoEstado) => {
 window.abrirRevisionPorEmpleado = async () => {
     const container = document.getElementById('contenido-modal-evaluaciones');
     if (!container) return;
+    // Estas pantallas llevan su propia flecha en el cuerpo; el encabezado de
+    // la hoja vuelve al de la lista para no quedarse con el título de la
+    // encuesta que se estuviera viendo.
+    window.encabezadoHojaEvaluaciones();
 
     // El expediente cruza a todos los empleados, así que es solo para admin.
     if (!window.modoAdminActivo) {
@@ -1198,6 +1265,10 @@ window.buscarEmpleadosRevision = async () => {
 window.abrirExpedienteEmpleado = async (empId) => {
     const container = document.getElementById('contenido-modal-evaluaciones');
     if (!container) return;
+    // Estas pantallas llevan su propia flecha en el cuerpo; el encabezado de
+    // la hoja vuelve al de la lista para no quedarse con el título de la
+    // encuesta que se estuviera viendo.
+    window.encabezadoHojaEvaluaciones();
 
     container.scrollTop = 0;
     container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner" style="margin: 0 auto 15px auto;"></div>Abriendo expediente...</div>';
@@ -1658,6 +1729,10 @@ window.certificacionActual = null;
 window.abrirCertificacionPorClasificacion = async () => {
     const container = document.getElementById('contenido-modal-evaluaciones');
     if (!container) return;
+    // Estas pantallas llevan su propia flecha en el cuerpo; el encabezado de
+    // la hoja vuelve al de la lista para no quedarse con el título de la
+    // encuesta que se estuviera viendo.
+    window.encabezadoHojaEvaluaciones();
 
     if (!window.modoAdminActivo) {
         alert("Esta vista está reservada para el modo administrador.");

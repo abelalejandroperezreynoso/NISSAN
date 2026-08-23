@@ -213,6 +213,40 @@ window.cerrarModalEvaluaciones = () => {
     if (modal) modal.style.display = 'none';
 };
 
+// El encabezado de la hoja dice en qué pantalla estás, porque son seis y todas
+// se dibujan dentro del mismo contenedor. Al entrar a una encuesta el título
+// pasa a ser el suyo y la cruz se convierte en la flecha de volver: cerrar de
+// golpe desde dentro dejaba al dedo sin manera de retroceder salvo bajando a
+// buscar otra flecha en el cuerpo.
+//
+// Sin argumentos vuelve a lo de la lista: «Evaluaciones y encuestas» y la cruz.
+// Toda pantalla que repinte `#contenido-modal-evaluaciones` tiene que llamarlo,
+// o heredará el título de la anterior.
+window.encabezadoHojaEvaluaciones = (titulo, alVolver) => {
+    const h = document.getElementById('titulo-hoja-evaluaciones');
+    const btn = document.getElementById('btn-hoja-evaluaciones');
+    if (h) h.innerText = titulo || 'Evaluaciones y encuestas';
+    if (!btn) return;
+
+    if (typeof alVolver === 'function') {
+        // Un icono que no es la cruz va con su `<svg>` dentro y sin la clase
+        // que la dibuja.
+        btn.classList.remove('ios-boton-cerrar');
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>';
+        btn.title = 'Volver';
+        btn.setAttribute('aria-label', 'Volver a la lista de encuestas');
+        btn.onclick = alVolver;
+    } else {
+        // La cruz la dibuja `.ios-boton-cerrar` con pseudoelementos, así que el
+        // botón se queda vacío.
+        btn.classList.add('ios-boton-cerrar');
+        btn.innerHTML = '';
+        btn.title = 'Cerrar';
+        btn.setAttribute('aria-label', 'Cerrar');
+        btn.onclick = window.cerrarModalEvaluaciones;
+    }
+};
+
 // --- 1. CARGAR LISTA PRINCIPAL ---
 window.cargarVistaEvaluaciones = async () => {
     // 1. Asegurarnos de que el modal flotante exista en el HTML (lo inyectamos si no)
@@ -222,8 +256,8 @@ window.cargarVistaEvaluaciones = async () => {
         <div id="modal-evaluaciones-flotante" class="hoja-overlay" style="z-index:2000;">
             <div class="form-content hoja-contenido" style="max-width: 800px; background: #f8fafc; overflow: hidden; padding: 12px 0 0;">
                 <div class="hoja-encabezado-lista">
-                    <h2 class="hoja-titulo">Evaluaciones y encuestas</h2>
-                    <button onclick="window.cerrarModalEvaluaciones()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                    <h2 id="titulo-hoja-evaluaciones" class="hoja-titulo">Evaluaciones y encuestas</h2>
+                    <button id="btn-hoja-evaluaciones" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                 </div>
                 <div id="contenido-modal-evaluaciones" style="flex:1; overflow-y: auto; padding: 20px; background: #f8fafc;"></div>
             </div>
@@ -234,6 +268,7 @@ window.cargarVistaEvaluaciones = async () => {
 
     // 2. Mostrar el modal
     modal.style.display = 'flex';
+    window.encabezadoHojaEvaluaciones();
     
     // 3. Nuestro contenedor destino ahora es el interior del modal
     const container = document.getElementById('contenido-modal-evaluaciones');

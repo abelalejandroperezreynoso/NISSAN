@@ -305,6 +305,29 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   administrador—. Cada documento lee el estado al cargar (`index.html` en
   `2b-core-dashboard.js`, que deja las visuales a `mostrarDashboard`) y cerrar
   sesión lo apaga.
+- **La hoja de evaluaciones dice en el encabezado en qué pantalla estás.**
+  Seis pantallas se dibujan dentro del mismo `#contenido-modal-evaluaciones`
+  —la lista, la encuesta abierta, el historial global, la revisión por
+  empleado, el expediente y la certificación por clasificación—, así que el
+  título de la hoja no puede ser fijo: se pone con
+  `window.encabezadoHojaEvaluaciones(titulo, alVolver)`, en
+  `4-evaluaciones-base.js`. Sin argumentos vuelve a «Evaluaciones y encuestas»
+  con la cruz. **Toda pantalla que repinte ese contenedor tiene que llamarlo**,
+  o se queda con el título de la anterior.
+
+  Al abrir una encuesta el botón del encabezado deja de ser la cruz y pasa a
+  ser la flecha de volver: dentro de una encuesta lo que busca el dedo es
+  retroceder, no cerrarlo todo. Como la cruz la dibuja `.ios-boton-cerrar` con
+  pseudoelementos, cambiar de icono es quitar esa clase y meter el `<svg>`
+  dentro —y al revés, vaciarlo y devolvérsela—.
+
+  La lista de respuestas de una encuesta va plegada en un
+  `<details class="hoja-plegable">`, y se abre sola sólo si hay algo esperando
+  la calificación de quien mira. Arriba, en cambio, sale siempre el último
+  resultado propio, que es a lo que entra la mayoría. Ojo con
+  `.hoja-plegable-resumen`, que es un flex con `gap`: cada nodo suelto del
+  `<summary>` cuenta como elemento, así que el rótulo y su contador van
+  envueltos en un solo `<span>` o el «(3)» se separa del texto.
 - **El `id_interno` identifica al equipo y el nombre va pegado a él.** La
   misma máquina suele estar dada de alta varias veces en `equipos`, una fila
   por línea, todas con el mismo `id_interno`. La base no tiene restricción de
