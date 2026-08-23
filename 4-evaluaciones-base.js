@@ -749,7 +749,11 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         modal.style.cssText = 'display:flex; z-index:999999;';
         
         let headerTitle = title;
-    let subTitle = currentDesc ? currentDesc : "Responde las siguientes preguntas. Todas son obligatorias.";
+    let subTitle = currentDesc ? currentDesc : "Responde las siguientes preguntas.";
+    // El aviso de que van todas va aparte y no dentro del subtítulo: las
+    // encuestas con descripción propia la enseñan en su lugar y se quedaban sin
+    // enterarse de la regla hasta que el envío se lo decía.
+    const avisoObligatorias = '<p style="color:#94a3b8; margin:6px 0 0; font-size:0.85rem;">Todas las preguntas son obligatorias.</p>';
     let headerStyle = "color:#1e293b;";
     
     if (window.targetUserForEval) {
@@ -772,6 +776,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
             <div style="margin-bottom:25px; ${headerStyle}">
                 <p style="color:#64748b; margin:0; font-size:0.95rem;">${subTitle}</p>
+                ${avisoObligatorias}
                 ${areaBadgeHtml} 
             </div>
             <div id="dynamic-questions-root"></div>
