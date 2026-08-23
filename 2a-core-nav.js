@@ -239,10 +239,14 @@ window.cerrarPanelAdmin = () => {
 window.volverAlDashboard = () => window.mostrarDashboard(JSON.parse(localStorage.getItem("usuarioLogueado")));
 
 // --- MODO ADMINISTRADOR ---
+// La contraseña se pide con la hoja de `1-config.js`, la misma que el panel de
+// refacciones. Antes era un `prompt()`, que en iOS capitaliza la primera letra
+// —y la contraseña va en minúsculas—, no deja ocultar lo tecleado y se dibuja
+// como un aviso del navegador encima de la aplicación instalada.
 document.getElementById('app-title').onclick = () => {
     const titleElem = document.getElementById('app-title');
     const adminToolbar = document.getElementById('admin-toolbar');
-    
+
     if(window.modoAdminActivo) {
         window.modoAdminActivo = false;
         sessionStorage.removeItem('adminSostenido'); // <-- LÍNEA AGREGADA
@@ -250,7 +254,10 @@ document.getElementById('app-title').onclick = () => {
         window.cerrarPanelAdmin();
         titleElem.style.color = '';
         window.volverAlDashboard();
-    } else if(prompt("Contraseña Admin:") === window.PASSWORD_ADMIN) {
+        return;
+    }
+
+    window.abrirClaveAdmin(() => {
         window.modoAdminActivo = true;
         if(adminToolbar) adminToolbar.style.display = 'flex';
         titleElem.style.color = '#d32f2f';
@@ -259,7 +266,7 @@ document.getElementById('app-title').onclick = () => {
             window.actualizarBotonAhorroVisual(btnAhorro);
         }
         window.volverAlDashboard();
-    }
+    });
 };
 
 window.checkAdmin = () => { return window.modoAdminActivo ? true : (alert("Requiere permisos de administrador"), false); }

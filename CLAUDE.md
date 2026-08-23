@@ -268,6 +268,24 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `position:fixed`). Ya no sirve para atenuar nada —las hojas no atenúan—,
   pero sigue disponible si una pantalla necesita teñir esa franja: es lo que
   hace `10-refacciones.html`, cuyo fondo no es el del panel principal.
+- **La contraseña de administrador se pide con una hoja, nunca con `prompt()`.**
+  En iOS, `prompt()` capitaliza la primera letra —y la contraseña va en
+  minúsculas—, no deja ocultar lo tecleado y se dibuja como un aviso del
+  navegador encima de la aplicación instalada. La hoja `#modal-clave-admin`
+  vive entera en `1-config.js`, marcado incluido, porque la comparten dos
+  documentos que no tienen más JavaScript en común; se monta la primera vez
+  que se pide, así que una pantalla que no la abra no carga con ella. Lo único
+  que cambia de una pantalla a otra es qué pasa al acertar, y va en el
+  argumento:
+
+  ```js
+  window.abrirClaveAdmin(() => { window.modoAdminActivo = true; /* … */ });
+  ```
+
+  Es también el sitio donde mirar cómo se hace un campo de contraseña aquí: el
+  botón del ojo alterna `type` entre `password` y `text` y cuenta lo que hace
+  en su `aria-label` y su `title`, que es lo que le queda a un botón sin
+  texto.
 - **El `id_interno` identifica al equipo y el nombre va pegado a él.** La
   misma máquina suele estar dada de alta varias veces en `equipos`, una fila
   por línea, todas con el mismo `id_interno`. La base no tiene restricción de
