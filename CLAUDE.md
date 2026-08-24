@@ -420,6 +420,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   El campo se abre con un `<label for>` y no con un `.click()` sobre el input
   escondido: en iOS ese click programático es indistinguible del toque fantasma
   de las ruedas (ver más arriba).
+
+  **La última foto de cada área sale en las estadísticas**, encabezando su
+  tarjeta en «Comparativa de desempeño por áreas», con la fecha en que se tomó
+  y ampliable al tocarla. No se traen con el resto de las respuestas —que se
+  piden sin `answers_json`—, sino en una consulta aparte que filtra por la
+  llave del jsonb (`.not('answers_json->>__foto_area', 'is', null)`), ordenada
+  de la más reciente y con tope de 400 filas: la primera de cada área es la que
+  se enseña. Si esa consulta falla, la sección se dibuja igual sin foto.
+
+  El área se agrupa por nombre normalizado con `window.claveDeArea()`: la
+  respuesta guarda el nombre que tenía el empleado ese día y la pantalla agrupa
+  por el de su ficha, así que «Planta 1» y « planta 1 » tienen que caer en el
+  mismo sitio. La foto **no** sigue al filtro de periodo de esa pantalla: es
+  siempre la última que hay, y por eso lleva la fecha encima.
 - **Una encuesta se entrega completa.** No se puede enviar dejando preguntas en
   blanco: `enviarRespuestasEval` reúne lo que falta —lo sin contestar y los
   motivos sin escribir—, lo dice todo junto en un solo aviso, señala en rojo

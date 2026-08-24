@@ -252,7 +252,18 @@ window.cargarStatsEncuestasGlobales = async () => {
         // cuáles de esas preguntas siguen existiendo.
         const p3 = sb.from('evaluation_questions').select('id, evaluation_id, question_text, order_index').order('order_index');
 
-        const [_, resEvals, rawResponses, resPreguntas] = await Promise.all([p1, p2, fetchTodasLasRespuestas(), p3]);
+        // La última foto de cada área. Se piden sólo las respuestas que traen
+        // una —el filtro por la llave del jsonb— y ordenadas de la más
+        // reciente: la primera de cada área es la que se enseña. El tope de 400
+        // es para que esto no crezca con el historial; con más áreas que ésas
+        // habría que cortar por fecha.
+        const p4 = sb.from('evaluation_responses')
+            .select('employee_area, submitted_at, answers_json')
+            .not(`answers_json->>${window.LLAVE_FOTO_AREA}`, 'is', null)
+            .order('submitted_at', { ascending: false })
+            .limit(400);
+
+        const [_, resEvals, rawResponses, resPreguntas, resFotos] = await Promise.all([p1, p2, fetchTodasLasRespuestas(), p3, p4]);
 
         if (resEvals.error) throw new Error("Error evaluaciones: " + resEvals.error.message);
 
@@ -271,11 +282,26 @@ window.cargarStatsEncuestasGlobales = async () => {
             preguntasPorEncuesta[clave].push({ id: String(q.id), texto: q.question_text || '' });
         });
 
+        // Si la consulta falla —una base sin ese filtro, o sin el bucket
+        // todavía— la sección de áreas se dibuja igual, sin foto.
+        const fotosPorArea = {};
+        if (resFotos && resFotos.error) {
+            console.warn('No se pudieron traer las fotos de área:', resFotos.error.message);
+        } else {
+            (resFotos && resFotos.data ? resFotos.data : []).forEach(r => {
+                const clave = window.claveDeArea(r.employee_area);
+                if (!clave || fotosPorArea[clave]) return;   // ya vienen ordenadas: la primera es la última
+                const url = window.fotoDeArea(r);
+                if (url) fotosPorArea[clave] = { url, fecha: r.submitted_at };
+            });
+        }
+
         window.encuestasRawData = {
             evalsList,
             rawResponses,
             categories,
-            preguntasPorEncuesta
+            preguntasPorEncuesta,
+            fotosPorArea
         };
 
         window.renderizarPanelEstadisticas('GLOBAL');
@@ -1567,7 +1593,8 @@ window.renderMiniTable = (dataMap) => {
     return h || '<div style="color:#cbd5e1; font-style:italic;">Sin datos revisados aún</div>';
 };
 
-window.renderAreaStats=(areaMap)=>{
+window.renderAreaStats=(areaMap,fotosPorArea)=>{
+const fotos=fotosPorArea||(window.encuestasRawData&&window.encuestasRawData.fotosPorArea)||{};
 const keys=Object.keys(areaMap).sort((a,b)=>{
 const avgA=areaMap[a].count>0?areaMap[a].sum/areaMap[a].count:-1;
 const avgB=areaMap[b].count>0?areaMap[b].sum/areaMap[b].count:-1;
@@ -1611,8 +1638,23 @@ usersHtml=`<div style="font-size:0.75rem; color:#94a3b8; font-style:italic; padd
 // llevaba casi toda la pantalla. El <details> guarda su propio estado y no
 // necesita ninguna función colgada de window.
 const numParticipantes=d.userStats?Object.keys(d.userStats).length:0;
+// La última foto que se tomó de esta área, si alguna evaluación la pidió. Es
+// lo que convierte una cifra en algo que se puede mirar.
+const foto=fotos[window.claveDeArea(k)];
+let fotoHtml='';
+if(foto&&foto.url){
+const fecha=new Date(foto.fecha).toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric'});
+fotoHtml=`
+<div style="position:relative; margin:-15px -15px 12px; border-radius:10px 10px 0 0; overflow:hidden;">
+<img src="${window.sanitizeForHTML(foto.url)}" alt="Última fotografía de ${window.sanitizeForHTML(k)}" loading="lazy"
+onclick="window.abrirVisorImagen&&window.abrirVisorImagen('${window.sanitizeForHTML(foto.url)}')"
+style="width:100%; height:130px; object-fit:cover; display:block; cursor:pointer;" title="Toca para ampliar">
+<span style="position:absolute; right:6px; bottom:6px; background:rgba(15,23,42,0.65); color:white; font-size:0.68rem; font-weight:600; padding:2px 7px; border-radius:20px;">${fecha}</span>
+</div>`;
+}
 h+=`
-<div class="stats-area" style="border-left-color:${col}; opacity:${d.count>0?'1':'0.6'};">
+<div class="stats-area" style="border-left-color:${col}; opacity:${d.count>0?'1':'0.6'}; overflow:hidden;">
+${fotoHtml}
 <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:12px;">
 <div style="flex: 1; min-width:0;">
 <div style="font-size:1rem; color:#334155; font-weight:700; display:flex; align-items:center; gap:8px;">

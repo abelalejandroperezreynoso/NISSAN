@@ -351,6 +351,12 @@ window.LLAVE_FOTO_AREA = '__foto_area';
 window.BUCKET_FOTOS_EVAL = 'fotos-evaluaciones';
 window.MAX_LADO_FOTO_EVAL = 600;
 
+// El nombre del área es texto libre: la respuesta guarda el que tenía el
+// empleado ese día y la pantalla de estadísticas agrupa por el de su ficha. Se
+// comparan siempre normalizados, o «Planta 1» y «PLANTA 1 » serían dos áreas.
+window.claveDeArea = (nombre) =>
+    String(nombre == null ? '' : nombre).trim().toUpperCase().replace(/\s+/g, ' ');
+
 window.fotoDeArea = (respuesta) => {
     const url = respuesta && respuesta.answers_json ? respuesta.answers_json[window.LLAVE_FOTO_AREA] : null;
     return typeof url === 'string' && url ? url : '';
