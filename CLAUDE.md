@@ -793,6 +793,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `window.todosLosEmpleadosData` y descarta la fila entera, así que descontar a
   alguien no necesita tocar la función SQL. Lo que sí puede discrepar es la
   fecha de alta, que la aplica la base por su cuenta.
+- **El orden de las preguntas es el del documento.** `guardarNuevaEvaluacion`
+  recorre los `.pregunta-wrapper` en el orden en que están y escribe su
+  posición en `order_index`, así que reordenar es literalmente moverlos de
+  sitio: `window.moverPregunta(btn, direccion)` intercambia la tarjeta con su
+  vecina y no hay nada más que recalcular. Cualquier cosa que quite o agregue
+  una tarjeta tiene que llamar a `window.renumerarPreguntas()`, que es quien
+  pone el número y apaga la flecha del primero y la del último.
 - **Editar una encuesta parte su historial en dos.** `answers_json` y
   `grades_json` guardan cada respuesta bajo el **id de la pregunta**
   (`evaluation_questions.id`). Editar el enunciado conserva el id, así que la

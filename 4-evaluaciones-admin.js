@@ -2881,8 +2881,8 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     d.style.cssText="margin-bottom:20px;background:#f9fafb;padding:15px;border-radius:12px;border:1px solid #e2e8f0;";
     
     const btnDeleteHTML = id
-        ? `<button onclick="borrarPreguntaDB('${id}', this)" style="color:red; border:none; background:#fee2e2; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Borrar de la base de datos">🗑️ Eliminar</button>`
-        : `<button onclick="this.closest('.pregunta-wrapper').remove()" style="color:#64748b; border:none; cursor:pointer;">✕ Quitar</button>`;
+        ? `<button onclick="borrarPreguntaDB('${id}', this)" style="margin-left:auto; color:red; border:none; background:#fee2e2; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Borrar de la base de datos">🗑️ Eliminar</button>`
+        : `<button onclick="this.closest('.pregunta-wrapper').remove(); window.renumerarPreguntas();" style="margin-left:auto; color:#64748b; border:none; cursor:pointer;">✕ Quitar</button>`;
 
     const showTextContainer = (tp === 'text');
     const showOptionsContainer = (tp === 'multiple' || tp === 'checklist' || tp === 'list_match');
@@ -2891,8 +2891,11 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     const optionsLabel = (tp === 'list_match') ? "Elementos Correctos (Respuesta Modelo):" : "Opciones:";
 
     d.innerHTML=`
-    <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
-        <select class="inp-tipo" onchange="window.toggleTipoPregunta(this)" ${isBoss ? 'disabled' : ''}>
+    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+        <span class="pregunta-numero" style="flex-shrink:0; width:24px; height:24px; border-radius:50%; background:#e2e8f0; color:#475569; font-size:0.8rem; font-weight:700; display:flex; align-items:center; justify-content:center;"></span>
+        <button type="button" onclick="window.moverPregunta(this, -1)" class="mover-pregunta" title="Subir" aria-label="Subir esta pregunta" style="flex-shrink:0; width:30px; height:30px; border:1px solid #cbd5e1; background:white; color:#475569; border-radius:8px; cursor:pointer; font-size:0.9rem; line-height:1; padding:0;">↑</button>
+        <button type="button" onclick="window.moverPregunta(this, 1)" class="mover-pregunta" title="Bajar" aria-label="Bajar esta pregunta" style="flex-shrink:0; width:30px; height:30px; border:1px solid #cbd5e1; background:white; color:#475569; border-radius:8px; cursor:pointer; font-size:0.9rem; line-height:1; padding:0;">↓</button>
+        <select class="inp-tipo" style="flex:1 1 120px; min-width:0;" onchange="window.toggleTipoPregunta(this)" ${isBoss ? 'disabled' : ''}>
             <option value="text" ${tp==='text'?'selected':''}>Texto Abierto</option>
             <option value="multiple" ${tp==='multiple'?'selected':''}>Opción Múltiple</option>
             <option value="checklist" ${tp==='checklist'?'selected':''}>Checklist</option>
@@ -2928,6 +2931,46 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     if(showOptionsContainer && op.length>0) op.forEach(o=>window.agregarInputOpcion(l,o));
     else if(showOptionsContainer) window.agregarInputOpcion(l);
     window.verificarRestriccionesModo();
+    window.renumerarPreguntas();
+};
+
+// El orden de las preguntas es el que tengan aquí: `guardarNuevaEvaluacion`
+// recorre los `.pregunta-wrapper` en el orden del documento y escribe su
+// posición en `order_index`. Así que moverlas es literalmente moverlas de
+// sitio, sin nada que recalcular.
+window.moverPregunta = (btn, direccion) => {
+    const wrapper = btn.closest('.pregunta-wrapper');
+    if (!wrapper) return;
+
+    const vecino = direccion < 0 ? wrapper.previousElementSibling : wrapper.nextElementSibling;
+    if (!vecino || !vecino.classList.contains('pregunta-wrapper')) return;
+
+    if (direccion < 0) vecino.before(wrapper);
+    else vecino.after(wrapper);
+
+    window.renumerarPreguntas();
+    // Con diez preguntas, la que se movió puede quedar fuera de la pantalla.
+    wrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+// Numera las tarjetas y apaga la flecha que no lleva a ningún lado, que es lo
+// que dice de un vistazo dónde empieza y dónde acaba la lista.
+window.renumerarPreguntas = () => {
+    const wrappers = Array.from(document.querySelectorAll('#questions-container .pregunta-wrapper'));
+    wrappers.forEach((w, i) => {
+        const numero = w.querySelector('.pregunta-numero');
+        if (numero) numero.innerText = i + 1;
+
+        const [arriba, abajo] = w.querySelectorAll('.mover-pregunta');
+        const apagar = (b, inutil) => {
+            if (!b) return;
+            b.disabled = inutil;
+            b.style.opacity = inutil ? '0.35' : '1';
+            b.style.cursor = inutil ? 'default' : 'pointer';
+        };
+        apagar(arriba, i === 0);
+        apagar(abajo, i === wrappers.length - 1);
+    });
 };
 
 window.borrarPreguntaDB = async (questionId, btnElement) => {
@@ -2935,7 +2978,7 @@ window.borrarPreguntaDB = async (questionId, btnElement) => {
     btnElement.innerText = "...";
     const { error } = await sb.from('evaluation_questions').delete().eq('id', questionId);
     if(error) { alert("Error al borrar: " + error.message); btnElement.innerText = "🗑️ Eliminar"; }
-    else { btnElement.closest('.pregunta-wrapper').remove(); }
+    else { btnElement.closest('.pregunta-wrapper').remove(); window.renumerarPreguntas(); }
 };
 
 // Apagar y encender una encuesta desde su propia tarjeta. Una encuesta
