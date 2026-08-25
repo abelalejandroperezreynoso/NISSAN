@@ -284,6 +284,10 @@ window.cargarVistaEvaluaciones = async () => {
         if (window.cargarDatosEmpleados) await window.cargarDatosEmpleados();
     }
 
+    // Qué clasificaciones se certifican: la insignia de más abajo lo pregunta
+    // sin poder esperar, así que la caché se llena antes de dibujar nada.
+    await window.cargarCertificacionDeClasificaciones();
+
     const misDirectos = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id));
     const tengoEquipo = misDirectos.length > 0;
 

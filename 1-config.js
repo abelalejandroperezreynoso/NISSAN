@@ -572,7 +572,6 @@ window.hayColumna = (tabla, columna) => {
 };
 
 window.hayColumnaRevisores = () => window.hayColumna('evaluations', 'reviewer_employees');
-window.hayColumnaCertificacion = () => window.hayColumna('evaluations', 'requires_certification');
 
 // Para las consultas que piden columnas por nombre: pedir una que no existe no
 // devuelve la fila sin ese campo, revienta la consulta entera.
@@ -582,27 +581,72 @@ window.camposConColumna = async (campos, tabla, columna) =>
 window.camposConRevisores = (campos) =>
     window.camposConColumna(campos, 'evaluations', 'reviewer_employees');
 
-// Las dos banderas de la certificación viajan juntas: las piden las mismas dos
-// pantallas y ninguna sirve sin la otra.
 window.camposConReintento = (campos) =>
     window.camposConColumna(campos, 'evaluations', 'retry_days');
 
-window.camposConCertificacion = async (campos) => {
-    const conBandera = await window.camposConColumna(campos, 'evaluations', 'requires_certification');
-    return window.camposConColumna(conBandera, 'evaluations', 'requires_min_score');
-};
+window.camposConMinimo = (campos) =>
+    window.camposConColumna(campos, 'evaluations', 'requires_min_score');
 
 // ==========================================
-// QUÉ ENCUESTAS HAY QUE CERTIFICAR
+// QUÉ CLASIFICACIONES SE CERTIFICAN
 // ==========================================
-// Certificar es dar fe de que las respuestas de alguien son verídicas, y no
-// toda encuesta lo necesita: una de clima laboral o una de sugerencias se
-// contesta y ya. La que no lo necesita deja de contar en el avance de su
-// clasificación, así que no impide que el resto se dé por certificado.
+// Certificar es de una clasificación entera y no de una encuesta suelta: se da
+// fe de que lo que alguien contestó en «Seguridad» ese periodo es verídico. Y
+// no toda clasificación lo necesita —una de clima laboral o de sugerencias se
+// contesta y ya—, así que la decisión se toma por clasificación, en la pantalla
+// de certificar.
 //
-// Nula significa que sí, para que todo lo que ya existe siga comportándose
-// igual y para que la aplicación aguante sin la columna.
-window.requiereCertificacion = (ev) => !!ev && ev.requires_certification !== false;
+// Vive en la tabla `clasificaciones_certificacion`, con el nombre normalizado
+// por llave. La que no tiene fila se certifica, que es lo de siempre: aquí sólo
+// hacen falta filas para las que se apaguen.
+//
+// La caché se llena una sola vez por sesión —se guarda la promesa, no el
+// resultado, para que dos pantallas a la vez no la pidan dos veces—. Mientras
+// no esté cargada todo se certifica: es lo que hacía antes y lo que deja a la
+// aplicación funcionando sin la tabla.
+window.CLASIFICACIONES_SIN_CERTIFICAR = null;   // Set de claves normalizadas
+let promesaClasificacionesCert = null;
+
+window.cargarCertificacionDeClasificaciones = (recargar) => {
+    if (recargar) promesaClasificacionesCert = null;
+    if (!promesaClasificacionesCert) {
+        promesaClasificacionesCert = sb.from('clasificaciones_certificacion')
+            .select('clave, requiere')
+            .then(({ data, error }) => {
+                if (error) {
+                    console.warn('No se pudo leer qué clasificaciones se certifican:', error.message);
+                    window.CLASIFICACIONES_SIN_CERTIFICAR = null;
+                    return false;
+                }
+                window.CLASIFICACIONES_SIN_CERTIFICAR = new Set(
+                    (data || []).filter(f => f.requiere === false).map(f => String(f.clave)));
+                return true;
+            })
+            .catch(() => { window.CLASIFICACIONES_SIN_CERTIFICAR = null; return false; });
+    }
+    return promesaClasificacionesCert;
+};
+
+// La pregunta que hacen las pantallas, y que tiene que poder contestarse sin
+// esperar a nadie: se resuelve con lo que haya en la caché.
+window.clasificacionSeCertifica = (clasificacion) => {
+    if (!window.CLASIFICACIONES_SIN_CERTIFICAR) return true;
+    return !window.CLASIFICACIONES_SIN_CERTIFICAR.has(window.normalizarClasificacion(clasificacion));
+};
+
+window.guardarCertificacionDeClasificacion = async (clasificacion, requiere) => {
+    const clave = window.normalizarClasificacion(clasificacion);
+    const { error } = await sb.from('clasificaciones_certificacion')
+        .upsert({ clave: clave, nombre: String(clasificacion || '').trim(), requiere: !!requiere,
+                  actualizado_en: new Date().toISOString() }, { onConflict: 'clave' });
+    if (error) throw error;
+
+    // La caché se corrige en el acto para que la pantalla no tenga que recargar.
+    if (window.CLASIFICACIONES_SIN_CERTIFICAR) {
+        if (requiere) window.CLASIFICACIONES_SIN_CERTIFICAR.delete(clave);
+        else window.CLASIFICACIONES_SIN_CERTIFICAR.add(clave);
+    }
+};
 
 // Si esta encuesta tiene un puntaje mínimo que alcanzar. Es cosa aparte de la
 // certificación: una encuesta puede no certificarse y aun así exigir el 80%
@@ -754,9 +798,10 @@ window.etiquetaDePeriodo = (periodo, frecuencia) => {
 
 window.estadoCertificacion = (encuestas, respuestas, fecha) => {
     const E = window.ESTADOS_CERTIFICACION;
-    // Las que no piden certificación se quedan fuera del resumen entero: ni
-    // suman al total ni pueden dejar una clasificación a medias.
-    const lista = (encuestas || []).filter(window.encuestaActiva).filter(window.requiereCertificacion);
+    // Una clasificación que no se certifica no tiene resumen que dar: se queda
+    // sin encuestas y el estado sale vacío.
+    const lista = (encuestas || []).filter(window.encuestaActiva)
+        .filter(ev => window.clasificacionSeCertifica(ev.category));
 
     const resumen = {
         estado: E.VACIO,

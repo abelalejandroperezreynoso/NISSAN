@@ -4,9 +4,13 @@
 -- toda encuesta lo necesita: una de clima laboral o una de sugerencias se
 -- contesta y ya está. Estas dos columnas lo deciden encuesta por encuesta:
 --
---   requires_certification  si cuenta para certificar su clasificación
---   requires_min_score      si además hay que sacar el 80% para certificarla
+--   requires_min_score      si hay que sacar el 80% para darla por buena
 --   retry_days              cuántos días hay para reponerla si no lo alcanza
+--
+-- (`requires_certification` la creó una versión anterior de este script para
+--  decidir por encuesta si contaba para certificar. Eso se decide ahora por
+--  clasificación —ver `clasificaciones-certificacion.sql`—, así que la columna
+--  ya no la lee nadie y se puede borrar.)
 --
 -- Una encuesta con `false` deja de contar en el avance de certificación de su
 -- clasificación: no suma al total, no aparece como pendiente de certificar y

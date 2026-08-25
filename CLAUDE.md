@@ -588,23 +588,34 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   esa caché, deja que el helper los consulte. El modo administrador es aparte:
   viaja en `sessionStorage` y sigue valiendo al pasar de una pantalla a la
   otra (ver más arriba).
-- **No toda encuesta se certifica.** La columna `requires_certification`
-  decide si cuenta para certificar su clasificación; nula o `true` significa
-  que sí, para que lo que ya existe se comporte igual. Una que dice que no
-  desaparece del resumen entero: no suma al total, no sale como pendiente y no
-  impide que el resto se dé por certificado. Sus respuestas se siguen
-  contestando, calificando y contando en las estadísticas.
+- **No toda clasificación se certifica, y eso se decide por clasificación.**
+  Certificar es de una clasificación entera —se da fe de lo que alguien
+  contestó en «Seguridad» ese periodo—, así que la decisión no vive en la
+  encuesta sino en la tabla `clasificaciones_certificacion`, con el nombre
+  normalizado por llave. La que no tiene fila se certifica, que es lo de
+  siempre: sólo hacen falta filas para las que se apaguen.
 
   ```js
-  window.requiereCertificacion(ev)   // en 1-config.js
+  await window.cargarCertificacionDeClasificaciones()   // llena la caché
+  window.clasificacionSeCertifica(nombre)               // sin esperar a nadie
+  await window.guardarCertificacionDeClasificacion(nombre, requiere)
   ```
 
-  El filtro se aplica en un solo sitio —la lista con la que arranca
-  `estadoCertificacion`—, así que lo heredan el badge del usuario, el
-  expediente y la pantalla de certificar por clasificación sin tocar ninguno.
-  Lo que sí hay que recordar es traerse la columna: las dos pantallas del
-  administrador piden columnas por nombre y usan
-  `window.camposConCertificacion(campos)`.
+  Se enciende y se apaga desde el conmutador que sale al elegir una
+  clasificación en **«⭐ Certificar por Clasificación»**; apagada, la pantalla
+  no lista a nadie y lo dice. Las encuestas de esa clasificación se siguen
+  contestando, calificando y contando en las estadísticas.
+
+  `estadoCertificacion` lo pregunta **sin poder esperar**, así que la caché se
+  llena antes: `cargarVistaEvaluaciones` y `abrirExpedienteEmpleado` la piden
+  al entrar, y la pantalla de certificar la relee de la base cada vez que se
+  abre, porque es la que la cambia. Mientras no esté cargada, todo se
+  certifica: es lo que hacía antes y lo que deja la aplicación en pie sin la
+  tabla.
+
+  El script es `sql/clasificaciones-certificacion.sql`. Hubo antes una columna
+  `evaluations.requires_certification` que hacía esto por encuesta; ya no la
+  lee nadie y se puede borrar.
 
   **El puntaje mínimo es cosa aparte**, y lo dice `requires_min_score` con la
   misma forma: nula o `true` es lo de siempre, `false` quita el mínimo. Las dos

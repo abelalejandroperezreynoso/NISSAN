@@ -473,13 +473,6 @@
                             <span class="eval-opcion-ayuda">Si se desactiva, será opcional.</span>
                         </span>
                     </label>
-                    <label class="eval-opcion">
-                        <input type="checkbox" id="chk-eval-certificable" checked>
-                        <span class="eval-opcion-texto">
-                            <span class="eval-opcion-titulo">⭐ Requiere certificación</span>
-                            <span class="eval-opcion-ayuda">Si se desactiva, no cuenta para certificar su clasificación.</span>
-                        </span>
-                    </label>
                     <label class="eval-opcion" id="opcion-umbral-certificacion">
                         <input type="checkbox" id="chk-eval-umbral" checked>
                         <span class="eval-opcion-texto">
@@ -492,7 +485,7 @@
                         <input type="number" id="eval-retry-days" value="0" min="0" max="365" style="width:80px;">
                     </div>
                     <p class="form-ayuda" style="margin-top:2px;">En 0 no se pide repetirla. Con un número, a quien no llegue al mínimo le vuelve a salir como pendiente durante esos días.</p>
-                    <p id="aviso-certificacion-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/certificacion-por-encuesta.sql</code> en Supabase para poder usarlas.</p>
+                    <p id="aviso-certificacion-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/certificacion-por-encuesta.sql</code> en Supabase para poder usarlos.</p>
                     <label class="eval-opcion">
                         <input type="checkbox" id="chk-eval-activa" checked>
                         <span class="eval-opcion-texto">

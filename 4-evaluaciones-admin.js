@@ -1335,6 +1335,8 @@ window.buscarEmpleadosRevision = async () => {
 window.abrirExpedienteEmpleado = async (empId) => {
     const container = document.getElementById('contenido-modal-evaluaciones');
     if (!container) return;
+    // El resumen por clasificación de más abajo lo pregunta sin poder esperar.
+    await window.cargarCertificacionDeClasificaciones();
     // Estas pantallas llevan su propia flecha en el cuerpo; el encabezado de
     // la hoja vuelve al de la lista para no quedarse con el título de la
     // encuesta que se estuviera viendo.
@@ -1356,7 +1358,7 @@ window.abrirExpedienteEmpleado = async (empId) => {
     // necesita saber en qué periodo cae cada encuesta y cuáles ya no cuentan;
     // los de destinatarios, para no contarle a esta persona encuestas que no
     // van dirigidas a su puesto ni a su departamento.
-    const camposEvals = await window.camposConCertificacion(
+    const camposEvals = await window.camposConMinimo(
         'id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
     const { data: evaluaciones } = await sb.from('evaluations').select(camposEvals);
     const titulos = {};
@@ -1818,7 +1820,7 @@ window.abrirCertificacionPorClasificacion = async () => {
         if (window.cargarDatosEmpleados) await window.cargarDatosEmpleados();
     }
 
-    const camposParaCertificar = await window.camposConCertificacion(
+    const camposParaCertificar = await window.camposConMinimo(
         'id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
     const { data: evaluaciones, error } = await sb.from('evaluations').select(camposParaCertificar);
 
@@ -1826,6 +1828,10 @@ window.abrirCertificacionPorClasificacion = async () => {
         container.innerHTML = `<div style="padding:40px; text-align:center; color:#ef4444;">No se pudieron cargar las encuestas: ${error.message}</div>`;
         return;
     }
+
+    // Qué clasificaciones se certifican: lo decide esta misma pantalla, así que
+    // se relee al abrirla en vez de tirar de la caché de la sesión.
+    const hayTabla = await window.cargarCertificacionDeClasificaciones(true);
 
     // Sólo las encendidas: una apagada no le aparece a nadie, así que tampoco
     // hay nada que certificarle.
@@ -1845,7 +1851,8 @@ window.abrirCertificacionPorClasificacion = async () => {
         fecha: null,
         periodos: [],
         periodoElegido: null,
-        actas: {}
+        actas: {},
+        hayTablaClasificaciones: hayTabla
     };
 
     container.innerHTML = `
@@ -1862,6 +1869,8 @@ window.abrirCertificacionPorClasificacion = async () => {
             <option value="">Elige una clasificación…</option>
             ${clasificaciones.map(c => `<option value="${window.sanitizeForHTML(c)}">${window.sanitizeForHTML(c)}</option>`).join('')}
         </select>
+
+        <div id="ajuste-clasificacion-cert" style="display:none; margin-bottom:15px;"></div>
 
         <div id="filtros-cert" style="display:none; gap:8px; flex-wrap:wrap; margin-bottom:15px;">
             <input type="text" id="buscador-cert" placeholder="🔍 Buscar empleado…"
@@ -1886,6 +1895,66 @@ window.abrirCertificacionPorClasificacion = async () => {
     }
 };
 
+// El conmutador de «esta clasificación se certifica», debajo del selector. Es
+// donde se decide, porque certificar es de una clasificación entera y no de una
+// encuesta suelta.
+window.pintarAjusteClasificacion = (clasificacion) => {
+    const caja = document.getElementById('ajuste-clasificacion-cert');
+    const estado = window.certificacionActual;
+    if (!caja || !estado || !clasificacion) return;
+
+    const seCertifica = window.clasificacionSeCertifica(clasificacion);
+    const hayTabla = estado.hayTablaClasificaciones;
+    const nombre = window.sanitizeForHTML(clasificacion);
+
+    const avisoSinTabla = hayTabla ? '' :
+        `<div style="font-size:0.78rem; color:#b45309; margin-top:8px;">Falta correr <code>sql/clasificaciones-certificacion.sql</code> en Supabase para poder cambiarlo.</div>`;
+
+    caja.style.display = 'block';
+    caja.innerHTML = `
+        <div style="background:white; border:1px solid ${seCertifica ? '#bfdbfe' : '#e2e8f0'}; border-left:3px solid ${seCertifica ? '#2563eb' : '#94a3b8'}; border-radius:10px; padding:12px 14px;">
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:700; color:#334155; font-size:0.92rem;">
+                        ${seCertifica ? '⭐ Se certifica' : '🚫 No se certifica'}
+                    </div>
+                    <div style="font-size:0.78rem; color:#94a3b8; margin-top:2px;">
+                        ${seCertifica
+                            ? 'Sus encuestas cuentan para certificar a cada persona.'
+                            : 'Sus encuestas se contestan y califican igual, pero no certifican a nadie.'}
+                    </div>
+                </div>
+                <button onclick="window.alternarCertificacionClasificacion('${nombre.replace(/'/g, "&apos;")}')"
+                        ${hayTabla ? '' : 'disabled'}
+                        style="flex-shrink:0; padding:8px 14px; border-radius:8px; cursor:${hayTabla ? 'pointer' : 'default'}; font-weight:700; font-size:0.85rem; border:1px solid ${seCertifica ? '#cbd5e1' : '#2563eb'}; background:${seCertifica ? 'white' : '#2563eb'}; color:${seCertifica ? '#64748b' : 'white'}; opacity:${hayTabla ? '1' : '0.5'};">
+                    ${seCertifica ? 'No certificar' : 'Certificar'}
+                </button>
+            </div>
+            ${avisoSinTabla}
+        </div>`;
+};
+
+window.alternarCertificacionClasificacion = async (clasificacion) => {
+    if (!window.modoAdminActivo) { alert('Requiere permisos de administrador'); return; }
+
+    const seCertifica = window.clasificacionSeCertifica(clasificacion);
+    const pregunta = seCertifica
+        ? `¿Dejar de certificar «${clasificacion}»?\n\nSus encuestas se seguirán contestando y calificando, pero dejarán de contar para certificar a nadie.\n\nLo ya certificado se queda como está.`
+        : `¿Volver a certificar «${clasificacion}»?`;
+    if (!confirm(pregunta)) return;
+
+    try {
+        await window.guardarCertificacionDeClasificacion(clasificacion, seCertifica ? false : true);
+        // El badge del usuario se calcula con la caché de encuestas, que ahora
+        // diría otra cosa.
+        window.evalCache = null;
+        window.cargarClasificacionParaCertificar(clasificacion, window.certificacionActual ? window.certificacionActual.fecha : null);
+    } catch (e) {
+        console.error('No se pudo cambiar la certificación de la clasificación:', e);
+        alert('No se pudo guardar: ' + (e.message || e));
+    }
+};
+
 window.cargarClasificacionParaCertificar = async (clasificacion, fechaRef) => {
     const cuerpo = document.getElementById('cuerpo-certificacion');
     const estado = window.certificacionActual;
@@ -1894,13 +1963,30 @@ window.cargarClasificacionParaCertificar = async (clasificacion, fechaRef) => {
     const buscador = document.getElementById('buscador-cert');
     const cajaFiltros = document.getElementById('filtros-cert');
 
+    const cajaAjuste = document.getElementById('ajuste-clasificacion-cert');
+
     if (!clasificacion) {
         estado.elegida = ''; estado.filas = []; estado.seleccion = [];
         estado.busqueda = ''; estado.departamento = '';
         estado.vista = 'pendientes'; estado.fecha = null; estado.periodos = [];
         if (cajaFiltros) cajaFiltros.style.display = 'none';
+        if (cajaAjuste) cajaAjuste.style.display = 'none';
         if (buscador) buscador.value = '';
         cuerpo.innerHTML = '';
+        return;
+    }
+
+    // Lo primero es si esta clasificación se certifica: si no, no hay nada que
+    // listar y lo único que se enseña es el conmutador para volver a encenderla.
+    window.pintarAjusteClasificacion(clasificacion);
+    if (!window.clasificacionSeCertifica(clasificacion)) {
+        estado.elegida = clasificacion; estado.filas = []; estado.seleccion = [];
+        if (cajaFiltros) cajaFiltros.style.display = 'none';
+        cuerpo.innerHTML = `<div style="padding:30px; text-align:center; color:#64748b;">
+            <div style="font-size:2rem; margin-bottom:8px;">🚫</div>
+            <div style="font-weight:600; color:#334155;">«${window.sanitizeForHTML(clasificacion)}» no se certifica</div>
+            <div style="font-size:0.9rem; margin-top:6px;">Sus encuestas se contestan y se califican igual, pero no cuentan para certificar a nadie.</div>
+        </div>`;
         return;
     }
 
@@ -2511,22 +2597,13 @@ window.avisarSiFaltaColumnaRevisores = async () => {
     }
 };
 
-// Sin la columna en la base no se puede apagar la certificación: se deja la
-// casilla marcada y se dice por qué, igual que con los revisores.
+// Sin las columnas en la base no se pueden apagar: se dejan marcadas y se dice
+// por qué, igual que con los revisores.
 window.avisarSiFaltaColumnaCertificacion = async () => {
     const aviso = document.getElementById('aviso-certificacion-no-disponible');
-    const hay = await window.hayColumnaCertificacion();
+    const hay = await window.hayColumna('evaluations', 'requires_min_score');
     if (aviso) aviso.style.display = hay ? 'none' : 'block';
 
-    const chk = document.getElementById('chk-eval-certificable');
-    if (chk) {
-        chk.disabled = !hay;
-        if (!hay) chk.checked = true;
-    }
-
-    // El mínimo y el plazo de reintento son cosa aparte de la certificación:
-    // una encuesta puede exigir el 80% sin certificarse, y al revés. Lo único
-    // que los ata es la columna, que llega en el mismo script.
     const chkUmbral = document.getElementById('chk-eval-umbral');
     if (chkUmbral) {
         chkUmbral.disabled = !hay;
@@ -2775,8 +2852,6 @@ window.abrirModalCrearEval = async () => {
     const chkActiva = document.getElementById('chk-eval-activa');
     if(chkActiva) chkActiva.checked = true;
 
-    const chkCert = document.getElementById('chk-eval-certificable');
-    if(chkCert) chkCert.checked = true;
     const chkUmbral = document.getElementById('chk-eval-umbral');
     if(chkUmbral) chkUmbral.checked = true;
     const inpReintento = document.getElementById('eval-retry-days');
@@ -2861,8 +2936,6 @@ window.editarEvaluacion = async (id) => {
     const chkActiva = document.getElementById('chk-eval-activa');
     if(chkActiva) { chkActiva.checked = window.encuestaActiva(evaluacion); }
 
-    const chkCert = document.getElementById('chk-eval-certificable');
-    if(chkCert) { chkCert.checked = window.requiereCertificacion(evaluacion); }
     const chkUmbral = document.getElementById('chk-eval-umbral');
     if(chkUmbral) { chkUmbral.checked = window.exigeMinimo(evaluacion); }
     const inpReintento = document.getElementById('eval-retry-days');
@@ -3222,11 +3295,6 @@ window.guardarNuevaEvaluacion = async () => {
                 // nombramiento; el resto de la encuesta sí, y la hoja ya avisó.
                 if (await window.hayColumnaRevisores()) {
                     payload.reviewer_employees = revisores;
-                }
-
-                const chkCert = document.getElementById('chk-eval-certificable');
-                if (await window.hayColumnaCertificacion()) {
-                    payload.requires_certification = chkCert ? chkCert.checked : true;
                 }
 
                 const chkUmbral = document.getElementById('chk-eval-umbral');
