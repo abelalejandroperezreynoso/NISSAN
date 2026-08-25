@@ -1349,8 +1349,9 @@ window.abrirExpedienteEmpleado = async (empId) => {
     // necesita saber en qué periodo cae cada encuesta y cuáles ya no cuentan;
     // los de destinatarios, para no contarle a esta persona encuestas que no
     // van dirigidas a su puesto ni a su departamento.
-    const { data: evaluaciones } = await sb.from('evaluations')
-        .select('id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
+    const camposEvals = await window.camposConCertificacion(
+        'id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
+    const { data: evaluaciones } = await sb.from('evaluations').select(camposEvals);
     const titulos = {};
     (evaluaciones || []).forEach(ev => {
         titulos[String(ev.id)] = { title: ev.title, category: (ev.category || 'General') };
@@ -1810,8 +1811,9 @@ window.abrirCertificacionPorClasificacion = async () => {
         if (window.cargarDatosEmpleados) await window.cargarDatosEmpleados();
     }
 
-    const { data: evaluaciones, error } = await sb.from('evaluations')
-        .select('id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
+    const camposParaCertificar = await window.camposConCertificacion(
+        'id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
+    const { data: evaluaciones, error } = await sb.from('evaluations').select(camposParaCertificar);
 
     if (error) {
         container.innerHTML = `<div style="padding:40px; text-align:center; color:#ef4444;">No se pudieron cargar las encuestas: ${error.message}</div>`;
@@ -2502,6 +2504,20 @@ window.avisarSiFaltaColumnaRevisores = async () => {
     }
 };
 
+// Sin la columna en la base no se puede apagar la certificación: se deja la
+// casilla marcada y se dice por qué, igual que con los revisores.
+window.avisarSiFaltaColumnaCertificacion = async () => {
+    const aviso = document.getElementById('aviso-certificacion-no-disponible');
+    const hay = await window.hayColumnaCertificacion();
+    if (aviso) aviso.style.display = hay ? 'none' : 'block';
+
+    const chk = document.getElementById('chk-eval-certificable');
+    if (chk) {
+        chk.disabled = !hay;
+        if (!hay) chk.checked = true;
+    }
+};
+
 window.verificarRestriccionesModo = () => {
     const modeEl = document.getElementById('eval-mode-input');
     const mode = modeEl ? modeEl.value : 'self';
@@ -2732,6 +2748,10 @@ window.abrirModalCrearEval = async () => {
     const chkActiva = document.getElementById('chk-eval-activa');
     if(chkActiva) chkActiva.checked = true;
 
+    const chkCert = document.getElementById('chk-eval-certificable');
+    if(chkCert) chkCert.checked = true;
+    await window.avisarSiFaltaColumnaCertificacion();
+
     window.prepararSelectorPersonas('destinatarios', null);
         window.prepararSelectorPersonas('revisores', null);
         await window.avisarSiFaltaColumnaRevisores();
@@ -2809,6 +2829,10 @@ window.editarEvaluacion = async (id) => {
 
     const chkActiva = document.getElementById('chk-eval-activa');
     if(chkActiva) { chkActiva.checked = window.encuestaActiva(evaluacion); }
+
+    const chkCert = document.getElementById('chk-eval-certificable');
+    if(chkCert) { chkCert.checked = window.requiereCertificacion(evaluacion); }
+    await window.avisarSiFaltaColumnaCertificacion();
 
     await window.prepararInputCategorias(evaluacion.category || 'General');
 
@@ -3163,6 +3187,11 @@ window.guardarNuevaEvaluacion = async () => {
                 // nombramiento; el resto de la encuesta sí, y la hoja ya avisó.
                 if (await window.hayColumnaRevisores()) {
                     payload.reviewer_employees = revisores;
+                }
+
+                const chkCert = document.getElementById('chk-eval-certificable');
+                if (await window.hayColumnaCertificacion()) {
+                    payload.requires_certification = chkCert ? chkCert.checked : true;
                 }
 
                 if(eid) {

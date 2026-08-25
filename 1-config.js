@@ -515,20 +515,46 @@ window.encuestasQueRevisa = (encuestas, revisorId) =>
 // estar todavía. Se pregunta una sola vez por sesión —y se guarda la promesa,
 // no el resultado, para que dos pantallas a la vez no la pidan dos veces—; sin
 // ella todo se comporta como antes y la hoja de la encuesta lo avisa.
-let promesaColumnaRevisores = null;
-window.hayColumnaRevisores = () => {
-    if (!promesaColumnaRevisores) {
-        promesaColumnaRevisores = sb.from('evaluations').select('reviewer_employees').limit(1)
+// Los scripts de `sql/` se corren a mano, así que una columna nueva puede no
+// estar todavía. Se pregunta una sola vez por columna y por sesión —y se guarda
+// la promesa, no el resultado, para que dos pantallas a la vez no la pidan dos
+// veces—; sin ella todo se comporta como antes.
+const promesasDeColumna = {};
+window.hayColumna = (tabla, columna) => {
+    const clave = `${tabla}.${columna}`;
+    if (!promesasDeColumna[clave]) {
+        promesasDeColumna[clave] = sb.from(tabla).select(columna).limit(1)
             .then(({ error }) => !error)
             .catch(() => false);
     }
-    return promesaColumnaRevisores;
+    return promesasDeColumna[clave];
 };
+
+window.hayColumnaRevisores = () => window.hayColumna('evaluations', 'reviewer_employees');
+window.hayColumnaCertificacion = () => window.hayColumna('evaluations', 'requires_certification');
 
 // Para las consultas que piden columnas por nombre: pedir una que no existe no
 // devuelve la fila sin ese campo, revienta la consulta entera.
-window.camposConRevisores = async (campos) =>
-    (await window.hayColumnaRevisores()) ? campos + ', reviewer_employees' : campos;
+window.camposConColumna = async (campos, tabla, columna) =>
+    (await window.hayColumna(tabla, columna)) ? `${campos}, ${columna}` : campos;
+
+window.camposConRevisores = (campos) =>
+    window.camposConColumna(campos, 'evaluations', 'reviewer_employees');
+
+window.camposConCertificacion = (campos) =>
+    window.camposConColumna(campos, 'evaluations', 'requires_certification');
+
+// ==========================================
+// QUÉ ENCUESTAS HAY QUE CERTIFICAR
+// ==========================================
+// Certificar es dar fe de que las respuestas de alguien son verídicas, y no
+// toda encuesta lo necesita: una de clima laboral o una de sugerencias se
+// contesta y ya. La que no lo necesita deja de contar en el avance de su
+// clasificación, así que no impide que el resto se dé por certificado.
+//
+// Nula significa que sí, para que todo lo que ya existe siga comportándose
+// igual y para que la aplicación aguante sin la columna.
+window.requiereCertificacion = (ev) => !!ev && ev.requires_certification !== false;
 
 // La clasificación es texto libre —un `input` con datalist, no un catálogo—,
 // así que «Seguridad», «SEGURIDAD» y «seguridad » serían tres grupos distintos
@@ -671,7 +697,9 @@ window.etiquetaDePeriodo = (periodo, frecuencia) => {
 
 window.estadoCertificacion = (encuestas, respuestas, fecha) => {
     const E = window.ESTADOS_CERTIFICACION;
-    const lista = (encuestas || []).filter(window.encuestaActiva);
+    // Las que no piden certificación se quedan fuera del resumen entero: ni
+    // suman al total ni pueden dejar una clasificación a medias.
+    const lista = (encuestas || []).filter(window.encuestaActiva).filter(window.requiereCertificacion);
 
     const resumen = {
         estado: E.VACIO,

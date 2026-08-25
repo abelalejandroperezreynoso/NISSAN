@@ -564,9 +564,11 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Pedirle a PostgREST una columna que no existe no devuelve la fila sin ese
   campo: revienta la consulta entera. Por eso toda consulta que la pida arma su
   lista de columnas con `window.camposConRevisores(campos)`, que se apoya en
-  `window.hayColumnaRevisores()` —una sola pregunta por sesión, guardada como
-  promesa—. Sin la columna todo se comporta como antes, la casilla se queda
-  apagada y la hoja dice qué script falta.
+  `window.hayColumna(tabla, columna)` —una sola pregunta por columna y por
+  sesión, guardada como promesa—. Ése es el molde de todas las columnas que
+  añade un script de `sql/`: `window.camposConColumna(campos, tabla, columna)`
+  y un envoltorio con nombre. Sin la columna todo se comporta como antes, la
+  casilla se queda apagada y la hoja dice qué script falta.
 - **Quién manda en las refacciones.** El permiso para ver todas las
   solicitudes de la empresa —y para repartirlas entre atendedores desde el
   mapa— no va por puesto sino por **encargo extra**: en «Configurar permisos»
@@ -586,6 +588,27 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   esa caché, deja que el helper los consulte. El modo administrador es aparte:
   viaja en `sessionStorage` y sigue valiendo al pasar de una pantalla a la
   otra (ver más arriba).
+- **No toda encuesta se certifica.** La columna `requires_certification`
+  decide si cuenta para certificar su clasificación; nula o `true` significa
+  que sí, para que lo que ya existe se comporte igual. Una que dice que no
+  desaparece del resumen entero: no suma al total, no sale como pendiente y no
+  impide que el resto se dé por certificado. Sus respuestas se siguen
+  contestando, calificando y contando en las estadísticas.
+
+  ```js
+  window.requiereCertificacion(ev)   // en 1-config.js
+  ```
+
+  El filtro se aplica en un solo sitio —la lista con la que arranca
+  `estadoCertificacion`—, así que lo heredan el badge del usuario, el
+  expediente y la pantalla de certificar por clasificación sin tocar ninguno.
+  Lo que sí hay que recordar es traerse la columna: las dos pantallas del
+  administrador piden columnas por nombre y usan
+  `window.camposConCertificacion(campos)`.
+
+  El script es `sql/certificacion-por-encuesta.sql`. Sin correrlo, todas las
+  encuestas se consideran certificables —como hasta ahora— y la casilla se
+  queda marcada y apagada avisando de qué falta.
 - **Certificar es de una persona y de un periodo.** Certificar quiere decir dar
   fe de que las respuestas de alguien son verídicas, así que la unidad es
   **clasificación × empleado × periodo**. Sin el periodo, el sello de enero
