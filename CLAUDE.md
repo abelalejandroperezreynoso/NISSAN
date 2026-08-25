@@ -661,16 +661,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   puntaje salió de la insignia porque ahí sólo cabe el plazo, y el botón dice
   «Repetir» en vez de «Responder».
 
-  Ese bloque va **a lo ancho de la tarjeta, bajo el `.card-header`**, y no
-  dentro de `.card-info`: entre el icono, los rellenos y los 90px de
-  `.card-actions`, a la columna del texto le quedan 116px en un teléfono y un
-  párrafo ahí sale en una tira de una palabra por línea. Lo mismo vale para
-  cualquier explicación nueva que se le quiera poner a un pendiente.
-
-  Y `.card-info` lleva hoy `min-width: 0` —con `flex-shrink: 0` en
-  `.card-actions`—: sin eso la columna del texto no encogía por debajo de su
-  insignia más ancha («📉 6 meses sin contestar», 150px) y empujaba el botón
-  fuera del borde de la tarjeta, cortado por la mitad y sin que el dedo llegara.
+  Ese bloque es `.pendiente-nota` —en `estilos.css`, con su variante
+  `.vencida`— y va como **una fila más del `.card-header`**, nunca dentro de
+  `.card-info`. Cualquier explicación nueva que se le quiera poner a un
+  pendiente va igual.
 
   **El plazo se cuenta desde que se envió, no desde que se calificó**: la base
   no guarda cuándo se calificó. Si la revisión tarda más que el plazo, el
@@ -875,6 +869,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   persona concreta en `scheduled_evaluations` sigue apareciendo en su día
   aunque después se apague la encuesta. Esa programación es una asignación
   explícita y se cancela desde el propio calendario.
+- **La tarjeta de un pendiente se parte en filas en el teléfono.** El
+  `.card-header` reparte el ancho en tres columnas —el icono, el texto y el
+  botón—, y en un iPhone 12 mini la tarjeta mide 329px: descontando los 60 del
+  icono, los 90 de `.card-actions` y los rellenos, a la columna del texto le
+  quedaban **107px**. El título salía en tres renglones, cada insignia en dos y
+  el bloque de detalle en una tira de una palabra por línea.
+
+  Por eso el encabezado lleva `flex-wrap: wrap` y, en `@media (max-width:600px)`,
+  el icono baja a 48px, `.card-info` va a `flex: 1 1 0%` y `.card-actions` a
+  `flex: 1 1 100%`: con esa base el botón ya no cabe en la primera fila y se va
+  solo a la suya, a lo ancho, que además es un blanco mucho más fácil para el
+  dedo. La columna del texto pasa de 107 a **233px** y las tarjetas encogen
+  —la de reintento, de 342 a 289px—. En pantalla ancha no cambia nada: la
+  primera fila sigue cabiendo entera.
+
+  El orden de las filas lo decide `order`, no el marcado: `.pendiente-nota`
+  está en el HTML entre el texto y el botón, pero lleva `order: 1` para caer
+  **debajo** del botón en pantalla ancha —donde el botón está a la derecha, no
+  estorba— y vuelve a `order: 0` en el teléfono, para explicar qué pasó
+  **antes** de pedir la acción.
+
+  Y `.card-info` lleva `min-width: 0` —con `flex-shrink: 0` en
+  `.card-actions`—: sin eso la columna del texto no encogía por debajo de su
+  insignia más ancha («📉 6 meses sin contestar», 150px) y empujaba el botón
+  fuera del borde de la tarjeta, cortado por la mitad y sin que el dedo
+  llegara.
+
+  Estas cuatro clases —`.card-header`, `.card-info`, `.card-actions`,
+  `.thumb-container`— **sólo las usa `7-pendientes.js`**; `.incident-card` a
+  secas sí la comparten objetivos, hallazgos y el detalle de una respuesta, y
+  ésa no se toca aquí.
 - **Las estadísticas tienen dos desgloses y dos orígenes.** Por
   departamentos, los conteos vienen del reporte `obtener_estadisticas_empleados`,
   que suma todos los registros del filtro en la base. Por registro, en cambio,

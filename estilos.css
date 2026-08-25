@@ -657,6 +657,7 @@ button.btn-login:disabled {
 .card-header {
     padding: 16px;
     display: flex;
+    flex-wrap: wrap;
     gap: 16px;
     align-items: center;
     justify-content: space-between;
@@ -3079,14 +3080,98 @@ html.modal-abierto {
     box-sizing: border-box;
 }
 
-/* El botón de la derecha de una tarjeta de pendientes no puede salirse de ella.
-   Sin `min-width:0`, la columna del texto no encoge por debajo de su insignia
-   más ancha —«📉 6 meses sin contestar» mide 150px— y empuja a `.card-actions`
-   fuera del borde: el botón quedaba cortado por la mitad y sin llegar el dedo. */
+/* --- Tarjetas de pendientes -------------------------------------------------
+   El botón de la derecha no puede salirse de la tarjeta. Sin `min-width:0`, la
+   columna del texto no encoge por debajo de su insignia más ancha —«📉 6 meses
+   sin contestar» mide 150px— y empuja a `.card-actions` fuera del borde: el
+   botón quedaba cortado por la mitad y sin que el dedo llegara. */
 .card-info {
     min-width: 0;
 }
 
 .card-actions {
     flex-shrink: 0;
+}
+
+/* Nota que explica un pendiente. Es una fila más del `.card-header` —con base
+   del 100% se lleva su propio renglón— y nunca va dentro de `.card-info`: ahí
+   le queda menos de la mitad del ancho y el párrafo sale en una tira de una
+   palabra por renglón. */
+.pendiente-nota {
+    flex: 1 1 100%;
+    order: 1;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+}
+
+.pendiente-nota.vencida {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.pendiente-nota-titulo {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #92400e;
+    margin-bottom: 4px;
+}
+
+.pendiente-nota.vencida .pendiente-nota-titulo {
+    color: #991b1b;
+}
+
+.pendiente-nota-texto {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: #a16207;
+}
+
+.pendiente-nota.vencida .pendiente-nota-texto {
+    color: #b91c1c;
+}
+
+/* En un iPhone 12 mini la tarjeta mide 329px y el encabezado repartía ese ancho
+   en tres columnas: el icono (60px), el texto y el botón (90px). A la columna
+   del texto le quedaban 107px, así que el título salía en tres renglones, cada
+   insignia en dos y el bloque de detalle en una tira. Aquí el encabezado se
+   parte en dos filas —arriba el icono con el texto, que pasa a 241px, y abajo
+   el botón a lo ancho, que además es un blanco mucho más fácil para el dedo—. */
+@media (max-width: 600px) {
+    .card-header {
+        flex-wrap: wrap;
+        gap: 12px;
+        padding: 14px;
+    }
+
+    .thumb-container {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+    }
+
+    /* El texto se lleva lo que sobra de la primera fila; el botón, con base del
+       100%, ya no cabe en ella y baja solo. */
+    .card-info {
+        flex: 1 1 0%;
+    }
+
+    .card-actions {
+        flex: 1 1 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+
+    .btn-firmar {
+        padding: 10px 12px;
+        font-size: 0.8rem;
+    }
+
+    /* Con el botón ya en su propia fila, la nota se pone delante: primero se
+       dice qué pasó y luego se pide la acción. */
+    .pendiente-nota {
+        order: 0;
+    }
 }

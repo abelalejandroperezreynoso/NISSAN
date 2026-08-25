@@ -238,11 +238,6 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
     window.bloqueDeReintento = (reintento, vencida) => {
         if (!reintento) return '';
 
-        const fondo = vencida ? '#fef2f2' : '#fffbeb';
-        const borde = vencida ? '#fecaca' : '#fde68a';
-        const titulo = vencida ? '#991b1b' : '#92400e';
-        const texto = vencida ? '#b91c1c' : '#a16207';
-
         const minimo = window.UMBRAL_CERTIFICACION;
         const contestada = fechaCorta(reintento.fechaRespuesta);
         const limite = fechaCorta(reintento.vence);
@@ -254,14 +249,11 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             ? `El plazo para reponerla venció el <strong>${limite}</strong>: contéstala en cuanto puedas.`
             : `Tienes hasta el <strong>${limite}</strong> para volver a contestarla.`;
 
-        // Va a lo ancho de la tarjeta y no dentro de la columna del texto: ahí
-        // le quedan 116px en un teléfono y el párrafo sale en una tira.
+        // Los colores y el ancho los pone `.pendiente-nota`, en `estilos.css`.
         return `
-            <div style="background:${fondo}; border:1px solid ${borde}; border-radius:8px; margin:0 16px 16px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
-                <div style="font-size:0.85rem; color:${titulo}; font-weight:700;">
-                    📉 Tu resultado es insuficiente
-                </div>
-                <div style="font-size:0.78rem; color:${texto}; line-height:1.4;">
+            <div class="pendiente-nota${vencida ? ' vencida' : ''}">
+                <div class="pendiente-nota-titulo">📉 Tu resultado es insuficiente</div>
+                <div class="pendiente-nota-texto">
                     ${cuando} y se pide al menos <strong>${minimo}%</strong>. ${plazo}
                 </div>
             </div>`;
@@ -1109,11 +1101,11 @@ if (item.virtual_type === 'waiting_boss') {
                                 </div>
                             </div>`}
                         </div>
+                        ${bloqueEstadoHtml}
                         <div class="card-actions" style="align-self: center;">
                             <button class="btn-firmar" onclick="window.responderDirecto('${item.id}', '${safeTitle}')" style="color:white; background:#2563eb; border:none;">${item.vencimiento && item.vencimiento.tipoAviso === 'reintento' ? 'Repetir' : 'Responder'}</button>
                         </div>
                     </div>
-                    ${bloqueEstadoHtml}
                 </div>`;
             }
                     
