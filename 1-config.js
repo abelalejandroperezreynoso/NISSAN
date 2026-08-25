@@ -405,7 +405,8 @@ window.reintentoDeRespuesta = (ev, resp, fecha) => {
     const vence = new Date(new Date(resp.submitted_at).getTime() + dias * 86400000);
     const diasFaltantes = Math.ceil((vence - ahora) / 86400000);
 
-    return { dias, puntaje, vence, diasFaltantes, vencida: diasFaltantes < 0 };
+    return { dias, puntaje, vence, diasFaltantes, vencida: diasFaltantes < 0,
+             fechaRespuesta: resp.submitted_at };
 };
 
 // El nombre del área es texto libre: la respuesta guarda el que tenía el

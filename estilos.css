@@ -3078,3 +3078,15 @@ html.modal-abierto {
 .pregunta-card textarea {
     box-sizing: border-box;
 }
+
+/* El botón de la derecha de una tarjeta de pendientes no puede salirse de ella.
+   Sin `min-width:0`, la columna del texto no encoge por debajo de su insignia
+   más ancha —«📉 6 meses sin contestar» mide 150px— y empuja a `.card-actions`
+   fuera del borde: el botón quedaba cortado por la mitad y sin llegar el dedo. */
+.card-info {
+    min-width: 0;
+}
+
+.card-actions {
+    flex-shrink: 0;
+}

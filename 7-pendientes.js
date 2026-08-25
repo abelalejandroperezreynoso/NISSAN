@@ -224,6 +224,49 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         return `${cantidad} ${cantidad === 1 ? nombres[0] : nombres[1]} sin contestar`;
     };
 
+    const fechaCorta = (valor) => {
+        const f = new Date(valor);
+        if (isNaN(f)) return '';
+        return `${String(f.getDate()).padStart(2, '0')}/${String(f.getMonth() + 1).padStart(2, '0')}/${f.getFullYear()}`;
+    };
+
+    // Un pendiente de reintento no se explica solo: la tarjeta dice «vuelve a
+    // contestarla» y quien la lee no sabe por qué, si ya la contestó. Este
+    // bloque sustituye al del periodo y dice las tres cosas que faltan: que el
+    // resultado no alcanzó, cuánto sacó contra cuánto se pide, y hasta cuándo
+    // hay para reponerla.
+    window.bloqueDeReintento = (reintento, vencida) => {
+        if (!reintento) return '';
+
+        const fondo = vencida ? '#fef2f2' : '#fffbeb';
+        const borde = vencida ? '#fecaca' : '#fde68a';
+        const titulo = vencida ? '#991b1b' : '#92400e';
+        const texto = vencida ? '#b91c1c' : '#a16207';
+
+        const minimo = window.UMBRAL_CERTIFICACION;
+        const contestada = fechaCorta(reintento.fechaRespuesta);
+        const limite = fechaCorta(reintento.vence);
+
+        const cuando = contestada
+            ? `La que entregaste el ${contestada} obtuvo <strong>${reintento.puntaje}%</strong>`
+            : `Tu última respuesta obtuvo <strong>${reintento.puntaje}%</strong>`;
+        const plazo = vencida
+            ? `El plazo para reponerla venció el <strong>${limite}</strong>: contéstala en cuanto puedas.`
+            : `Tienes hasta el <strong>${limite}</strong> para volver a contestarla.`;
+
+        // Va a lo ancho de la tarjeta y no dentro de la columna del texto: ahí
+        // le quedan 116px en un teléfono y el párrafo sale en una tira.
+        return `
+            <div style="background:${fondo}; border:1px solid ${borde}; border-radius:8px; margin:0 16px 16px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
+                <div style="font-size:0.85rem; color:${titulo}; font-weight:700;">
+                    📉 Tu resultado es insuficiente
+                </div>
+                <div style="font-size:0.78rem; color:${texto}; line-height:1.4;">
+                    ${cuando} y se pide al menos <strong>${minimo}%</strong>. ${plazo}
+                </div>
+            </div>`;
+    };
+
     // 'fechaAlta' (el created_at de la encuesta) sirve de origen para contar la
     // racha cuando el empleado no la ha contestado nunca.
     window.esEvaluacionPendiente = (respuestas, evalId, frecuencia, fechaAlta, encuesta) => {
@@ -764,6 +807,9 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
             // Racha de periodos que cerraron sin respuesta. Se muestra aparte del
             // estado para que el atraso acumulado quede a la vista.
             let badgeOmisionesHtml = '';
+            // Bloque que sustituye al del periodo cuando hace falta explicar por
+            // qué está ahí el pendiente. Vacío, la tarjeta pinta el suyo.
+            let bloqueEstadoHtml = '';
             if (item.vencimiento && item.vencimiento.periodosOmitidos > 0) {
                 const textoRacha = window.textoOmisiones(item.vencimiento.frecuencia, item.vencimiento.periodosOmitidos);
                 if (textoRacha) {
@@ -783,9 +829,12 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     const borde = item.vencimiento.vencida ? '#fecaca' : '#fef08a';
                     const color = item.vencimiento.vencida ? '#b91c1c' : '#a16207';
 
-                    badgeTiempoHtml = `<span style="background:${fondo}; color:${color}; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid ${borde};">🔁 Repetir (${r.puntaje}%) · ${plazo}</span>`;
+                    // El puntaje no va en la etiqueta: ahí sólo cabe el plazo, y
+                    // la cifra se explica entera en el bloque de abajo.
+                    badgeTiempoHtml = `<span style="background:${fondo}; color:${color}; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid ${borde};">🔁 Repetir ${plazo}</span>`;
                     txtEstado = "¡Vuelve a contestarla!";
                     colorEstado = color;
+                    bloqueEstadoHtml = window.bloqueDeReintento(r, item.vencimiento.vencida);
                 } else if (item.vencimiento.vencida) {
                     const etiquetaVencida = item.vencimiento.tipoAviso === 'nunca' ? 'Nunca contestada' : 'Vencida';
                     badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">🚨 ${etiquetaVencida}</span>`;
@@ -1050,6 +1099,7 @@ if (item.virtual_type === 'waiting_boss') {
                                 ${badgeOmisionesHtml}
                             </div>
                             
+                            ${bloqueEstadoHtml ? '' : `
                             <div style="background:#eff6ff; border:1px solid #dbeafe; border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
                                 <div style="font-size:0.85rem; color:#1e40af; font-weight:700;">
                                     📅 ${textoPeriodo}
@@ -1057,12 +1107,13 @@ if (item.virtual_type === 'waiting_boss') {
                                 <div style="font-size:0.75rem; color:#1e3a8a; display:flex; align-items:center; gap:4px;">
                                     <span>🔄</span> <span style="font-weight:600;">${textoUltima}</span>
                                 </div>
-                            </div>
+                            </div>`}
                         </div>
                         <div class="card-actions" style="align-self: center;">
-                            <button class="btn-firmar" onclick="window.responderDirecto('${item.id}', '${safeTitle}')" style="color:white; background:#2563eb; border:none;">Responder</button>
+                            <button class="btn-firmar" onclick="window.responderDirecto('${item.id}', '${safeTitle}')" style="color:white; background:#2563eb; border:none;">${item.vencimiento && item.vencimiento.tipoAviso === 'reintento' ? 'Repetir' : 'Responder'}</button>
                         </div>
                     </div>
+                    ${bloqueEstadoHtml}
                 </div>`;
             }
                     

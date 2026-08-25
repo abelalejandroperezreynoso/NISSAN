@@ -640,7 +640,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **Y cuánto tiempo hay para reponerla** lo dice `retry_days`, en días. En 0
   —el valor por defecto— no pasa nada. Con un número, una respuesta ya
   calificada por debajo del mínimo vuelve a salir en los pendientes de quien la
-  contestó, con la insignia «🔁 Repetir (55%) · en 3 días»:
+  contestó, con la insignia «🔁 Repetir en 3 días»:
 
   ```js
   window.reintentoDeRespuesta(ev, resp, fecha)   // null si no hay nada que reponer
@@ -652,6 +652,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   que sí hubo que hacer es pasarle la encuesta —quinto argumento— y traerse
   `review_status` y `grades_json` en las dos consultas de respuestas, porque
   sin el puntaje no se sabe si hay que reponerla.
+
+  **Un pendiente de reintento se explica solo.** «Vuelve a contestarla» no le
+  dice nada a quien ya la contestó, así que la tarjeta sustituye el bloque del
+  periodo por el de `window.bloqueDeReintento(reintento, vencida)`, en
+  `7-pendientes.js`: «Tu resultado es insuficiente», qué sacó contra qué se
+  pide y hasta cuándo hay —o desde cuándo venció, y entonces en rojo—. El
+  puntaje salió de la insignia porque ahí sólo cabe el plazo, y el botón dice
+  «Repetir» en vez de «Responder».
+
+  Ese bloque va **a lo ancho de la tarjeta, bajo el `.card-header`**, y no
+  dentro de `.card-info`: entre el icono, los rellenos y los 90px de
+  `.card-actions`, a la columna del texto le quedan 116px en un teléfono y un
+  párrafo ahí sale en una tira de una palabra por línea. Lo mismo vale para
+  cualquier explicación nueva que se le quiera poner a un pendiente.
+
+  Y `.card-info` lleva hoy `min-width: 0` —con `flex-shrink: 0` en
+  `.card-actions`—: sin eso la columna del texto no encogía por debajo de su
+  insignia más ancha («📉 6 meses sin contestar», 150px) y empujaba el botón
+  fuera del borde de la tarjeta, cortado por la mitad y sin que el dedo llegara.
 
   **El plazo se cuenta desde que se envió, no desde que se calificó**: la base
   no guarda cuándo se calificó. Si la revisión tarda más que el plazo, el
