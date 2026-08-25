@@ -481,13 +481,18 @@
                         </span>
                     </label>
                     <label class="eval-opcion" id="opcion-umbral-certificacion">
-                        <input type="checkbox" id="chk-eval-umbral" checked>
+                        <input type="checkbox" id="chk-eval-umbral" onchange="window.alternarUmbralCertificacion()" checked>
                         <span class="eval-opcion-texto">
                             <span class="eval-opcion-titulo">📊 Exige 80% para certificar</span>
                             <span class="eval-opcion-ayuda">Si se desactiva, se certifica con cualquier calificación.</span>
                         </span>
                     </label>
-                    <p id="aviso-certificacion-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/certificacion-por-encuesta.sql</code> en Supabase para poder desactivarlas.</p>
+                    <div class="eval-escala-fila" id="fila-reintento" style="padding:10px 0 0;">
+                        <label for="eval-retry-days" style="margin:0;">Días para repetirla si no alcanza</label>
+                        <input type="number" id="eval-retry-days" value="0" min="0" max="365" style="width:80px;">
+                    </div>
+                    <p class="form-ayuda" style="margin-top:2px;">En 0 no se pide repetirla. Con un número, a quien no llegue al mínimo le vuelve a salir como pendiente durante esos días.</p>
+                    <p id="aviso-certificacion-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/certificacion-por-encuesta.sql</code> en Supabase para poder usarlas.</p>
                     <label class="eval-opcion">
                         <input type="checkbox" id="chk-eval-activa" checked>
                         <span class="eval-opcion-texto">

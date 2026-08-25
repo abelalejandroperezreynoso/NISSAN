@@ -6,6 +6,7 @@
 --
 --   requires_certification  si cuenta para certificar su clasificación
 --   requires_min_score      si además hay que sacar el 80% para certificarla
+--   retry_days              cuántos días hay para reponerla si no lo alcanza
 --
 -- Una encuesta con `false` deja de contar en el avance de certificación de su
 -- clasificación: no suma al total, no aparece como pendiente de certificar y
@@ -18,6 +19,11 @@
 -- `requires_min_score` en false deja certificar una respuesta ya calificada
 -- con el puntaje que sea, para las encuestas que se contestan para dejar
 -- constancia y no para aprobar. Nula o true: hace falta el 80% de siempre.
+--
+-- `retry_days` en 0 —el valor por defecto— se comporta como hasta ahora: una
+-- respuesta por debajo del mínimo se queda como está. Con un número, a quien no
+-- lo alcanzó le vuelve a salir la encuesta entre sus pendientes durante esos
+-- días, contados desde que la envió.
 --
 -- Ejecutar en el SQL Editor de Supabase. Se puede correr las veces que haga
 -- falta: cada columna se crea sólo si no está. La aplicación aguanta mientras
@@ -61,8 +67,29 @@ begin
     raise notice 'Columna evaluations.requires_min_score creada con default true';
 end $$;
 
+do $$
+begin
+    if exists (
+        select 1
+          from pg_attribute
+         where attrelid = 'public.evaluations'::regclass
+           and attname  = 'retry_days'
+           and not attisdropped
+    ) then
+        raise notice 'La columna evaluations.retry_days ya existe; no se toca.';
+        return;
+    end if;
+
+    execute 'alter table public.evaluations add column retry_days smallint not null default 0';
+
+    raise notice 'Columna evaluations.retry_days creada con default 0';
+end $$;
+
 comment on column public.evaluations.requires_certification is
     'Si es false, esta encuesta no cuenta para certificar su clasificación. Nula o true: cuenta, que es lo de siempre.';
 
 comment on column public.evaluations.requires_min_score is
     'Si es false, una respuesta calificada se puede certificar con cualquier puntaje. Nula o true: hace falta el 80%.';
+
+comment on column public.evaluations.retry_days is
+    'Días para volver a contestar la encuesta cuando la respuesta no alcanzó el mínimo. 0: no se pide repetirla.';

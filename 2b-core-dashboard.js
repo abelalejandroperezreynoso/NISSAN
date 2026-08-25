@@ -1092,8 +1092,8 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
     }
 
     try {
-        const camposEvals = await window.camposConRevisores(
-            'id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency');
+        const camposEvals = await window.camposConReintento(await window.camposConRevisores(
+            'id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency'));
         const { data: activeEvalsDb } = await sb.from('evaluations')
             .select(camposEvals)
             .eq('active', true);
@@ -1151,15 +1151,17 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
 
                 if (evalsQueLeTocan.length > 0) {
                     const idsEvals = evalsQueLeTocan.map(e => e.id);
+                    // `grades_json` es para el plazo de reintento: sin el
+                    // puntaje no se sabe si hay que reponer la encuesta.
                     const { data: respuestas } = await sb.from('evaluation_responses')
-                        .select('evaluation_id, submitted_at, review_status')
+                        .select('evaluation_id, submitted_at, review_status, grades_json')
                         .eq('employee_id', empId)
                         .in('evaluation_id', idsEvals);
                     
                     countEvals = evalsQueLeTocan.filter(ev => {
                                             if (window.esEvaluacionPendiente) {
                                                 // Usamos la nueva lógica unificada (Retorna un objeto, por lo que leemos .mostrar)
-                                                return window.esEvaluacionPendiente(respuestas, ev.id, ev.frequency).mostrar;
+                                                return window.esEvaluacionPendiente(respuestas, ev.id, ev.frequency, ev.created_at, ev).mostrar;
                                             } else {
                                                 // Fallback de seguridad por si el archivo 7-pendientes.js aún no ha cargado
                                                 const resps = respuestas ? respuestas.filter(r => r.evaluation_id === ev.id) : [];

@@ -623,11 +623,33 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   no certificar de más. La casilla del umbral se apaga sola cuando la encuesta
   no se certifica, que es cuando no significa nada.
 
-  Las dos columnas van en `sql/certificacion-por-encuesta.sql`, que se puede
+  **Y cuánto tiempo hay para reponerla** lo dice `retry_days`, en días. En 0
+  —el valor por defecto— no pasa nada. Con un número, una respuesta ya
+  calificada por debajo del mínimo vuelve a salir en los pendientes de quien la
+  contestó, con la insignia «🔁 Repetir (55%) · en 3 días»:
+
+  ```js
+  window.reintentoDeRespuesta(ev, resp, fecha)   // null si no hay nada que reponer
+  ```
+
+  Se engancha en `esEvaluacionPendiente`, justo detrás de «mal revisada» y por
+  las mismas razones: la contestó, pero no cuenta. Con eso lo heredan la
+  pantalla de pendientes, el badge del panel y el calendario sin tocarlos; lo
+  que sí hubo que hacer es pasarle la encuesta —quinto argumento— y traerse
+  `review_status` y `grades_json` en las dos consultas de respuestas, porque
+  sin el puntaje no se sabe si hay que reponerla.
+
+  **El plazo se cuenta desde que se envió, no desde que se calificó**: la base
+  no guarda cuándo se calificó. Si la revisión tarda más que el plazo, el
+  pendiente sale igual pero ya vencido —visible y accionable—; lo que no puede
+  pasar es que no salga. Para contarlo desde la calificación haría falta una
+  columna `reviewed_at` sellada al calificar.
+
+  Las tres columnas van en `sql/certificacion-por-encuesta.sql`, que se puede
   correr las veces que haga falta —cada una se crea sólo si no está—. Sin
-  correrlo, todas las encuestas se consideran certificables y con mínimo —como
-  hasta ahora— y las casillas se quedan marcadas y apagadas avisando de qué
-  falta.
+  correrlo, todas las encuestas se consideran certificables y con mínimo, sin
+  plazo de reintento —como hasta ahora— y los controles se quedan apagados
+  avisando de qué falta.
 - **Certificar es de una persona y de un periodo.** Certificar quiere decir dar
   fe de que las respuestas de alguien son verídicas, así que la unidad es
   **clasificación × empleado × periodo**. Sin el periodo, el sello de enero

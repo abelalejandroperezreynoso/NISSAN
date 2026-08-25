@@ -367,6 +367,47 @@ window.esPreguntaDeFoto = (pregunta) =>
 // o unas opciones se quedarían sin calificar y sin nadie que los revisara.
 window.TIPOS_EN_MODO_JEFE = ['range', window.TIPO_PREGUNTA_FOTO];
 
+// ==========================================
+// PLAZO PARA VOLVER A CONTESTAR
+// ==========================================
+// Una respuesta que no llegó al mínimo no sirve de nada si nadie vuelve a
+// hacerla. `retry_days` da un plazo para reponerla: mientras corre, la encuesta
+// vuelve a salir en los pendientes de quien la contestó. En 0 —o sin la
+// columna— no pasa nada y todo se comporta como antes.
+window.diasDeReintento = (ev) => {
+    const n = ev ? parseInt(ev.retry_days, 10) : 0;
+    return (Number.isFinite(n) && n > 0) ? n : 0;
+};
+
+// Si esta respuesta abre un plazo para repetirla. Devuelve null cuando no hay
+// nada que reponer.
+//
+// El plazo se cuenta desde que se envió y no desde que se calificó: la base no
+// guarda cuándo se calificó. Si la revisión tarda más que el plazo, el
+// pendiente sale igual pero ya vencido, que es visible y accionable —lo que no
+// puede pasar es que no salga—.
+window.reintentoDeRespuesta = (ev, resp, fecha) => {
+    const dias = window.diasDeReintento(ev);
+    if (dias <= 0 || !resp) return null;
+
+    // Sin mínimo que alcanzar no hay reprobado que reponer.
+    if (!window.exigeUmbralCertificacion(ev)) return null;
+
+    // Sólo lo ya calificado y todavía no dado por bueno: lo que está sin
+    // calificar aún no se sabe, y lo certificado ya pasó.
+    if (resp.review_status !== 'Revisado') return null;
+
+    const puntaje = typeof window.calcularScoreRespuesta === 'function'
+        ? window.calcularScoreRespuesta(resp) : 0;
+    if (puntaje >= window.UMBRAL_CERTIFICACION) return null;
+
+    const ahora = fecha ? new Date(fecha) : new Date();
+    const vence = new Date(new Date(resp.submitted_at).getTime() + dias * 86400000);
+    const diasFaltantes = Math.ceil((vence - ahora) / 86400000);
+
+    return { dias, puntaje, vence, diasFaltantes, vencida: diasFaltantes < 0 };
+};
+
 // El nombre del área es texto libre: la respuesta guarda el que tenía el
 // empleado ese día y la pantalla de estadísticas agrupa por el de su ficha. Se
 // comparan siempre normalizados, o «Planta 1» y «PLANTA 1 » serían dos áreas.
@@ -543,6 +584,9 @@ window.camposConRevisores = (campos) =>
 
 // Las dos banderas de la certificación viajan juntas: las piden las mismas dos
 // pantallas y ninguna sirve sin la otra.
+window.camposConReintento = (campos) =>
+    window.camposConColumna(campos, 'evaluations', 'retry_days');
+
 window.camposConCertificacion = async (campos) => {
     const conBandera = await window.camposConColumna(campos, 'evaluations', 'requires_certification');
     return window.camposConColumna(conBandera, 'evaluations', 'requires_min_score');

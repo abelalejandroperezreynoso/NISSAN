@@ -2540,6 +2540,15 @@ window.alternarUmbralCertificacion = (forzarApagado) => {
     const inutil = forzarApagado || !chkCert || !chkCert.checked;
     chkUmbral.disabled = inutil;
     fila.style.opacity = inutil ? '0.45' : '1';
+
+    // Sin mínimo que alcanzar no hay nada que repetir.
+    const filaReintento = document.getElementById('fila-reintento');
+    const inpReintento = document.getElementById('eval-retry-days');
+    if (filaReintento && inpReintento) {
+        const sinUmbral = inutil || !chkUmbral.checked;
+        inpReintento.disabled = sinUmbral;
+        filaReintento.style.opacity = sinUmbral ? '0.45' : '1';
+    }
 };
 
 window.verificarRestriccionesModo = () => {
@@ -2776,6 +2785,8 @@ window.abrirModalCrearEval = async () => {
     if(chkCert) chkCert.checked = true;
     const chkUmbral = document.getElementById('chk-eval-umbral');
     if(chkUmbral) chkUmbral.checked = true;
+    const inpReintento = document.getElementById('eval-retry-days');
+    if(inpReintento) inpReintento.value = 0;
     await window.avisarSiFaltaColumnaCertificacion();
 
     window.prepararSelectorPersonas('destinatarios', null);
@@ -2860,6 +2871,8 @@ window.editarEvaluacion = async (id) => {
     if(chkCert) { chkCert.checked = window.requiereCertificacion(evaluacion); }
     const chkUmbral = document.getElementById('chk-eval-umbral');
     if(chkUmbral) { chkUmbral.checked = window.exigeUmbralCertificacion(evaluacion); }
+    const inpReintento = document.getElementById('eval-retry-days');
+    if(inpReintento) { inpReintento.value = window.diasDeReintento(evaluacion); }
     await window.avisarSiFaltaColumnaCertificacion();
 
     await window.prepararInputCategorias(evaluacion.category || 'General');
@@ -3225,6 +3238,12 @@ window.guardarNuevaEvaluacion = async () => {
                 const chkUmbral = document.getElementById('chk-eval-umbral');
                 if (await window.hayColumna('evaluations', 'requires_min_score')) {
                     payload.requires_min_score = chkUmbral ? chkUmbral.checked : true;
+                }
+
+                const inpReintento = document.getElementById('eval-retry-days');
+                if (await window.hayColumna('evaluations', 'retry_days')) {
+                    const dias = inpReintento ? parseInt(inpReintento.value, 10) : 0;
+                    payload.retry_days = (Number.isFinite(dias) && dias > 0) ? dias : 0;
                 }
 
                 if(eid) {
