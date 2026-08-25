@@ -606,9 +606,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   administrador piden columnas por nombre y usan
   `window.camposConCertificacion(campos)`.
 
-  El script es `sql/certificacion-por-encuesta.sql`. Sin correrlo, todas las
-  encuestas se consideran certificables —como hasta ahora— y la casilla se
-  queda marcada y apagada avisando de qué falta.
+  **Y si además hay que sacar el 80%** lo dice `requires_min_score`, con la
+  misma forma: nula o `true` es lo de siempre, y `false` deja certificar una
+  respuesta ya calificada con el puntaje que sea —para las encuestas que se
+  contestan para dejar constancia y no para aprobar—.
+
+  ```js
+  window.exigeUmbralCertificacion(ev)   // sin encuesta a mano, exige
+  ```
+
+  Se mira en dos sitios y sólo en dos: al resumir (`estadoCertificacion`, que
+  manda la respuesta a `certificables` o a `bajoUmbral`) y en la puerta de una
+  respuesta suelta (`motivoNoAplicable`, que es por donde pasan tanto la
+  certificación de una en una como la de un lote). Ahí la encuesta se busca en
+  `window.encuestaEnCache`, y si no aparece se exige el umbral: es preferible
+  no certificar de más. La casilla del umbral se apaga sola cuando la encuesta
+  no se certifica, que es cuando no significa nada.
+
+  Las dos columnas van en `sql/certificacion-por-encuesta.sql`, que se puede
+  correr las veces que haga falta —cada una se crea sólo si no está—. Sin
+  correrlo, todas las encuestas se consideran certificables y con mínimo —como
+  hasta ahora— y las casillas se quedan marcadas y apagadas avisando de qué
+  falta.
 - **Certificar es de una persona y de un periodo.** Certificar quiere decir dar
   fe de que las respuestas de alguien son verídicas, así que la unidad es
   **clasificación × empleado × periodo**. Sin el periodo, el sello de enero

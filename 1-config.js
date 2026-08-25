@@ -541,8 +541,12 @@ window.camposConColumna = async (campos, tabla, columna) =>
 window.camposConRevisores = (campos) =>
     window.camposConColumna(campos, 'evaluations', 'reviewer_employees');
 
-window.camposConCertificacion = (campos) =>
-    window.camposConColumna(campos, 'evaluations', 'requires_certification');
+// Las dos banderas de la certificación viajan juntas: las piden las mismas dos
+// pantallas y ninguna sirve sin la otra.
+window.camposConCertificacion = async (campos) => {
+    const conBandera = await window.camposConColumna(campos, 'evaluations', 'requires_certification');
+    return window.camposConColumna(conBandera, 'evaluations', 'requires_min_score');
+};
 
 // ==========================================
 // QUÉ ENCUESTAS HAY QUE CERTIFICAR
@@ -555,6 +559,14 @@ window.camposConCertificacion = (campos) =>
 // Nula significa que sí, para que todo lo que ya existe siga comportándose
 // igual y para que la aplicación aguante sin la columna.
 window.requiereCertificacion = (ev) => !!ev && ev.requires_certification !== false;
+
+// Y si además hay que sacar el mínimo para poder certificarla. Apagado, una
+// respuesta calificada se puede certificar con el puntaje que sea: sirve para
+// las encuestas que se contestan para dejar constancia y no para aprobar.
+//
+// Sin encuesta a mano se exige el umbral, que es lo prudente: es preferible
+// no certificar de más a certificar lo que no se debía.
+window.exigeUmbralCertificacion = (ev) => !ev || ev.requires_min_score !== false;
 
 // La clasificación es texto libre —un `input` con datalist, no un catálogo—,
 // así que «Seguridad», «SEGURIDAD» y «seguridad » serían tres grupos distintos
@@ -735,7 +747,7 @@ window.estadoCertificacion = (encuestas, respuestas, fecha) => {
 
         const puntaje = typeof window.calcularScoreRespuesta === 'function'
             ? window.calcularScoreRespuesta(resp) : 0;
-        if (puntaje >= window.UMBRAL_CERTIFICACION) {
+        if (!window.exigeUmbralCertificacion(ev) || puntaje >= window.UMBRAL_CERTIFICACION) {
             resumen.calificadas++;
             resumen.certificables.push(resp.id);
         } else {

@@ -1,8 +1,11 @@
--- Qué encuestas hay que certificar
+-- Qué encuestas hay que certificar, y con qué mínimo
 -- ------------------------------------------------------------------
 -- Certificar es dar fe de que las respuestas de alguien son verídicas, y no
 -- toda encuesta lo necesita: una de clima laboral o una de sugerencias se
--- contesta y ya está. Esta columna permite apagarlo encuesta por encuesta.
+-- contesta y ya está. Estas dos columnas lo deciden encuesta por encuesta:
+--
+--   requires_certification  si cuenta para certificar su clasificación
+--   requires_min_score      si además hay que sacar el 80% para certificarla
 --
 -- Una encuesta con `false` deja de contar en el avance de certificación de su
 -- clasificación: no suma al total, no aparece como pendiente de certificar y
@@ -12,10 +15,15 @@
 -- Nula o `true` significa lo de siempre, así que todo lo que ya existe se
 -- comporta igual.
 --
--- Ejecutar una sola vez en el SQL Editor de Supabase. La aplicación aguanta
--- mientras no se haya corrido: sin la columna todas las encuestas se
--- consideran certificables —como hasta ahora— y la casilla de la hoja se queda
--- marcada y apagada, avisando de qué script falta.
+-- `requires_min_score` en false deja certificar una respuesta ya calificada
+-- con el puntaje que sea, para las encuestas que se contestan para dejar
+-- constancia y no para aprobar. Nula o true: hace falta el 80% de siempre.
+--
+-- Ejecutar en el SQL Editor de Supabase. Se puede correr las veces que haga
+-- falta: cada columna se crea sólo si no está. La aplicación aguanta mientras
+-- no se haya corrido: sin las columnas todas las encuestas se consideran
+-- certificables y con mínimo —como hasta ahora— y las casillas de la hoja se
+-- quedan marcadas y apagadas, avisando de qué script falta.
 
 do $$
 begin
@@ -35,5 +43,26 @@ begin
     raise notice 'Columna evaluations.requires_certification creada con default true';
 end $$;
 
+do $$
+begin
+    if exists (
+        select 1
+          from pg_attribute
+         where attrelid = 'public.evaluations'::regclass
+           and attname  = 'requires_min_score'
+           and not attisdropped
+    ) then
+        raise notice 'La columna evaluations.requires_min_score ya existe; no se toca.';
+        return;
+    end if;
+
+    execute 'alter table public.evaluations add column requires_min_score boolean not null default true';
+
+    raise notice 'Columna evaluations.requires_min_score creada con default true';
+end $$;
+
 comment on column public.evaluations.requires_certification is
     'Si es false, esta encuesta no cuenta para certificar su clasificación. Nula o true: cuenta, que es lo de siempre.';
+
+comment on column public.evaluations.requires_min_score is
+    'Si es false, una respuesta calificada se puede certificar con cualquier puntaje. Nula o true: hace falta el 80%.';

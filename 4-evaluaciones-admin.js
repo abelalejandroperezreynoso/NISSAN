@@ -1177,7 +1177,14 @@ window.motivoNoAplicable = (resp, nuevoEstado) => {
     const estado = resp.review_status;
     if (nuevoEstado === 'Certificada') {
         if (estado === 'Certificada') return 'ya está certificada';
-        if (window.calcularScoreRespuesta(resp) < 80) return 'califica por debajo de 80%';
+
+        // El mínimo se puede apagar encuesta por encuesta. Sin la encuesta a
+        // mano se exige, que es lo prudente.
+        const ev = window.encuestaEnCache ? window.encuestaEnCache(resp.evaluation_id) : null;
+        if (window.exigeUmbralCertificacion(ev)
+            && window.calcularScoreRespuesta(resp) < window.UMBRAL_CERTIFICACION) {
+            return `califica por debajo de ${window.UMBRAL_CERTIFICACION}%`;
+        }
         return null;
     }
     if (nuevoEstado === 'Mal Revisada') return estado === 'Mal Revisada' ? 'ya está marcada así' : null;
@@ -2516,6 +2523,23 @@ window.avisarSiFaltaColumnaCertificacion = async () => {
         chk.disabled = !hay;
         if (!hay) chk.checked = true;
     }
+
+    const chkUmbral = document.getElementById('chk-eval-umbral');
+    if (chkUmbral && !hay) chkUmbral.checked = true;
+    window.alternarUmbralCertificacion(!hay);
+};
+
+// El mínimo sólo pinta algo si la encuesta se certifica: sin certificación no
+// hay umbral que exigir.
+window.alternarUmbralCertificacion = (forzarApagado) => {
+    const chkCert = document.getElementById('chk-eval-certificable');
+    const chkUmbral = document.getElementById('chk-eval-umbral');
+    const fila = document.getElementById('opcion-umbral-certificacion');
+    if (!chkUmbral || !fila) return;
+
+    const inutil = forzarApagado || !chkCert || !chkCert.checked;
+    chkUmbral.disabled = inutil;
+    fila.style.opacity = inutil ? '0.45' : '1';
 };
 
 window.verificarRestriccionesModo = () => {
@@ -2750,6 +2774,8 @@ window.abrirModalCrearEval = async () => {
 
     const chkCert = document.getElementById('chk-eval-certificable');
     if(chkCert) chkCert.checked = true;
+    const chkUmbral = document.getElementById('chk-eval-umbral');
+    if(chkUmbral) chkUmbral.checked = true;
     await window.avisarSiFaltaColumnaCertificacion();
 
     window.prepararSelectorPersonas('destinatarios', null);
@@ -2832,6 +2858,8 @@ window.editarEvaluacion = async (id) => {
 
     const chkCert = document.getElementById('chk-eval-certificable');
     if(chkCert) { chkCert.checked = window.requiereCertificacion(evaluacion); }
+    const chkUmbral = document.getElementById('chk-eval-umbral');
+    if(chkUmbral) { chkUmbral.checked = window.exigeUmbralCertificacion(evaluacion); }
     await window.avisarSiFaltaColumnaCertificacion();
 
     await window.prepararInputCategorias(evaluacion.category || 'General');
@@ -3192,6 +3220,11 @@ window.guardarNuevaEvaluacion = async () => {
                 const chkCert = document.getElementById('chk-eval-certificable');
                 if (await window.hayColumnaCertificacion()) {
                     payload.requires_certification = chkCert ? chkCert.checked : true;
+                }
+
+                const chkUmbral = document.getElementById('chk-eval-umbral');
+                if (await window.hayColumna('evaluations', 'requires_min_score')) {
+                    payload.requires_min_score = chkUmbral ? chkUmbral.checked : true;
                 }
 
                 if(eid) {
