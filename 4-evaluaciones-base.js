@@ -704,6 +704,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
 
     let areaBadgeHtml = '';
     window.fotoAreaLista = null;
+    window.fotosPreguntaListas = {};
     if (evaluatesArea) {
         window.areaConfirmadaParaEstaSesion = false;
         
@@ -859,6 +860,24 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             }
             inputHtml = `<div id="recall-list-${q.id}">${listHtml}</div>`;
         }
+        else if (window.esPreguntaDeFoto(q)) {
+            // El enunciado ya dice qué fotografiar, así que aquí sólo va el
+            // botón y la vista previa. Igual que la foto del área: `<label for>`
+            // y nada de `.click()` sobre el input, que en iOS se confunde con
+            // el toque fantasma de las ruedas.
+            inputHtml = `
+                <input type="file" id="inp-foto-preg-${q.id}" accept="image/*" capture="environment" style="display:none;" onchange="window.mostrarFotoPregunta(this, '${q.id}')">
+                <label for="inp-foto-preg-${q.id}" id="btn-foto-preg-${q.id}" style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; box-sizing:border-box; padding:14px; background:#eff6ff; color:#2563eb; border:1px dashed #93c5fd; border-radius:10px; font-weight:600; font-size:0.95rem; cursor:pointer;">
+                    📷 Tomar fotografía
+                </label>
+                <div id="previo-foto-preg-${q.id}" style="display:none; margin-top:10px;">
+                    <img id="previo-foto-preg-img-${q.id}" alt="Evidencia" style="width:100%; border-radius:10px; display:block;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
+                        <span id="previo-foto-preg-peso-${q.id}" style="font-size:0.75rem; color:#94a3b8;"></span>
+                        <label for="inp-foto-preg-${q.id}" style="font-size:0.8rem; color:#2563eb; font-weight:600; cursor:pointer;">Cambiar</label>
+                    </div>
+                </div>`;
+        }
         else if (q.question_type === 'range') {
             let min = 0, step = 1;
             const max = window.maximoDeEscala(q);
@@ -935,6 +954,40 @@ window.mostrarFotoArea = async (input) => {
         if (boton) boton.innerText = '📷 Tomar otra fotografía';
     } catch (e) {
         console.error('No se pudo preparar la foto del área:', e);
+        alert('No se pudo procesar la foto: ' + (e.message || e));
+        if (previo) previo.style.display = 'none';
+        if (boton) boton.innerText = '📷 Tomar fotografía';
+        input.value = '';
+    }
+};
+
+// Las evidencias de cada pregunta, por id. Se encogen al elegirlas, igual que
+// la del área, y `enviarRespuestasEval` las sube al final.
+window.fotosPreguntaListas = {};
+
+window.mostrarFotoPregunta = async (input, qid) => {
+    const previo = document.getElementById(`previo-foto-preg-${qid}`);
+    const img = document.getElementById(`previo-foto-preg-img-${qid}`);
+    const peso = document.getElementById(`previo-foto-preg-peso-${qid}`);
+    const boton = document.getElementById(`btn-foto-preg-${qid}`);
+
+    delete window.fotosPreguntaListas[qid];
+    if (!input.files || !input.files[0]) { if (previo) previo.style.display = 'none'; return; }
+
+    if (boton) boton.innerText = '⏳ Preparando la foto…';
+    try {
+        const blob = await window.optimizarImagen(input.files[0], {
+            maxLado: window.MAX_LADO_FOTO_EVAL,
+            maxBytes: 300 * 1024
+        });
+        window.fotosPreguntaListas[qid] = blob;
+
+        if (img) img.src = URL.createObjectURL(blob);
+        if (peso) peso.innerText = `${Math.round(blob.size / 1024)} KB`;
+        if (previo) previo.style.display = 'block';
+        if (boton) boton.innerText = '📷 Tomar otra fotografía';
+    } catch (e) {
+        console.error('No se pudo preparar la evidencia:', e);
         alert('No se pudo procesar la foto: ' + (e.message || e));
         if (previo) previo.style.display = 'none';
         if (boton) boton.innerText = '📷 Tomar fotografía';
@@ -1038,6 +1091,7 @@ window.enviarRespuestasEval = async () => {
         const motivos = {};
         const faltanMotivos = [];
         const faltanRespuestas = [];
+        const evidenciasPorSubir = [];
 
         window.preguntasCacheActual.forEach((q, indice) => {
             let val = null;
@@ -1058,11 +1112,21 @@ window.enviarRespuestasEval = async () => {
             } else if (q.question_type === 'range') {
                 const el = document.querySelector(`input[name="range-${q.id}"]:checked`);
                 if (el) val = el.value;
+            } else if (window.esPreguntaDeFoto(q)) {
+                // Todavía no hay URL: la foto se sube más abajo, cuando ya se
+                // sabe que la encuesta está completa. Aquí sólo cuenta como
+                // contestada, y el valor definitivo lo pone la subida.
+                if (window.fotosPreguntaListas[q.id]) {
+                    val = '';
+                    evidenciasPorSubir.push({ id: q.id, blob: window.fotosPreguntaListas[q.id] });
+                }
             }
             
             answersMap[q.id] = val;
 
-            const contestada = val !== null && val !== "" && !(Array.isArray(val) && val.length === 0);
+            const contestada = window.esPreguntaDeFoto(q)
+                ? !!window.fotosPreguntaListas[q.id]
+                : (val !== null && val !== "" && !(Array.isArray(val) && val.length === 0));
 
             // Una encuesta a medias no dice nada: se contestan todas.
             if (!contestada) faltanRespuestas.push({ numero: indice + 1, texto: q.question_text || '', id: q.id });
@@ -1160,26 +1224,21 @@ window.enviarRespuestasEval = async () => {
         const finalStatus = (isBossMode || (answeredCount > 0 && answeredCount === autoGradedCount)) ? 'Revisado' : 'Pendiente';
         const finalGrades = autoGradesMap;
 
+        // Las evidencias de cada pregunta, por el mismo camino y por lo mismo:
+        // subir antes de validar dejaría archivos huérfanos en el bucket.
+        for (let i = 0; i < evidenciasPorSubir.length; i++) {
+            const { id, blob } = evidenciasPorSubir[i];
+            if (btn) btn.innerText = `Subiendo evidencia ${i + 1} de ${evidenciasPorSubir.length}…`;
+            answersMap[id] = await window.subirFotoEvaluacion(blob, `preg-${id}-${targetEmployeeId}`);
+        }
+
         // La foto se sube al final, cuando ya se sabe que la encuesta está
         // completa: subirla antes dejaría archivos huérfanos en el bucket cada
         // vez que alguien se arrepiente o le falta una pregunta.
         if (evaluatesArea && window.fotoAreaLista) {
-            if (btn) btn.innerText = "Subiendo foto…";
-            const blob = window.fotoAreaLista;
-            const extension = blob.type === 'image/webp' ? 'webp' : 'jpg';
-            const nombreArchivo = `eval-${window.evalIdRespondiendo}-${targetEmployeeId}-${Date.now()}.${extension}`;
-
-            const { error: errorFoto } = await sb.storage
-                .from(window.BUCKET_FOTOS_EVAL)
-                .upload(nombreArchivo, blob, { contentType: blob.type, upsert: true });
-
-            if (errorFoto) {
-                console.error('Error al subir la foto del área:', errorFoto);
-                throw new Error(`No se pudo subir la fotografía. Si el problema sigue, revisa que exista el bucket '${window.BUCKET_FOTOS_EVAL}' en Supabase.`);
-            }
-
-            const { data: datosUrl } = sb.storage.from(window.BUCKET_FOTOS_EVAL).getPublicUrl(nombreArchivo);
-            if (datosUrl && datosUrl.publicUrl) answersMap[window.LLAVE_FOTO_AREA] = datosUrl.publicUrl;
+            if (btn) btn.innerText = "Subiendo foto del área…";
+            answersMap[window.LLAVE_FOTO_AREA] = await window.subirFotoEvaluacion(
+                window.fotoAreaLista, `area-${window.evalIdRespondiendo}-${targetEmployeeId}`);
         }
 
         // Mandamos EL TEXTO a employee_area para conservar el registro histórico en esa tabla

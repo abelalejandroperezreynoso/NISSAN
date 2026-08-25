@@ -619,8 +619,35 @@ window.verDetalleRespuesta = async (resp) => {
             resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${status==='correct'?'#dcfce7':(status==='incorrect'?'#fee2e2':'#f1f5f9')}; color:${status==='correct'?'#166534':(status==='incorrect'?'#991b1b':'#64748b')}; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${status==='correct'?'CORRECTO':(status==='incorrect'?'INCORRECTO':'PENDIENTE')}</span>`;
         }
 
+        // Una evidencia se mira, no se lee: su respuesta es la URL de la foto y
+        // se pinta igual se pueda calificar o no. Editarla desde aquí no tiene
+        // sentido —habría que volver a tomarla—, así que ni el administrador
+        // ve un campo de texto con la URL dentro.
+        if (window.esPreguntaDeFoto(q)) {
+            const urlEvidencia = typeof rawRespuesta === 'string' ? rawRespuesta : '';
+            contentHtml = urlEvidencia
+                ? `<img src="${window.sanitizeForHTML(urlEvidencia)}" alt="Evidencia"
+                        onclick="window.abrirVisorImagen && window.abrirVisorImagen('${window.sanitizeForHTML(urlEvidencia)}')"
+                        style="width:100%; border-radius:10px; display:block; cursor:pointer;" title="Toca para ampliar">`
+                : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin evidencia)</div>`;
+
+            // Y su calificación, que es la misma de correcto/incorrecto que
+            // llevan las de texto: mismas clases y mismo marcado, que es de lo
+            // que se agarra `setGrade` para apagar el botón contrario.
+            if (puedeCalificar) {
+                const estadoFoto = (gradeObj && gradeObj.status) || (typeof gradeObj === 'string' ? gradeObj : 'pending');
+                contentHtml += `
+                    <div style="margin-top:15px;">
+                        <div style="font-size:0.85rem; color:#64748b; margin-bottom:6px; font-weight:600;">Calificación:</div>
+                        <div style="display:flex; gap:8px;">
+                            <button class="grade-btn ${estadoFoto==='correct'?'selected-correct':''}" onclick="setGrade('${q.id}', 'correct', this)" style="flex:1; padding:8px; border-radius:8px; border:1px solid #22c55e; background:${estadoFoto==='correct'?'#22c55e':'white'}; color:${estadoFoto==='correct'?'white':'#22c55e'}; cursor:pointer; font-weight:bold; transition:all 0.2s;">Correcto</button>
+                            <button class="grade-btn ${estadoFoto==='incorrect'?'selected-incorrect':''}" onclick="setGrade('${q.id}', 'incorrect', this)" style="flex:1; padding:8px; border-radius:8px; border:1px solid #ef4444; background:${estadoFoto==='incorrect'?'#ef4444':'white'}; color:${estadoFoto==='incorrect'?'white':'#ef4444'}; cursor:pointer; font-weight:bold; transition:all 0.2s;">Incorrecto</button>
+                        </div>
+                    </div>`;
+            }
+        }
         // Construir la vista Integrada (Editable/Calificable) vs la vista de Sólo Lectura
-        if (puedeCalificar) {
+        else if (puedeCalificar) {
             const readOnlyAttr = esAdminTotal ? '' : 'readonly disabled';
             const displayEditOpts = esAdminTotal ? 'flex' : 'none';
             const bgEditable = esAdminTotal ? 'white' : '#f8fafc';
@@ -776,7 +803,7 @@ window.verDetalleRespuesta = async (resp) => {
             motivoHtml = `<div style="margin-top:12px; font-size:0.8rem; color:#94a3b8; font-style:italic;">Sin explicación: se contestó antes de que se pidiera.</div>`;
         }
 
-        container.insertAdjacentHTML('beforeend', `<div style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid ${cardBorderColor};"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;"><label style="font-weight:700; color:#1e293b; font-size:1.1rem; line-height:1.4; flex:1;">${index+1}. ${q.question_text}</label>${resultBadge}</div>${contentHtml}${motivoHtml}</div>`);
+        container.insertAdjacentHTML('beforeend', `<div class="pregunta-detalle" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid ${cardBorderColor};"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;"><label style="font-weight:700; color:#1e293b; font-size:1.1rem; line-height:1.4; flex:1;">${index+1}. ${q.question_text}</label>${resultBadge}</div>${contentHtml}${motivoHtml}</div>`);
     });
     setTimeout(() => {
         document.querySelectorAll('.admin-edit-answer[data-type="text"], .auto-resize-text').forEach(ta => {
@@ -925,7 +952,15 @@ window.setGrade = (questionId, status, btn) => {
         badge.style.background = status === 'correct' ? '#dcfce7' : '#fee2e2';
         badge.style.color = status === 'correct' ? '#166534' : '#991b1b';
         badge.innerText = status === 'correct' ? 'CORRECTO' : 'INCORRECTO';
-        badge.closest('.incident-card, div[style*="border-radius:16px"]').style.borderColor = status === 'correct' ? '#bbf7d0' : '#fecaca';
+
+        // La tarjeta se busca por su clase. Antes se buscaba por el atributo
+        // style (`div[style*="border-radius:16px"]`), y la primera calificación
+        // lo rompía: al escribir `borderColor` el navegador reescribe el
+        // atributo entero con espacios —`border-radius: 16px`—, así que a
+        // partir de la segunda el selector ya no casaba, `closest` devolvía
+        // null y el TypeError abortaba la función sin aviso.
+        const tarjeta = badge.closest('.incident-card, .pregunta-detalle');
+        if (tarjeta) tarjeta.style.borderColor = status === 'correct' ? '#bbf7d0' : '#fecaca';
     }
 };
 
@@ -2837,6 +2872,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     const showTextContainer = (tp === 'text');
     const showOptionsContainer = (tp === 'multiple' || tp === 'checklist' || tp === 'list_match');
     const showRangeInfo = (tp === 'range');
+    const showPhotoInfo = (tp === 'photo');
     const optionsLabel = (tp === 'list_match') ? "Elementos Correctos (Respuesta Modelo):" : "Opciones:";
 
     d.innerHTML=`
@@ -2847,10 +2883,11 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
             <option value="checklist" ${tp==='checklist'?'selected':''}>Checklist</option>
             <option value="list_match" ${tp==='list_match'?'selected':''}>Recall (Lista de Memoria)</option>
             <option value="range" ${tp==='range'?'selected':''}>Rango Numérico</option>
+            <option value="photo" ${tp==='photo'?'selected':''}>📷 Evidencia fotográfica</option>
         </select>
         ${btnDeleteHTML}
     </div>
-    <input type="text" class="inp-pregunta" value="${t}" placeholder="Escribe la pregunta aquí..." style="width:100%;padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+    <input type="text" class="inp-pregunta" value="${t}" placeholder="${showPhotoInfo ? 'Qué hay que fotografiar…' : 'Escribe la pregunta aquí...'}" style="width:100%;padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
     
     <div class="options-container" style="display:${showOptionsContainer?'block':'none'};margin-top:10px;">
         <label class="lbl-options" style="font-size:0.8rem; color:#64748b; margin-bottom:5px; display:block;">${optionsLabel}</label>
@@ -2865,6 +2902,10 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
 
     <div class="range-info-container" style="display:${showRangeInfo?'block':'none'}; margin-top:15px; padding:10px; background:#fdf2f8; border:1px dashed #fbcfe8; border-radius:8px; font-size:0.85rem; color:#be185d;">
         📊 <b>Nota:</b> Esta pregunta se auto-evaluará utilizando el "Puntaje Máximo" global configurado arriba.
+    </div>
+
+    <div class="photo-info-container" style="display:${showPhotoInfo?'block':'none'}; margin-top:15px; padding:10px; background:#eff6ff; border:1px dashed #bfdbfe; border-radius:8px; font-size:0.85rem; color:#1d4ed8;">
+        📷 <b>Evidencia:</b> el enunciado de arriba es lo que se le pide fotografiar. La foto se guarda reducida a ${window.MAX_LADO_FOTO_EVAL}px y la califica quien revise. Para pedir varias evidencias, agrega otra pregunta de este tipo.
     </div>`;
     
     document.getElementById('questions-container').appendChild(d);
@@ -2931,15 +2972,21 @@ window.toggleTipoPregunta = (s) => {
     const t = w.querySelector('.text-container');
     const lbl = w.querySelector('.lbl-options');
     const rInfo = w.querySelector('.range-info-container');
+    const fInfo = w.querySelector('.photo-info-container');
     
     if(o) o.style.display = 'none';
     if(t) t.style.display = 'none';
     if(rInfo) rInfo.style.display = 'none';
+    if(fInfo) fInfo.style.display = 'none';
 
     if (s.value === 'text') {
         if(t) t.style.display = 'block';
     } else if (s.value === 'range') {
         if(rInfo) rInfo.style.display = 'block';
+    } else if (s.value === window.TIPO_PREGUNTA_FOTO) {
+        // Una evidencia no tiene opciones ni respuesta modelo: sólo el
+        // enunciado, que dice qué fotografiar.
+        if(fInfo) fInfo.style.display = 'block';
     } else {
         if(o) {
             o.style.display = 'block';

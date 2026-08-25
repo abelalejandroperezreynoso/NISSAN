@@ -351,11 +351,40 @@ window.LLAVE_FOTO_AREA = '__foto_area';
 window.BUCKET_FOTOS_EVAL = 'fotos-evaluaciones';
 window.MAX_LADO_FOTO_EVAL = 600;
 
+// Una pregunta de evidencia se contesta con una fotografía en vez de con
+// texto: su enunciado dice qué hay que fotografiar y su respuesta es la URL de
+// lo que se subió. Es un tipo de pregunta más, de modo que se ordena, se
+// edita, se borra y se califica como las demás, y pedir varias evidencias es
+// añadir varias preguntas.
+window.TIPO_PREGUNTA_FOTO = 'photo';
+window.esPreguntaDeFoto = (pregunta) =>
+    !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_FOTO;
+
 // El nombre del área es texto libre: la respuesta guarda el que tenía el
 // empleado ese día y la pantalla de estadísticas agrupa por el de su ficha. Se
 // comparan siempre normalizados, o «Planta 1» y «PLANTA 1 » serían dos áreas.
 window.claveDeArea = (nombre) =>
     String(nombre == null ? '' : nombre).trim().toUpperCase().replace(/\s+/g, ' ');
+
+// Sube una foto ya encogida y devuelve su URL pública. La usan la foto del
+// área y las evidencias de cada pregunta; el mensaje de error nombra el bucket
+// porque el script de `sql/` se corre a mano y ése es el fallo probable.
+window.subirFotoEvaluacion = async (blob, prefijo) => {
+    const extension = blob.type === 'image/webp' ? 'webp' : 'jpg';
+    const nombreArchivo = `${prefijo}-${Date.now()}.${extension}`;
+
+    const { error } = await sb.storage
+        .from(window.BUCKET_FOTOS_EVAL)
+        .upload(nombreArchivo, blob, { contentType: blob.type, upsert: true });
+
+    if (error) {
+        console.error('Error al subir la fotografía:', error);
+        throw new Error(`No se pudo subir la fotografía. Si el problema sigue, revisa que exista el bucket '${window.BUCKET_FOTOS_EVAL}' en Supabase.`);
+    }
+
+    const { data } = sb.storage.from(window.BUCKET_FOTOS_EVAL).getPublicUrl(nombreArchivo);
+    return (data && data.publicUrl) ? data.publicUrl : '';
+};
 
 window.fotoDeArea = (respuesta) => {
     const url = respuesta && respuesta.answers_json ? respuesta.answers_json[window.LLAVE_FOTO_AREA] : null;

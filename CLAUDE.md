@@ -390,6 +390,27 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   que las pantallas que deciden sobre el usuario actual miran su ficha en
   `window.todosLosEmpleadosData` y no en `usuarioLogueado`, que no trae el
   campo.
+- **La evidencia fotográfica es un tipo de pregunta más.** Al crear la encuesta
+  se elige «📷 Evidencia fotográfica» en el desplegable de tipo; el enunciado
+  pasa a ser lo que se pide fotografiar («Foto del extintor con su etiqueta
+  vigente») y la respuesta es la URL de lo que se subió. Al ser una pregunta y
+  no un ajuste de la encuesta, se ordena, se edita, se borra y se califica como
+  las demás, y **pedir varias evidencias es agregar varias preguntas**.
+
+  ```js
+  window.esPreguntaDeFoto(pregunta)   // en 1-config.js
+  ```
+
+  No lleva opciones ni respuesta modelo, y por lo mismo no pide motivo. La
+  califica quien revise, con el mismo correcto/incorrecto de las de texto, así
+  que una encuesta con evidencias nunca se califica sola. Al calificar se ve la
+  foto y no la URL: editarla desde ahí no tendría sentido —habría que volver a
+  tomarla—, así que ni en modo administrador aparece un campo de texto.
+
+  Comparte con la foto del área el encogido, el bucket y
+  `window.subirFotoEvaluacion(blob, prefijo)`; lo que cambia es dónde acaba la
+  URL: la del área bajo `__foto_area`, la de cada evidencia bajo el id de su
+  pregunta, que es donde va la respuesta de cualquier otra.
 - **Una evaluación por área lleva foto, y la foto se encoge antes de subir.**
   Las encuestas con `evaluates_area` piden una fotografía del área que se está
   evaluando: sin ella la evaluación es la palabra de quien la llenó contra
@@ -960,6 +981,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   la lista se desplaza dentro de su tarjeta (`.stats-plegable-cuerpo`, tope de
   260px) en vez de estirar la fila. Así es la comparativa por áreas, que con
   todo el personal desplegado se llevaba nueve mil píxeles de la pantalla.
+- **Un selector por atributo `style` se rompe en cuanto se toca ese estilo.**
+  `setGrade` buscaba la tarjeta de la pregunta con
+  `closest('div[style*="border-radius:16px"]')` y le pintaba el borde. Al
+  escribir `borderColor`, el navegador reescribe el atributo entero con su
+  formato —`border-radius: 16px`, con espacio—, así que el selector dejaba de
+  casar: la primera calificación funcionaba y de la segunda en adelante
+  `closest` devolvía null y el `TypeError` abortaba el resto de la función sin
+  aviso, dejando la insignia de la pregunta sin actualizar. Se busca por clase
+  (`.pregunta-detalle`), y con guarda.
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con
