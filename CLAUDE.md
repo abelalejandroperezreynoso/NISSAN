@@ -402,8 +402,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   ```
 
   No lleva opciones ni respuesta modelo, y por lo mismo no pide motivo. La
-  califica quien revise, con el mismo correcto/incorrecto de las de texto, así
-  que una encuesta con evidencias nunca se califica sola. Al calificar se ve la
+  califica quien revise, con el mismo correcto/incorrecto de las de texto.
+
+  **En modo `boss` la evidencia entra y la encuesta se sigue calificando
+  sola.** Esa encuesta se guarda ya como `'Revisado'` al enviarla, así que sólo
+  admite lo que se puntúa solo —la escala— y las evidencias, que no puntúan:
+  `calcularScoreRespuesta` promedia lo que hay en `grades_json` y una foto sin
+  calificar simplemente no entra, de modo que queda como constancia de lo que
+  el jefe vio sin diluir el resultado. Un texto o unas opciones sí quedarían
+  sin calificar y sin nadie que las revisara, y por eso siguen fuera: la lista
+  está en `window.TIPOS_EN_MODO_JEFE`. `verificarRestriccionesModo` apaga las
+  opciones que no valen en vez de bloquear el desplegable entero —que es lo que
+  antes dejaba «Rango Numérico» como única salida— y devuelve a escala
+  cualquier pregunta con un tipo que no cuadre, incluida la recién agregada,
+  que nace como texto. Al calificar se ve la
   foto y no la URL: editarla desde ahí no tendría sentido —habría que volver a
   tomarla—, así que ni en modo administrador aparece un campo de texto.
 

@@ -2519,14 +2519,29 @@ window.verificarRestriccionesModo = () => {
 
     if (mode === 'boss') {
         const maxVal = document.getElementById('eval-max-scale') ? document.getElementById('eval-max-scale').value : 5;
+
+        // Esta encuesta se guarda ya calificada al enviarla, así que sólo
+        // admite lo que se puede puntuar solo —la escala— y la evidencia, que
+        // no puntúa: es la constancia de lo que el jefe vio mientras evaluaba.
+        // Un texto o unas opciones se quedarían sin calificar y sin nadie que
+        // los revisara, porque la respuesta ya nace revisada.
+        //
+        // Se apagan las opciones que no valen en vez de bloquear el desplegable
+        // entero, que es lo que antes dejaba «Rango Numérico» como única salida.
         allTypeSelects.forEach(sel => {
-            sel.value = 'range';
-            sel.disabled = true;
+            Array.from(sel.options).forEach(op => {
+                op.disabled = !window.TIPOS_EN_MODO_JEFE.includes(op.value);
+            });
+            sel.disabled = false;
+            if (!window.TIPOS_EN_MODO_JEFE.includes(sel.value)) sel.value = 'range';
             window.toggleTipoPregunta(sel);
         });
-        window.textoBoton(btnAddQuestion, `+ Agregar Pregunta Numérica (1-${maxVal})`);
+        window.textoBoton(btnAddQuestion, `+ Agregar Pregunta (escala 1-${maxVal} o evidencia)`);
     } else {
-        allTypeSelects.forEach(sel => { sel.disabled = false; });
+        allTypeSelects.forEach(sel => {
+            Array.from(sel.options).forEach(op => { op.disabled = false; });
+            sel.disabled = false;
+        });
         window.textoBoton(btnAddQuestion, "+ Agregar Pregunta");
     }
 
@@ -2905,7 +2920,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     </div>
 
     <div class="photo-info-container" style="display:${showPhotoInfo?'block':'none'}; margin-top:15px; padding:10px; background:#eff6ff; border:1px dashed #bfdbfe; border-radius:8px; font-size:0.85rem; color:#1d4ed8;">
-        📷 <b>Evidencia:</b> el enunciado de arriba es lo que se le pide fotografiar. La foto se guarda reducida a ${window.MAX_LADO_FOTO_EVAL}px y la califica quien revise. Para pedir varias evidencias, agrega otra pregunta de este tipo.
+        📷 <b>Evidencia:</b> el enunciado de arriba es lo que se le pide fotografiar. La foto se guarda reducida a ${window.MAX_LADO_FOTO_EVAL}px junto a la respuesta, y la califica quien revise si la encuesta pasa a revisión. Para pedir varias evidencias, agrega otra pregunta de este tipo.
     </div>`;
     
     document.getElementById('questions-container').appendChild(d);

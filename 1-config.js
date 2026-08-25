@@ -360,6 +360,13 @@ window.TIPO_PREGUNTA_FOTO = 'photo';
 window.esPreguntaDeFoto = (pregunta) =>
     !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_FOTO;
 
+// Lo que admite una encuesta de modo `boss`. Esa encuesta se guarda ya
+// calificada al enviarla —la contesta el jefe y su palabra es el veredicto—,
+// así que sólo caben las preguntas que se puntúan solas y las evidencias, que
+// no puntúan: quedan como constancia de lo que vio mientras evaluaba. Un texto
+// o unas opciones se quedarían sin calificar y sin nadie que los revisara.
+window.TIPOS_EN_MODO_JEFE = ['range', window.TIPO_PREGUNTA_FOTO];
+
 // El nombre del área es texto libre: la respuesta guarda el que tenía el
 // empleado ese día y la pantalla de estadísticas agrupa por el de su ficha. Se
 // comparan siempre normalizados, o «Planta 1» y «PLANTA 1 » serían dos áreas.
