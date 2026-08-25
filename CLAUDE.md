@@ -606,22 +606,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   administrador piden columnas por nombre y usan
   `window.camposConCertificacion(campos)`.
 
-  **Y si además hay que sacar el 80%** lo dice `requires_min_score`, con la
-  misma forma: nula o `true` es lo de siempre, y `false` deja certificar una
-  respuesta ya calificada con el puntaje que sea —para las encuestas que se
-  contestan para dejar constancia y no para aprobar—.
+  **El puntaje mínimo es cosa aparte**, y lo dice `requires_min_score` con la
+  misma forma: nula o `true` es lo de siempre, `false` quita el mínimo. Las dos
+  banderas son **independientes** y así se presentan: una encuesta puede no
+  certificarse y aun así exigir el 80% —de ahí sale el plazo para repetirla—, y
+  al revés, certificarse con el puntaje que sea porque se contesta para dejar
+  constancia y no para aprobar. Ninguna casilla apaga a la otra; lo único que
+  las ata es que la columna llega en el mismo script.
 
   ```js
-  window.exigeUmbralCertificacion(ev)   // sin encuesta a mano, exige
+  window.exigeMinimo(ev)   // sin encuesta a mano, exige
   ```
 
-  Se mira en dos sitios y sólo en dos: al resumir (`estadoCertificacion`, que
-  manda la respuesta a `certificables` o a `bajoUmbral`) y en la puerta de una
-  respuesta suelta (`motivoNoAplicable`, que es por donde pasan tanto la
-  certificación de una en una como la de un lote). Ahí la encuesta se busca en
-  `window.encuestaEnCache`, y si no aparece se exige el umbral: es preferible
-  no certificar de más. La casilla del umbral se apaga sola cuando la encuesta
-  no se certifica, que es cuando no significa nada.
+  Se mira en tres sitios: al resumir la certificación (`estadoCertificacion`,
+  que manda la respuesta a `certificables` o a `bajoUmbral`), en la puerta de
+  una respuesta suelta (`motivoNoAplicable`, por donde pasan tanto certificar
+  de una en una como el lote) y en el plazo de reintento. En los dos primeros
+  la encuesta se busca en `window.encuestaEnCache`, y si no aparece se exige el
+  mínimo: es preferible no dar por buena una respuesta que dar por buena la que
+  no se debía.
 
   **Y cuánto tiempo hay para reponerla** lo dice `retry_days`, en días. En 0
   —el valor por defecto— no pasa nada. Con un número, una respuesta ya

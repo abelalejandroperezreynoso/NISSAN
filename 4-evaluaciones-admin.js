@@ -1181,7 +1181,7 @@ window.motivoNoAplicable = (resp, nuevoEstado) => {
         // El mínimo se puede apagar encuesta por encuesta. Sin la encuesta a
         // mano se exige, que es lo prudente.
         const ev = window.encuestaEnCache ? window.encuestaEnCache(resp.evaluation_id) : null;
-        if (window.exigeUmbralCertificacion(ev)
+        if (window.exigeMinimo(ev)
             && window.calcularScoreRespuesta(resp) < window.UMBRAL_CERTIFICACION) {
             return `califica por debajo de ${window.UMBRAL_CERTIFICACION}%`;
         }
@@ -2524,31 +2524,25 @@ window.avisarSiFaltaColumnaCertificacion = async () => {
         if (!hay) chk.checked = true;
     }
 
+    // El mínimo y el plazo de reintento son cosa aparte de la certificación:
+    // una encuesta puede exigir el 80% sin certificarse, y al revés. Lo único
+    // que los ata es la columna, que llega en el mismo script.
     const chkUmbral = document.getElementById('chk-eval-umbral');
-    if (chkUmbral && !hay) chkUmbral.checked = true;
-    window.alternarUmbralCertificacion(!hay);
-};
-
-// El mínimo sólo pinta algo si la encuesta se certifica: sin certificación no
-// hay umbral que exigir.
-window.alternarUmbralCertificacion = (forzarApagado) => {
-    const chkCert = document.getElementById('chk-eval-certificable');
-    const chkUmbral = document.getElementById('chk-eval-umbral');
-    const fila = document.getElementById('opcion-umbral-certificacion');
-    if (!chkUmbral || !fila) return;
-
-    const inutil = forzarApagado || !chkCert || !chkCert.checked;
-    chkUmbral.disabled = inutil;
-    fila.style.opacity = inutil ? '0.45' : '1';
-
-    // Sin mínimo que alcanzar no hay nada que repetir.
-    const filaReintento = document.getElementById('fila-reintento');
-    const inpReintento = document.getElementById('eval-retry-days');
-    if (filaReintento && inpReintento) {
-        const sinUmbral = inutil || !chkUmbral.checked;
-        inpReintento.disabled = sinUmbral;
-        filaReintento.style.opacity = sinUmbral ? '0.45' : '1';
+    if (chkUmbral) {
+        chkUmbral.disabled = !hay;
+        if (!hay) chkUmbral.checked = true;
     }
+
+    const filaUmbral = document.getElementById('opcion-umbral-certificacion');
+    if (filaUmbral) filaUmbral.style.opacity = hay ? '1' : '0.45';
+
+    const inpReintento = document.getElementById('eval-retry-days');
+    const filaReintento = document.getElementById('fila-reintento');
+    if (inpReintento) {
+        inpReintento.disabled = !hay;
+        if (!hay) inpReintento.value = 0;
+    }
+    if (filaReintento) filaReintento.style.opacity = hay ? '1' : '0.45';
 };
 
 window.verificarRestriccionesModo = () => {
@@ -2870,7 +2864,7 @@ window.editarEvaluacion = async (id) => {
     const chkCert = document.getElementById('chk-eval-certificable');
     if(chkCert) { chkCert.checked = window.requiereCertificacion(evaluacion); }
     const chkUmbral = document.getElementById('chk-eval-umbral');
-    if(chkUmbral) { chkUmbral.checked = window.exigeUmbralCertificacion(evaluacion); }
+    if(chkUmbral) { chkUmbral.checked = window.exigeMinimo(evaluacion); }
     const inpReintento = document.getElementById('eval-retry-days');
     if(inpReintento) { inpReintento.value = window.diasDeReintento(evaluacion); }
     await window.avisarSiFaltaColumnaCertificacion();

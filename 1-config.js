@@ -391,7 +391,7 @@ window.reintentoDeRespuesta = (ev, resp, fecha) => {
     if (dias <= 0 || !resp) return null;
 
     // Sin mínimo que alcanzar no hay reprobado que reponer.
-    if (!window.exigeUmbralCertificacion(ev)) return null;
+    if (!window.exigeMinimo(ev)) return null;
 
     // Sólo lo ya calificado y todavía no dado por bueno: lo que está sin
     // calificar aún no se sabe, y lo certificado ya pasó.
@@ -604,13 +604,14 @@ window.camposConCertificacion = async (campos) => {
 // igual y para que la aplicación aguante sin la columna.
 window.requiereCertificacion = (ev) => !!ev && ev.requires_certification !== false;
 
-// Y si además hay que sacar el mínimo para poder certificarla. Apagado, una
-// respuesta calificada se puede certificar con el puntaje que sea: sirve para
-// las encuestas que se contestan para dejar constancia y no para aprobar.
+// Si esta encuesta tiene un puntaje mínimo que alcanzar. Es cosa aparte de la
+// certificación: una encuesta puede no certificarse y aun así exigir el 80%
+// —de ahí sale el plazo para repetirla—, y al revés, certificarse con el
+// puntaje que sea porque se contesta para dejar constancia y no para aprobar.
 //
-// Sin encuesta a mano se exige el umbral, que es lo prudente: es preferible
-// no certificar de más a certificar lo que no se debía.
-window.exigeUmbralCertificacion = (ev) => !ev || ev.requires_min_score !== false;
+// Sin encuesta a mano se exige, que es lo prudente: es preferible no dar por
+// buena una respuesta que dar por buena la que no se debía.
+window.exigeMinimo = (ev) => !ev || ev.requires_min_score !== false;
 
 // La clasificación es texto libre —un `input` con datalist, no un catálogo—,
 // así que «Seguridad», «SEGURIDAD» y «seguridad » serían tres grupos distintos
@@ -791,7 +792,7 @@ window.estadoCertificacion = (encuestas, respuestas, fecha) => {
 
         const puntaje = typeof window.calcularScoreRespuesta === 'function'
             ? window.calcularScoreRespuesta(resp) : 0;
-        if (!window.exigeUmbralCertificacion(ev) || puntaje >= window.UMBRAL_CERTIFICACION) {
+        if (!window.exigeMinimo(ev) || puntaje >= window.UMBRAL_CERTIFICACION) {
             resumen.calificadas++;
             resumen.certificables.push(resp.id);
         } else {
