@@ -359,26 +359,56 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   altas repetidas del mapa de activos y `guardarEmpleado()` en
   `10-refacciones.html`. Las políticas van por operación, así que una tabla
   puede dejar actualizar y no borrar.
-- **Borrar un empleado no borra su historial.** La baja —desmarcar «Activo»—
-  es el camino normal y lo conserva todo; el bote de basura del encabezado de
-  «Editar empleado», en `10-refacciones.html`, elimina la fila de `employees`
-  y nada más. Las firmas, las respuestas de encuestas, los objetivos, los
-  hallazgos, las encuestas programadas y las solicitudes de refacciones
-  guardan a la persona por su número —unas veces el `id` numérico de la fila y
-  otras el `employee_id` de texto, según la antigüedad del registro— y ninguna
-  de esas columnas es llave foránea: la base no borra en cascada ni se queja,
-  deja el registro apuntando a alguien que ya no existe, y un alta futura con
-  ese mismo número lo hereda. Por eso `window.eliminarEmpleado()` cuenta antes
-  lo que quedaría colgando —una consulta por tabla, con `or` y
-  `{ count: 'exact', head: true }`, según la lista
-  `window.RASTROS_DEL_EMPLEADO`— y lo dice en el aviso; una tabla que todavía
-  no exista devuelve null y el resumen dice «no se pudo comprobar», que no es
-  lo mismo que decir que no hay nada. Nadie borra su propia ficha —la sesión
-  dura treinta días y seguiría abierta sin nada detrás— y los subordinados se
-  desligan (`supervisor_id` a null) **después** de que el borrado haya
-  ocurrido, no antes. Toda tabla nueva que guarde a una persona por su número
-  se añade a esa lista, o su historial desaparecerá del aviso sin dejar de
-  quedarse huérfano.
+- **Eliminar un empleado borra también su historial.** La baja —desmarcar
+  «Activo»— es el camino normal y lo conserva todo; el bote de basura del
+  encabezado de «Editar empleado», en `10-refacciones.html`, borra la ficha y
+  todo lo que esa persona dejó registrado, sin papelera ni vuelta atrás.
+
+  La base no lo hace sola. Las firmas, las respuestas de encuestas, los
+  objetivos, los hallazgos, las encuestas programadas y las solicitudes de
+  refacciones guardan a la persona por su número —unas veces el `id` numérico
+  de la fila y otras el `employee_id` de texto, según la antigüedad del
+  registro— y esas columnas no son llaves foráneas: borrar la ficha no borra
+  en cascada ni se queja, dejaba el registro apuntando a alguien que ya no
+  existe y un alta futura con ese mismo número lo heredaba. El barrido lo hace
+  `window.eliminarEmpleado()`, tabla por tabla, según la lista
+  `window.RASTROS_DEL_EMPLEADO`.
+
+  Esa lista separa **lo suyo de lo ajeno**, que no es lo mismo: las columnas
+  `suyas` dicen que la fila ES suya —la solicitud que pidió, la encuesta que
+  contestó— y la fila entera se borra; las columnas `menciones` son donde
+  aparece dentro de la fila de otro —la solicitud que atendió, el hallazgo que
+  le asignaron, el acta que firmó, sus subordinados— y ahí sólo se le desliga
+  poniendo la columna a null, porque borrar esa fila destruiría el registro de
+  un tercero. **Toda tabla nueva que guarde a una persona por su número se
+  añade a esa lista**, en la mitad que le toque, o su historial sobrevivirá al
+  borrado sin dueño que lo reclame.
+
+  **El orden lo manda lo que no tiene vuelta atrás: primero la ficha, después
+  el historial.** Si la base rechaza el borrado —una política de RLS sin
+  DELETE, y van por operación, así que una tabla puede dejar actualizar y no
+  borrar— no se ha perdido nada; al revés, el historial se habría barrido para
+  dejar la ficha en pie. La única excepción es `certificado_por` de
+  `certificaciones_clasificacion`, que sí es llave foránea contra
+  `employees(id)` y sin poner a null impide borrar a quien haya certificado
+  algo: ahí la base responde 23503, se desliga y se reintenta **una** vez. Por
+  ser llaves foráneas, las dos columnas de esa tabla se filtran sólo por el
+  `id` numérico (`soloIdNumerico`): el `employee_id` de texto es otro número y
+  podría casar con la fila de otra persona.
+
+  El aviso previo enseña lo que se va a borrar y lo que se va a desligar, con
+  una consulta por tabla y columna —`or` con `{ count: 'exact', head: true }`,
+  así no viaja ninguna fila—. Una tabla que todavía no exista devuelve null y
+  el resumen dice «no se pudo comprobar», que no es lo mismo que decir que no
+  hay nada, y no detiene el borrado: lo que falle después de que la ficha ya
+  no esté se informa al final como pendiente de limpiar desde el editor SQL,
+  porque no habrá otra ficha desde la que reintentarlo.
+
+  Nadie borra su propia ficha —la sesión dura treinta días y seguiría abierta
+  sin nada detrás—. Lo que **no** se toca son los archivos de los buckets (el
+  avatar, las imágenes de firma) ni los arreglos `target_employees` y
+  `reviewer_employees` de las encuestas, que son asignación y no historial.
+
 - **Quién debe firmar un registro.** No hay tabla que lo diga: la regla la
   sostiene el código, y desde que se separó en cuatro copias vive en un solo
   sitio, `1-config.js`. Le toca firmar a todo empleado **activo** dado de alta
