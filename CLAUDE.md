@@ -359,6 +359,26 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   altas repetidas del mapa de activos y `guardarEmpleado()` en
   `10-refacciones.html`. Las políticas van por operación, así que una tabla
   puede dejar actualizar y no borrar.
+- **Borrar un empleado no borra su historial.** La baja —desmarcar «Activo»—
+  es el camino normal y lo conserva todo; el bote de basura del encabezado de
+  «Editar empleado», en `10-refacciones.html`, elimina la fila de `employees`
+  y nada más. Las firmas, las respuestas de encuestas, los objetivos, los
+  hallazgos, las encuestas programadas y las solicitudes de refacciones
+  guardan a la persona por su número —unas veces el `id` numérico de la fila y
+  otras el `employee_id` de texto, según la antigüedad del registro— y ninguna
+  de esas columnas es llave foránea: la base no borra en cascada ni se queja,
+  deja el registro apuntando a alguien que ya no existe, y un alta futura con
+  ese mismo número lo hereda. Por eso `window.eliminarEmpleado()` cuenta antes
+  lo que quedaría colgando —una consulta por tabla, con `or` y
+  `{ count: 'exact', head: true }`, según la lista
+  `window.RASTROS_DEL_EMPLEADO`— y lo dice en el aviso; una tabla que todavía
+  no exista devuelve null y el resumen dice «no se pudo comprobar», que no es
+  lo mismo que decir que no hay nada. Nadie borra su propia ficha —la sesión
+  dura treinta días y seguiría abierta sin nada detrás— y los subordinados se
+  desligan (`supervisor_id` a null) **después** de que el borrado haya
+  ocurrido, no antes. Toda tabla nueva que guarde a una persona por su número
+  se añade a esa lista, o su historial desaparecerá del aviso sin dejar de
+  quedarse huérfano.
 - **Quién debe firmar un registro.** No hay tabla que lo diga: la regla la
   sostiene el código, y desde que se separó en cuatro copias vive en un solo
   sitio, `1-config.js`. Le toca firmar a todo empleado **activo** dado de alta
