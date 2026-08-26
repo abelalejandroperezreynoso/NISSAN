@@ -531,6 +531,41 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   `is_obligatory` es otra cosa: dice que la encuesta no se puede dejar sin
   contestar, no que haya que llenar todas sus preguntas.
+- **Una pregunta de opciones puede decir cuáles son correctas, y entonces se
+  califica sola.** Es lo que convierte una encuesta en un examen: al crearla se
+  marca con ✔ la opción —o las opciones— que dan por buena la respuesta, y al
+  enviarla queda calificada sin que nadie la revise. Si todas las preguntas son
+  así, la respuesta se guarda ya como `'Revisado'` —lo decide `autoGradedCount`,
+  el mismo camino de la escala— y quien la contestó ve su resultado al momento.
+  Sin marcar ninguna todo sigue como antes: la califica quien revise. Las reglas
+  viven en `1-config.js`:
+
+  ```js
+  window.opcionesCorrectas(pregunta)             // [] si no se marcó ninguna
+  window.seCalificaSola(pregunta)                // si hay alguna marcada
+  window.aciertaEnOpciones(pregunta, respuesta)  // si acertó
+  ```
+
+  En `multiple` basta con haber elegido **una** de las correctas —marcar varias
+  es dar por válidas varias salidas—; en `checklist` hay que marcar
+  **exactamente** ésas, ni una de más ni una de menos, que es lo que se está
+  preguntando.
+
+  Van **dentro de `correct_answer_text`**, así que no hay columna nueva ni
+  script que correr. Ese campo no guardaba aquí nada aprovechable: era el
+  arreglo con **todas** las opciones, copiado del propio campo de opciones. Lo
+  nuevo se escribe como **objeto** (`{"correctas": [...]}`) precisamente para
+  distinguirlo: un arreglo se lee como «no se marcó ninguna», y por eso las
+  encuestas de antes se siguen calificando a mano en vez de darse todas por
+  correctas de golpe. La pantalla de calificar enseña las marcadas —«Opción
+  correcta: ✔ …»— en lugar del JSON crudo que salía antes, y dice «se calificó
+  sola» junto a los botones, que siguen ahí para corregirla.
+
+  El envío escribe en `grades_json` la misma forma que pone `setGrade` a mano
+  —`{ type: 'standard', status, question }`—, más un `auto: true` que sólo sirve
+  para decirlo en pantalla. Quien la recalifique a mano lo pierde, que es lo
+  correcto.
+
 - **Una pregunta con opciones pide además el porqué.** Marcar una casilla no
   dice por qué se marcó, y en una encuesta de seguridad eso es justo lo que hay
   que saber: «no» a secas y «no, porque la máquina estaba en paro» son
@@ -539,6 +574,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   debajo de las opciones, y `enviarRespuestasEval` no deja enviar sin él. Fuera
   quedan `text` —que ya es texto libre— y `list_match`, que es una lista de
   elementos y no una elección.
+
+  **Una pregunta que se califica sola no lleva motivo.** Ahí sí hay una
+  respuesta buena y otra mala —se acierta o no se acierta—, y pedir además el
+  porqué de cada una convierte un examen de diez preguntas en diez redacciones:
+  es la diferencia entre examinar y levantar hallazgos. Lo decide
+  `window.llevaMotivo(pregunta)`, que es por donde pasan el formulario, el
+  envío y la pantalla de calificar; `pideMotivo` se apoya en él.
 
   **`range` lleva motivo y sigue calificándose sola.** Un 0 en «existe un
   estándar de 5S» vale como hallazgo sólo si dice qué se encontró, pero eso no

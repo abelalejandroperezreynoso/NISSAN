@@ -712,7 +712,24 @@ window.verDetalleRespuesta = async (resp) => {
                     editableInput = `<div class="admin-edit-answer-check-group" data-qid="${q.id}" data-type="checklist" style="padding:10px; border:1px solid #cbd5e1; border-radius:6px; background:${bgEditable};">${checksHtml}</div>`;
                 }
 
+                // En una pregunta de opciones, la «respuesta modelo» son las
+                // que se marcaron como correctas. Lo guardado antes de que eso
+                // existiera era el arreglo con todas las opciones, que no dice
+                // nada: ahí se sigue calificando a criterio de quien revisa.
+                const correctasDeLaPregunta = window.opcionesCorrectas(q);
+                const esDeOpciones = window.PREGUNTAS_CON_OPCIONES.includes(q.question_type);
+
+                let modeloTitulo = "Respuesta Modelo:";
                 let correctText = q.correct_answer_text || "A criterio del evaluador";
+
+                if (correctasDeLaPregunta.length > 0) {
+                    modeloTitulo = correctasDeLaPregunta.length === 1 ? "Opción correcta:" : "Opciones correctas:";
+                    correctText = correctasDeLaPregunta
+                        .map(o => `✔ ${window.sanitizeForHTML(o)}`).join('<br>');
+                } else if (esDeOpciones) {
+                    correctText = "A criterio del evaluador";
+                }
+
                 let status = "pending";
                 if (typeof gradeObj === 'string') status = gradeObj;
                 else if (gradeObj && gradeObj.status) status = gradeObj.status;
@@ -728,11 +745,11 @@ window.verDetalleRespuesta = async (resp) => {
                     </div>
                     <div style="width: 250px; flex-shrink:0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:15px; display:flex; flex-direction:column; justify-content:space-between;">
                         <div>
-                            <div style="font-size:0.85rem; color:#64748b; margin-bottom:6px; font-weight:600;">Respuesta Modelo:</div>
-                            <div style="background:#eff6ff; padding:8px 12px; border-radius:6px; font-size:0.9rem; color:#1e3a8a; border-left:3px solid #3b82f6;">${correctText}</div>
+                            <div style="font-size:0.85rem; color:#64748b; margin-bottom:6px; font-weight:600;">${modeloTitulo}</div>
+                            <div style="background:#eff6ff; padding:8px 12px; border-radius:6px; font-size:0.9rem; color:#1e3a8a; border-left:3px solid #3b82f6; line-height:1.6;">${correctText}</div>
                         </div>
                         <div style="margin-top:15px;">
-                            <div style="font-size:0.85rem; color:#64748b; margin-bottom:6px; font-weight:600;">Calificación:</div>
+                            <div style="font-size:0.85rem; color:#64748b; margin-bottom:6px; font-weight:600;">Calificación:${(gradeObj && gradeObj.auto) ? ' <span style="font-weight:500; color:#16a34a;">se calificó sola</span>' : ''}</div>
                             <div style="display:flex; gap:8px;">
                                 <button class="grade-btn ${isCorrect}" onclick="setGrade('${q.id}', 'correct', this)" style="flex:1; padding:8px; border-radius:8px; border:1px solid #22c55e; background:${status==='correct'?'#22c55e':'white'}; color:${status==='correct'?'white':'#22c55e'}; cursor:pointer; font-weight:bold; transition:all 0.2s;">Correcto</button>
                                 <button class="grade-btn ${isIncorrect}" onclick="setGrade('${q.id}', 'incorrect', this)" style="flex:1; padding:8px; border-radius:8px; border:1px solid #ef4444; background:${status==='incorrect'?'#ef4444':'white'}; color:${status==='incorrect'?'white':'#ef4444'}; cursor:pointer; font-weight:bold; transition:all 0.2s;">Incorrecto</button>
@@ -802,7 +819,7 @@ window.verDetalleRespuesta = async (resp) => {
                     <div style="font-size:0.75rem; font-weight:700; color:#7e22ce; margin-bottom:4px;">💬 Por qué</div>
                     <div style="font-size:0.95rem; color:#334155; white-space:pre-wrap;">${window.sanitizeForHTML(motivo)}</div>
                 </div>`;
-        } else if (window.PREGUNTAS_CON_MOTIVO.includes(q.question_type) && rawRespuesta) {
+        } else if (window.llevaMotivo(q) && rawRespuesta) {
             // Las respuestas anteriores a que se pidiera el motivo no lo traen;
             // decirlo evita buscarlo.
             motivoHtml = `<div style="margin-top:12px; font-size:0.8rem; color:#94a3b8; font-style:italic;">Sin explicación: se contestó antes de que se pidiera.</div>`;
@@ -3132,6 +3149,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     
     <div class="options-container" style="display:${showOptionsContainer?'block':'none'};margin-top:10px;">
         <label class="lbl-options" style="font-size:0.8rem; color:#64748b; margin-bottom:5px; display:block;">${optionsLabel}</label>
+        <div class="ayuda-correctas" style="display:none; font-size:0.75rem; color:#16a34a; background:#f0fdf4; border:1px dashed #bbf7d0; border-radius:8px; padding:8px 10px; margin-bottom:8px;"></div>
         <div class="dynamic-options-list"></div>
         <button onclick="window.agregarInputOpcion(this.parentElement.querySelector('.dynamic-options-list'))" style="margin-top:5px; cursor:pointer; color:#2563eb; background:none; border:none; font-weight:bold;">+ Agregar Elemento</button>
     </div>
@@ -3156,8 +3174,13 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     
     document.getElementById('questions-container').appendChild(d);
     const l=d.querySelector('.dynamic-options-list');
-    if(showOptionsContainer && op.length>0) op.forEach(o=>window.agregarInputOpcion(l,o));
+    // Cuáles venían marcadas como correctas. Se leen con el mismo helper que
+    // usa el envío para calificar, que es el que aguanta lo guardado antes de
+    // que esto existiera.
+    const correctas = window.opcionesCorrectas({ question_type: tp, correct_answer_text: c });
+    if(showOptionsContainer && op.length>0) op.forEach(o=>window.agregarInputOpcion(l, o, correctas.includes(String(o))));
     else if(showOptionsContainer) window.agregarInputOpcion(l);
+    window.actualizarMarcasCorrectas(d);
     window.verificarRestriccionesModo();
     window.renumerarPreguntas();
 };
@@ -3282,18 +3305,65 @@ window.toggleTipoPregunta = (s) => {
             }
         }
     }
+
+    // Las casillas de «correcta» son de opción múltiple y checklist; en
+    // «Recall» sobran, y al cambiar de tipo hay que apagarlas.
+    window.actualizarMarcasCorrectas(w);
 };
 
-window.agregarInputOpcion = (c,v="") => {
+// Cada opción lleva delante su casilla de «ésta es correcta». Marcar alguna es
+// lo que hace que la pregunta se califique sola al enviarla; sin marcar
+// ninguna, la califica quien revise, como siempre. La casilla no se enseña en
+// «Recall», que es una lista de elementos y no una elección: eso lo decide
+// window.actualizarMarcasCorrectas según el tipo de la pregunta.
+window.agregarInputOpcion = (c, v = "", correcta = false) => {
     const d=document.createElement('div');
-    d.style.cssText="display:flex;gap:5px;margin-top:5px;";
+    d.style.cssText="display:flex;gap:5px;margin-top:5px;align-items:center;";
+
+    const marca = document.createElement('label');
+    marca.className = "marca-correcta";
+    marca.style.cssText = "display:flex; align-items:center; justify-content:center; width:34px; height:34px; flex-shrink:0; border-radius:8px; background:#f1f5f9; border:1px solid #e2e8f0; cursor:pointer;";
+    marca.title = "Marcar como respuesta correcta";
+    const chk = document.createElement('input');
+    chk.type = "checkbox"; chk.className = "chk-opt-ok"; chk.checked = !!correcta;
+    chk.style.cssText = "width:17px; height:17px; accent-color:#16a34a; cursor:pointer;";
+    chk.setAttribute('aria-label', 'Esta opción es correcta');
+    marca.appendChild(chk);
+
     const inp = document.createElement('input');
     inp.type = "text"; inp.className = "inp-opt-val"; inp.value = v;
-    inp.style.cssText = "flex:1; padding:8px; border:1px solid #cbd5e1; border-radius:6px;";
+    inp.style.cssText = "flex:1; min-width:0; padding:8px; border:1px solid #cbd5e1; border-radius:6px;";
     const btn = document.createElement('button');
     btn.innerText = "✕"; btn.style.cssText = "color:red; border:none; background:white; font-weight:bold; cursor:pointer;";
     btn.onclick = function() { this.parentElement.remove(); };
-    d.appendChild(inp); d.appendChild(btn); c.appendChild(d);
+    d.appendChild(marca); d.appendChild(inp); d.appendChild(btn); c.appendChild(d);
+
+    const wrapper = c.closest('.pregunta-wrapper');
+    if (wrapper) window.actualizarMarcasCorrectas(wrapper);
+};
+
+// Enseña o esconde las casillas de «correcta» según el tipo, y dice arriba qué
+// significa marcarlas. Se llama al cambiar el tipo y al agregar una opción.
+window.actualizarMarcasCorrectas = (wrapper) => {
+    const tipoEl = wrapper.querySelector('.inp-tipo');
+    const tipo = tipoEl ? tipoEl.value : 'text';
+    const llevanMarca = window.PREGUNTAS_CON_OPCIONES.includes(tipo);
+
+    wrapper.querySelectorAll('.marca-correcta').forEach(m => {
+        m.style.display = llevanMarca ? 'flex' : 'none';
+        if (!llevanMarca) {
+            const chk = m.querySelector('.chk-opt-ok');
+            if (chk) chk.checked = false;
+        }
+    });
+
+    const ayuda = wrapper.querySelector('.ayuda-correctas');
+    if (ayuda) {
+        ayuda.style.display = llevanMarca ? 'block' : 'none';
+        ayuda.innerText = tipo === 'checklist'
+            ? 'Marca ✔ las opciones correctas: se calificará sola y habrá que marcarlas todas, sin ninguna de más. Sin marcar ninguna, la califica quien revise.'
+            : 'Marca ✔ la opción correcta: se calificará sola. Si marcas varias, cualquiera de ellas cuenta como acierto. Sin marcar ninguna, la califica quien revise.';
+    }
 };
 
 // Las tres columnas de «A quién va dirigida», leídas de la hoja. Devuelve null
@@ -3470,8 +3540,21 @@ window.guardarNuevaEvaluacion = async () => {
             let corr="", ops=[];
             
             if(tp==='multiple' || tp==='checklist'){
-                d.querySelectorAll('.inp-opt-val').forEach(r=>{if(r.value.trim())ops.push(r.value.trim());});
-                corr=JSON.stringify(ops);
+                // `correct_answer_text` guardaba aquí el arreglo con TODAS las
+                // opciones, que no decía nada. Ahora guarda las que dan por
+                // buena la respuesta, y como objeto: así lo viejo —un arreglo—
+                // se distingue de «se marcaron éstas» y no se lee como que
+                // todas eran correctas. Sin ninguna marcada, la califica quien
+                // revise, igual que hasta ahora.
+                const correctas = [];
+                d.querySelectorAll('.inp-opt-val').forEach(r=>{
+                    const texto = r.value.trim();
+                    if(!texto) return;
+                    ops.push(texto);
+                    const marca = r.parentElement.querySelector('.chk-opt-ok');
+                    if(marca && marca.checked) correctas.push(texto);
+                });
+                corr=JSON.stringify({ [window.LLAVE_OPCIONES_CORRECTAS]: correctas });
             } else if (tp === 'list_match') {
                 const items = [];
                 d.querySelectorAll('.inp-opt-val').forEach(r=>{if(r.value.trim())items.push(r.value.trim());});

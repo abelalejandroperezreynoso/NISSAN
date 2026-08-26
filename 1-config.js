@@ -441,6 +441,63 @@ window.fotoDeArea = (respuesta) => {
 };
 
 // ==========================================
+// LAS OPCIONES CORRECTAS DE UNA PREGUNTA
+// ==========================================
+// Una pregunta de opciones puede decir cuáles dan por buena la respuesta, y
+// entonces se califica sola al enviarla: es lo que convierte una encuesta en
+// un examen. Sin opciones correctas marcadas todo sigue como antes —la
+// califica quien revise—, que es lo que hacen las encuestas de seguridad,
+// donde ninguna respuesta es «la buena».
+//
+// Van dentro de `correct_answer_text`, que para estos tipos no guardaba nada
+// aprovechable —era el arreglo de TODAS las opciones, copiado del propio
+// campo—, así que no hay columna nueva ni script que correr. Lo nuevo se
+// escribe como objeto (`{"correctas": [...]}`) y lo viejo era un arreglo: por
+// eso un arreglo se lee como «no se marcó ninguna» y las encuestas de antes se
+// siguen calificando a mano, en vez de darse todas por correctas de golpe.
+window.PREGUNTAS_CON_OPCIONES = ['multiple', 'checklist'];
+window.LLAVE_OPCIONES_CORRECTAS = 'correctas';
+
+window.opcionesCorrectas = (pregunta) => {
+    if (!pregunta || !window.PREGUNTAS_CON_OPCIONES.includes(pregunta.question_type)) return [];
+
+    let v = pregunta.correct_answer_text;
+    if (typeof v === 'string') {
+        if (!v.trim()) return [];
+        try { v = JSON.parse(v); } catch (e) { return []; }
+    }
+    // Lo viejo: el arreglo con todas las opciones. No dice nada de cuál es la
+    // correcta y no puede leerse como que lo son todas.
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return [];
+
+    const lista = v[window.LLAVE_OPCIONES_CORRECTAS];
+    return Array.isArray(lista) ? lista.map(x => String(x)) : [];
+};
+
+// Si esta pregunta se califica sola. Lo preguntan el envío —que es quien pone
+// la calificación—, el formulario y la pantalla de calificar.
+window.seCalificaSola = (pregunta) => window.opcionesCorrectas(pregunta).length > 0;
+
+// Si la respuesta acierta. En una de opción múltiple basta con haber elegido
+// una de las correctas —marcar varias como buenas es dar por válidas varias
+// salidas—; en un checklist hay que marcar exactamente ésas, ni una de más ni
+// una de menos, que es lo que se está preguntando.
+window.aciertaEnOpciones = (pregunta, respuesta) => {
+    const correctas = window.opcionesCorrectas(pregunta);
+    if (correctas.length === 0) return false;
+
+    if (pregunta.question_type === 'checklist') {
+        const marcadas = Array.isArray(respuesta)
+            ? respuesta.map(String)
+            : (respuesta === null || respuesta === undefined || respuesta === '' ? [] : [String(respuesta)]);
+        const juego = new Set(correctas);
+        return marcadas.length === juego.size && marcadas.every(m => juego.has(m));
+    }
+
+    return correctas.includes(String(respuesta));
+};
+
+// ==========================================
 // EL MOTIVO DE UNA RESPUESTA CON OPCIONES
 // ==========================================
 // Marcar una opción no dice por qué se marcó, y en una encuesta de seguridad
@@ -506,11 +563,20 @@ window.bloqueGuiaEscala = (pregunta) => {
         </details>`;
 };
 
+// Si esta pregunta lleva campo de motivo. Una que se califica sola no: ahí sí
+// hay una respuesta buena y otra mala, se acierta o no se acierta, y pedir
+// además el porqué de cada una convierte un examen de diez preguntas en diez
+// redacciones. Es la diferencia entre examinar y levantar hallazgos.
+window.llevaMotivo = (pregunta) =>
+    !!pregunta &&
+    window.PREGUNTAS_CON_MOTIVO.includes(pregunta.question_type) &&
+    !window.seCalificaSola(pregunta);
+
 // El tope de la escala es el «todo bien»: no hay nada que explicar. Cualquier
 // valor por debajo sí, que es donde está el hallazgo. Las demás preguntas con
 // opciones piden el motivo siempre: ahí ninguna respuesta es la buena.
 window.pideMotivo = (pregunta, valor) => {
-    if (!pregunta || !window.PREGUNTAS_CON_MOTIVO.includes(pregunta.question_type)) return false;
+    if (!window.llevaMotivo(pregunta)) return false;
     if (pregunta.question_type !== 'range') return true;
 
     const numero = parseFloat(valor);

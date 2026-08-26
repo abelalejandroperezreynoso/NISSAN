@@ -925,7 +925,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         // distintos. Las preguntas con opciones piden el motivo, y sin él no se
         // envía —eso lo comprueba `enviarRespuestasEval`—.
         let comentarioHtml = '';
-        if (window.PREGUNTAS_CON_MOTIVO.includes(q.question_type)) {
+        if (window.llevaMotivo(q)) {
             comentarioHtml = `
                 <div style="margin-top:16px; border-top:1px solid #f1f5f9; padding-top:14px;">
                     <label style="display:block; font-weight:600; color:#475569; margin-bottom:8px; font-size:0.9rem;">
@@ -1155,7 +1155,7 @@ window.enviarRespuestasEval = async () => {
             // El motivo se pide sólo de lo que sí se contestó: a lo que aún no
             // tiene opción marcada se le pide antes la respuesta, y sería
             // confuso reclamar las dos cosas a la vez.
-            if (window.PREGUNTAS_CON_MOTIVO.includes(q.question_type)) {
+            if (window.llevaMotivo(q)) {
                 const campo = document.querySelector(`.resp-comentario[data-id="${q.id}"]`);
                 const motivo = campo ? campo.value.trim() : '';
                 if (contestada) {
@@ -1193,6 +1193,23 @@ window.enviarRespuestasEval = async () => {
                         // el id de la pregunta y ese texto puede cambiar o
                         // desaparecer del cuestionario más adelante.
                         question: q.question_text || ''
+                    };
+                    autoGradedCount++;
+                } else if (window.seCalificaSola(q)) {
+                    // La pregunta dice cuáles son sus opciones correctas, así
+                    // que no hay nada que decidir: acierta o no acierta. Si
+                    // todas las de la encuesta son así, se guarda ya revisada
+                    // —lo decide `autoGradedCount` más abajo— y quien la
+                    // contestó ve su resultado al momento.
+                    autoGradesMap[q.id] = {
+                        // La misma forma que pone `setGrade` al calificar a
+                        // mano, para que `calcularScoreRespuesta` no tenga que
+                        // saber de dónde vino; `auto` es sólo para decirlo en
+                        // la pantalla de calificar.
+                        type: 'standard',
+                        status: window.aciertaEnOpciones(q, val) ? 'correct' : 'incorrect',
+                        question: q.question_text || '',
+                        auto: true
                     };
                     autoGradedCount++;
                 }
