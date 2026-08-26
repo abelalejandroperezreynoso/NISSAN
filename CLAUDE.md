@@ -659,6 +659,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   encuesta se va con el bloque «Datos», así que en este modo lo dice el
   subtítulo del encabezado.
 
+  **Y la pantalla de inicio dice de cuáles es revisor**, en la tarjeta que
+  llena `window.cargarEncuestasQueReviso(userId)` (`2b-core-dashboard.js`)
+  dentro de `#container-encuestas-reviso`. Hacía falta porque revisar no
+  depende de ser jefe de nadie y no se notaba en ninguna parte: la encuesta
+  puede no tocarle a él —así que no le sale como pendiente— y el badge sólo se
+  enciende cuando alguien ya contestó. Cada renglón lleva lo que espera su
+  calificación, con el mismo filtro del badge de `calcularPendientesBatch`
+  —`'Pendiente'` y `'Mal Revisada'`, sin las respuestas propias, que vuelven al
+  jefe inmediato—, y abre la encuesta con `window.abrirEncuestaQueReviso`, que
+  monta antes la lista porque el detalle se dibuja dentro de su hoja. Sin
+  encuestas que revisar la tarjeta no se dibuja: quien no sea revisor no ve
+  nada nuevo en su inicio.
+
   El guardado es otro: `window.guardarNuevaEvaluacion` desvía a
   `window.guardarDestinatariosEncuesta` en cuanto ve `editandoSoloDestinatarios`,
   porque el guardado entero lee el título, la escala y las preguntas —campos

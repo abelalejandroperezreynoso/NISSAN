@@ -751,6 +751,109 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
     setTimeout(() => {
         window.calcularPendientesBatch([user.id]);
     }, 500);
+
+    window.cargarEncuestasQueReviso(user.id);
+};
+
+// ==========================================
+// LAS ENCUESTAS QUE REVISA ESTA PERSONA
+// ==========================================
+// Revisar una encuesta —ser el instructor que la imparte— no depende de ser
+// jefe de nadie, así que hasta ahora no se notaba en ningún sitio de la
+// pantalla de inicio: la encuesta puede no tocarle a él, y el badge de
+// pendientes sólo se enciende cuando alguien ya contestó. Esta tarjeta dice de
+// cuáles es revisor aunque todavía no haya nada que calificar, que es lo que
+// permite entrar a corregir a quién va dirigida antes de que la conteste
+// nadie.
+//
+// Se esconde entera si no revisa ninguna, que es el caso de casi todo el
+// mundo: quien no sea revisor no ve nada nuevo en su inicio.
+window.cargarEncuestasQueReviso = async (userId) => {
+    const cont = document.getElementById('container-encuestas-reviso');
+    if (!cont) return;
+
+    cont.style.display = 'none';
+    cont.innerHTML = '';
+
+    const empStrId = String(userId).trim();
+
+    try {
+        // Sólo las encendidas: una apagada no la ve nadie salvo el
+        // administrador, y tampoco genera respuestas que calificar. Sin la
+        // columna de revisores —su script se corre a mano—,
+        // `camposConRevisores` la deja fuera y la lista sale vacía.
+        const campos = await window.camposConRevisores('id, title, category');
+        const { data: encuestas, error } = await sb.from('evaluations')
+            .select(campos)
+            .eq('active', true);
+
+        if (error || !encuestas) return;
+
+        const mias = window.encuestasQueRevisa(encuestas, empStrId);
+        if (mias.length === 0) return;
+
+        // Cuántas respuestas espera calificar cada una. Las suyas propias no
+        // cuentan: nadie califica su propia respuesta, ésa vuelve a su jefe
+        // inmediato. Es el mismo filtro del badge de `calcularPendientesBatch`.
+        const porCalificar = {};
+        const { data: respuestas } = await sb.from('evaluation_responses')
+            .select('evaluation_id')
+            .in('review_status', ['Pendiente', 'Mal Revisada'])
+            .in('evaluation_id', mias.map(e => e.id))
+            .neq('employee_id', empStrId);
+
+        (respuestas || []).forEach(r => {
+            const clave = String(r.evaluation_id);
+            porCalificar[clave] = (porCalificar[clave] || 0) + 1;
+        });
+
+        const totalPorCalificar = Object.values(porCalificar).reduce((a, b) => a + b, 0);
+
+        const filas = mias.map(ev => {
+            const pendientes = porCalificar[String(ev.id)] || 0;
+            const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+
+            const insignia = pendientes > 0
+                ? `<div style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; border-radius:20px; padding:3px 10px; font-size:0.7rem; font-weight:bold; white-space:nowrap;">${pendientes} por calificar</div>`
+                : `<div style="background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:20px; padding:3px 10px; font-size:0.7rem; font-weight:bold; white-space:nowrap;">Al día</div>`;
+
+            return `
+                <div onclick="window.abrirEncuestaQueReviso('${ev.id}', '${safeTitle}')"
+                     style="display:flex; align-items:center; gap:10px; padding:10px 8px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                    <div style="font-size:1.3rem; line-height:1;">📋</div>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
+                        <div style="font-size:0.72rem; color:#94a3b8;">${window.sanitizeForHTML(ev.category || 'General')}</div>
+                    </div>
+                    ${insignia}
+                </div>`;
+        }).join('');
+
+        const resumen = totalPorCalificar > 0
+            ? `${totalPorCalificar} ${totalPorCalificar === 1 ? 'respuesta espera' : 'respuestas esperan'} tu calificación`
+            : 'No hay nada esperando calificación';
+
+        cont.innerHTML = `
+            <div style="background:white; border-radius:16px; padding:15px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
+                <h3 style="margin:0 0 2px 0; color:#7e22ce; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">👁️ Encuestas que revisas</h3>
+                <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:6px;">${resumen}</div>
+                ${filas}
+            </div>`;
+        cont.style.display = 'block';
+    } catch (e) {
+        // Nada que enseñar es mejor que una tarjeta rota: el resto del inicio
+        // no depende de esto.
+        console.warn('No se pudieron cargar las encuestas que revisa:', e.message);
+    }
+};
+
+// Se abre la lista de encuestas primero: el detalle se dibuja dentro de su
+// hoja —`#contenido-modal-evaluaciones`, que no existe hasta que la lista se
+// ha montado— y así la flecha de volver lleva a donde tiene que llevar.
+window.abrirEncuestaQueReviso = async (evalId, titulo) => {
+    if (!window.cargarVistaEvaluaciones) { alert('Módulo de encuestas en actualización'); return; }
+    await window.cargarVistaEvaluaciones();
+    if (window.abrirHistorialEvaluacion) await window.abrirHistorialEvaluacion(evalId, titulo);
 };
 
 window.cargarDatosEmpleados = async () => {
