@@ -130,8 +130,13 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" style="width: 100%; padding:12px 20px; background:#2563eb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(37,99,235,0.25); transition: transform 0.1s;">📝 ${btnText}</button>`;
     } else if (window.revisoresDeEncuesta(evalData).includes(String(user.id))) {
         // Se está aquí para calificarla, no para contestarla: la encuesta no va
-        // dirigida a esta persona y el botón de responder sobra.
-        actionButtonHtml = `<div style="text-align:center; color:#7e22ce; font-size:0.9rem; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px;">👁️ Te toca revisar esta encuesta.</div>`;
+        // dirigida a esta persona y el botón de responder sobra. Lo que sí
+        // puede hacer desde aquí es corregir a quién va dirigida, que es la
+        // razón de que la vea en la lista sin tenerla asignada.
+        actionButtonHtml = `<div style="text-align:center; color:#7e22ce; font-size:0.9rem; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px;">
+            <div>👁️ Te toca revisar esta encuesta.</div>
+            <button onclick="window.cerrarModalEvaluaciones(); window.editarDestinatariosEncuesta('${evalId}')" style="margin-top:10px; padding:8px 14px; background:white; color:#7e22ce; border:1px solid #d8b4fe; border-radius:8px; cursor:pointer; font-weight:bold; font-size:0.85rem;">👥 Editar a quién va dirigida</button>
+        </div>`;
     }
 
     // --- LO ÚLTIMO QUE SACÓ ESTA PERSONA AQUÍ ---
@@ -2548,24 +2553,56 @@ window.certificarSeleccionClasificacion = async () => {
 // tiene que decirlo el encabezado: el título, el subtítulo y la etiqueta del
 // botón de guardar, que al ser un botón de icono la lleva en el aria-label y
 // en el title. Antes decía «Nueva evaluación» también al editar una existente.
-window.prepararEncabezadoEval = (editando) => {
+window.prepararEncabezadoEval = (editando, soloDestinatarios = false) => {
     const titulo = document.getElementById('titulo-crear-eval');
     const subtitulo = document.getElementById('subtitulo-crear-eval');
     const guardar = document.getElementById('btn-guardar-eval');
     const escala = document.getElementById('div-rango-labels');
 
-    if (titulo) titulo.innerText = editando ? 'Editar evaluación' : 'Nueva evaluación';
-    if (subtitulo) subtitulo.innerText = editando
-        ? 'Los cambios valen del periodo siguiente en adelante'
-        : 'Define el cuestionario y a quién le toca';
+    if (titulo) titulo.innerText = soloDestinatarios
+        ? 'A quién va dirigida'
+        : (editando ? 'Editar evaluación' : 'Nueva evaluación');
+    if (subtitulo) subtitulo.innerText = soloDestinatarios
+        ? 'Como revisor sólo cambias a quién le toca'
+        : (editando
+            ? 'Los cambios valen del periodo siguiente en adelante'
+            : 'Define el cuestionario y a quién le toca');
     if (guardar) {
-        const etiqueta = editando ? 'Guardar cambios' : 'Publicar evaluación';
+        const etiqueta = (editando || soloDestinatarios) ? 'Guardar cambios' : 'Publicar evaluación';
         guardar.title = etiqueta;
         guardar.setAttribute('aria-label', etiqueta);
     }
     // La escala arranca plegada; quien la necesite la abre, y al editar la
     // abre window.editarEvaluacion si la encuesta ya trae etiquetas.
     if (escala) escala.open = false;
+};
+
+// La misma hoja sirve para configurar la encuesta entera y para que un revisor
+// corrija sólo a quién va dirigida. Lo que sobra se esconde en vez de armar una
+// segunda hoja: así el selector de puestos, departamentos y personas —con su
+// buscador y sus fichas— sigue siendo uno solo.
+//
+// El bloque de revisores se esconde siempre en este modo aunque
+// `verificarRestriccionesModo` lo vuelva a mostrar: nombrar revisores es
+// justamente lo que no le toca a un revisor.
+window.SECCIONES_FUERA_DE_DESTINATARIOS = [
+    'grupo-datos', 'grupo-datos-cuerpo',
+    'grupo-revisores', 'grupo-revisores-cuerpo',
+    'grupo-opciones', 'grupo-opciones-cuerpo',
+    'div-rango-labels',
+    'grupo-preguntas', 'questions-container', 'btn-agregar-pregunta'
+];
+
+window.aplicarModoSoloDestinatarios = (activo) => {
+    window.SECCIONES_FUERA_DE_DESTINATARIOS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = activo ? 'none' : '';
+    });
+
+    // Y su propio rótulo, que repetiría el título de la hoja: en este modo la
+    // hoja entera se llama «A quién va dirigida».
+    const rotulo = document.getElementById('grupo-destinatarios');
+    if (rotulo) rotulo.style.display = activo ? 'none' : '';
 };
 
 window.renderConfiguracionEscala = () => {
@@ -2830,6 +2867,8 @@ window.toggleSelectorDeptos = () => {
 
 window.abrirModalCrearEval = async () => {
     window.idEditandoEval = null;
+    window.editandoSoloDestinatarios = false;
+    window.aplicarModoSoloDestinatarios(false);
     document.getElementById('eval-title-input').value = '';
     
     const descInput = document.getElementById('eval-desc-input');
@@ -2876,7 +2915,10 @@ window.abrirModalCrearEval = async () => {
     window.verificarRestriccionesModo();
 };
 
-window.editarEvaluacion = async (id) => {
+// El segundo argumento la abre restringida: sólo el bloque de destinatarios,
+// que es lo que puede tocar un revisor. Entra por ahí
+// `window.editarDestinatariosEncuesta`, que además comprueba el permiso.
+window.editarEvaluacion = async (id, soloDestinatarios = false) => {
     let evaluacion = null;
     if (window.evalCache && window.evalCache.evals) {
         evaluacion = window.evalCache.evals.find(e => e.id === id);
@@ -2888,9 +2930,11 @@ window.editarEvaluacion = async (id) => {
     if (!evaluacion) { alert("Error: No se encontró la evaluación."); return; }
 
     window.idEditandoEval = id;
+    window.editandoSoloDestinatarios = soloDestinatarios;
+    window.aplicarModoSoloDestinatarios(soloDestinatarios);
     // Antes de tocar la escala: prepararEncabezadoEval la deja plegada y el
     // bloque de range_labels de más abajo la vuelve a abrir si hay etiquetas.
-    window.prepararEncabezadoEval(true);
+    window.prepararEncabezadoEval(true, soloDestinatarios);
     document.getElementById('eval-title-input').value = evaluacion.title;
 
     const descInput = document.getElementById('eval-desc-input');
@@ -2923,6 +2967,17 @@ window.editarEvaluacion = async (id) => {
             } catch (e) { targetEmployeesData = null; }
         }
         window.prepararSelectorPersonas('destinatarios', targetEmployeesData);
+
+        // Un revisor sólo cambia a quién va dirigida: el resto de la hoja está
+        // escondido, así que no hay nada más que llenar y el cuestionario ni se
+        // le pide a la base. El subtítulo lleva el título de la encuesta porque
+        // el campo que lo dice se queda fuera de la vista en este modo.
+        if (soloDestinatarios) {
+            const subtituloHoja = document.getElementById('subtitulo-crear-eval');
+            if (subtituloHoja) subtituloHoja.innerText = evaluacion.title || '';
+            document.getElementById('modal-crear-eval').style.display = 'flex';
+            return;
+        }
 
         // Los revisores propios se leen con el mismo helper que usan las demás
         // pantallas, que es el que aguanta que la columna venga como texto.
@@ -3007,6 +3062,33 @@ window.editarEvaluacion = async (id) => {
         });
     } else { window.agregarCampoPregunta(); }
     setTimeout(window.verificarRestriccionesModo, 50);
+};
+
+// La puerta del revisor a la hoja de edición. Abre la misma hoja con todo
+// escondido salvo «A quién va dirigida», que es lo único que puede cambiar
+// quien imparte la encuesta sin ser administrador.
+//
+// La encuesta se pide con `window.encuestaDeLaRespuesta`, que es la que ya
+// sabe traerla con sus revisores aguantando que la columna no exista todavía;
+// aquí sólo hace falta para comprobar el permiso, y la hoja se la vuelve a
+// buscar entera.
+window.editarDestinatariosEncuesta = async (id) => {
+    const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
+    const evaluacion = await window.encuestaDeLaRespuesta(id);
+    if (!evaluacion) { alert("Error: No se encontró la evaluación."); return; }
+
+    if (!window.modoAdminActivo && !(user && window.puedeEditarDestinatarios(evaluacion, user.id))) {
+        alert("Sólo quien revisa esta encuesta puede cambiar a quién va dirigida.");
+        return;
+    }
+
+    // Las dos hojas comparten z-index, así que con la lista abierta la de
+    // edición se quedaría detrás y sin manera de tocarla: manda el orden del
+    // documento. Los botones que llaman aquí ya la cierran —así no hay
+    // fotograma con las dos a la vista—, y esto es la red de seguridad.
+    if (window.cerrarModalEvaluaciones) window.cerrarModalEvaluaciones();
+
+    await window.editarEvaluacion(id, true);
 };
 
 window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
@@ -3214,7 +3296,85 @@ window.agregarInputOpcion = (c,v="") => {
     d.appendChild(inp); d.appendChild(btn); c.appendChild(d);
 };
 
+// Las tres columnas de «A quién va dirigida», leídas de la hoja. Devuelve null
+// —tras avisar— en el único caso que no se puede guardar: haber desmarcado
+// «Todos los colaboradores» sin nombrar a nadie. Lo comparten el guardado
+// entero y el del revisor, que sólo escribe esto.
+window.destinatariosDeLaHoja = () => {
+    const listaMarcada = (idCasillaTodos, selectorItems) => {
+        const chkAll = document.getElementById(idCasillaTodos);
+        if (!chkAll || chkAll.checked) return ['ALL'];
+        const marcados = Array.from(document.querySelectorAll(selectorItems)).map(cb => cb.value);
+        return marcados.length > 0 ? marcados : ['ALL'];
+    };
+
+    const targetEmployees = window.idsDelSelector('destinatarios');
+    if (targetEmployees === null) {
+        alert("Desmarcaste 'Todos los colaboradores' pero no agregaste a nadie a la lista.");
+        return null;
+    }
+
+    return {
+        target_positions: listaMarcada('chk-all-puestos', '.chk-puesto-item:checked'),
+        target_departments: listaMarcada('chk-all-deptos', '.chk-depto-item:checked'),
+        target_employees: targetEmployees
+    };
+};
+
+// El guardado del revisor: sólo los destinatarios. No pasa por el guardado
+// entero porque ése lee el título, la escala y las preguntas, que en esta hoja
+// están escondidas —y las escribiría con lo que hubiera quedado en los campos—.
+window.guardarDestinatariosEncuesta = async () => {
+    const eid = window.idEditandoEval;
+    if (!eid) { alert("No hay ninguna encuesta abierta."); return; }
+
+    const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
+    const evaluacion = await window.encuestaDeLaRespuesta(eid);
+    if (!window.modoAdminActivo && !(user && window.puedeEditarDestinatarios(evaluacion, user.id))) {
+        alert("Sólo quien revisa esta encuesta puede cambiar a quién va dirigida.");
+        return;
+    }
+
+    const destinatarios = window.destinatariosDeLaHoja();
+    if (!destinatarios) return;
+
+    const btn = document.getElementById('btn-guardar-eval');
+    if (btn) btn.disabled = true;
+
+    try {
+        // PostgREST responde con éxito a un update que las políticas de RLS
+        // rechazan: simplemente no afecta a ninguna fila. Aquí escribe alguien
+        // que no es administrador, así que comprobar `error` no basta: se
+        // encadena `.select()` y se cuentan las filas, o la hoja se cerraría
+        // diciendo que guardó lo que la base no dejó pasar.
+        const { data, error } = await sb.from('evaluations')
+            .update(destinatarios)
+            .eq('id', eid)
+            .select('id');
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            alert("❌ La base no aceptó el cambio: no se modificó ninguna fila. Pide a un administrador que revise los permisos de la tabla de encuestas.");
+            return;
+        }
+
+        alert("✅ Guardado correctamente");
+        document.getElementById('modal-crear-eval').style.display = 'none';
+        window.evalCache = null;
+        cargarVistaEvaluaciones();
+    } catch (e) {
+        alert("❌ Error: " + e.message);
+        console.error(e);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+};
+
 window.guardarNuevaEvaluacion = async () => {
+    // La hoja restringida del revisor guarda por su cuenta: aquí abajo se leen
+    // campos que ella ni siquiera enseña.
+    if (window.editandoSoloDestinatarios) return window.guardarDestinatariosEncuesta();
+
     const tit = document.getElementById('eval-title-input').value.trim();
     const cat = document.getElementById('eval-category-input').value.trim() || "General";
     
@@ -3238,31 +3398,10 @@ window.guardarNuevaEvaluacion = async () => {
             if(el && el.value.trim()) { rangeLabels[i] = el.value.trim(); hasLabels = true; }
         }
 
-        const chkAll = document.getElementById('chk-all-puestos');
-        let targetPositions = ['ALL'];
-
-        if (chkAll && !chkAll.checked) {
-            const checkboxes = document.querySelectorAll('.chk-puesto-item:checked');
-            const seleccionados = Array.from(checkboxes).map(cb => cb.value);
-            if (seleccionados.length > 0) {
-                targetPositions = seleccionados;
-            } else {
-                targetPositions = ['ALL'];
-            }
-        }
-
-        const chkAllDeptos = document.getElementById('chk-all-deptos');
-        let targetDepartments = ['ALL'];
-
-        if (chkAllDeptos && !chkAllDeptos.checked) {
-            const checkboxesDeptos = document.querySelectorAll('.chk-depto-item:checked');
-            const seleccionadosDeptos = Array.from(checkboxesDeptos).map(cb => cb.value);
-            if (seleccionadosDeptos.length > 0) {
-                targetDepartments = seleccionadosDeptos;
-            } else {
-                targetDepartments = ['ALL'];
-            }
-        }
+        // Las tres listas de «A quién va dirigida» se arman en un solo sitio:
+        // el revisor guarda exactamente lo mismo desde su hoja restringida.
+        const destinatarios = window.destinatariosDeLaHoja();
+        if (!destinatarios) return;
 
         let isObligatory = true;
         const chkOblig = document.getElementById('chk-eval-obligatoria');
@@ -3275,12 +3414,6 @@ window.guardarNuevaEvaluacion = async () => {
                 // ve el administrador y no genera pendientes a nadie.
                 const chkActiva = document.getElementById('chk-eval-activa');
                 const estaActiva = chkActiva ? chkActiva.checked : true;
-
-                const targetEmployees = window.idsDelSelector('destinatarios');
-                if (targetEmployees === null) {
-                    alert("Desmarcaste 'Todos los colaboradores' pero no agregaste a nadie a la lista.");
-                    return;
-                }
 
                 // Nombrar revisores es opcional: ['ALL'] significa lo de
                 // siempre, que la revisa el jefe inmediato.
@@ -3297,9 +3430,7 @@ window.guardarNuevaEvaluacion = async () => {
                     frequency: freq,
                     mode: mode,
                     range_labels: hasLabels ? JSON.stringify(rangeLabels) : null,
-                    target_positions: targetPositions,
-                    target_departments: targetDepartments,
-                    target_employees: targetEmployees,
+                    ...destinatarios,
                     evaluates_area: evaluatesArea,
                     is_obligatory: isObligatory,
                     active: estaActiva

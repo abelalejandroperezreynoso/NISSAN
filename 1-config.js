@@ -589,6 +589,17 @@ window.nombresDeEmpleados = (ids) => (ids || []).map(id => {
 window.encuestasQueRevisa = (encuestas, revisorId) =>
     (encuestas || []).filter(ev => window.revisoresDeEncuesta(ev).includes(String(revisorId)));
 
+// Quien revisa una encuesta —el instructor que la imparte— puede corregir a
+// quién va dirigida sin ser administrador: es quien sabe a quién le falta
+// tomarla y quién ya no tiene por qué. Lo demás de la configuración —el
+// cuestionario, la frecuencia, los revisores— no se le enseña, y el guardado
+// de esa hoja restringida sólo escribe las tres columnas de destinatarios.
+//
+// Lo usan la lista de encuestas (para sacar el lápiz en la tarjeta) y la hoja
+// de edición (al abrirla y al guardar), que son dos módulos distintos.
+window.puedeEditarDestinatarios = (ev, empleadoId) =>
+    window.revisoresDeEncuesta(ev).includes(String(empleadoId));
+
 // La columna es nueva y el script de `sql/` se corre a mano, así que puede no
 // estar todavía. Se pregunta una sola vez por sesión —y se guarda la promesa,
 // no el resultado, para que dos pantallas a la vez no la pidan dos veces—; sin

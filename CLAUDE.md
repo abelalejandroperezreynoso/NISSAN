@@ -640,6 +640,35 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `4-evaluaciones-base.js` la guarda ya como `'Revisado'`, así que no hay nada
   que repartir y el bloque de revisores se esconde en la hoja.
 
+  **Quien revisa una encuesta puede además corregir a quién va dirigida**, sin
+  ser administrador y sin tocar nada más: es el instructor que la imparte y es
+  quien sabe a quién le falta tomarla. La tarjeta de la encuesta le saca el
+  mismo lápiz que al administrador —y el aviso de «te toca revisar esta
+  encuesta» su botón— y los dos entran por
+  `window.editarDestinatariosEncuesta(id)`, que comprueba el permiso con
+  `window.puedeEditarDestinatarios(ev, empleadoId)` (en `1-config.js`, junto a
+  las demás reglas de revisión).
+
+  Es **la misma hoja** `#modal-crear-eval` con todo lo demás escondido, no una
+  segunda: así el selector de puestos, departamentos y personas sigue siendo
+  uno solo. Lo esconde `window.aplicarModoSoloDestinatarios(activo)` a partir
+  de la lista `window.SECCIONES_FUERA_DE_DESTINATARIOS`, y por eso **cada
+  bloque de esa hoja lleva id** —`grupo-datos`, `grupo-opciones`,
+  `grupo-preguntas`…—: un bloque nuevo que no sea de destinatarios hay que
+  añadirlo a esa lista o se le quedará a la vista al revisor. El título de la
+  encuesta se va con el bloque «Datos», así que en este modo lo dice el
+  subtítulo del encabezado.
+
+  El guardado es otro: `window.guardarNuevaEvaluacion` desvía a
+  `window.guardarDestinatariosEncuesta` en cuanto ve `editandoSoloDestinatarios`,
+  porque el guardado entero lee el título, la escala y las preguntas —campos
+  escondidos, que escribiría con lo que hubiera quedado dentro—. Sólo escribe
+  las tres columnas de destinatarios, que arma
+  `window.destinatariosDeLaHoja()` para los dos. Y **cuenta las filas que
+  devuelve el `update`**: aquí escribe alguien que no es administrador y una
+  política de RLS que lo rechace no da error, simplemente no afecta a ninguna
+  fila.
+
   **La columna es nueva y el script se corre a mano** (`sql/revisores-por-encuesta.sql`).
   Pedirle a PostgREST una columna que no existe no devuelve la fila sin ese
   campo: revienta la consulta entera. Por eso toda consulta que la pida arma su

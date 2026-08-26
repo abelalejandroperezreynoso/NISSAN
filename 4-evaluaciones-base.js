@@ -500,6 +500,19 @@ window.cargarVistaEvaluaciones = async () => {
                                         onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'"
                                         title="Eliminar Evaluación">🗑️</button>
                             </div>`;
+                        } else if (laReviso(ev)) {
+                            // Quien revisa la encuesta puede corregir a quién va
+                            // dirigida sin ser administrador: es quien sabe a
+                            // quién le falta tomarla. La hoja se abre
+                            // restringida a ese bloque; el resto de la
+                            // configuración no se le enseña.
+                            adminBtn = `
+                            <div style="display:flex; gap:5px; margin-top:6px; justify-content:center; position:relative; z-index:100;">
+                                <button onclick="event.stopPropagation(); window.cerrarModalEvaluaciones(); window.editarDestinatariosEncuesta('${ev.id}')"
+                                        style="border:none; background:#f3e8ff; color:#7e22ce; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:0.7rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;"
+                                        onmouseover="this.style.background='#e9d5ff'" onmouseout="this.style.background='#f3e8ff'"
+                                        title="Editar a quién va dirigida" aria-label="Editar a quién va dirigida">✏️</button>
+                            </div>`;
                         }
 
                         // TARJETA ESTRUCTURADA COMO APP DE iOS
