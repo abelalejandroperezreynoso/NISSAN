@@ -527,6 +527,36 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   Lo contestado antes de que existiera esta regla no trae motivo, y la pantalla
   de calificar lo dice en lugar de dejar el hueco en blanco.
+- **Una escala puede explicar qué significa cada valor.** «¿Existe un estándar
+  de 5S?» del 0 al 3 no se contesta igual si nadie dice qué es un 2, y dos
+  personas calificando lo mismo ponen números distintos. Por eso cada pregunta
+  de tipo `range` lleva su propia guía: un texto largo, con los saltos de línea
+  con que se escribió, que sale **plegado** entre el enunciado y los círculos
+  —al contestarla y al calificarla, que el criterio tiene que ser el mismo para
+  los dos—.
+
+  ```js
+  window.guiaDeEscala(pregunta)      // '' si no tiene
+  window.bloqueGuiaEscala(pregunta)  // el <details>, o '' si no hay nada que decir
+  ```
+
+  Es **de la pregunta**, y no hay que confundirla con las etiquetas de
+  `evaluations.range_labels`, que son **de la encuesta entera** y caben en dos
+  palabras debajo de cada círculo. Las dos pueden convivir.
+
+  Viaja en la **cuarta posición de `options`** —que para una escala es
+  `[min, max, paso, guía]`— y no en una columna nueva, así que no hay ningún
+  script que correr: todo lo que ya lee `options` de una escala mira sólo las
+  tres primeras. El índice está en `window.PLAZA_GUIA_ESCALA` y el parseo del
+  campo, que llega unas veces como arreglo y otras como el texto JSON de
+  PostgREST, se hace en un solo sitio: `window.opcionesDePregunta()`.
+
+  El campo para escribirla está en la tarjeta de la pregunta, dentro del bloque
+  que ya sólo salía para las escalas (`.range-info-container`), así que aparece
+  y desaparece al cambiar el tipo como el resto de los campos. Cambiar una
+  pregunta de escala a otro tipo **pierde la guía**, igual que se pierden las
+  opciones: `guardarNuevaEvaluacion` rearma `options` desde cero según el tipo.
+
 - **Quién califica una respuesta.** Tampoco lo dice ninguna tabla por defecto:
   la califica el **jefe inmediato** de quien contestó, y esa regla la sostiene
   el código. Una encuesta puede en cambio nombrar a sus propios revisores en

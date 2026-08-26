@@ -3175,3 +3175,33 @@ html.modal-abierto {
         order: 0;
     }
 }
+
+/* La guía de una escala: el desplegable que explica qué representa cada valor
+   de esa pregunta. Va dentro de la tarjeta de la pregunta —al contestarla y al
+   calificarla—, así que aprieta los márgenes de `.hoja-plegable` y se tiñe para
+   separarse del enunciado. El texto conserva los saltos de línea con los que se
+   escribió: normalmente es una lista de «0 = …», «1 = …». */
+.hoja-plegable.guia-escala {
+    margin: 0 0 15px;
+    background: #fdf4ff;
+    border-color: #f0abfc;
+}
+
+.guia-escala .hoja-plegable-resumen {
+    padding: 10px 0;
+    font-size: 0.85rem;
+    color: #86198f;
+}
+
+.guia-escala .hoja-plegable-resumen::after {
+    border-color: #c026d3;
+}
+
+.guia-escala-texto {
+    padding-top: 10px;
+    border-top-color: #f0abfc;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #334155;
+    white-space: pre-wrap;
+}

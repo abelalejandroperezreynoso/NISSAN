@@ -926,7 +926,11 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                 </div>`;
         }
 
-        container.insertAdjacentHTML('beforeend', `<div id="pregunta-card-${q.id}" class="pregunta-card" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${q.question_text}</label>${inputHtml}${comentarioHtml}</div>`);
+        // La guía de la escala va entre el enunciado y los círculos: se lee qué
+        // significa cada valor y luego se elige. Sin guía no dibuja nada.
+        const guiaHtml = window.bloqueGuiaEscala(q);
+
+        container.insertAdjacentHTML('beforeend', `<div id="pregunta-card-${q.id}" class="pregunta-card" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${q.question_text}</label>${guiaHtml}${inputHtml}${comentarioHtml}</div>`);
     });
 };
 

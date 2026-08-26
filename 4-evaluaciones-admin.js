@@ -803,7 +803,11 @@ window.verDetalleRespuesta = async (resp) => {
             motivoHtml = `<div style="margin-top:12px; font-size:0.8rem; color:#94a3b8; font-style:italic;">Sin explicación: se contestó antes de que se pidiera.</div>`;
         }
 
-        container.insertAdjacentHTML('beforeend', `<div class="pregunta-detalle" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid ${cardBorderColor};"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;"><label style="font-weight:700; color:#1e293b; font-size:1.1rem; line-height:1.4; flex:1;">${index+1}. ${q.question_text}</label>${resultBadge}</div>${contentHtml}${motivoHtml}</div>`);
+        // Quien califica una escala necesita el mismo criterio que quien la
+        // contestó, así que la guía sale también aquí.
+        const guiaHtml = window.bloqueGuiaEscala(q);
+
+        container.insertAdjacentHTML('beforeend', `<div class="pregunta-detalle" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid ${cardBorderColor};"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;"><label style="font-weight:700; color:#1e293b; font-size:1.1rem; line-height:1.4; flex:1;">${index+1}. ${q.question_text}</label>${resultBadge}</div>${guiaHtml}${contentHtml}${motivoHtml}</div>`);
     });
     setTimeout(() => {
         document.querySelectorAll('.admin-edit-answer[data-type="text"], .auto-resize-text').forEach(ta => {
@@ -3016,6 +3020,11 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
         ? `<button onclick="borrarPreguntaDB('${id}', this)" style="margin-left:auto; color:red; border:none; background:#fee2e2; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Borrar de la base de datos">🗑️ Eliminar</button>`
         : `<button onclick="this.closest('.pregunta-wrapper').remove(); window.renumerarPreguntas();" style="margin-left:auto; color:#64748b; border:none; cursor:pointer;">✕ Quitar</button>`;
 
+    // La guía de una escala viaja en la cuarta posición de `options`; el resto
+    // de los tipos no la tienen y el campo va escondido.
+    const guiaEscala = (tp === 'range' && typeof op[window.PLAZA_GUIA_ESCALA] === 'string')
+        ? window.sanitizeForHTML(op[window.PLAZA_GUIA_ESCALA]) : '';
+
     const showTextContainer = (tp === 'text');
     const showOptionsContainer = (tp === 'multiple' || tp === 'checklist' || tp === 'list_match');
     const showRangeInfo = (tp === 'range');
@@ -3050,8 +3059,13 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
         <textarea class="inp-respuesta-correcta-text" placeholder='Texto esperado...' style="width:100%; padding:8px; border:1px solid #94a3b8; border-radius:6px; background:#f0f9ff; font-family:inherit;" rows="4">${c}</textarea>
     </div>
 
-    <div class="range-info-container" style="display:${showRangeInfo?'block':'none'}; margin-top:15px; padding:10px; background:#fdf2f8; border:1px dashed #fbcfe8; border-radius:8px; font-size:0.85rem; color:#be185d;">
-        📊 <b>Nota:</b> Esta pregunta se auto-evaluará utilizando el "Puntaje Máximo" global configurado arriba.
+    <div class="range-info-container" style="display:${showRangeInfo?'block':'none'}; margin-top:15px;">
+        <div style="padding:10px; background:#fdf2f8; border:1px dashed #fbcfe8; border-radius:8px; font-size:0.85rem; color:#be185d;">
+            📊 <b>Nota:</b> Esta pregunta se auto-evaluará utilizando el "Puntaje Máximo" global configurado arriba.
+        </div>
+        <label style="font-size:0.8rem; color:#64748b; margin:12px 0 3px; display:block;">Qué significa cada valor (opcional):</label>
+        <textarea class="inp-guia-escala" rows="4" placeholder="0 = no existe el estándar&#10;1 = existe pero no se aplica&#10;…" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #94a3b8; border-radius:6px; background:#fdf4ff; font-family:inherit;">${guiaEscala}</textarea>
+        <div style="font-size:0.75rem; color:#94a3b8; margin-top:4px;">Sale plegado bajo la pregunta al contestarla y al calificarla. Es de esta pregunta; las etiquetas cortas de «Escala de puntajes» son de toda la encuesta.</div>
     </div>
 
     <div class="photo-info-container" style="display:${showPhotoInfo?'block':'none'}; margin-top:15px; padding:10px; background:#eff6ff; border:1px dashed #bfdbfe; border-radius:8px; font-size:0.85rem; color:#1d4ed8;">
@@ -3336,6 +3350,9 @@ window.guardarNuevaEvaluacion = async () => {
                 const chkHalf = document.getElementById('eval-half-points');
                 const step = (chkHalf && chkHalf.checked) ? 0.5 : 1;
                 ops = [0, globalMaxVal, step];
+                const campoGuia = d.querySelector('.inp-guia-escala');
+                const guia = campoGuia ? campoGuia.value.trim() : '';
+                if (guia) ops[window.PLAZA_GUIA_ESCALA] = guia;
                 corr = "";
             } else {
                 corr=d.querySelector('.inp-respuesta-correcta-text').value.trim();

@@ -460,14 +460,50 @@ window.PREGUNTAS_CON_MOTIVO = ['multiple', 'checklist', 'range'];
 // El tope de una escala. Va aquí porque lo preguntan tres sitios —el
 // formulario al dibujarla, el envío al calificarla y la regla de más abajo— y
 // tres copias del parseo acabarían discrepando. Sin `options` la escala es de 5.
-window.maximoDeEscala = (pregunta) => {
+// `options` llega unas veces como arreglo y otras como el texto JSON que
+// guardó PostgREST. Todo el que lo mire pasa por aquí.
+window.opcionesDePregunta = (pregunta) => {
     let opts = pregunta ? pregunta.options : null;
     if (typeof opts === 'string') { try { opts = JSON.parse(opts); } catch (e) { opts = null; } }
-    if (Array.isArray(opts) && opts.length >= 2) {
+    return Array.isArray(opts) ? opts : [];
+};
+
+window.maximoDeEscala = (pregunta) => {
+    const opts = window.opcionesDePregunta(pregunta);
+    if (opts.length >= 2) {
         const max = parseFloat(opts[1]);
         if (!isNaN(max)) return max;
     }
     return 5;
+};
+
+// Una pregunta de escala puede llevar su propia guía: el texto largo que
+// explica qué representa cada valor **en esa pregunta**. Es otra cosa que las
+// etiquetas de `range_labels`, que son de la encuesta entera y caben en dos
+// palabras debajo del círculo; ésta se lee plegada y puede ocupar párrafos.
+//
+// Viaja en la cuarta posición de `options`, que para una escala es
+// `[min, max, paso, guía]`, y no en una columna nueva: así no hay otro script
+// que correr a mano. Todo lo que ya lee `options` de una escala mira sólo las
+// tres primeras y no se entera.
+window.PLAZA_GUIA_ESCALA = 3;
+
+window.guiaDeEscala = (pregunta) => {
+    if (!pregunta || pregunta.question_type !== 'range') return '';
+    const guia = window.opcionesDePregunta(pregunta)[window.PLAZA_GUIA_ESCALA];
+    return typeof guia === 'string' ? guia.trim() : '';
+};
+
+// El mismo desplegable en las dos pantallas donde se ve una escala: al
+// contestarla y al calificarla. Sin guía no dibuja nada.
+window.bloqueGuiaEscala = (pregunta) => {
+    const guia = window.guiaDeEscala(pregunta);
+    if (!guia) return '';
+    return `
+        <details class="hoja-plegable guia-escala">
+            <summary class="hoja-plegable-resumen"><span>📖 Qué significa cada valor</span></summary>
+            <div class="hoja-plegable-cuerpo guia-escala-texto">${window.sanitizeForHTML(guia)}</div>
+        </details>`;
 };
 
 // El tope de la escala es el «todo bien»: no hay nada que explicar. Cualquier
