@@ -684,12 +684,18 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   **Quien revisa una encuesta puede además corregir a quién va dirigida**, sin
   ser administrador y sin tocar nada más: es el instructor que la imparte y es
-  quien sabe a quién le falta tomarla. La tarjeta de la encuesta le saca el
-  mismo lápiz que al administrador —y el aviso de «te toca revisar esta
-  encuesta» su botón— y los dos entran por
-  `window.editarDestinatariosEncuesta(id)`, que comprueba el permiso con
-  `window.puedeEditarDestinatarios(ev, empleadoId)` (en `1-config.js`, junto a
-  las demás reglas de revisión).
+  quien sabe a quién le falta tomarla. Se entra por dos sitios: el lápiz de la
+  tarjeta en la lista —el mismo que tiene el administrador— y el botón «👥
+  Editar a quién va dirigida» de la pantalla de la encuesta, debajo del de
+  responder. Los dos llaman a `window.editarDestinatariosEncuesta(id)`, que
+  comprueba el permiso con `window.puedeEditarDestinatarios(ev, empleadoId)`
+  (en `1-config.js`, junto a las demás reglas de revisión).
+
+  Ese botón **no cuelga de cuál sea la acción principal de la pantalla**.
+  Colgaba del aviso de «te toca revisar esta encuesta», que sale sólo cuando la
+  encuesta **no** va dirigida a quien mira; al revisor al que además le tocaba
+  contestarla —que es lo normal— le salía el botón de responder y nunca el
+  otro. Hoy se decide aparte, con el permiso y nada más.
 
   Es **la misma hoja** `#modal-crear-eval` con todo lo demás escondido, no una
   segunda: así el selector de puestos, departamentos y personas sigue siendo

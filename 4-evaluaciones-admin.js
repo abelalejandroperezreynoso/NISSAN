@@ -130,13 +130,25 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" style="width: 100%; padding:12px 20px; background:#2563eb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(37,99,235,0.25); transition: transform 0.1s;">📝 ${btnText}</button>`;
     } else if (window.revisoresDeEncuesta(evalData).includes(String(user.id))) {
         // Se está aquí para calificarla, no para contestarla: la encuesta no va
-        // dirigida a esta persona y el botón de responder sobra. Lo que sí
-        // puede hacer desde aquí es corregir a quién va dirigida, que es la
-        // razón de que la vea en la lista sin tenerla asignada.
-        actionButtonHtml = `<div style="text-align:center; color:#7e22ce; font-size:0.9rem; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px;">
-            <div>👁️ Te toca revisar esta encuesta.</div>
-            <button onclick="window.cerrarModalEvaluaciones(); window.editarDestinatariosEncuesta('${evalId}')" style="margin-top:10px; padding:8px 14px; background:white; color:#7e22ce; border:1px solid #d8b4fe; border-radius:8px; cursor:pointer; font-weight:bold; font-size:0.85rem;">👥 Editar a quién va dirigida</button>
-        </div>`;
+        // dirigida a esta persona y el botón de responder sobra.
+        actionButtonHtml = `<div style="text-align:center; color:#7e22ce; font-size:0.9rem; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px;">👁️ Te toca revisar esta encuesta.</div>`;
+    }
+
+    // Corregir a quién va dirigida no depende de cuál de los botones de arriba
+    // haya salido: quien revisa la encuesta —el instructor que la imparte—
+    // puede hacerlo tanto si además le toca contestarla como si no. Antes
+    // colgaba del aviso de «te toca revisar», así que al revisor al que la
+    // encuesta también le tocaba —que es lo normal— nunca le aparecía.
+    //
+    // Va debajo de la acción principal y con menos peso que ella: aquí se
+    // viene a responder, y esto es lo secundario.
+    let destinatariosBtnHtml = '';
+    if (evalData && (window.modoAdminActivo || window.puedeEditarDestinatarios(evalData, user.id))) {
+        destinatariosBtnHtml = `
+            <button onclick="window.cerrarModalEvaluaciones(); window.editarDestinatariosEncuesta('${evalId}')"
+                    style="width:100%; margin-top:10px; padding:10px 16px; background:white; color:#7e22ce; border:1px solid #d8b4fe; border-radius:10px; cursor:pointer; font-weight:600; font-size:0.9rem; display:flex; align-items:center; justify-content:center; gap:8px;">
+                👥 Editar a quién va dirigida
+            </button>`;
     }
 
     // --- LO ÚLTIMO QUE SACÓ ESTA PERSONA AQUÍ ---
@@ -191,6 +203,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
                 ¿Deseas registrar una nueva respuesta para esta evaluación?
             </div>
             ${actionButtonHtml}
+            ${destinatariosBtnHtml}
         </div>
     `;
 
