@@ -232,36 +232,76 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
 
     // Un pendiente de reintento no se explica solo: la tarjeta dice «vuelve a
     // contestarla» y quien la lee no sabe por qué, si ya la contestó. Este
-    // bloque sustituye al del periodo y dice las tres cosas que faltan: que el
-    // resultado no alcanzó, cuánto sacó contra cuánto se pide, y hasta cuándo
-    // hay para reponerla.
-    window.bloqueDeReintento = (reintento, vencida) => {
+    // bloque sustituye al del periodo y dice las cuatro cosas que faltan: que
+    // el pendiente volvió a abrirse, por qué —cuánto sacó contra cuánto se
+    // pide—, hasta cuándo hay para reponerla y qué se espera que haga, que no
+    // es volver a contestar lo mismo sino corregir lo que salió mal.
+    //
+    // Con `persona` el mismo bloque habla de la evaluación de un tercero: es
+    // la encuesta de modo jefe, que la repone quien evalúa y no el evaluado.
+    window.bloqueDeReintento = (reintento, vencida, persona) => {
         if (!reintento) return '';
 
         const minimo = window.UMBRAL_CERTIFICACION;
         const contestada = fechaCorta(reintento.fechaRespuesta);
         const limite = fechaCorta(reintento.vence);
+        // El nombre viene de la ficha del colaborador y se imprime dentro del
+        // bloque, así que se escapa como cualquier otro texto de la base.
+        const quien = persona ? window.sanitizeForHTML(String(persona).trim()) : '';
 
-        const cuando = contestada
-            ? `La que entregaste el ${contestada} obtuvo <strong>${reintento.puntaje}%</strong>`
-            : `Tu última respuesta obtuvo <strong>${reintento.puntaje}%</strong>`;
-        const plazo = vencida
-            ? `El plazo para reponerla venció el <strong>${limite}</strong>: contéstala en cuanto puedas.`
-            : `Tienes hasta el <strong>${limite}</strong> para volver a contestarla.`;
+        const titulo = quien
+            ? `🔁 Se reactivó por la baja puntuación de ${quien}`
+            : '🔁 Se reactivó por tu baja puntuación';
+
+        let cuando;
+        if (quien) {
+            cuando = contestada
+                ? `La evaluación de ${quien} del ${contestada} obtuvo <strong>${reintento.puntaje}%</strong>`
+                : `La última evaluación de ${quien} obtuvo <strong>${reintento.puntaje}%</strong>`;
+        } else {
+            cuando = contestada
+                ? `La que entregaste el ${contestada} obtuvo <strong>${reintento.puntaje}%</strong>`
+                : `Tu última respuesta obtuvo <strong>${reintento.puntaje}%</strong>`;
+        }
+
+        let plazo;
+        if (quien) {
+            plazo = vencida
+                ? `El plazo para reponerla venció el <strong>${limite}</strong>: vuelve a evaluarlo en cuanto puedas.`
+                : `Tienes hasta el <strong>${limite}</strong> para volver a evaluarlo.`;
+        } else {
+            plazo = vencida
+                ? `El plazo para reponerla venció el <strong>${limite}</strong>: contéstala en cuanto puedas.`
+                : `Tienes hasta el <strong>${limite}</strong> para volver a contestarla.`;
+        }
+
+        const accion = quien
+            ? `Acuerda con ${quien} las contramedidas para los puntos que salieron mal y vuelve a evaluarlo.`
+            : 'Genera las contramedidas para los puntos que salieron mal y vuelve a evaluar.';
 
         // Los colores y el ancho los pone `.pendiente-nota`, en `estilos.css`.
         return `
             <div class="pendiente-nota${vencida ? ' vencida' : ''}">
-                <div class="pendiente-nota-titulo">📉 Tu resultado es insuficiente</div>
+                <div class="pendiente-nota-titulo">${titulo}</div>
                 <div class="pendiente-nota-texto">
                     ${cuando} y se pide al menos <strong>${minimo}%</strong>. ${plazo}
                 </div>
+                <div class="pendiente-nota-accion">🛠️ ${accion}</div>
             </div>`;
     };
 
     // 'fechaAlta' (el created_at de la encuesta) sirve de origen para contar la
     // racha cuando el empleado no la ha contestado nunca.
-    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia, fechaAlta, encuesta) => {
+    //
+    // 'contestaQuienMira' dice si el pendiente es de quien está mirando la
+    // pantalla, y sólo lo usa el plazo de reintento: reponer una respuesta que
+    // no llegó al mínimo le toca a quien la contesta, que en una encuesta de
+    // modo jefe no es el evaluado sino su jefe. Sin esto, al evaluado le salía
+    // «Esperando evaluación» con la insignia de repetir y un botón que no
+    // resuelve nada, y del lado del jefe no aparecía: no había forma de
+    // quitarlo. Lo demás —el periodo, la racha, «mal revisada»— no depende de
+    // quién mire y se decide igual para los dos.
+    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia, fechaAlta, encuesta, contestaQuienMira = true) => {
         const resps = respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [];
 
         // Sin frecuencia repetitiva ('once', o sin dato) no hay periodos que contar.
@@ -282,7 +322,7 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         // No llegó al mínimo y la encuesta da plazo para reponerla. Va por
         // encima del periodo, igual que «mal revisada»: la contestó, pero no
         // cuenta.
-        const reintento = window.reintentoDeRespuesta(encuesta, resps[0], now);
+        const reintento = contestaQuienMira ? window.reintentoDeRespuesta(encuesta, resps[0], now) : null;
         if (reintento) {
             return {
                 mostrar: true,
@@ -423,8 +463,12 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
                 }
             }
 
-            const camposEvals = await window.camposConReintento(await window.camposConRevisores(
-                'id, title, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'));
+            // `requires_min_score` hace falta para el plazo de reintento tanto
+            // como `retry_days`: sin ella, `exigeMinimo` da por hecho que la
+            // encuesta exige el 80% y se pedía repetir hasta las encuestas que
+            // lo tienen apagado.
+            const camposEvals = await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+                'id, title, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')));
             const { data: activeEvalsDb } = await sb.from('evaluations')
                         .select(camposEvals)
                         .eq('active', true);
@@ -476,7 +520,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                 // Solo agregamos la encuesta si hace match
                                                 if (esObligatoria && esParaMi) {
-                                                    const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, ev.created_at, ev);
+                                                    const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, ev.created_at, ev, (ev.mode || 'self') !== 'boss');
                                     if (requiereRespuesta.mostrar) {
     if (ev.mode === 'boss') {
         // Generamos un item especial para indicar que el usuario está esperando a su jefe
@@ -565,8 +609,12 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 const teamObligatorias = activeEvalsDb ? activeEvalsDb.filter(ev => ev.is_obligatory !== false && String(ev.is_obligatory) !== 'false') : [];
                 
                 if (teamObligatorias.length > 0) {
+                    // `review_status` y `grades_json`, igual que en la consulta de
+                    // las respuestas propias: son los que dicen si una evaluación
+                    // de modo jefe se quedó por debajo del mínimo y hay que
+                    // reponerla.
                     const { data: teamResponsesEvals } = await sb.from('evaluation_responses')
-                        .select('evaluation_id, employee_id, submitted_at')
+                        .select('evaluation_id, employee_id, submitted_at, review_status, grades_json')
                         .in('employee_id', equipoDirectoIds)
                         .in('evaluation_id', teamObligatorias.map(e => e.id));
 
@@ -607,7 +655,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                                    if (aplicaSub) {
                                                     const subResps = teamResponsesEvals ? teamResponsesEvals.filter(r => String(r.employee_id) === String(sub.id)) : [];
-                                                                       const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at, ev);
+                                                                       const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at, ev, (ev.mode || 'self') === 'boss');
                                                     
                                                     if (requiresResponse.mostrar) {
                                                         if (ev.mode === 'boss') {
@@ -745,7 +793,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                                                 if (aplicaSub) {
                                                             const subResps = teamResponses ? teamResponses.filter(r => String(r.employee_id) === String(sub.id)) : [];
-                                                                                    const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at, ev);
+                                                                                    const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at, ev, false);
                                                             
                                                             if (requiresResponse.mostrar) {
                                                                 items.push({
@@ -904,6 +952,15 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
             if (item.virtual_type === 'boss_eval') {
                             const safeTitle = (item.description || "Evaluación").replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+
+                // Es un reintento: la evaluación anterior no llegó al mínimo y
+                // hay que reponerla. El bloque lo explica con el nombre de a
+                // quién se evalúa, que aquí el resultado no es del que mira.
+                const esReintento = !!(item.vencimiento && item.vencimiento.tipoAviso === 'reintento');
+                const nombreSub = (item.sub_name || '').trim().split(' ')[0];
+                const notaReintentoHtml = esReintento
+                    ? window.bloqueDeReintento(item.vencimiento.reintento, item.vencimiento.vencida, nombreSub)
+                    : '';
                 
                 let textoUltima = "Nunca evaluado";
                 if (item.vencimiento && item.vencimiento.ultimaFecha) {
@@ -932,7 +989,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                             
                             <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:8px; margin-top:0;">
                                 <span class="badge-type" style="background-color:#be185d">Desempeño</span>
-                                <span style="color:#ea580c; font-weight:bold; font-size:0.8rem;">¡Falta evaluar!</span>
+                                <span style="color:${esReintento ? '#b91c1c' : '#ea580c'}; font-weight:bold; font-size:0.8rem;">${esReintento ? '¡Vuelve a evaluar!' : '¡Falta evaluar!'}</span>
                                 ${badgeFreqHtml}
                                 ${badgeTiempoHtml}
                                 ${badgeOmisionesHtml}
@@ -947,8 +1004,9 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                 </div>
                             </div>
                         </div>
+                        ${notaReintentoHtml}
                         <div class="card-actions" style="align-self: center;">
-                            <button class="btn-firmar" onclick="window.confirmarEvaluacionSub('${item.real_eval_id}', '${safeTitle}', '${item.sub_id}', '${item.sub_name}', 'boss')" style="color:white; background:#be185d; border:none;">Evaluar</button>
+                            <button class="btn-firmar" onclick="window.confirmarEvaluacionSub('${item.real_eval_id}', '${safeTitle}', '${item.sub_id}', '${item.sub_name}', 'boss')" style="color:white; background:#be185d; border:none;">${esReintento ? 'Repetir' : 'Evaluar'}</button>
                         </div>
                     </div>
                 </div>`;

@@ -3132,6 +3132,24 @@ html.modal-abierto {
     color: #b91c1c;
 }
 
+/* Lo que hay que hacer, separado del porqué: la nota explica que el pendiente
+   se reabrió y esta línea pide lo que se espera —contramedidas y volver a
+   evaluar—, que no es lo mismo que repetir la respuesta tal cual. */
+.pendiente-nota-accion {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed #fde68a;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    font-weight: 700;
+    color: #92400e;
+}
+
+.pendiente-nota.vencida .pendiente-nota-accion {
+    border-top-color: #fecaca;
+    color: #991b1b;
+}
+
 /* En un iPhone 12 mini la tarjeta mide 329px y el encabezado repartía ese ancho
    en tres columnas: el icono (60px), el texto y el botón (90px). A la columna
    del texto le quedaban 107px, así que el título salía en tres renglones, cada

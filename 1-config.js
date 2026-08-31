@@ -379,6 +379,15 @@ window.diasDeReintento = (ev) => {
     return (Number.isFinite(n) && n > 0) ? n : 0;
 };
 
+// Si la respuesta trae siquiera una pregunta calificada. `grades_json` llega
+// como objeto, pero se admite el texto JSON por si alguna consulta lo pide en
+// crudo.
+window.tieneCalificaciones = (resp) => {
+    let grades = resp ? resp.grades_json : null;
+    if (typeof grades === 'string') { try { grades = JSON.parse(grades); } catch (e) { grades = null; } }
+    return !!grades && typeof grades === 'object' && Object.keys(grades).length > 0;
+};
+
 // Si esta respuesta abre un plazo para repetirla. Devuelve null cuando no hay
 // nada que reponer.
 //
@@ -390,12 +399,23 @@ window.reintentoDeRespuesta = (ev, resp, fecha) => {
     const dias = window.diasDeReintento(ev);
     if (dias <= 0 || !resp) return null;
 
-    // Sin mínimo que alcanzar no hay reprobado que reponer.
+    // Sin mínimo que alcanzar no hay reprobado que reponer. Ojo: quien
+    // pregunte tiene que haberse traído `requires_min_score` en su consulta,
+    // o esta puerta se queda abierta —la columna que no llega se lee como
+    // `undefined` y eso no es `false`—. La arma `window.camposConMinimo`.
     if (!window.exigeMinimo(ev)) return null;
 
     // Sólo lo ya calificado y todavía no dado por bueno: lo que está sin
     // calificar aún no se sabe, y lo certificado ya pasó.
     if (resp.review_status !== 'Revisado') return null;
+
+    // Una respuesta sin ninguna pregunta calificada no sacó cero: es que no
+    // hay nada que puntuar, y `calcularScoreRespuesta` devuelve 0 en los dos
+    // casos. Pasa con una encuesta de modo jefe hecha sólo de evidencias
+    // fotográficas —que se guarda ya `'Revisado'` y no puntúan— y con
+    // cualquier respuesta que alguien diera por revisada sin calificar nada:
+    // sin esta puerta se les pedía repetirlas para siempre.
+    if (!window.tieneCalificaciones(resp)) return null;
 
     const puntaje = typeof window.calcularScoreRespuesta === 'function'
         ? window.calcularScoreRespuesta(resp) : 0;

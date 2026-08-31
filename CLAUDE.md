@@ -823,13 +823,47 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `review_status` y `grades_json` en las dos consultas de respuestas, porque
   sin el puntaje no se sabe si hay que reponerla.
 
+  **Tres cosas tienen que llegarle o el plazo se dispara donde no debe**, y las
+  tres se colaron alguna vez:
+
+  - **`requires_min_score`, en la consulta.** `exigeMinimo` lo lee del objeto
+    de la encuesta, así que una columna que no se pidió llega `undefined` y eso
+    no es `false`: se pedía repetir hasta las encuestas que tienen apagado el
+    mínimo. Toda consulta que vaya a decidir un pendiente arma sus columnas con
+    `window.camposConMinimo(...)`, encadenado con `camposConReintento` —lo
+    hacen `7-pendientes.js` y `2b-core-dashboard.js`—.
+  - **Alguna pregunta calificada.** `calcularScoreRespuesta` devuelve 0 tanto
+    cuando se falló todo como cuando no hay nada que calificar, y las dos cosas
+    no son lo mismo: una encuesta de modo jefe hecha sólo de evidencias
+    fotográficas se guarda ya `'Revisado'` con `grades_json` vacío y pedía
+    repetirse para siempre. Lo tapa `window.tieneCalificaciones(resp)`, en
+    `1-config.js`, antes de mirar el puntaje.
+  - **Que quien mira sea quien la contesta**, que es el sexto argumento de
+    `esEvaluacionPendiente` (`contestaQuienMira`). Reponer una respuesta le
+    toca a quien la contesta, y en una encuesta de modo jefe no es el evaluado
+    sino su jefe: al evaluado le salía «Esperando evaluación» con la insignia
+    de repetir y un botón que no resuelve nada, y del lado del jefe no aparecía
+    porque su consulta de respuestas del equipo no traía `review_status` ni
+    `grades_json`. Nadie podía quitarlo. Hoy la de modo jefe se repone desde
+    «Evaluar a …», con la nota en tercera persona, y la de modo `self` desde el
+    panel del propio interesado. Lo demás —el periodo, la racha, «mal
+    revisada»— no depende de quién mire y se decide igual para los dos.
+
   **Un pendiente de reintento se explica solo.** «Vuelve a contestarla» no le
   dice nada a quien ya la contestó, así que la tarjeta sustituye el bloque del
-  periodo por el de `window.bloqueDeReintento(reintento, vencida)`, en
-  `7-pendientes.js`: «Tu resultado es insuficiente», qué sacó contra qué se
-  pide y hasta cuándo hay —o desde cuándo venció, y entonces en rojo—. El
-  puntaje salió de la insignia porque ahí sólo cabe el plazo, y el botón dice
-  «Repetir» en vez de «Responder».
+  periodo por el de `window.bloqueDeReintento(reintento, vencida, persona)`, en
+  `7-pendientes.js`, que dice las cuatro cosas que faltan: **que el pendiente
+  se reactivó** —y no que falte contestarla—, por qué —qué sacó contra qué se
+  pide—, hasta cuándo hay —o desde cuándo venció, y entonces en rojo— y **qué
+  se espera que haga**, que es generar contramedidas para lo que salió mal y
+  volver a evaluar, no repetir la misma respuesta. Esa última línea va aparte,
+  en `.pendiente-nota-accion`. El puntaje salió de la insignia porque ahí sólo
+  cabe el plazo, y el botón dice «Repetir» en vez de «Responder».
+
+  Con `persona` el mismo bloque habla de un tercero —«Se reactivó por la baja
+  puntuación de Luis», «acuerda con Luis las contramedidas»—: es la encuesta de
+  modo jefe, que la repone quien evalúa y no el evaluado. Lo pasa la tarjeta
+  «Evaluar a …» con el nombre de pila del colaborador.
 
   Ese bloque es `.pendiente-nota` —en `estilos.css`, con su variante
   `.vencida`— y va como **una fila más del `.card-header`**, nunca dentro de

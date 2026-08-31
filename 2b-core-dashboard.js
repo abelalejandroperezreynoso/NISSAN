@@ -1195,8 +1195,11 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
     }
 
     try {
-        const camposEvals = await window.camposConReintento(await window.camposConRevisores(
-            'id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency'));
+        // `requires_min_score` va con `retry_days`: sin ella el badge daba por
+        // hecho que toda encuesta exige el 80% y contaba como pendiente hasta
+        // las respuestas de las que lo tienen apagado.
+        const camposEvals = await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+            'id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')));
         const { data: activeEvalsDb } = await sb.from('evaluations')
             .select(camposEvals)
             .eq('active', true);
@@ -1264,7 +1267,7 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                     countEvals = evalsQueLeTocan.filter(ev => {
                                             if (window.esEvaluacionPendiente) {
                                                 // Usamos la nueva lógica unificada (Retorna un objeto, por lo que leemos .mostrar)
-                                                return window.esEvaluacionPendiente(respuestas, ev.id, ev.frequency, ev.created_at, ev).mostrar;
+                                                return window.esEvaluacionPendiente(respuestas, ev.id, ev.frequency, ev.created_at, ev, (ev.mode || 'self') !== 'boss').mostrar;
                                             } else {
                                                 // Fallback de seguridad por si el archivo 7-pendientes.js aún no ha cargado
                                                 const resps = respuestas ? respuestas.filter(r => r.evaluation_id === ev.id) : [];
@@ -1354,8 +1357,11 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                     const teamObligatorias = activeEvalsDb ? activeEvalsDb.filter(ev => ev.is_obligatory !== false) : [];
                     
                     if(teamObligatorias.length > 0) {
+                        // Con `review_status` y `grades_json` el badge cuenta también
+                        // la evaluación de modo jefe que se quedó por debajo del
+                        // mínimo y hay que reponer, que es trabajo suyo.
                         const { data: teamResps } = await sb.from('evaluation_responses')
-                            .select('evaluation_id, employee_id, submitted_at')
+                            .select('evaluation_id, employee_id, submitted_at, review_status, grades_json')
                             .in('employee_id', misSubsIds)
                             .in('evaluation_id', teamObligatorias.map(e=>e.id));
                         
@@ -1388,7 +1394,7 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                                                             
                                                             // Evaluamos usando la lógica global unificada
                                                             if (window.esEvaluacionPendiente) {
-                                                                if (window.esEvaluacionPendiente(subResps, ev.id, ev.frequency).mostrar) {
+                                                                if (window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at, ev, (ev.mode || 'self') === 'boss').mostrar) {
                                                                     countPorCalificar++;
                                                                 }
                                                             } else {
