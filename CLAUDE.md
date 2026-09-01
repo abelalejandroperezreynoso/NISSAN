@@ -1156,6 +1156,23 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   envío de `4-evaluaciones-base.js`). Es lo que permite rotular el eje de una
   pregunta que ya no existe, y sólo vale de aquí en adelante: lo contestado
   antes no lo trae y cae en «Pregunta N».
+
+  **El rótulo de la punta lo recorta quien la dibuja, no quien la calcula.**
+  `ejesPorPregunta` entrega el enunciado entero y «Pregunta N» significa una
+  sola cosa: que esa pregunta no tiene enunciado en ningún lado. Partirlo para
+  que quepa es de `window.rotuloDeEje(texto, anchoLienzo)`, que reparte por
+  ancho —no de tres palabras en tres, que es lo que dejaba salirse a
+  «de responsabilidades»— y recorta con «…» lo que pase de
+  `window.MAX_LINEAS_ROTULO_RADAR` renglones. El presupuesto por renglón sale
+  del ancho real del lienzo, medido al dibujar: en un teléfono, dos rótulos
+  anchos a los lados dejan al polígono sin sitio. Una palabra suelta puede
+  pasarse hasta un 40% antes de partirse por la mitad.
+
+  Antes ese recorte estaba en `ejesPorPregunta` y era una guillotina: el
+  enunciado de más de 40 caracteres se sustituía **entero** por «Pregunta 3»,
+  así que una encuesta de 5S enseñaba media gráfica sin decir qué medía. Lo que
+  no cabe se lee hoy en el globo, que dice el enunciado completo: es para lo
+  que se llenaba `radarFullLabels`, que hasta entonces no lo usaba nadie.
 - **Cuánto tardan en contestar sale de la fecha, no de un registro.** La base
   no guarda en ningún sitio el momento en que una encuesta apareció en el panel
   de pendientes de alguien: los pendientes se calculan al vuelo cada vez que se

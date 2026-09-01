@@ -177,6 +177,62 @@ window.cuestionarioDeReferencia = (respuestas, preguntasVigentes) => {
     };
 };
 
+// Cuántos renglones aguanta el rótulo de una punta del radar antes de
+// recortarse. Con el porcentaje debajo son cuatro líneas de 10px.
+window.MAX_LINEAS_ROTULO_RADAR = 3;
+
+// El rótulo de una punta del radar, partido en renglones. Antes se partía de
+// tres palabras en tres —'de responsabilidades' ya se salía— y el enunciado de
+// más de 40 caracteres ni se intentaba: se sustituía entero por «Pregunta 3»,
+// que es lo que dejaba media gráfica sin decir qué se estaba midiendo. Se
+// reparte por ancho, no por palabras, y sólo se recorta con «…» lo que pase de
+// los renglones que caben.
+window.rotuloDeEje = (texto, anchoLienzo) => {
+    // El presupuesto por renglón va atado al ancho real del lienzo: en un
+    // teléfono, dos rótulos de 21 caracteres a los lados dejan al polígono sin
+    // sitio donde dibujarse.
+    const porLinea = (anchoLienzo && anchoLienzo < 360) ? 15 : 21;
+    const maxLineas = window.MAX_LINEAS_ROTULO_RADAR;
+    // Una palabra sola puede pasarse un poco del presupuesto sin estorbar a
+    // nadie: el presupuesto es para que no se junten dos, y partir
+    // 'Responsabilidades' por la mitad se lee peor que dejarla sobresalir.
+    const topeDePalabra = Math.round(porLinea * 1.4);
+
+    const palabras = String(texto == null ? '' : texto).trim().split(/\s+/).filter(Boolean);
+    if (palabras.length === 0) return [''];
+
+    const lineas = [];
+    let actual = '';
+    palabras.forEach(palabra => {
+        let resto = palabra;
+        // Una sola palabra más larga que el renglón se parte: contar palabras
+        // no impide que un 'responsabilidades' se salga del ancho.
+        while (resto.length > topeDePalabra) {
+            if (actual) { lineas.push(actual); actual = ''; }
+            lineas.push(resto.slice(0, porLinea));
+            resto = resto.slice(porLinea);
+        }
+        if (resto.length > porLinea) {
+            // Cabe, pero sólo ella: se lleva su renglón entero.
+            if (actual) { lineas.push(actual); actual = ''; }
+            lineas.push(resto);
+            return;
+        }
+        if (!resto) return;
+        if (!actual) actual = resto;
+        else if (actual.length + 1 + resto.length <= porLinea) actual += ' ' + resto;
+        else { lineas.push(actual); actual = resto; }
+    });
+    if (actual) lineas.push(actual);
+
+    if (lineas.length <= maxLineas) return lineas;
+    const corte = lineas.slice(0, maxLineas);
+    let ultima = corte[maxLineas - 1];
+    if (ultima.length > topeDePalabra - 1) ultima = ultima.slice(0, topeDePalabra - 1);
+    corte[maxLineas - 1] = ultima.replace(/[\s,;.]+$/, '') + '…';
+    return corte;
+};
+
 // Ejes del radar cuando se mira una sola encuesta: uno por cada pregunta del
 // cuestionario de referencia y en su orden, no uno por cada llave que aparezca
 // en las respuestas. Una pregunta que nadie ha contestado todavía no dibuja
@@ -188,8 +244,12 @@ window.ejesPorPregunta = (referencia, mapaPreguntas, textoUsuarios) => {
         const d = mapaPreguntas[p.id];
         if (!d || d.count === 0) { n++; return; }
         const enunciado = p.texto || d.labelText || '';
-        let label = enunciado && enunciado.length <= 40 ? enunciado : `Pregunta ${n}`;
-        if (!enunciado && String(p.id).match(/^[0-9a-fA-F-]+$/)) label = `P${n}`;
+        // El enunciado va entero: quien lo recorta para que quepa en la
+        // gráfica es `rotuloDeEje`, al dibujar. `Pregunta N` es sólo para la
+        // que no tiene enunciado —una borrada, calificada antes de que la
+        // calificación guardara el texto—, y N es su posición en el
+        // cuestionario, contando también las que no dibujan eje.
+        const label = enunciado || `Pregunta ${n}`;
         labels.push(label);
         puntos.push(Math.round(d.sum / d.count));
         usuarios.push(textoUsuarios(d));
@@ -1178,10 +1238,11 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             const ctx = document.getElementById('stats-radar-chart');
             if (window.statsRadarChart) window.statsRadarChart.destroy();
             
+            // El ancho del lienzo decide cuánto texto cabe por renglón, así
+            // que se mide antes de partir los rótulos.
+            const anchoRadar = ctx && ctx.parentElement ? ctx.parentElement.clientWidth : 0;
             const formattedLabels = radarLabels.map((label, idx) => {
-                const words = label.split(' ');
-                const lines = [];
-                while(words.length > 0) lines.push(words.splice(0, 3).join(' '));
+                const lines = window.rotuloDeEje(label, anchoRadar);
                 lines.push(`${radarDataPoints[idx]}%`);
                 return lines;
             });
@@ -1218,6 +1279,12 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                             backgroundColor: 'rgba(15, 23, 42, 0.9)',
                             padding: 10,
                             callbacks: {
+                                // El rótulo de la punta puede venir recortado;
+                                // aquí es donde se lee el enunciado entero.
+                                title: function(items) {
+                                    if (!items || items.length === 0) return '';
+                                    return radarFullLabels[items[0].dataIndex] || '';
+                                },
                                 label: function(context) {
                                     const index = context.dataIndex;
                                     const uStat = radarUserStats[index] || "";
@@ -1416,6 +1483,7 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
     const radarLabels = [];
     const radarDataPoints = [];
     const radarUserStats = [];
+    const radarFullLabels = [];
     
     const totalU = new Set();
     const totalA = new Set();
@@ -1434,6 +1502,7 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
         radarLabels.push(...ejes.labels);
         radarDataPoints.push(...ejes.puntos);
         radarUserStats.push(...ejes.usuarios);
+        radarFullLabels.push(...ejes.completos);
 
         referenciaCuestionario.preguntas.forEach(p => {
             const d = radarQuestionsMap[p.id];
@@ -1450,6 +1519,7 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
             radarLabels.push(key);
             radarDataPoints.push(avg);
             radarUserStats.push(`${uniqueParticipating} de ${uniqueAssigned} usuarios`);
+            radarFullLabels.push(key);
             
             d.users.forEach(u => totalU.add(u));
             if (assignedMap[key]) assignedMap[key].forEach(u => totalA.add(u));
@@ -1471,10 +1541,9 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
         if (seccionRadar) seccionRadar.style.display = 'block';
         if (window.statsRadarChart) window.statsRadarChart.destroy();
         
+        const anchoRadar = ctx && ctx.parentElement ? ctx.parentElement.clientWidth : 0;
         const formattedLabels = radarLabels.map((label, idx) => {
-            const words = label.split(' ');
-            const lines = [];
-            while(words.length > 0) lines.push(words.splice(0, 3).join(' '));
+            const lines = window.rotuloDeEje(label, anchoRadar);
             lines.push(`${radarDataPoints[idx]}%`);
             return lines;
         });
@@ -1511,6 +1580,10 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
                         backgroundColor: 'rgba(15, 23, 42, 0.9)',
                         padding: 10,
                         callbacks: {
+                            title: function(items) {
+                                if (!items || items.length === 0) return '';
+                                return radarFullLabels[items[0].dataIndex] || '';
+                            },
                             label: function(context) {
                                 const index = context.dataIndex;
                                 const uStat = radarUserStats[index] || "";
