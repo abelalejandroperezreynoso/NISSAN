@@ -436,16 +436,14 @@ window.pctTexto = (parte, total) => {
 // calificación es la excepción, que ya viene en porcentaje.
 window.CRITERIOS_STATS = [
     { clave: 'participacion', etiqueta: 'Participación', nombre: 'contestadas', color: '#3b82f6', relleno: '#bfdbfe',
-      extremo: 'El que menos contesta',
       valor: (d) => d.assignedCount > 0 ? (d.responses || 0) / d.assignedCount : 0 },
     // Cuánto lleva revisado quien califica, de todo lo que ya le contestaron.
     // Es el único criterio que no se mide sobre las asignadas: una encuesta
     // sin contestar no se le puede revisar a nadie, así que meterla en el
     // denominador volvería a medir participación en lugar del trabajo del
     // revisor. Por lo mismo, quien no tiene ni una respuesta no dice 0% sino
-    // «sin contestar», y queda fuera del renglón del peor.
+    // «sin contestar»: no hay revisión atrasada que reprocharle.
     { clave: 'avance_revision', etiqueta: 'Avance de revisión', nombre: 'de lo contestado', color: '#0891b2', relleno: '#a5f3fc',
-      extremo: 'El que menos lleva revisado',
       valor: (d) => (d.responses || 0) > 0 ? window.procesadasDe(d) / d.responses : 0,
       texto: (d) => (d.responses || 0) > 0
           ? `${window.pctTexto(window.procesadasDe(d), d.responses)}% · ${window.procesadasDe(d)}/${d.responses}`
@@ -456,16 +454,14 @@ window.CRITERIOS_STATS = [
           ? { cifra: `${window.pctTexto(window.procesadasDe(d), d.responses)}%`, detalle: `${window.procesadasDe(d)}/${d.responses}` }
           : { cifra: '—', detalle: 'sin contestar' } },
     { clave: 'revisadas_altas', etiqueta: 'Revisadas ≥80%', nombre: 'revisadas ≥80%', color: '#047857', relleno: '#6ee7b7',
-      extremo: 'El que menos revisadas altas tiene',
       valor: (d) => d.assignedCount > 0 ? (d.revisadasAltas || 0) / d.assignedCount : 0 },
     // El mismo 80%, pero persona a persona y en **todas** sus encuestas: aquí
     // no basta con que el promedio llegue. Por eso se mide sobre la gente
     // —cuántos de los que ya tienen algo calificado no bajaron del mínimo en
     // ninguna— y no sobre las encuestas, que es lo que ya dice el criterio de
-    // arriba. Quien no tiene ni una calificada dice «sin calificar» y queda
-    // fuera del renglón del peor, igual que en avance de revisión.
+    // arriba. Quien no tiene ni una calificada dice «sin calificar»: todavía
+    // no cumple ni deja de cumplir.
     { clave: 'minimo_en_todas', etiqueta: '80% Líderes', nombre: 'al mínimo en todas', color: '#0f766e', relleno: '#99f6e4',
-      extremo: 'El que menos gente tiene al mínimo',
       valor: (d) => (d.personasEvaluadas || 0) > 0 ? (d.personasAlMinimo || 0) / d.personasEvaluadas : 0,
       texto: (d) => {
           const evaluadas = d.personasEvaluadas || 0;
@@ -483,24 +479,22 @@ window.CRITERIOS_STATS = [
           return { cifra: `${window.pctTexto(d.personasAlMinimo || 0, evaluadas)}%`, detalle: `${d.personasAlMinimo || 0}/${evaluadas}` };
       } },
     { clave: 'certificadas', etiqueta: 'Certificadas', nombre: 'certificadas', color: '#eab308', relleno: '#fde68a',
-      extremo: 'El que menos certifica',
       valor: (d) => d.assignedCount > 0 ? (d.certificadas || 0) / d.assignedCount : 0 },
-    // En falsas y mal revisadas lo malo es tener muchas, así que el señalado
-    // es el de arriba y no el de abajo.
+    // En falsas y mal revisadas lo malo es tener muchas, así que el puesto #1
+    // del cuadro es el que menos tiene y no el que más (`peorEsAlto`).
     { clave: 'falsas', etiqueta: 'Falsas', nombre: 'falsas', color: '#ef4444', relleno: '#fecaca',
-      extremo: 'El que más falsas tiene', peorEsAlto: true,
+      peorEsAlto: true,
       valor: (d) => d.assignedCount > 0 ? (d.falsas || 0) / d.assignedCount : 0 },
     { clave: 'mal_revisadas', etiqueta: 'Mal rev.', nombre: 'mal revisadas', color: '#a855f7', relleno: '#e9d5ff',
-      extremo: 'El que más mal revisadas tiene', peorEsAlto: true,
+      peorEsAlto: true,
       valor: (d) => d.assignedCount > 0 ? (d.malRevisadas || 0) / d.assignedCount : 0 },
     { clave: 'calificacion', etiqueta: 'Calificación', nombre: 'de calificación', color: '#16a34a', relleno: '#86efac',
-      extremo: 'El de peor calificación',
       valor: (d) => d.countScore > 0 ? (d.sumScore / d.countScore) / 100 : 0 },
     // Prontitud: qué parte del plazo quedaba sin gastar al contestar. Lleno es
     // pronto. Dentro del cuadro no se enseña esa proporción sino los días, que
     // es lo que se entiende sin explicación.
     { clave: 'prontitud', etiqueta: 'Prontitud', nombre: 'de prontitud', color: '#6366f1', relleno: '#c7d2fe',
-      extremo: 'El más lento', escalaRelativa: true,
+      escalaRelativa: true,
       valor: (d) => d.countProntitud > 0 ? d.sumProntitud / d.countProntitud : 0,
       texto: (d) => d.countDias > 0 ? window.textoDias(d.sumDias / d.countDias) : 'sin datos' }
 ];
@@ -514,34 +508,6 @@ window.textoDias = (dias) => {
         return horas <= 1 ? 'menos de 1 h' : `${horas} h`;
     }
     return `${dias.toFixed(1)} días`;
-};
-
-// Cuál de los cuadros es el que hay que mirar. Un treemap coloca por tamaño y
-// no por medida, así que con valores parecidos todos los rellenos se ven
-// iguales y no hay forma de ver quién va peor: eso lo dice este renglón.
-window.extremoDelCriterio = (nodos) => {
-    const criterio = window.criterioStats();
-    const conDatos = (nodos || []).filter(n => {
-        if (criterio.clave === 'prontitud') return n.datos.countProntitud > 0;
-        if (criterio.clave === 'calificacion') return n.datos.countScore > 0;
-        // Sin respuestas no hay revisión atrasada que reprocharle a nadie.
-        if (criterio.clave === 'avance_revision') return (n.datos.responses || 0) > 0;
-        // Ni nada que reprocharle a quien todavía no tiene una calificada.
-        if (criterio.clave === 'minimo_en_todas') return (n.datos.personasEvaluadas || 0) > 0;
-        return (n.datos.assignedCount || 0) > 0;
-    });
-    if (conDatos.length < 2) return null;
-
-    const peor = conDatos.reduce((a, b) => {
-        const va = criterio.valor(a.datos), vb = criterio.valor(b.datos);
-        if (criterio.peorEsAlto) return vb > va ? b : a;
-        return vb < va ? b : a;
-    });
-
-    return {
-        nombre: peor.nombre,
-        cifra: window.cifraDelCriterio(peor.datos)
-    };
 };
 
 // La cifra de una fila según el criterio: los días en prontitud, el porcentaje
@@ -1900,7 +1866,7 @@ window.pintarDesglose = () => {
     // pero se desplaza y el elegido puede quedar fuera de la vista; además,
     // dentro de los cuadros pequeños no cabe ningún texto.
     const nodos = window.nodosDeCuadros(esPuesto ? cache.puestoCache : cache.statsCache);
-    const encabezado = window.encabezadoDelGrafico(forma, nodos);
+    const encabezado = window.encabezadoDelGrafico(nodos);
 
     if (forma === 'barras') {
         cont.innerHTML = encabezado +
@@ -1921,34 +1887,33 @@ window.lienzoDeCuadros = () => '<div id="desglose-treemap" class="stats-treemap'
     + (window.formaDesgloseActual() === 'personas' ? ' stats-treemap--personas' : '')
     + '"></div>';
 
-// Ancho de un texto por cada píxel de fuente, medido con un lienzo suelto.
-// Se mide una sola vez por texto: dibujar los cuadros llama a esto para cada
-// palabra de cada nombre.
-// Encabezado del gráfico: qué se está midiendo y, debajo, a quién hay que
-// mirar. Lo comparten el nivel de arriba y los de dentro.
-window.encabezadoDelGrafico = (forma, nodos) => {
-    const criterio = window.criterioStats();
-    const peor = window.extremoDelCriterio(nodos);
+// El nivel entero sumado en una sola fila: los mismos contadores de una fila
+// de caché, sumados sobre todos los cuadros que se están viendo. Es lo que
+// permite decir el total con la misma medida del criterio —«9% · 38/430
+// personas»— sin contar figuras a ojo. Los campos que no son números —la lista
+// de empleados, el mapa de supervisores— se quedan fuera.
+window.totalDelNivel = (nodos) => {
+    const total = {};
+    (nodos || []).forEach(n => {
+        const d = n.datos || {};
+        Object.keys(d).forEach(campo => {
+            if (typeof d[campo] === 'number') total[campo] = (total[campo] || 0) + d[campo];
+        });
+    });
+    return total;
+};
 
-    // En personas la nota va antes que la de la escala relativa: ahí cada
-    // figura se llena con lo suyo en absoluto, así que «del más rápido al más
-    // lento» —que habla de la escala del nivel— no describiría el dibujo.
-    const nota = forma === 'barras' ? 'ordena las columnas'
-        : forma === 'personas' ? 'una figura es una persona'
-        : criterio.escalaRelativa ? 'del más rápido al más lento'
-        : 'llena los cuadros';
+// Encabezado del gráfico: qué se está midiendo y cuánto suma el nivel entero.
+// Lo comparten el nivel de arriba y los de dentro.
+window.encabezadoDelGrafico = (nodos) => {
+    const criterio = window.criterioStats();
+    const total = window.cifraDelCriterio(window.totalDelNivel(nodos));
 
     return '<div class="stats-grafico-titulo">' +
             `<span class="stats-grafico-punto" style="background:${criterio.color};"></span>` +
             criterio.etiqueta +
-            `<span class="stats-grafico-nota">${nota}</span>` +
-        '</div>' +
-        (peor
-            ? '<div class="stats-grafico-extremo">' +
-                  `${criterio.extremo || 'El más bajo'}: ` +
-                  `<b>${window.sanitizeForHTML(peor.nombre)}</b> · ${window.sanitizeForHTML(peor.cifra)}` +
-              '</div>'
-            : '');
+            `<span class="stats-grafico-total" style="color:${criterio.color};">${window.sanitizeForHTML(total)}</span>` +
+        '</div>';
 };
 
 // Un nivel de dentro del desglose dibujado en cuadros: encabezado con
@@ -1960,7 +1925,7 @@ window.vistaCuadrosDentro = ({ titulo, subtitulo, volver, nodos, alTocar }) => {
     if (!cont) return;
 
     cont.innerHTML =
-        window.encabezadoDelGrafico(window.formaDesgloseActual(), nodos) +
+        window.encabezadoDelGrafico(nodos) +
         '<div class="stats-migas">' +
             '<button type="button" id="btn-volver-cuadros">Volver</button>' +
             `<span class="stats-migas-titulo">${window.sanitizeForHTML(titulo)}</span>` +
@@ -2037,6 +2002,9 @@ window.valorDeCriterio = (fila) => {
     return window.criterioStats().valor(d) || 0;
 };
 
+// Ancho de un texto por cada píxel de fuente, medido con un lienzo suelto.
+// Se mide una sola vez por texto: dibujar los cuadros llama a esto para cada
+// palabra de cada nombre.
 window.anchoPorPixelDeTexto = (() => {
     const medidor = document.createElement('canvas').getContext('2d');
     const cache = {};

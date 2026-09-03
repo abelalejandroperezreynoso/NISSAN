@@ -1410,9 +1410,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   (`window.globoDeFila`). Un treemap coloca por tamaño y no por medida, así
   que con valores parecidos los rellenos se ven iguales y no hay forma de ver
   quién va peor: para eso cada cuadro lleva su puesto en la tabla (`#3 · 6.5
-  días`) y el encabezado señala al peor del nivel
-  (`window.extremoDelCriterio`), que en falsas y mal revisadas es el de más y
-  en los demás el de menos.
+  días`), que en falsas y mal revisadas cuenta al revés —el #1 es el que menos
+  tiene, y eso es lo que dice `peorEsAlto`—.
+
+  **El encabezado del gráfico dice el total del nivel**, con la misma medida
+  del criterio y a la derecha de su nombre: «50% · 40/80 personas» en 80%
+  Líderes, «4.4 días» en prontitud. Sale de `window.totalDelNivel(nodos)`, que
+  suma en una sola fila los contadores numéricos de todos los cuadros que se
+  están viendo —los campos que no son números, la lista de empleados y el mapa
+  de supervisores, se quedan fuera— y se la pasa a `cifraDelCriterio`. Así el
+  total se lee en las unidades de cada criterio sin tener que contar figuras a
+  ojo, y vale igual para las tres formas y para los niveles de dentro.
+
+  Ahí estuvieron antes dos renglones que se quitaron a propósito: una nota que
+  describía el dibujo («llena los cuadros», «una figura es una persona») y el
+  señalamiento del peor del nivel, con su `window.extremoDelCriterio` y la
+  propiedad `extremo` de cada criterio. El total dice más en el mismo sitio.
 
   Casi todos los criterios miden **sobre las asignadas**, que es lo que hace
   comparables las barras y los cuadros entre sí. Las tres excepciones son
@@ -1423,8 +1436,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   contestó volvería a medir participación en lugar del trabajo del revisor.
   Su cifra son las dos cosas —`60% · 12/20`—, porque un porcentaje sobre
   cuatro respuestas no dice lo mismo que sobre cuarenta. Quien no tiene ni una
-  respuesta dice «sin contestar» y **queda fuera del renglón del peor**: no
-  hay revisión atrasada que reprocharle. Lo que cuenta como revisado es
+  respuesta dice «sin contestar»: no hay revisión atrasada que reprocharle. Lo que cuenta como revisado es
   cualquier veredicto —revisada, certificada, falsa o mal revisada—, que es lo
   que reúne `window.procesadasDe(fila)`.
 
@@ -1445,8 +1457,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Se mira **sobre lo ya calificado**, las mismas respuestas procesadas que
   cuenta `revisadasAltas`: una encuesta que nadie ha revisado todavía no dice
   nada de quien la contestó, y meterla aquí volvería a medir participación en
-  lugar de puntaje. Quien no tiene ni una calificada dice «sin calificar» y
-  **queda fuera del renglón del peor**, igual que en avance de revisión.
+  lugar de puntaje. Quien no tiene ni una calificada dice «sin calificar»:
+  todavía no cumple ni deja de cumplir, igual que en avance de revisión. Por
+  eso el total del encabezado dice «40/80 personas» y no «40/120»: el
+  denominador es la gente a la que ya se le calificó algo, que es la misma
+  cuenta con la que cada cuadro saca su porcentaje —las figuras grises de
+  quien no tiene nada calificado se dibujan igual—.
 
   Los dos contadores —`personasEvaluadas` y `personasAlMinimo`— **no se
   derivan de la fila de un grupo**: ahí no se puede, porque el grupo suma
@@ -1549,9 +1565,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   (`escalaRelativa`). Esa escala existe para separar promedios de departamento
   que se parecen demasiado; entre personas no hace falta —varían de sobra— y
   encima aplastaría a media plantilla contra el 0 o el 100 según con quién le
-  tocara compartir cuadro. Por lo mismo la nota del encabezado en esta forma se
-  decide antes que la de la escala relativa: dice «una figura es una persona»,
-  que es lo que describe el dibujo.
+  tocara compartir cuadro.
 
   **El globo de cada figura es un `<title>` dentro de su `<use>`**, como el
   resto de los globos de la aplicación, y lo arma `window.globoDePersona`. Para
