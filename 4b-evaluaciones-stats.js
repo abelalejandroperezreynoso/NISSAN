@@ -2187,9 +2187,14 @@ window.montarIconoPersona = () => {
 window.rejillaDePersonas = (ancho, alto, altoCelda, personas) => {
     if (!(personas > 0)) return null;
 
+    // Los tres `floor` van con una pizca de holgura, y hace falta: el tamaño
+    // común es **exactamente** el que consiente el cuadro más apretado, así que
+    // ahí la división da 2.0000 y la coma flotante la deja en 1.9999999. Sin la
+    // holgura, el único cuadro que se quedaba sin figuras era justamente el que
+    // había fijado el tamaño de todos los demás.
     const anchoCelda = altoCelda * window.ASPECTO_PERSONA;
-    const topeColumnas = Math.floor(ancho / anchoCelda);
-    const topeFilas = Math.floor(alto / altoCelda);
+    const topeColumnas = Math.floor(ancho / anchoCelda + 1e-6);
+    const topeFilas = Math.floor(alto / altoCelda + 1e-6);
     if (topeColumnas < 1 || topeFilas < 1 || topeColumnas * topeFilas < personas) return null;
 
     // **La figura no se estira, pero el hueco entre figuras sí.** El tamaño es
@@ -2350,18 +2355,127 @@ window.lienzoDeGente = (rejilla, ancho, alto, gente, color) => {
     return { svg: svg, total: rejilla.total };
 };
 
+// De qué tamaño va el rótulo de un cuadro y si le cabe el renglón de la cifra.
+// Vive aparte porque lo necesitan dos: el dibujo, para escribirlo, y la
+// búsqueda de la altura del lienzo, para estimar cuánto sitio se lleva antes
+// de que exista ningún cuadro.
+window.medidasDelRotulo = (w, h, nombre, enPersonas) => {
+    const area = w * h;
+
+    // En personas el título va mucho más pequeño y de un solo renglón: cada
+    // píxel que se lleva la chapa es una fila de figuras menos, y en esta
+    // forma lo que hay que leer es la gente. En cuadros el nombre es lo único
+    // que hay dentro y se queda como estaba.
+    const tam = enPersonas
+        ? Math.max(8, Math.min(11, Math.sqrt(area) / 11))
+        : Math.max(8, Math.min(20, Math.sqrt(area) / 7));
+
+    // El nombre se parte entre palabras, nunca a media palabra: la fuente se
+    // encoge hasta que la palabra más larga cabe de ancho. Sin esto,
+    // «MANTENIMIENTO» se leía «MANTENIMIENT / O». En personas no hace falta:
+    // el título va en un renglón y lo que no cabe lo recorta el navegador con
+    // puntos suspensivos. El entero sigue en el globo.
+    const palabras = String(nombre == null ? '' : nombre).split(/\s+/).filter(Boolean);
+    const anchoUtil = Math.max(w - 9, 4);
+    const anchoPalabra = palabras.reduce((m, p) => Math.max(m, window.anchoPorPixelDeTexto(p)), 0.01);
+
+    return {
+        tam: tam,
+        tamTitulo: enPersonas ? tam : Math.max(6, Math.min(tam, anchoUtil / anchoPalabra)),
+        // El renglón de abajo sólo cabe en los cuadros grandes. En personas se
+        // piden además 70px de ancho: por debajo de eso la cifra se queda en
+        // tres letras y unos puntos suspensivos, y ese renglón vale menos que
+        // la fila de figuras que se está comiendo.
+        hayDato: area >= 2600 && h >= 44 && (!enPersonas || w >= 70),
+        tamDato: enPersonas ? Math.max(7, tam * 0.8) : Math.max(8, tam * 0.62)
+    };
+};
+
+// --- LA ALTURA DEL LIENZO EN PERSONAS NO ES FIJA ---
+// Las otras dos formas viven con la altura que les da la hoja de estilos. En
+// personas no conviene: el reparto en cuadros depende de la proporción del
+// lienzo, y una altura que no le sienta bien produce cuadros largos y
+// estrechos donde la gente no cabe en filas enteras. Con un lienzo más bajo,
+// el mismo reparto sale con otras proporciones y las figuras entran más
+// grandes —o entran, a secas, en un cuadro que si no se quedaba con el relleno
+// liso—.
+//
+// Sólo puede **encoger** desde el alto de la hoja de estilos, nunca crecer: ese
+// alto es el techo que la pantalla puede dedicarle.
+window.MINIMO_ALTO_LIENZO_PERSONAS = 190;
+window.PASO_ALTO_LIENZO = 8;
+
+// El rótulo aquí se **estima** —el de verdad se mide, en la segunda pasada del
+// dibujo—: para elegir la altura hay que valorar decenas de repartos que
+// todavía no existen en el documento, y medir cada uno costaría un recálculo
+// de maqueta por cada uno. Como en personas el título y la cifra van a un solo
+// renglón cada uno, la cuenta se queda muy cerca; y aunque se pase, lo único
+// que hay en juego es cuál de dos alturas parecidas se elige.
+window.altoRotuloEstimado = (w, h, nombre) => {
+    const m = window.medidasDelRotulo(w, h, nombre, true);
+    return m.tamTitulo * 1.2 + (m.hayDato ? m.tamDato * 1.25 : 0) + 7;
+};
+
+// Cómo de bien sale el reparto a una altura dada: cuántos cuadros se quedarían
+// sin poder enseñar a su gente y de qué tamaño saldrían las figuras.
+window.balanceDeReparto = (nodos, pesos, ancho, alto) => {
+    const cuadros = window.repartirEnCuadros(pesos, ancho, alto);
+    let sinFiguras = 0;
+    let celda = window.MAX_ALTO_PERSONA;
+
+    cuadros.forEach(c => {
+        const n = nodos[c.indice];
+        const w = Math.max(c.ancho - 1, 1);
+        const h = Math.max(c.alto - 1, 1);
+        const region = h - window.altoRotuloEstimado(w, h, n.nombre);
+        const cabe = window.celdaQueCabe(w, region, n.personas || 0);
+
+        if (!(n.personas > 0)) return;
+        if (cabe < window.MIN_ALTO_PERSONA) { sinFiguras++; return; }
+        if (cabe < celda) celda = cabe;
+    });
+
+    return { sinFiguras: sinFiguras, celda: Math.min(celda, window.MAX_ALTO_PERSONA) };
+};
+
+// La mejor altura, probando de la más alta a la más baja. Manda que nadie se
+// quede sin figuras; después, que las figuras salgan lo más grandes posible.
+// Como se recorre de arriba abajo y sólo se cambia de campeón ante una mejora
+// clara, en un empate gana la altura mayor: encoger sin ganar nada sería
+// quitarle sitio al gráfico por gusto.
+window.alturaDeLienzoPersonas = (nodos, pesos, ancho, altoTecho) => {
+    const suelo = Math.max(window.MINIMO_ALTO_LIENZO_PERSONAS, Math.round(altoTecho * 0.55));
+    if (ancho <= 0 || altoTecho <= suelo) return altoTecho;
+
+    let mejor = null;
+    for (let alto = altoTecho; alto >= suelo; alto -= window.PASO_ALTO_LIENZO) {
+        const b = window.balanceDeReparto(nodos, pesos, ancho, alto);
+        const gana = !mejor
+            || b.sinFiguras < mejor.sinFiguras
+            || (b.sinFiguras === mejor.sinFiguras && b.celda > mejor.celda * 1.02);
+        if (gana) mejor = { alto: alto, sinFiguras: b.sinFiguras, celda: b.celda };
+    }
+    return mejor ? mejor.alto : altoTecho;
+};
+
 window.dibujarCuadros = (nodos, alTocar) => {
     window.__redibujarCuadros = () => window.dibujarCuadros(nodos, alTocar);
 
     const lienzo = document.getElementById('desglose-treemap');
     if (!lienzo) return;
 
+    // Se le quita el alto que pudiera haberle puesto un dibujo anterior antes
+    // de medirlo: si no, cada repintado —girar el teléfono, cambiar de
+    // criterio— encogería un poco más sobre lo ya encogido hasta dejar el
+    // gráfico en nada.
+    lienzo.style.height = '';
     const ancho = lienzo.clientWidth;
-    const alto = lienzo.clientHeight;
+    let alto = lienzo.clientHeight;
     lienzo.innerHTML = '';
     if (ancho <= 0 || alto <= 0) return;
 
     const criterio = window.criterioStats();
+    const enPersonas = window.formaDesgloseActual() === 'personas';
 
     if (nodos.length === 0) {
         lienzo.innerHTML = '<div style="display:flex; align-items:center; justify-content:center; height:100%; color:#94a3b8; font-size:0.85rem;">Sin datos para este periodo.</div>';
@@ -2382,8 +2496,6 @@ window.dibujarCuadros = (nodos, alTocar) => {
     // escala rige las barras.
     const escala = window.escalaDelNivel(ordenados.map(n => n.datos));
 
-    const enPersonas = window.formaDesgloseActual() === 'personas';
-
     // Qué mide el tamaño del cuadro. En cuadros, lo asignado, como siempre.
     // **En personas, la gente**, que es lo único coherente con lo que se
     // dibuja dentro: si el cuadro midiera lo asignado, un departamento con
@@ -2399,7 +2511,19 @@ window.dibujarCuadros = (nodos, alTocar) => {
     // Un departamento sin encuestas asignadas no puede desaparecer del todo o
     // no habría manera de abrirlo; se le deja un peso mínimo y queda diminuto.
     const mayor = nodos.reduce((m, n) => Math.max(m, peso(n)), 0);
-    const cuadros = window.repartirEnCuadros(nodos.map(n => Math.max(peso(n), mayor * 0.02, 0.5)), ancho, alto);
+    const pesos = nodos.map(n => Math.max(peso(n), mayor * 0.02, 0.5));
+
+    // En personas el alto de la hoja de estilos es un techo, no una medida: si
+    // un lienzo más bajo reparte mejor a la gente, se encoge hasta ahí.
+    if (enPersonas) {
+        const mejorAlto = window.alturaDeLienzoPersonas(nodos, pesos, ancho, alto);
+        if (mejorAlto < alto) {
+            lienzo.style.height = mejorAlto + 'px';
+            alto = mejorAlto;
+        }
+    }
+
+    const cuadros = window.repartirEnCuadros(pesos, ancho, alto);
 
     // En personas el dibujo va en dos pasadas. La primera monta los cuadros
     // con su rótulo; la segunda mide lo que ese rótulo acabó ocupando y
@@ -2433,31 +2557,7 @@ window.dibujarCuadros = (nodos, alTocar) => {
         else el.style.cursor = 'default';
 
         // --- El rótulo, que es quien decide cuánto sitio le queda a la gente ---
-        // En personas el título va mucho más pequeño y de un solo renglón:
-        // cada píxel que se lleva la chapa es una fila de figuras menos, y en
-        // esta forma lo que hay que leer es la gente. En cuadros el nombre es
-        // lo único que hay dentro y se queda como estaba.
-        const tam = enPersonas
-            ? Math.max(8, Math.min(11, Math.sqrt(area) / 11))
-            : Math.max(8, Math.min(20, Math.sqrt(area) / 7));
-
-        // El nombre se parte entre palabras, nunca a media palabra: la fuente
-        // se encoge hasta que la palabra más larga cabe de ancho. Sin esto,
-        // «MANTENIMIENTO» se leía «MANTENIMIENT / O».
-        // En personas no hace falta: el título va en un renglón y lo que no
-        // cabe lo recorta el navegador con puntos suspensivos, que es lo que
-        // pidió el nombre largo. El entero sigue en el globo.
-        const palabras = String(n.nombre).split(/\s+/).filter(Boolean);
-        const anchoUtil = Math.max(w - 9, 4);
-        const anchoPalabra = palabras.reduce((m, p) => Math.max(m, window.anchoPorPixelDeTexto(p)), 0.01);
-        const tamTitulo = enPersonas ? tam : Math.max(6, Math.min(tam, anchoUtil / anchoPalabra));
-
-        // Los renglones de abajo sólo caben en los cuadros grandes. En
-        // personas se piden además 70px de ancho: por debajo de eso la cifra
-        // se queda en tres letras y unos puntos suspensivos, y ese renglón
-        // vale menos que la fila de figuras que se está comiendo.
-        const hayDato = area >= 2600 && h >= 44 && (!enPersonas || w >= 70);
-        const tamDato = enPersonas ? Math.max(7, tam * 0.8) : Math.max(8, tam * 0.62);
+        const { tamTitulo, tamDato, hayDato } = window.medidasDelRotulo(w, h, n.nombre, enPersonas);
 
         el.title = `${n.nombre}\nAsignadas: ${n.asignadas}\nContestadas: ${n.respuestas}`
             + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación: ${n.calificacion}%`)

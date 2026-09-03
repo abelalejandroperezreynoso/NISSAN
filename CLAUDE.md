@@ -1436,6 +1436,43 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   más pequeño y no la cantidad de gente, y con un tope bajo esos cuadros salían
   con un monigote perdido en el centro.
 
+  **El alto de la hoja de estilos es un techo, no una medida: el lienzo puede
+  encoger.** Las otras dos formas viven con el alto que les toca; en personas
+  no conviene, porque el reparto en cuadros depende de la proporción del lienzo
+  y una proporción que no le sienta bien produce cuadros largos y estrechos
+  donde la gente no cabe en filas enteras. Con un lienzo más bajo, el mismo
+  reparto sale con otras formas y las figuras entran más grandes —o entran, a
+  secas, en un cuadro que si no se quedaba con el relleno liso—. En un iPhone
+  12 mini, bajar de 330 a 258px es la diferencia entre que un departamento se
+  quede sin dibujar y que salgan los diez.
+
+  `window.alturaDeLienzoPersonas` prueba de la más alta a la más baja y se
+  queda con la mejor: manda que **nadie se quede sin figuras** y después que
+  **las figuras salgan lo más grandes posible**. Como recorre de arriba abajo y
+  sólo cambia de campeón ante una mejora clara, en un empate gana la altura
+  mayor: encoger sin ganar nada sería quitarle sitio al gráfico por gusto. El
+  resultado no es una función suave del alto —el reparto *squarify* salta— y
+  por eso se prueba en vez de calcularse.
+
+  **Antes de medir el lienzo hay que quitarle el alto que le puso el dibujo
+  anterior** (`lienzo.style.height = ''`). Sin eso, cada repintado —girar el
+  teléfono, cambiar de criterio— encogería un poco más sobre lo ya encogido
+  hasta dejar el gráfico en nada.
+
+  Para elegir la altura, el rótulo se **estima** (`window.altoRotuloEstimado`);
+  para colocar a la gente se **mide**. Son decenas de repartos que todavía no
+  existen en el documento y medir cada uno costaría un recálculo de maqueta por
+  cada uno; como en personas el título y la cifra van a un renglón cada uno, la
+  cuenta se queda muy cerca, y lo único en juego es cuál de dos alturas
+  parecidas se elige. Las dos salen de `window.medidasDelRotulo`, que es el
+  único sitio donde se decide de qué tamaño va ese rótulo.
+
+  **Los `floor` de `rejillaDePersonas` van con una pizca de holgura**, y hace
+  falta: el tamaño común es *exactamente* el que consiente el cuadro más
+  apretado, así que ahí la división da 2.0000 y la coma flotante la deja en
+  1.9999999. Sin la holgura, el único cuadro que se quedaba sin figuras era
+  justamente el que había fijado el tamaño de todos los demás.
+
   **La figura no se estira, pero el hueco entre figuras sí.** Como el tamaño lo
   manda el cuadro más apretado, a los demás les sobra sitio por definición y
   amontonar la gente contra el suelo dejaba medio cuadro en blanco. El hueco no
