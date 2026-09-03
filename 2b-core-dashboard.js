@@ -350,6 +350,142 @@ window.toggleAccesoDestacado = async (tabla, id, valorBoolean) => {
 };
 
 // ==========================================
+// INSIGNIAS POR CLASIFICACIÓN
+// ==========================================
+// Se gana una insignia por clasificación cuando **todas** las encuestas de esa
+// clasificación que le tocan a alguien están calificadas al mínimo o por
+// encima. No es el promedio: un 100 y un 60 promedian 80 y ahí falta una, así
+// que esa clasificación no da insignia. Es la misma regla del criterio «80%
+// Líderes» de las estadísticas, mirada por clasificación en vez de por
+// persona.
+//
+// Una encuesta sin contestar, o contestada y aún sin calificar, deja la
+// clasificación sin insignia: no se puede dar por cumplido lo que nadie ha
+// revisado. Y la que no exige mínimo (`requires_min_score` en false) cuenta
+// como cumplida en cuanto está calificada, que es lo que esa bandera significa.
+window.insigniasGanadas = (encuestas, respuestas, empleado, tieneEquipo) => {
+    if (!empleado) return [];
+
+    // La respuesta que vale de cada encuesta es la última calificada. Llegan
+    // ordenadas de la más reciente, así que la primera de cada una es la suya.
+    const suyaDe = {};
+    (respuestas || []).forEach(r => {
+        if (suyaDe[r.evaluation_id] === undefined) suyaDe[r.evaluation_id] = r;
+    });
+
+    const umbral = window.UMBRAL_CERTIFICACION || 80;
+    const porClasificacion = {};
+
+    (encuestas || []).forEach(ev => {
+        if (!window.leTocaEstaEncuesta(ev, empleado, tieneEquipo)) return;
+
+        const nombre = (ev.category || 'General').trim() || 'General';
+        const clave = window.normalizarClasificacion(nombre);
+        if (!porClasificacion[clave]) porClasificacion[clave] = { nombre: nombre, total: 0, cumplidas: 0 };
+        porClasificacion[clave].total++;
+
+        const resp = suyaDe[ev.id];
+        if (!resp) return;
+        // Sin nada calificado no hay puntaje que mirar: `calcularScoreRespuesta`
+        // devuelve 0 tanto si se falló todo como si no hay nada, y no son lo
+        // mismo.
+        if (!window.tieneCalificaciones(resp)) return;
+        if (!window.exigeMinimo(ev) || window.calcularScoreRespuesta(resp) >= umbral) {
+            porClasificacion[clave].cumplidas++;
+        }
+    });
+
+    return Object.values(porClasificacion)
+        .filter(c => c.total > 0 && c.cumplidas === c.total)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre));
+};
+
+// El símbolo de la insignia. Las clasificaciones habituales tienen el suyo; a
+// cualquier otra le toca uno fijo sacado de su nombre, que es lo que hace que
+// no cambie de un día para otro.
+window.SIMBOLOS_INSIGNIA = [
+    { busca: /SEGURIDAD|SAFETY/, simbolo: '🛡️' },
+    { busca: /CALIDAD|QUALITY/, simbolo: '⭐' },
+    { busca: /\b5S\b|ORDEN|LIMPIEZA/, simbolo: '🧹' },
+    { busca: /MANTENIMIENTO|MANTTO/, simbolo: '🔧' },
+    { busca: /AMBIENT|ECOLOG|VERDE/, simbolo: '🌱' },
+    { busca: /SALUD|MEDIC|HIGIENE/, simbolo: '⛑️' },
+    { busca: /PRODUC|MANUFAC|ENSAMBLE/, simbolo: '⚙️' },
+    { busca: /CAPACITA|ENTRENA|FORMACI|CURSO/, simbolo: '🎓' },
+    { busca: /ENERG|ELECTR/, simbolo: '⚡' }
+];
+window.SIMBOLOS_INSIGNIA_SUELTOS = ['🏅', '🎖️', '🥇', '🏆', '🔰', '✨', '🧭', '🦉'];
+
+// Un número estable a partir del nombre: el mismo nombre da siempre el mismo
+// color y el mismo símbolo, en este teléfono y en el de al lado.
+window.semillaDeTexto = (texto) => {
+    let h = 5381;
+    const s = String(texto || '');
+    for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    return h;
+};
+
+window.simboloDeClasificacion = (nombre) => {
+    const norm = window.normalizarClasificacion(nombre).toUpperCase();
+    const conocida = window.SIMBOLOS_INSIGNIA.find(s => s.busca.test(norm));
+    if (conocida) return conocida.simbolo;
+    const sueltos = window.SIMBOLOS_INSIGNIA_SUELTOS;
+    return sueltos[window.semillaDeTexto(norm) % sueltos.length];
+};
+
+window.matizDeClasificacion = (nombre) =>
+    window.semillaDeTexto(window.normalizarClasificacion(nombre)) % 360;
+
+// El parche de mérito: un aro festoneado —los puntos del borde son las
+// puntadas—, el disco de dentro y el símbolo. Todo en SVG y sin imágenes, que
+// el color sale del nombre de la clasificación.
+window.svgInsignia = (nombre) => {
+    const matiz = window.matizDeClasificacion(nombre);
+    const aro = `hsl(${matiz}, 45%, 32%)`;
+    const disco = `hsl(${matiz}, 45%, 92%)`;
+    const costura = `hsl(${matiz}, 40%, 60%)`;
+
+    let puntadas = '';
+    for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        puntadas += `<circle cx="${(32 + 26.5 * Math.cos(a)).toFixed(1)}" cy="${(32 + 26.5 * Math.sin(a)).toFixed(1)}" r="5" fill="${aro}"/>`;
+    }
+
+    return `<svg viewBox="0 0 64 64" class="insignia-svg" aria-hidden="true">
+            ${puntadas}
+            <circle cx="32" cy="32" r="26.5" fill="${aro}"/>
+            <circle cx="32" cy="32" r="21.5" fill="${disco}"/>
+            <circle cx="32" cy="32" r="21.5" fill="none" stroke="${costura}" stroke-width="1.2" stroke-dasharray="3 3"/>
+            <text x="32" y="33" text-anchor="middle" dominant-baseline="central" font-size="20">${window.simboloDeClasificacion(nombre)}</text>
+        </svg>`;
+};
+
+window.dibujarInsigniasClasificacion = (insignias) => {
+    const caja = document.getElementById('insignias-clasificacion');
+    if (!caja) return;
+
+    // Sin ninguna ganada no se dibuja nada: un hueco vacío en el panel no
+    // dice más que la ausencia de la insignia.
+    if (!insignias || insignias.length === 0) { caja.innerHTML = ''; return; }
+
+    const umbral = window.UMBRAL_CERTIFICACION || 80;
+    caja.innerHTML = `
+        <div class="insignias-titulo">Insignias</div>
+        <div class="insignias-fila">
+            ${insignias.map(ins => {
+                const seguro = window.sanitizeForHTML(ins.nombre);
+                const globo = ins.total === 1
+                    ? `${seguro}: su única encuesta de esta clasificación está calificada al ${umbral}% o más`
+                    : `${seguro}: sus ${ins.total} encuestas de esta clasificación están calificadas al ${umbral}% o más`;
+                return `<div class="insignia" title="${globo}">
+                        ${window.svgInsignia(ins.nombre)}
+                        <div class="insignia-nombre">${seguro}</div>
+                    </div>`;
+            }).join('')}
+        </div>`;
+};
+
+// ==========================================
 // RADAR GENERAL DASHBOARD (HEADER)
 // ==========================================
 window.cargarRadarGeneralDashboard = async (userId) => {
@@ -360,12 +496,28 @@ window.cargarRadarGeneralDashboard = async (userId) => {
     if(!radarContainer || !canvas) return;
 
     try {
-        const { data: activeEvals } = await sb.from('evaluations').select('id, title, category, target_positions, is_obligatory').eq('active', true);
+        // Las columnas de más —`mode`, los otros dos destinatarios y el mínimo—
+        // son para las insignias, que deciden a quién le toca cada encuesta con
+        // `leTocaEstaEncuesta` y no sólo por el puesto. El radar sigue mirando
+        // lo suyo.
+        const camposEval = await window.camposConMinimo(
+            'id, title, category, target_positions, is_obligatory, mode, target_departments, target_employees');
+        const { data: activeEvals } = await sb.from('evaluations').select(camposEval).eq('active', true);
         const { data: responses } = await sb.from('evaluation_responses')
     .select('evaluation_id, grades_json, review_status, submitted_at')
     .eq('employee_id', userId)
     .in('review_status', ['Revisado', 'Certificada']) // 🔥 Agregamos Certificada
     .order('submitted_at', { ascending: false });
+
+        // Las insignias van con estos mismos datos y antes de dibujar nada: si
+        // el radar se queda sin ejes que enseñar, ellas se dibujan igual.
+        try {
+            const yo = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(userId));
+            window.dibujarInsigniasClasificacion(
+                window.insigniasGanadas(activeEvals, responses, yo, window.tieneEquipoDirecto(userId)));
+        } catch (e) {
+            console.error('Error insignias por clasificación:', e);
+        }
 
         const uniqueResponsesMap = {};
         if (responses) {
@@ -718,6 +870,11 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
                         <canvas id="dashboard-main-radar"></canvas>
                      </div>
                 </div>
+
+                <!-- Las insignias de clasificación las llena
+                     dibujarInsigniasClasificacion, y si no hay ninguna se
+                     queda vacío. -->
+                <div id="insignias-clasificacion"></div>
             `;
             
             window.renderizarVistaRapidaEquipo(false);

@@ -3300,3 +3300,78 @@ html.modal-abierto {
     color: #334155;
     white-space: pre-wrap;
 }
+
+/* ==========================================
+   INSIGNIAS POR CLASIFICACIÓN
+   ==========================================
+   El parche de mérito que se gana quien tiene todas las encuestas de una
+   clasificación calificadas al mínimo o por encima. Va en el panel de
+   información del usuario, debajo del radar, y cada uno se dibuja entero en
+   SVG: el color y el símbolo salen del nombre de la clasificación, así que un
+   catálogo nuevo no necesita ninguna imagen. */
+#insignias-clasificacion:empty {
+    display: none;
+}
+
+.insignias-titulo {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+/* Se arrastra con el dedo en vez de partirse en dos renglones: la fila crece
+   con el catálogo de clasificaciones y el panel del usuario no puede crecer
+   con ella.
+
+   El centrado se hace con los márgenes automáticos de la primera y la última,
+   nunca con `justify-content: center`: centrando así, en cuanto la fila
+   desborda el navegador recorta por la **izquierda** y las primeras insignias
+   quedan fuera sin que se pueda llegar a ellas arrastrando. Los márgenes
+   automáticos se van a cero cuando no sobra sitio, así que con pocas quedan
+   centradas y con muchas empiezan por la primera. */
+.insignias-fila {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    padding: 2px 4px 4px;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+}
+
+.insignias-fila > .insignia:first-child { margin-left: auto; }
+.insignias-fila > .insignia:last-child { margin-right: auto; }
+
+.insignia {
+    flex: 0 0 auto;
+    width: 74px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    scroll-snap-align: start;
+}
+
+.insignia-svg {
+    width: 56px;
+    height: 56px;
+    display: block;
+    filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.18));
+}
+
+/* El nombre cabe en dos renglones y lo que pase se recorta: el entero está en
+   el globo de la insignia. */
+.insignia-nombre {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #475569;
+    text-align: center;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}

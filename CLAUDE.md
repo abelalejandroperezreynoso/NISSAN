@@ -1732,6 +1732,52 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   la lista se desplaza dentro de su tarjeta (`.stats-plegable-cuerpo`, tope de
   260px) en vez de estirar la fila. Así es la comparativa por áreas, que con
   todo el personal desplegado se llevaba nueve mil píxeles de la pantalla.
+- **Una insignia por clasificación cumplida.** En el panel de información del
+  usuario, debajo del radar, se gana un parche de mérito por cada clasificación
+  cuyas encuestas están **todas** calificadas al mínimo o por encima. Es la
+  misma regla del criterio «80% Líderes» de las estadísticas —no el promedio:
+  un 100 y un 60 promedian 80 y ahí falta una—, mirada por clasificación en
+  lugar de por persona.
+
+  ```js
+  window.insigniasGanadas(encuestas, respuestas, empleado, tieneEquipo)
+  window.dibujarInsigniasClasificacion(insignias)   // en #insignias-clasificacion
+  ```
+
+  Vale de cada encuesta **la última respuesta calificada**, que es la primera
+  que aparece por venir ordenadas de la más reciente. Una encuesta sin
+  contestar, o contestada y aún sin calificar, deja la clasificación sin
+  insignia: no se da por cumplido lo que nadie ha revisado. Y la que no exige
+  mínimo (`requires_min_score` en false) cuenta en cuanto está calificada, que
+  es lo que esa bandera significa.
+
+  **A quién le toca cada encuesta lo decide `leTocaEstaEncuesta`**, no el
+  `target_positions` a mano que mira el radar justo encima. Por eso la consulta
+  de `cargarRadarGeneralDashboard` —de la que cuelgan las dos cosas, para no
+  pedir lo mismo dos veces— se trae además `mode`, `target_departments`,
+  `target_employees` y, con `camposConMinimo`, `requires_min_score`. Las
+  insignias se dibujan **antes** que el radar: si no hay ejes que enseñar, o si
+  Chart falla, ellas salen igual.
+
+  El parche se dibuja entero en SVG (`window.svgInsignia`) y **no hay ninguna
+  imagen que subir**: el aro festoneado son dieciséis círculos, y el color y el
+  símbolo salen del nombre de la clasificación —`matizDeClasificacion` y
+  `simboloDeClasificacion`, ambos sobre la misma semilla estable, así que una
+  clasificación tiene siempre el mismo parche en todos los teléfonos—. Las
+  habituales traen su símbolo en `window.SIMBOLOS_INSIGNIA` (seguridad 🛡️,
+  calidad ⭐, 5S 🧹…) y a cualquier otra le toca uno fijo de
+  `SIMBOLOS_INSIGNIA_SUELTOS`.
+
+  Sin ninguna ganada no se dibuja nada —`#insignias-clasificacion:empty` se
+  esconde—: un hueco vacío en el panel no dice más que la ausencia del parche.
+
+  **La fila se centra con los márgenes automáticos de la primera y la última,
+  nunca con `justify-content: center`.** Centrando así, en cuanto la fila
+  desborda —y desborda: crece con el catálogo de clasificaciones— el navegador
+  recorta por la **izquierda** y las primeras insignias quedan fuera sin que se
+  pueda llegar a ellas arrastrando. Los márgenes automáticos se van a cero
+  cuando no sobra sitio, de modo que con pocas quedan centradas y con muchas se
+  empieza por la primera.
 - **Un selector por atributo `style` se rompe en cuanto se toca ese estilo.**
   `setGrade` buscaba la tarjeta de la pregunta con
   `closest('div[style*="border-radius:16px"]')` y le pintaba el borde. Al
