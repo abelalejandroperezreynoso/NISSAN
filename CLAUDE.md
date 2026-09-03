@@ -90,14 +90,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     que no puede venir de la caché, así que es la que descubre el desfase. Se
     comprueba al cargar, **al volver a primer plano** —el único momento en que
     se entera una aplicación instalada que no recarga nunca— y al abrir una
-    encuesta. Al encontrarlo se avisa con una hoja y se recarga a una URL con
-    `?v=` nueva, que el navegador tampoco ha visto y tiene que pedir a la red.
+    encuesta. Al encontrarlo salta a una URL con `?v=` nueva, que el navegador
+    tampoco ha visto y tiene que pedir a la red.
 
     ```js
     await window.comprobarVersionApp({ forzar: true })  // ¿hay una más nueva?
     window.hayVersionNueva()                            // lo que ya se sabe
+    window.versionEnServidor()                          // la última que dijo
     window.avisarVersionNueva({ bloqueante: true })     // la hoja, sin «Ahora no»
     ```
+
+  - **El salto se da solo, y nadie tiene que tocar el botón.** Abrir la
+    aplicación —o volver a ella— basta para quedarse al día: si la pantalla
+    está en reposo se recarga sin preguntar. Con **dos frenos**, que son lo que
+    lo hace seguro:
+
+    **Con una hoja abierta no se recarga jamás.** Ahí puede haber media
+    encuesta llena, un incidente a medio redactar o una foto ya tomada, y nada
+    de eso sobrevive a una recarga. Se mira la clase `modal-abierto` que el
+    observador deja en `<html>`, que es exactamente donde vive todo formulario
+    de la aplicación: si la hay, se avisa con la hoja y decide la persona. Por
+    eso el aviso se ve poco — es lo que queda para lo que no se puede hacer
+    solo.
+
+    **Y no se salta dos veces a la misma versión.** Si tras el salto seguimos
+    desfasados es que el despliegue quedó a medias —`version.json` subido y los
+    `.js` todavía viejos, o al revés— y sin este freno la aplicación se
+    quedaría recargando en bucle para siempre, que es peor que la versión
+    vieja. La marca va en `sessionStorage.versionIntentada` y da un intento por
+    arranque; al comprobar que ya se está al día se borra sola. Un navegador
+    que no deje escribir ahí no salta nunca: sin red de seguridad, mejor el
+    botón.
 
   - **`window.responderDirecto` no abre una encuesta con la versión vieja.** Es
     el único sitio de la aplicación donde el aviso no admite un «Ahora no»:

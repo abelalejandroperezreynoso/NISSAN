@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-03-1';
+window.VERSION_APP = '2026-09-03-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1685,6 +1685,9 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
     window.hayVersionNueva = () =>
         !!versionEnServidor && versionEnServidor !== window.VERSION_APP;
 
+    // La última que dijo el servidor, o null si todavía no ha dicho nada.
+    window.versionEnServidor = () => versionEnServidor;
+
     window.comprobarVersionApp = async ({ forzar = false } = {}) => {
         if (window.hayVersionNueva()) return true;
         if (enCurso) return enCurso;
@@ -1769,7 +1772,7 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
         if (texto) {
             texto.innerText = bloqueante
                 ? 'Este dispositivo está usando una versión anterior de la aplicación y podría no mostrar todas las preguntas de la encuesta. Actualiza antes de contestarla.'
-                : 'Este dispositivo está usando una versión anterior de la aplicación. Actualiza para tener los cambios más recientes.';
+                : 'Este dispositivo está usando una versión anterior de la aplicación. Se pondrá al día solo la próxima vez que la abras. Si prefieres actualizar ahora, se perderá lo que tengas sin enviar.';
         }
 
         const luego = document.getElementById('btn-version-luego');
@@ -1783,19 +1786,69 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
         if (hoja) hoja.style.display = 'none';
     };
 
-    const comprobarYAvisar = async (opciones) => {
-        if (await window.comprobarVersionApp(opciones)) window.avisarVersionNueva();
+    // ------------------------------------------------------------------
+    // La actualización se pone sola
+    // ------------------------------------------------------------------
+    // Lo normal es que nadie tenga que tocar nada: si la pantalla está en
+    // reposo se recarga sin preguntar, así que abrir la aplicación —o volver a
+    // ella— basta para quedarse al día. El botón es para lo que no se puede
+    // hacer solo.
+    //
+    // Con una hoja abierta no se recarga jamás: ahí puede haber media encuesta
+    // llena, un incidente a medio redactar o una foto ya tomada, y nada de eso
+    // sobrevive a una recarga. `modal-abierto` es la marca que el observador de
+    // más arriba deja en <html> mientras haya cualquier panel a la vista, y es
+    // exactamente donde vive todo formulario de la aplicación. En ese caso se
+    // avisa y decide la persona.
+    const hayTrabajoAMedias = () =>
+        document.documentElement.classList.contains('modal-abierto');
+
+    // Y no se recarga dos veces por la misma versión. Si tras el salto seguimos
+    // desfasados es que el despliegue quedó a medias —`version.json` subido y
+    // los `.js` todavía viejos, o al revés—, y sin esta marca la aplicación se
+    // quedaría recargando en bucle para siempre. La marca vive en
+    // `sessionStorage`, que dura lo que la pestaña: un intento por arranque.
+    const LLAVE_INTENTO = 'versionIntentada';
+
+    const yaSeIntento = (version) => {
+        try { return sessionStorage.getItem(LLAVE_INTENTO) === version; }
+        catch (e) { return true; }   // sin sessionStorage no hay red de seguridad
     };
 
-    // Al arrancar, sin competir con la primera carga de datos.
-    window.addEventListener('load', () => setTimeout(() => comprobarYAvisar(), 3000));
+    const anotarIntento = (version) => {
+        try { sessionStorage.setItem(LLAVE_INTENTO, version); } catch (e) {}
+    };
+
+    const olvidarIntento = () => {
+        try { sessionStorage.removeItem(LLAVE_INTENTO); } catch (e) {}
+    };
+
+    const comprobarYResolver = async (opciones) => {
+        if (!await window.comprobarVersionApp(opciones)) {
+            // Al día: si veníamos de un salto, salió bien y la marca sobra.
+            olvidarIntento();
+            return;
+        }
+        if (hayTrabajoAMedias() || yaSeIntento(window.versionEnServidor())) {
+            window.avisarVersionNueva();
+            return;
+        }
+        anotarIntento(window.versionEnServidor());
+        window.recargarAVersionNueva();
+    };
+
+    // Al arrancar. Pronto, para que el salto ocurra antes de que nadie se haya
+    // puesto a trabajar: es un archivo de sesenta bytes y no le quita sitio a
+    // la primera carga de datos.
+    window.addEventListener('load', () => setTimeout(() => comprobarYResolver(), 600));
 
     // Y al volver a primer plano, que es el único momento en que se entera una
     // aplicación instalada que lleva semanas abierta y no ha recargado nunca.
+    // Cerrarla y abrirla pasa por aquí aunque iOS no relance el documento.
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') comprobarYAvisar();
+        if (document.visibilityState === 'visible') comprobarYResolver();
     });
     window.addEventListener('pageshow', (e) => {
-        if (e.persisted) comprobarYAvisar({ forzar: true });
+        if (e.persisted) comprobarYResolver({ forzar: true });
     });
 })();
