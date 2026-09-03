@@ -2710,6 +2710,63 @@ html.modal-abierto {
 
 .stats-cuadro-dato { font-weight: 700; line-height: 1.25; }
 
+/* --- El mismo treemap, relleno de gente ---
+   La forma «Personas» no cambia ni la geometría ni el orden ni los toques:
+   sólo sustituye la banda lisa que sube por figuras, y pinta de color las que
+   le tocan al criterio. Un relleno al 62% y otro al 71% se ven casi iguales;
+   catorce figuras de veinte contra dieciséis se cuentan de un vistazo.
+
+   El lienzo necesita más alto que el de cuadros: una figura por debajo de
+   12px deja de leerse, así que en un lienzo bajo los cuadros pequeños no
+   cabría ninguna y caerían al relleno liso. */
+.stats-treemap--personas { height: 380px; }
+
+/* El fondo del cuadro se aclara —lo que tiene que destacar son las figuras y
+   no la caja—, pero entonces el hueco de 1px que separa un cuadro de otro deja
+   de verse contra el blanco del lienzo y el reparto se lee como una mancha
+   sola. El borde interior es lo que devuelve los límites. */
+.stats-cuadro--personas {
+    background: #f8fafc;
+    box-shadow: inset 0 0 0 1px #e2e8f0;
+}
+
+.stats-cuadro-gente {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* El rótulo no puede ir centrado sobre las figuras. Se sube a una chapa
+   translúcida pegada al techo del cuadro, que es el hueco que el dibujo dejó
+   libre a propósito: la gente se apoya en el suelo y las filas que caben se
+   cuentan sobre el alto que queda por debajo de esta chapa. */
+.stats-cuadro-cuerpo--personas {
+    justify-content: flex-start;
+    padding: 0;
+}
+
+.stats-cuadro-chapa {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 3px 4px 4px;
+    background: rgba(255, 255, 255, 0.86);
+    border-radius: 0 0 6px 6px;
+    text-align: center;
+    overflow: hidden;
+}
+
+/* La cifra se queda en un renglón pase lo que pase. Envuelta, «#2 · 93%
+   contestadas» ocupaba tres en un cuadro estrecho y la chapa se llevaba la
+   mitad del alto: dos filas de figuras menos por un dato que ya está en el
+   globo. */
+.stats-cuadro-chapa .stats-cuadro-dato {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Migas del desglose en cuadros: volver, dónde se está y cuánto hay. */
 .stats-migas {
     display: flex;
@@ -3055,6 +3112,13 @@ html.modal-abierto {
 
     .stats-treemap {
         height: 240px;
+    }
+
+    /* En personas el lienzo se queda más alto que el de cuadros incluso en un
+       teléfono: 240px repartidos entre ocho departamentos dejan cuadros de
+       60px de alto, y ahí no cabe ni una fila de figuras legibles. */
+    .stats-treemap--personas {
+        height: 330px;
     }
 
     /* Dos conmutadores en una sección estrecha: aprietan para que el de la

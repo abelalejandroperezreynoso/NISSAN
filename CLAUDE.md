@@ -1334,6 +1334,56 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   en píxeles, así que al girar el teléfono hay que rehacerlo — de eso se
   encarga el oyente de `resize` que se registra una sola vez.
 
+  **Y hay una tercera forma, «Personas», que es el mismo treemap relleno de
+  gente.** Misma geometría, mismo orden, mismos toques y el mismo criterio: lo
+  único que cambia es que en vez de subir una banda lisa, el cuadro se llena de
+  figuras y se pintan de color las que le tocan al criterio. Es lo que el
+  relleno no sabe hacer: un 62% y un 71% dan dos bandas casi iguales, mientras
+  que catorce figuras de veinte contra dieciséis se cuentan de un vistazo.
+
+  Por eso no es un gráfico aparte sino un valor más de `formaDesglose`
+  (`window.FORMAS_DESGLOSE`), y **nadie lee esa variable a pelo**: se pregunta
+  con `window.formaDesgloseActual()`, que devuelve cuadros ante cualquier cosa
+  que no esté en la lista —`sessionStorage` puede traer la forma de una
+  versión anterior—. Los tres niveles de dentro ya entran aquí solos, porque
+  preguntan por `!== 'barras'`.
+
+  ```js
+  window.rejillaDePersonas(ancho, alto)   // {filas, columnas, total…} o null
+  window.lienzoDeGente(rejilla, ancho, alto, proporcion, color)
+  ```
+
+  La figura vive **una sola vez** en el documento, colgada de `<body>` en un
+  `<symbol>` que monta `window.montarIconoPersona()`, y cada cuadro la reusa
+  con `<use>`: son cientos por pantalla. Va en `<body>` y no dentro del
+  desglose porque ese contenedor se reescribe entero con `innerHTML` a cada
+  repintado y se la llevaría por delante.
+
+  **El rótulo se mide, no se estima, y por eso el dibujo va en dos pasadas.**
+  La gente se reparte en el hueco que queda por debajo de la chapa del título,
+  y la cifra («#2 · 93% contestadas») cabe de un renglón en un cuadro ancho y
+  de tres en uno estrecho: por catorce píxeles de más, la primera fila de
+  figuras se quedaba escondida detrás. La primera pasada monta todos los
+  cuadros con su rótulo y la segunda lee `offsetHeight` y dibuja, así que el
+  navegador recalcula la maqueta una sola vez y no una por cuadro. Quien toque
+  ese bucle tiene que mantener las escrituras en la primera y las lecturas en
+  la segunda.
+
+  Cuántas figuras caben lo decide un objetivo sacado del área —un cuadro
+  grande enseña más gente, que es lo que hace comparables dos cuadros de
+  tamaños distintos— y se prueba renglón a renglón. Sólo hay **un tope duro**,
+  `MIN_ALTO_PERSONA`: por debajo la figura deja de leerse y el cuadro cae al
+  relleno liso de siempre, que es preferible a media persona asomando. El de
+  arriba (`MAX_ALTO_PERSONA`) es una preferencia con penalización, y tiene que
+  seguir siéndolo: como condición dejaba sin ningún reparto válido justo al
+  cuadro más grande —el único donde no cabe una figura de 40px sin pasarse de
+  gente— y ése acababa liso, que es el que más se mira.
+
+  Las figuras se cuentan enteras, así que el redondeo reserva los dos extremos
+  para lo exacto igual que `pctTexto`: ni cero de color cuando algo hay, ni
+  todas cuando falta algo. La geometría del relleno liso sigue yendo sin
+  redondear.
+
   Una sección que crece con el catálogo no se apila: va en `.stats-carrusel`,
   una fila que se arrastra con el dedo y engancha las tarjetas de una en una.
   El último elemento se recorta a propósito —asomar el siguiente es lo único
