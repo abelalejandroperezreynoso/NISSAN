@@ -3375,3 +3375,26 @@ html.modal-abierto {
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
+
+/* Las estrellas de debajo de la foto de perfil: una por insignia. Caben cinco
+   en el ancho de la foto y las demás bajan a otro renglón; con ninguna, el
+   contenedor no ocupa nada. */
+.estrellas-insignias {
+    width: 60px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1px;
+    margin-top: 4px;
+    line-height: 0;
+}
+
+.estrella-insignia {
+    width: 11px;
+    height: 11px;
+    display: block;
+    fill: #facc15;
+    stroke: #ca8a04;
+    stroke-width: 0.8;
+    stroke-linejoin: round;
+}

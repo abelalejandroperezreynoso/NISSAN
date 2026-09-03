@@ -460,7 +460,33 @@ window.svgInsignia = (nombre) => {
         </svg>`;
 };
 
+// Una estrella por insignia, debajo de la foto de perfil. Es el mismo dato que
+// los parches de más abajo, dicho donde se mira primero: el parche dice de qué
+// clasificación y la estrella sólo cuántas van.
+//
+// La estrella es un `<path>` y no un emoji: el emoji lo dibuja cada sistema a
+// su manera —en iOS sale con relieve y borde— y aquí hacen falta cinco iguales
+// en fila, del mismo amarillo.
+window.svgEstrella = () => '<svg class="estrella-insignia" viewBox="0 0 24 24" aria-hidden="true">'
+    + '<path d="M12 1.8l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 17.6l-6.2 3.3 1.2-6.9-5-4.9 6.9-1z"/>'
+    + '</svg>';
+
+window.dibujarEstrellasInsignias = (cuantas) => {
+    const caja = document.getElementById('estrellas-insignias');
+    if (!caja) return;
+
+    if (!cuantas) { caja.innerHTML = ''; caja.removeAttribute('title'); return; }
+
+    caja.className = 'estrellas-insignias';
+    caja.title = cuantas === 1
+        ? '1 clasificación con todas sus encuestas al mínimo'
+        : `${cuantas} clasificaciones con todas sus encuestas al mínimo`;
+    caja.innerHTML = window.svgEstrella().repeat(cuantas);
+};
+
 window.dibujarInsigniasClasificacion = (insignias) => {
+    window.dibujarEstrellasInsignias((insignias || []).length);
+
     const caja = document.getElementById('insignias-clasificacion');
     if (!caja) return;
 
@@ -842,11 +868,18 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
             userHeader.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: nowrap;">
                     
-                    <div id="header-user-info" style="min-width: 0; flex: 1;"> 
-                        <div id="header-user-icon" onclick="window.abrirStatsEmpleado('${user.id}', '${user.name}', '${user.puesto || 'Colaborador'}')"
-                                style="width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); cursor:pointer; position:relative; flex-shrink:0; margin-right: 15px; float: left; ${headerBgStyle}">
-                            ${headerAvatarHtml}
-                            <div id="badge-count-${user.id}" class="notification-badge" style="display:none;">0</div>
+                    <div id="header-user-info" style="min-width: 0; flex: 1;">
+                        <!-- La foto y, debajo, una estrella por insignia. El
+                             flotado vive aquí y no en la foto: así las
+                             estrellas caen debajo de ella y el nombre las
+                             rodea igual que rodeaba a la foto sola. -->
+                        <div style="float: left; margin-right: 15px;">
+                            <div id="header-user-icon" onclick="window.abrirStatsEmpleado('${user.id}', '${user.name}', '${user.puesto || 'Colaborador'}')"
+                                    style="width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); cursor:pointer; position:relative; flex-shrink:0; ${headerBgStyle}">
+                                ${headerAvatarHtml}
+                                <div id="badge-count-${user.id}" class="notification-badge" style="display:none;">0</div>
+                            </div>
+                            <div id="estrellas-insignias"></div>
                         </div>
 
                         <div style="overflow: hidden;">

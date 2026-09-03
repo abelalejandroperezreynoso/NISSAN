@@ -1768,8 +1768,26 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   calidad ⭐, 5S 🧹…) y a cualquier otra le toca uno fijo de
   `SIMBOLOS_INSIGNIA_SUELTOS`.
 
+  **Debajo de la foto de perfil va una estrella amarilla por insignia**, que es
+  el mismo dato dicho donde se mira primero: el parche dice de qué
+  clasificación y la estrella sólo cuántas van. Las pone
+  `window.dibujarEstrellasInsignias(cuantas)`, a la que llama la propia
+  `dibujarInsigniasClasificacion`, así que las dos cosas no pueden discrepar.
+  La estrella es un `<path>` y **no un emoji**: el emoji lo dibuja cada sistema
+  a su manera —en iOS sale con relieve y borde— y aquí hacen falta cinco
+  iguales en fila del mismo amarillo. Caben cinco en el ancho de la foto y las
+  demás bajan a otro renglón.
+
+  Para que caigan debajo de la foto, **el flotado se mudó de la foto a un
+  envoltorio** que las contiene a las dos; el nombre y el puesto lo rodean
+  igual que rodeaban a la foto sola. Las estrellas son **hermanas** del
+  `#header-user-icon` y no van dentro: ese div se reescribe entero con
+  `innerHTML` cada vez que se carga el avatar o se cambia la foto, y se las
+  llevaría por delante.
+
   Sin ninguna ganada no se dibuja nada —`#insignias-clasificacion:empty` se
-  esconde—: un hueco vacío en el panel no dice más que la ausencia del parche.
+  esconde y las estrellas se vacían—: un hueco vacío en el panel no dice más
+  que la ausencia del parche.
 
   **La fila se centra con los márgenes automáticos de la primera y la última,
   nunca con `justify-content: center`.** Centrando así, en cuanto la fila
