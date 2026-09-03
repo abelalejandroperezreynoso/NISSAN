@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-03-2';
+window.VERSION_APP = '2026-09-03-3';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1850,5 +1850,151 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
     });
     window.addEventListener('pageshow', (e) => {
         if (e.persisted) comprobarYResolver({ forzar: true });
+    });
+})();
+
+// ==========================================================================
+// CIERRE DE SESIÓN ORDENADO POR EL ADMINISTRADOR
+// ==========================================================================
+// El administrador puede obligar a toda la plantilla a volver a identificarse.
+// No es un interruptor que se enciende y se apaga, sino **un instante**: se
+// guarda la hora de la orden en `system_config`, y toda sesión iniciada antes
+// de esa hora deja de valer. La diferencia importa. Un interruptor encendido y
+// olvidado deja a todo el mundo fuera para siempre; un instante se agota solo,
+// porque en cuanto cada persona vuelve a entrar su sesión es posterior a la
+// orden y ya no le afecta. Volver a darla es simplemente adelantar el
+// instante.
+//
+//     await window.ordenarCierreDeSesiones()   // el administrador la da
+//     await window.sesionEstaInvalidada()      // ¿le alcanza a esta sesión?
+//     window.cerrarSesionForzada(mensaje)      // sacar a quien esté dentro
+//
+// La sesión se guarda en `localStorage` con su hora en `loginTimestamp`
+// (2a-core-nav.js), y de ahí sale la comparación. Una sesión sin esa hora es
+// de una versión anterior y se cierra igual, que es lo que ya hacía la
+// caducidad de treinta días.
+//
+// Vive aquí porque lo comprueban los tres documentos —el panel, refacciones y
+// el mapa— y porque `cerrarSesionForzada` tiene que existir en los tres: antes
+// sólo la tenía `2a-core-nav.js`, que es el único que carga `index.html`.
+(() => {
+    window.CLAVE_CIERRE_SESION = 'cierre_sesion_global';
+
+    const INTERVALO = 5 * 60 * 1000;   // ms entre consultas a la base
+
+    let ultimaConsulta = 0;
+    let instante = null;               // ms de la orden, 0 si no hay ninguna
+    let enCurso = null;
+
+    const leerInstante = async () => {
+        try {
+            const { data, error } = await sb.from('system_config')
+                .select('texto').eq('key', window.CLAVE_CIERRE_SESION);
+            if (error) return null;
+            const texto = (data && data.length > 0) ? data[0].texto : null;
+            if (!texto) return 0;      // nunca se ha dado la orden
+            const ms = Date.parse(texto);
+            return isNaN(ms) ? 0 : ms;
+        } catch (e) {
+            return null;               // sin red se sigue como se estaba
+        }
+    };
+
+    window.instanteDeCierreGlobal = async ({ forzar = false } = {}) => {
+        if (!forzar && instante !== null && Date.now() - ultimaConsulta < INTERVALO) return instante;
+        if (enCurso) return enCurso;
+
+        enCurso = (async () => {
+            const ms = await leerInstante();
+            if (ms !== null) { instante = ms; ultimaConsulta = Date.now(); }
+            enCurso = null;
+            return instante || 0;
+        })();
+        return enCurso;
+    };
+
+    // Sin sesión abierta no hay nada que invalidar: quien no ha entrado ya está
+    // en el login.
+    window.sesionEstaInvalidada = async (opciones) => {
+        if (!localStorage.getItem('usuarioLogueado')) return false;
+
+        const orden = await window.instanteDeCierreGlobal(opciones);
+        if (!orden) return false;
+
+        // Una sesión sin hora viene de una versión anterior a que se guardara:
+        // no se puede saber si es de antes o de después de la orden, y ante la
+        // duda se pide entrar de nuevo, que es lo que ya hace la caducidad.
+        const inicio = parseInt(localStorage.getItem('loginTimestamp'), 10);
+        return isNaN(inicio) ? true : inicio < orden;
+    };
+
+    // El administrador da la orden. Se sella el instante de ahora y **su propia
+    // sesión se renueva**: quien la da no se echa a sí mismo, que si no acabaría
+    // fuera a mitad de lo que estuviera administrando.
+    window.ordenarCierreDeSesiones = async () => {
+        const ahora = new Date();
+        const texto = ahora.toISOString();
+
+        // Una escritura que las políticas de RLS rechacen no da error, sólo
+        // afecta a cero filas: hay que contar lo que devuelve el `.select()`.
+        const { data: existentes, error: errorLectura } = await sb.from('system_config')
+            .select('key').eq('key', window.CLAVE_CIERRE_SESION);
+        if (errorLectura) throw errorLectura;
+
+        const escritura = (existentes && existentes.length > 0)
+            ? sb.from('system_config').update({ texto }).eq('key', window.CLAVE_CIERRE_SESION).select('key')
+            : sb.from('system_config').insert([{ key: window.CLAVE_CIERRE_SESION, texto }]).select('key');
+
+        const { data, error } = await escritura;
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            throw new Error('La base no aceptó la orden (ninguna fila se guardó).');
+        }
+
+        instante = ahora.getTime();
+        ultimaConsulta = Date.now();
+        if (localStorage.getItem('usuarioLogueado')) {
+            localStorage.setItem('loginTimestamp', String(instante + 1000));
+        }
+        return ahora;
+    };
+
+    // Sacar a quien esté dentro. Estaba en `2a-core-nav.js` y se mudó aquí en
+    // cuanto la necesitaron los tres documentos. El login vive sólo en
+    // `index.html`, así que desde las otras pantallas hay que ir hasta allí en
+    // vez de recargar la que se esté viendo.
+    window.cerrarSesionForzada = (mensaje) => {
+        if (mensaje) alert(mensaje);
+        localStorage.removeItem('usuarioLogueado');
+        localStorage.removeItem('loginTimestamp');
+        if (window.sostenerModoAdmin) window.sostenerModoAdmin(false);
+
+        const enElPanel = /(^|\/)index\.html$/.test(window.location.pathname)
+            || /\/$/.test(window.location.pathname);
+        if (enElPanel) window.location.reload();
+        else window.irAPantalla('index.html');
+    };
+
+    const AVISO = 'El administrador pidió que todos vuelvan a iniciar sesión.';
+
+    // Al arrancar se aplica siempre: es lo que se le pide a esta función, que
+    // al abrir la aplicación haya que entrar de nuevo, y ahí no hay nada a
+    // medias que perder.
+    //
+    // Al volver a primer plano con una hoja abierta, no. Ahí puede haber media
+    // encuesta llena o una foto ya tomada, y cerrar la sesión de golpe se lo
+    // llevaría por delante sin haberlo enviado; se deja para la próxima vez que
+    // se abra la aplicación, que es lo que la orden pedía de todas formas. Es
+    // el mismo freno que usa la comprobación de versión, y por lo mismo.
+    const comprobarYCerrar = async (opciones) => {
+        if (await window.sesionEstaInvalidada(opciones)) window.cerrarSesionForzada(AVISO);
+    };
+
+    window.addEventListener('load', () => setTimeout(() => comprobarYCerrar({ forzar: true }), 600));
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        if (document.documentElement.classList.contains('modal-abierto')) return;
+        comprobarYCerrar();
     });
 })();

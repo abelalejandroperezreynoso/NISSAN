@@ -144,6 +144,52 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   y de ahí en adelante quedan protegidos. Sin `version.json` en el servidor, o
   sin red, todo se comporta como antes: no se avisa ni se bloquea nada.
 
+- **El administrador puede obligar a todos a volver a identificarse, y eso es
+  un instante, no un interruptor.** El botón «🔒 Forzar inicio de sesión» del
+  panel de administración sella la hora de la orden en `system_config`
+  (`cierre_sesion_global`, en la columna `texto`), y toda sesión iniciada antes
+  de esa hora deja de valer. La diferencia con un interruptor importa: uno
+  encendido y olvidado deja a la plantilla entera fuera para siempre, mientras
+  que un instante **se agota solo** —en cuanto cada quien vuelve a entrar, su
+  sesión es posterior a la orden y ya no le alcanza—. Volver a darla es
+  adelantar el instante, y no hay nada que apagar después.
+
+  ```js
+  await window.ordenarCierreDeSesiones()   // el administrador la da
+  await window.sesionEstaInvalidada()      // ¿le alcanza a esta sesión?
+  window.cerrarSesionForzada(mensaje)      // sacar a quien esté dentro
+  ```
+
+  La comparación sale de `loginTimestamp`, que `2a-core-nav.js` guarda en
+  `localStorage` junto a la sesión. Una sesión **sin** esa hora es de una
+  versión anterior a que se guardara y se cierra igual: no se puede saber si es
+  de antes o de después de la orden, y ante la duda se pide entrar de nuevo,
+  que es lo que ya hacía la caducidad de treinta días.
+
+  **Quien da la orden no se echa a sí mismo**: `ordenarCierreDeSesiones` renueva
+  su propio `loginTimestamp`, o el administrador acabaría en el login a mitad de
+  lo que estuviera administrando.
+
+  Se comprueba **al abrir la aplicación** —siempre, que es lo que la función
+  promete y ahí no hay nada a medias que perder— y al volver a primer plano,
+  esto último con el freno de `modal-abierto`: con una hoja abierta puede haber
+  media encuesta llena o una foto ya tomada, y cerrar la sesión de golpe se lo
+  llevaría sin enviar. Se deja para la próxima vez que se abra la aplicación,
+  que es lo que la orden pedía de todos modos. Es el mismo freno que la
+  comprobación de versión y por lo mismo.
+
+  Todo esto vive en `1-config.js` porque lo comprueban los tres documentos, y
+  por eso **`cerrarSesionForzada` se mudó ahí desde `2a-core-nav.js`**, que sólo
+  lo carga `index.html`. El login vive únicamente en el panel principal, así que
+  desde las otras dos pantallas hay que ir hasta allí en vez de recargar la que
+  se esté viendo.
+
+  No hace falta ningún script de `sql/`: la tabla `system_config` ya existe y la
+  clave es una fila más, como `titulo_accesos_directos`. Lo que sí hace falta es
+  **contar las filas del `.select()`** al escribirla —una política de RLS que la
+  rechace no da error, sólo afecta a cero filas—, o el panel diría que la orden
+  se dio sin que nadie vaya a salir.
+
 - **Fuente de 16px en los campos de formulario.** Safari en iOS ignora el
   `user-scalable=no` del viewport, así que cualquier `input`, `select` o
   `textarea` con fuente menor a 16px provoca zoom automático al enfocarlo.

@@ -297,12 +297,36 @@ window.verificarExpiracionSesion = () => {
     return false; // La sesión sigue siendo válida
 };
 
-window.cerrarSesionForzada = (mensaje) => {
-    alert(mensaje);
-    localStorage.removeItem("usuarioLogueado");
-    localStorage.removeItem("loginTimestamp");
-    window.sostenerModoAdmin(false);
-    location.reload();
+// `window.cerrarSesionForzada` vive en `1-config.js`: la necesitan los tres
+// documentos y aquí sólo la tenía `index.html`.
+
+// Obliga a toda la plantilla a volver a identificarse. La regla —y por qué es
+// un instante y no un interruptor— está en `1-config.js`.
+window.forzarInicioDeSesion = async () => {
+    if (!window.checkAdmin()) return;
+
+    const aviso = "¿Obligar a todos a iniciar sesión de nuevo?\n\n"
+        + "Cada persona volverá a la pantalla de acceso la próxima vez que abra "
+        + "la aplicación. Lo que alguien tenga a medio llenar en ese momento y "
+        + "no haya enviado se pierde.\n\n"
+        + "Tu sesión no se cierra: quien da la orden se queda dentro.";
+    if (!confirm(aviso)) return;
+
+    const btn = document.getElementById('btn-forzar-login');
+    const antes = window.textoBoton(btn, "Guardando...");
+    if (btn) btn.disabled = true;
+
+    try {
+        const cuando = await window.ordenarCierreDeSesiones();
+        alert("✅ Orden guardada " + cuando.toLocaleString('es-MX') + ".\n\n"
+            + "Quien tenga la aplicación abierta ahora mismo saldrá al volver a "
+            + "ella; el resto, al abrirla.");
+    } catch (e) {
+        console.error(e);
+        alert("No se pudo guardar la orden: " + (e.message || e));
+    } finally {
+        if (btn) { btn.disabled = false; window.textoBoton(btn, antes); }
+    }
 };
 
 // --- LOGIN Y GESTIÓN DE SESIÓN ---
