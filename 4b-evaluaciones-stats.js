@@ -694,32 +694,17 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
 
     const evalMap = {};
     evalsList.forEach(e => {
-        let targets = ['ALL'];
-        if (e.target_positions) {
-            if (Array.isArray(e.target_positions)) targets = e.target_positions;
-            else if (typeof e.target_positions === 'string') {
-                try { targets = JSON.parse(e.target_positions); } catch(err) { targets = ['ALL']; }
-            }
-        }
-        let targetDeptos = ['ALL'];
-        if (e.target_departments) {
-            if (Array.isArray(e.target_departments)) targetDeptos = e.target_departments;
-            else if (typeof e.target_departments === 'string') {
-                try { targetDeptos = JSON.parse(e.target_departments); } catch(err) { targetDeptos = ['ALL']; }
-            }
-        }
-        
         const f = e.frequency || 'once';
         if (freqWeight[f] > freqWeight[maxFreq]) maxFreq = f;
 
         evalMap[e.id] = {
             // La fila entera, para las reglas que necesitan `mode`,
-            // `target_employees` y demás campos que este resumen no copia.
+            // `target_employees` y demás campos que este resumen no copia. A
+            // quién le toca la encuesta lo decide `leTocaEstaEncuesta` desde
+            // aquí, así que el resumen no vuelve a parsear los destinatarios.
             encuesta: e,
             title: e.title,
             category: e.category || "General",
-            targets: targets,
-            target_departments: targetDeptos,
             is_obligatory: e.is_obligatory !== false,
             evaluates_area: e.evaluates_area === true,
             frequency: f,
@@ -749,29 +734,6 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     });
     
     const periodosArray = Array.from(availablePeriods).sort((a,b) => b.localeCompare(a));
-    const puestosDirigidosSet = new Set();
-    let incluyeAllPuestos = false;
-
-    Object.values(evalMap).forEach(info => {
-        if (info.targets) {
-             info.targets.forEach(t => {
-                 const pNorm = String(t).toUpperCase().trim();
-                 if (pNorm === 'ALL') incluyeAllPuestos = true;
-                 else if (pNorm !== '') puestosDirigidosSet.add(String(t).trim());
-             });
-        }
-    });
-
-    let textoPuestosDirigidos = '';
-    if (incluyeAllPuestos) {
-        textoPuestosDirigidos = puestosDirigidosSet.size > 0 
-            ? 'Todos los puestos (y configuraciones explícitas: ' + Array.from(puestosDirigidosSet).join(', ') + ')'
-            : 'Aplica a todos los puestos';
-    } else if (puestosDirigidosSet.size > 0) {
-        textoPuestosDirigidos = Array.from(puestosDirigidosSet).join(', ');
-    } else {
-        textoPuestosDirigidos = '<span style="color:#ef4444;">Ningún puesto asignado (excluye a todos)</span>';
-    }
 
     const statsCache = {};
     const puestoCache = {};
@@ -1310,15 +1272,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             </div>
         </div>
 
-        <div class="stats-objetivo">
-            <div style="font-size:1.4rem;">🎯</div>
-            <div style="min-width:0;">
-                <div class="stats-tarjeta-rotulo">Puestos objetivo de esta clasificación</div>
-                <div style="font-size:0.85rem; color:#1e293b; font-weight:600; margin-top:3px; line-height:1.35;">${textoPuestosDirigidos}</div>
-            </div>
-        </div>
-
-        ${areasHtml} 
+        ${areasHtml}
         
         <div class="stats-seccion">
             <div class="stats-seccion-encabezado">

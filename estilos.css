@@ -2509,18 +2509,6 @@ html.modal-abierto {
     line-height: 1.25;
 }
 
-/* Recuadro de «Puestos objetivo». */
-.stats-objetivo {
-    background: #f8fafc;
-    border-radius: 12px;
-    padding: 12px 20px;
-    border: 1px dashed #cbd5e1;
-    margin-bottom: 25px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
 /* Cada bloque blanco de la pantalla: por departamento, por puesto, ranking… */
 .stats-seccion {
     background: #fff;
@@ -3093,12 +3081,6 @@ html.modal-abierto {
     .stats-tarjeta-pie {
         font-size: 0.6rem;
         margin-top: auto;
-    }
-
-    .stats-objetivo {
-        padding: 10px 12px;
-        margin-bottom: 15px;
-        gap: 8px;
     }
 
     .stats-seccion {
