@@ -379,6 +379,30 @@ window.cargarStatsEncuestasGlobales = async () => {
 window.procesadasDe = (d) => (d.reviewed || 0) + (d.certificadas || 0)
     + (d.falsas || 0) + (d.malRevisadas || 0);
 
+// Cumplir el mínimo **en cada una** de sus encuestas no es lo mismo que
+// cumplirlo en el promedio, y ésa es toda la diferencia entre este criterio y
+// «Revisadas ≥80%»: quien saca un 100 y un 60 promedia 80 y aun así reprobó
+// una. Se mira sobre lo que ya está calificado —las mismas respuestas
+// procesadas que cuenta `revisadasAltas`—, porque una encuesta que nadie ha
+// revisado todavía no dice nada de quien la contestó, y meterla aquí volvería
+// a medir participación en lugar de puntaje. Quien no tiene ni una calificada
+// no cumple ni deja de cumplir: queda fuera de la cuenta.
+window.cumpleMinimoEnTodas = (fila) => {
+    const procesadas = window.procesadasDe(fila);
+    return procesadas > 0 && (fila.revisadasAltas || 0) >= procesadas;
+};
+
+// Los dos contadores del criterio puestos en una fila que **es** una persona:
+// la de un colaborador y la de cada figura del gráfico de personas. En las
+// cachés por departamento, supervisor y puesto no se derivan —ahí no se puede,
+// porque el grupo suma respuestas y no gente—: los suma el motor persona a
+// persona cuando ya están contadas todas las respuestas.
+window.conMinimoEnTodas = (fila) => {
+    fila.personasEvaluadas = window.procesadasDe(fila) > 0 ? 1 : 0;
+    fila.personasAlMinimo = window.cumpleMinimoEnTodas(fila) ? 1 : 0;
+    return fila;
+};
+
 // El porcentaje que se lee en pantalla. `Math.round` decía 100% con 478 de
 // 480 —faltando dos— y 0% con 1 de 480, que son las dos cifras que nadie
 // quiere ver mal: el 100% es el cierre total y el 0% es no haber empezado.
@@ -434,6 +458,30 @@ window.CRITERIOS_STATS = [
     { clave: 'revisadas_altas', etiqueta: 'Revisadas ≥80%', nombre: 'revisadas ≥80%', color: '#047857', relleno: '#6ee7b7',
       extremo: 'El que menos revisadas altas tiene',
       valor: (d) => d.assignedCount > 0 ? (d.revisadasAltas || 0) / d.assignedCount : 0 },
+    // El mismo 80%, pero persona a persona y en **todas** sus encuestas: aquí
+    // no basta con que el promedio llegue. Por eso se mide sobre la gente
+    // —cuántos de los que ya tienen algo calificado no bajaron del mínimo en
+    // ninguna— y no sobre las encuestas, que es lo que ya dice el criterio de
+    // arriba. Quien no tiene ni una calificada dice «sin calificar» y queda
+    // fuera del renglón del peor, igual que en avance de revisión.
+    { clave: 'minimo_en_todas', etiqueta: '≥80% en todas', nombre: 'al mínimo en todas', color: '#0f766e', relleno: '#99f6e4',
+      extremo: 'El que menos gente tiene al mínimo',
+      valor: (d) => (d.personasEvaluadas || 0) > 0 ? (d.personasAlMinimo || 0) / d.personasEvaluadas : 0,
+      texto: (d) => {
+          const evaluadas = d.personasEvaluadas || 0;
+          if (evaluadas === 0) return 'sin calificar';
+          // Un cuadro que es una persona —el último nivel del desglose, y cada
+          // figura del gráfico de personas— no puede decir «100% · 1/1
+          // personas»: ahí se cumple o no se cumple.
+          if (evaluadas === 1) return (d.personasAlMinimo || 0) > 0 ? 'cumple en todas' : 'no cumple en todas';
+          return `${window.pctTexto(d.personasAlMinimo || 0, evaluadas)}% · ${d.personasAlMinimo || 0}/${evaluadas} personas`;
+      },
+      corto: (d) => {
+          const evaluadas = d.personasEvaluadas || 0;
+          if (evaluadas === 0) return { cifra: '—', detalle: 'sin calificar' };
+          if (evaluadas === 1) return { cifra: (d.personasAlMinimo || 0) > 0 ? 'Sí' : 'No', detalle: 'en todas' };
+          return { cifra: `${window.pctTexto(d.personasAlMinimo || 0, evaluadas)}%`, detalle: `${d.personasAlMinimo || 0}/${evaluadas}` };
+      } },
     { clave: 'certificadas', etiqueta: 'Certificadas', nombre: 'certificadas', color: '#eab308', relleno: '#fde68a',
       extremo: 'El que menos certifica',
       valor: (d) => d.assignedCount > 0 ? (d.certificadas || 0) / d.assignedCount : 0 },
@@ -478,6 +526,8 @@ window.extremoDelCriterio = (nodos) => {
         if (criterio.clave === 'calificacion') return n.datos.countScore > 0;
         // Sin respuestas no hay revisión atrasada que reprocharle a nadie.
         if (criterio.clave === 'avance_revision') return (n.datos.responses || 0) > 0;
+        // Ni nada que reprocharle a quien todavía no tiene una calificada.
+        if (criterio.clave === 'minimo_en_todas') return (n.datos.personasEvaluadas || 0) > 0;
         return (n.datos.assignedCount || 0) > 0;
     });
     if (conDatos.length < 2) return null;
@@ -755,8 +805,8 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         // plantilla entera (`employeesCount`) a propósito: a quien no le toca
         // ninguna encuesta no le puede tocar ninguna respuesta, así que su
         // figura no podría colorearse nunca y sólo engordaría el gris.
-        if (!statsCache[dept]) statsCache[dept] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0, empleados: [], supervisors: {} };
-        if (!statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0, empleados: [] };
+        if (!statsCache[dept]) statsCache[dept] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, personasAlMinimo: 0, personasEvaluadas: 0, sumScore: 0, countScore: 0, empleados: [], supervisors: {} };
+        if (!statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, personasAlMinimo: 0, personasEvaluadas: 0, sumScore: 0, countScore: 0, empleados: [] };
 
         statsCache[dept].employeesCount++;
         statsCache[dept].supervisors[sup].employeesCount++;
@@ -764,14 +814,14 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         let empAssignments = 0;
 
         const empPuestoKey = getPuesto(e);
-        if (!puestoCache[empPuestoKey]) puestoCache[empPuestoKey] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0, empleados: [] };
+        if (!puestoCache[empPuestoKey]) puestoCache[empPuestoKey] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, personasAlMinimo: 0, personasEvaluadas: 0, sumScore: 0, countScore: 0, empleados: [] };
         puestoCache[empPuestoKey].employeesCount++;
 
         porEmpleado[empId] = {
             nombre: e.name || e.nombre || 'Sin nombre',
             departamento: dept, supervisor: sup, puesto: empPuestoKey, area: getAreaEmp(e),
             assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0,
-            malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0,
+            malRevisadas: 0, revisadasAltas: 0, personasAlMinimo: 0, personasEvaluadas: 0, sumScore: 0, countScore: 0,
             sumDias: 0, countDias: 0, sumProntitud: 0, countProntitud: 0
         };
         
@@ -1116,6 +1166,23 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             areaPerfMap[empArea].details[title].users.add(nombreConDepto);
             }
         }
+    });
+
+    // Quién cumple el mínimo en todas sus encuestas es una cuenta de **gente**,
+    // no de respuestas, así que se hace aquí, cuando ya están contadas todas:
+    // cada persona se resuelve con lo suyo y suma uno en su departamento, en su
+    // supervisor y en su puesto. Sumarlo dentro del bucle de respuestas contaría
+    // a la misma persona una vez por encuesta.
+    Object.values(porEmpleado).forEach(ficha => {
+        window.conMinimoEnTodas(ficha);
+        if (!ficha.personasEvaluadas) return;
+
+        const dep = statsCache[ficha.departamento];
+        [dep, dep && dep.supervisors[ficha.supervisor], puestoCache[ficha.puesto]].forEach(fila => {
+            if (!fila) return;
+            fila.personasEvaluadas = (fila.personasEvaluadas || 0) + 1;
+            fila.personasAlMinimo = (fila.personasAlMinimo || 0) + ficha.personasAlMinimo;
+        });
     });
 
 
@@ -1957,7 +2024,10 @@ window.vistaCuadrosDentro = ({ titulo, subtitulo, volver, nodos, alTocar }) => {
 // la identidad que va al globo y los contadores con los que se llena su figura.
 // Sus campos se llaman de otra manera que en las cachés, y de traducirlos se
 // encarga `filaCanonica`, que es por donde pasa.
-window.fichaDeColaborador = (emp) => ({
+// Los contadores de «≥80% en todas» los pone `conMinimoEnTodas`: una fila de
+// colaborador es una persona, así que se resuelve con lo suyo y no hay nada
+// que sumar.
+window.fichaDeColaborador = (emp) => window.conMinimoEnTodas({
     nombre: emp.name,
     departamento: emp.dept,
     puesto: emp.job,
@@ -1977,7 +2047,7 @@ window.fichaDeColaborador = (emp) => ({
     countProntitud: emp.countProntitud || 0
 });
 
-window.filaCanonica = (emp) => ({
+window.filaCanonica = (emp) => window.conMinimoEnTodas({
     // Una fila de colaborador es una persona, así que su cuadro lleva una
     // figura —ella misma— y se llena por partes con lo que haya hecho.
     personasAsignadas: 1,

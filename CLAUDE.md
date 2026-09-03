@@ -1415,8 +1415,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   en los demás el de menos.
 
   Casi todos los criterios miden **sobre las asignadas**, que es lo que hace
-  comparables las barras y los cuadros entre sí. Las dos excepciones son
-  calificación, que ya viene en porcentaje, y **avance de revisión**, que se
+  comparables las barras y los cuadros entre sí. Las tres excepciones son
+  calificación, que ya viene en porcentaje; **≥80% en todas**, que mide sobre
+  la gente y no sobre las encuestas (más abajo); y **avance de revisión**, que se
   mide sobre las **contestadas**: dice qué parte de lo que ya entregaron lleva
   calificada quien revisa, y meter en el denominador una encuesta que nadie
   contestó volvería a medir participación en lugar del trabajo del revisor.
@@ -1426,6 +1427,40 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   hay revisión atrasada que reprocharle. Lo que cuenta como revisado es
   cualquier veredicto —revisada, certificada, falsa o mal revisada—, que es lo
   que reúne `window.procesadasDe(fila)`.
+
+  **«Revisadas ≥80%» y «≥80% en todas» no son el mismo filtro.** El primero
+  cuenta encuestas —qué parte de lo asignado se calificó por encima del
+  mínimo—, así que quien saca un 100 y un 60 sale a la mitad y quien saca dos
+  ochentas sale entero, y un promedio que llega al 80 tapa la encuesta que se
+  reprobó. El segundo cuenta **gente**: cuántas de las personas que ya tienen
+  algo calificado no bajaron del mínimo en **ninguna** de sus encuestas. Es el
+  que responde a «enséñame quién cumple en todas», y su cifra son las dos cosas
+  —`60% · 3/5 personas`—.
+
+  ```js
+  window.cumpleMinimoEnTodas(fila)   // ¿esta persona no bajó del mínimo en ninguna?
+  window.conMinimoEnTodas(fila)      // le pone sus dos contadores y la devuelve
+  ```
+
+  Se mira **sobre lo ya calificado**, las mismas respuestas procesadas que
+  cuenta `revisadasAltas`: una encuesta que nadie ha revisado todavía no dice
+  nada de quien la contestó, y meterla aquí volvería a medir participación en
+  lugar de puntaje. Quien no tiene ni una calificada dice «sin calificar» y
+  **queda fuera del renglón del peor**, igual que en avance de revisión.
+
+  Los dos contadores —`personasEvaluadas` y `personasAlMinimo`— **no se
+  derivan de la fila de un grupo**: ahí no se puede, porque el grupo suma
+  respuestas y no gente, y `revisadasAltas === procesadas` diría que todos
+  cumplen en todas o que no cumple nadie. Los suma el motor en una pasada
+  aparte sobre `porEmpleado`, **después** del bucle de respuestas —dentro
+  contaría a la misma persona una vez por encuesta— y una fila que **es** una
+  persona (la de un colaborador, cada figura del gráfico de personas) los
+  resuelve con lo suyo en `conMinimoEnTodas`. Toda caché nueva que quiera
+  dibujarse aquí tiene que traerlos, como trae `personasAsignadas`.
+
+  Donde el cuadro es una persona, la cifra no dice «100% · 1/1 personas» sino
+  «cumple en todas» —o «Sí»/«No» en la columna, que es estrecha—: ahí no hay
+  proporción que enseñar, se cumple o no se cumple.
 
   **Todo porcentaje que se imprima pasa por `window.pctTexto()`**, nunca por
   `Math.round` a secas. Con 478 de 480 el redondeo decía 100% —faltando dos— y

@@ -2901,7 +2901,7 @@ html.modal-abierto {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* Seis criterios no caben de ancho en un teléfono, así que este conmutador se
+/* Los criterios no caben de ancho en un teléfono, así que este conmutador se
    arrastra con el dedo en lugar de partirse en dos renglones. El último botón
    asomando por el borde es lo que avisa de que hay más. */
 .stats-conmutador--desliza {
