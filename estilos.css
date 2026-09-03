@@ -2757,14 +2757,24 @@ html.modal-abierto {
     overflow: hidden;
 }
 
-/* La cifra se queda en un renglón pase lo que pase. Envuelta, «#2 · 93%
-   contestadas» ocupaba tres en un cuadro estrecho y la chapa se llevaba la
-   mitad del alto: dos filas de figuras menos por un dato que ya está en el
-   globo. */
+/* Título y cifra se quedan en un renglón cada uno, pase lo que pase, y lo que
+   no cabe se recorta con puntos suspensivos. Envueltos, «M110 TALLER DE
+   MANTENIMIENTO» y «#2 · 93%» se llevaban media chapa cada uno y la chapa
+   media altura del cuadro: cuatro filas de figuras menos por un texto que
+   está entero en el globo. Aquí lo que hay que leer es la gente. */
+.stats-cuadro-chapa .stats-cuadro-titulo,
 .stats-cuadro-chapa .stats-cuadro-dato {
+    display: block;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* El título de la chapa pesa menos que el del cuadro liso: ahí es el único
+   contenido y aquí es un rótulo encima del dibujo. */
+.stats-cuadro-chapa .stats-cuadro-titulo {
+    font-weight: 700;
+    line-height: 1.2;
 }
 
 /* Migas del desglose en cuadros: volver, dónde se está y cuánto hay. */

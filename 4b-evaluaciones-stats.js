@@ -508,6 +508,19 @@ window.criterioStats = () => window.CRITERIOS_STATS.find(c => c.clave === window
 // La cifra de una columna. Es estrecha —78px en un teléfono—, así que lo que
 // no cabe de una línea baja al segundo renglón. En un cuadro hay sitio para
 // una sola línea larga y de eso se encarga `cifraDelCriterio`.
+// La cifra pelada, para el renglón de dentro de un cuadro: sólo el número.
+// Ahí al lado ya está el nombre del departamento y encima el título del
+// gráfico dice qué se mide, así que repetir «contestadas» en cada cuadro
+// gasta el ancho que necesita el nombre —y en avance de revisión el
+// «798/800» de detrás llegaba a partir el renglón en dos—.
+//
+// «5.0 días» y «sin contestar» no son una palabra de adorno detrás de un
+// número sino la medida entera, y se quedan.
+window.cifraDesnudaDelCriterio = (fila) => {
+    const { cifra, detalle } = window.cifraCortaDelCriterio(fila);
+    return cifra === '—' ? detalle : cifra;
+};
+
 window.cifraCortaDelCriterio = (fila) => {
     const criterio = window.criterioStats();
     if (criterio.corto) return criterio.corto(fila);
@@ -1979,15 +1992,29 @@ window.dibujarCuadrosDesglose = () => {
 // cual deja de leerse como una persona y se ve como una mota.
 window.ASPECTO_PERSONA = 10 / 24;
 window.MIN_ALTO_PERSONA = 12;
-// Y el tope por arriba, que hace falta igual: en una caja ancha y baja el
-// reparto de un solo renglón sale «mejor» por área y deja siete figuras
-// enormes donde caben treinta. Una figura no es un dibujo, es una unidad de
-// cuenta: pasado este tamaño sólo ocupa sitio.
-window.MAX_ALTO_PERSONA = 40;
-// Más de esto en un cuadro y las figuras se vuelven ruido: ya no se cuentan,
-// que es justo lo único que este gráfico hace mejor que el relleno liso.
-window.MAX_PERSONAS_CUADRO = 120;
 window.COLOR_PERSONA_VACIA = '#cbd5e1';
+
+// --- TODAS LAS FIGURAS MIDEN LO MISMO ---
+// El tamaño se decide una vez para el lienzo entero y no cuadro por cuadro.
+// Con figuras de tamaños distintos no había forma de comparar dos cuadros:
+// uno enseñaba diez gigantes y otro sesenta diminutas, y la vista leía tamaño
+// donde no había ninguna medida. Siendo único, cada figura vale lo mismo en
+// todo el gráfico y la cuenta de cada cuadro es su tamaño, que es lo asignado.
+window.ALTO_CELDA_PERSONA = 24;
+// Y los dos guardarraíles del tamaño único, que sólo entran en lienzos
+// extremos: en uno pequeño, 24px no dejarían casi a nadie dentro; en uno muy
+// grande serían miles de figuras —una textura, no una cuenta— y otros tantos
+// nodos que dibujar.
+window.MIN_FIGURAS_LIENZO = 90;
+window.MAX_FIGURAS_LIENZO = 900;
+
+window.altoCeldaDeLienzo = (ancho, alto) => {
+    const area = Math.max(ancho * alto, 1);
+    const dePocas = Math.sqrt((area / window.MIN_FIGURAS_LIENZO) / window.ASPECTO_PERSONA);
+    const deMuchas = Math.sqrt((area / window.MAX_FIGURAS_LIENZO) / window.ASPECTO_PERSONA);
+    return Math.max(window.MIN_ALTO_PERSONA,
+        Math.min(dePocas, Math.max(window.ALTO_CELDA_PERSONA, deMuchas)));
+};
 
 window.SVG_PERSONA_ID = 'stats-icono-persona';
 
@@ -2018,58 +2045,32 @@ window.montarIconoPersona = () => {
     document.body.appendChild(caja);
 };
 
-// Cuánta gente cabe en una caja y cómo se reparte. Se prueban los renglones
-// de uno en uno y se queda el reparto cuyo total se acerca más al objetivo,
-// que sale del área: un cuadro grande enseña más figuras que uno pequeño, y
-// eso es lo que hace comparables dos cuadros de tamaños distintos.
+// Cuánta gente cabe en una caja, con la celda que ya trae decidida el lienzo.
+// Al ser el tamaño único, aquí no se elige nada: se cuenta cuántas filas y
+// cuántas columnas caben enteras y se acabó. Antes esto probaba renglón a
+// renglón buscando el reparto de mejor proporción, que es lo que hacía que
+// cada cuadro acabara con figuras de un tamaño distinto.
 //
-// No se busca el reparto más denso posible: llenar un cuadro grande de
-// cuatrocientas motas de 12px no se cuenta, se ve como una textura.
-//
-// Devuelve null cuando la caja es tan chica que no caben ni tres figuras
-// legibles. Ese cuadro se pinta con el relleno liso de siempre, que es
-// preferible a media persona asomando.
-window.rejillaDePersonas = (ancho, alto) => {
-    if (ancho <= 4 || alto < window.MIN_ALTO_PERSONA) return null;
+// Devuelve null cuando en la caja no cabe ni una figura entera. Ese cuadro se
+// pinta con el relleno liso de siempre, que es preferible a media persona
+// asomando.
+window.rejillaDePersonas = (ancho, alto, altoCelda) => {
+    const anchoCelda = altoCelda * window.ASPECTO_PERSONA;
+    const columnas = Math.floor(ancho / anchoCelda);
+    const filas = Math.floor(alto / altoCelda);
+    if (columnas < 1 || filas < 1) return null;
 
-    const objetivo = Math.min(window.MAX_PERSONAS_CUADRO,
-        Math.max(3, Math.round((ancho * alto) / 420)));
-
-    let mejor = null;
-    for (let filas = 1; filas <= 24; filas++) {
-        const altoCelda = alto / filas;
-        // El único tope duro: por debajo de esto la figura ya no se lee.
-        if (altoCelda < window.MIN_ALTO_PERSONA) break;
-
-        const columnas = Math.floor(ancho / (altoCelda * window.ASPECTO_PERSONA));
-        if (columnas < 1) continue;
-
-        const total = columnas * filas;
-
-        // El de arriba, en cambio, es una preferencia y no una condición. Como
-        // condición dejaba sin ningún reparto válido al cuadro más grande de
-        // todos —el único donde no cabe una figura de 40px que no salga
-        // pasada de gente— y ése acababa con el relleno liso, que es
-        // justamente el cuadro que más se mira. La penalización basta: una
-        // figura gigante sólo gana cuando no hay nada más.
-        const distancia = Math.abs(total - objetivo)
-            + (altoCelda > window.MAX_ALTO_PERSONA ? window.MAX_PERSONAS_CUADRO : 0);
-        if (mejor && distancia >= mejor.distancia) continue;
-
-        mejor = {
-            distancia: distancia,
-            filas: filas,
-            columnas: columnas,
-            total: total,
-            altoCelda: altoCelda,
-            // El sobrante de ancho se reparte entre las columnas en lugar de
-            // dejarlo todo a la derecha: así la gente queda repartida por el
-            // cuadro y no apelotonada contra un borde.
-            anchoCelda: ancho / columnas
-        };
-    }
-
-    return (mejor && mejor.total >= 3) ? mejor : null;
+    // La celda no se estira para repartir el sobrante: el paso entre figuras
+    // tiene que ser el mismo en todos los cuadros, o dos cuadros con las
+    // mismas figuras se leerían como cargas distintas. El sobrante se va a los
+    // márgenes —el bloque queda centrado de ancho y apoyado en el suelo—.
+    return {
+        filas: filas,
+        columnas: columnas,
+        total: columnas * filas,
+        altoCelda: altoCelda,
+        anchoCelda: anchoCelda
+    };
 };
 
 // El lienzo de figuras de un cuadro. Se pintan de abajo arriba, que es como
@@ -2084,9 +2085,10 @@ window.lienzoDeGente = (rejilla, ancho, alto, proporcion, color) => {
     if (proporcion > 0 && pintadas < 1) pintadas = 1;
     if (proporcion < 1 && pintadas >= total) pintadas = total - 1;
 
-    // El bloque se apoya en el suelo del cuadro; lo que sobra de alto queda
-    // arriba, que es donde va el rótulo.
+    // El bloque se apoya en el suelo del cuadro —lo que sobra de alto queda
+    // arriba, que es donde va el rótulo— y se centra de ancho.
     const y0 = alto - rejilla.filas * rejilla.altoCelda;
+    const x0 = (ancho - rejilla.columnas * rejilla.anchoCelda) / 2;
     const altoFigura = rejilla.altoCelda * 0.86;
     const anchoFigura = altoFigura * window.ASPECTO_PERSONA;
 
@@ -2094,7 +2096,7 @@ window.lienzoDeGente = (rejilla, ancho, alto, proporcion, color) => {
     for (let i = 0; i < total; i++) {
         const fila = rejilla.filas - 1 - Math.floor(i / rejilla.columnas);
         const columna = i % rejilla.columnas;
-        const x = columna * rejilla.anchoCelda + (rejilla.anchoCelda - anchoFigura) / 2;
+        const x = x0 + columna * rejilla.anchoCelda + (rejilla.anchoCelda - anchoFigura) / 2;
         const y = y0 + fila * rejilla.altoCelda + (rejilla.altoCelda - altoFigura) / 2;
         figuras += '<use href="#' + window.SVG_PERSONA_ID + '"'
             + ' x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '"'
@@ -2151,6 +2153,10 @@ window.dibujarCuadros = (nodos, alTocar) => {
     const cuadros = window.repartirEnCuadros(nodos.map(n => Math.max(n.asignadas, mayor * 0.02, 0.5)), ancho, alto);
 
     const enPersonas = window.formaDesgloseActual() === 'personas';
+    // Una sola vez para todo el lienzo, no cuadro por cuadro: es lo que hace
+    // que todas las figuras midan lo mismo y que la cuenta de un cuadro se
+    // pueda comparar con la del de al lado.
+    const altoCelda = enPersonas ? window.altoCeldaDeLienzo(ancho, alto) : 0;
 
     // En personas el dibujo va en dos pasadas. La primera monta los cuadros
     // con su rótulo; la segunda mide lo que ese rótulo acabó ocupando y
@@ -2184,27 +2190,31 @@ window.dibujarCuadros = (nodos, alTocar) => {
         else el.style.cursor = 'default';
 
         // --- El rótulo, que es quien decide cuánto sitio le queda a la gente ---
-        // En personas el título se queda un punto por debajo: cada píxel que
-        // se lleva la chapa es una fila de figuras menos, y aquí lo que hay
-        // que leer es la gente.
+        // En personas el título va mucho más pequeño y de un solo renglón:
+        // cada píxel que se lleva la chapa es una fila de figuras menos, y en
+        // esta forma lo que hay que leer es la gente. En cuadros el nombre es
+        // lo único que hay dentro y se queda como estaba.
         const tam = enPersonas
-            ? Math.max(8, Math.min(15, Math.sqrt(area) / 8))
+            ? Math.max(8, Math.min(11, Math.sqrt(area) / 11))
             : Math.max(8, Math.min(20, Math.sqrt(area) / 7));
 
         // El nombre se parte entre palabras, nunca a media palabra: la fuente
         // se encoge hasta que la palabra más larga cabe de ancho. Sin esto,
         // «MANTENIMIENTO» se leía «MANTENIMIENT / O».
+        // En personas no hace falta: el título va en un renglón y lo que no
+        // cabe lo recorta el navegador con puntos suspensivos, que es lo que
+        // pidió el nombre largo. El entero sigue en el globo.
         const palabras = String(n.nombre).split(/\s+/).filter(Boolean);
         const anchoUtil = Math.max(w - 9, 4);
         const anchoPalabra = palabras.reduce((m, p) => Math.max(m, window.anchoPorPixelDeTexto(p)), 0.01);
-        const tamTitulo = Math.max(6, Math.min(tam, anchoUtil / anchoPalabra));
+        const tamTitulo = enPersonas ? tam : Math.max(6, Math.min(tam, anchoUtil / anchoPalabra));
 
         // Los renglones de abajo sólo caben en los cuadros grandes. En
         // personas se piden además 70px de ancho: por debajo de eso la cifra
         // se queda en tres letras y unos puntos suspensivos, y ese renglón
         // vale menos que la fila de figuras que se está comiendo.
         const hayDato = area >= 2600 && h >= 44 && (!enPersonas || w >= 70);
-        const tamDato = Math.max(8, tam * 0.62);
+        const tamDato = enPersonas ? Math.max(7, tam * 0.8) : Math.max(8, tam * 0.62);
 
         el.title = `${n.nombre}\nAsignadas: ${n.asignadas}\nContestadas: ${n.respuestas}`
             + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación: ${n.calificacion}%`)
@@ -2249,7 +2259,7 @@ window.dibujarCuadros = (nodos, alTocar) => {
             const dato = document.createElement('div');
             dato.className = 'stats-cuadro-dato';
             dato.style.fontSize = tamDato + 'px';
-            dato.innerText = `#${puesto[n.nombre]} · ` + window.cifraDelCriterio(n.datos);
+            dato.innerText = `#${puesto[n.nombre]} · ` + window.cifraDesnudaDelCriterio(n.datos);
             destino.appendChild(dato);
         }
         if (chapa) {
@@ -2266,7 +2276,7 @@ window.dibujarCuadros = (nodos, alTocar) => {
     // se pinta con el relleno liso de siempre, que es preferible a media
     // persona asomando.
     pendientes.forEach(pd => {
-        const rejilla = window.rejillaDePersonas(pd.w, pd.h - pd.chapa.offsetHeight);
+        const rejilla = window.rejillaDePersonas(pd.w, pd.h - pd.chapa.offsetHeight, altoCelda);
         if (rejilla) {
             const gente = window.lienzoDeGente(rejilla, pd.w, pd.h, pd.pct / 100, criterio.color);
             pd.el.title += `\n👥 ${gente.pintadas} de ${gente.total} figuras`;

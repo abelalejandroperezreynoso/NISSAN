@@ -1369,15 +1369,39 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   ese bucle tiene que mantener las escrituras en la primera y las lecturas en
   la segunda.
 
-  Cuántas figuras caben lo decide un objetivo sacado del área —un cuadro
-  grande enseña más gente, que es lo que hace comparables dos cuadros de
-  tamaños distintos— y se prueba renglón a renglón. Sólo hay **un tope duro**,
-  `MIN_ALTO_PERSONA`: por debajo la figura deja de leerse y el cuadro cae al
-  relleno liso de siempre, que es preferible a media persona asomando. El de
-  arriba (`MAX_ALTO_PERSONA`) es una preferencia con penalización, y tiene que
-  seguir siéndolo: como condición dejaba sin ningún reparto válido justo al
-  cuadro más grande —el único donde no cabe una figura de 40px sin pasarse de
-  gente— y ése acababa liso, que es el que más se mira.
+  **Todas las figuras del gráfico miden lo mismo**, y por eso el tamaño se
+  decide una vez para el lienzo entero (`window.altoCeldaDeLienzo(ancho,
+  alto)`) y no cuadro por cuadro. Con el tamaño elegido cuadro a cuadro, uno
+  enseñaba diez figuras gigantes y el de al lado sesenta diminutas: la vista
+  leía tamaño donde no había ninguna medida, y las cuentas de dos cuadros no
+  se podían comparar. Siendo único, cada figura vale lo mismo en todo el
+  gráfico y la cuenta de un cuadro es su área, que es lo asignado.
+  `rejillaDePersonas` ya no elige nada: cuenta cuántas filas y columnas caben
+  enteras con esa celda. **Y la celda no se estira** para repartir el sobrante
+  —el paso entre figuras tiene que ser el mismo en todos los cuadros—: lo que
+  sobra se va a los márgenes, con el bloque centrado de ancho y apoyado en el
+  suelo.
+
+  El tamaño único es `ALTO_CELDA_PERSONA` y sólo se mueve en lienzos extremos,
+  entre `MIN_FIGURAS_LIENZO` y `MAX_FIGURAS_LIENZO`: en un lienzo pequeño no
+  entraría casi nadie, y en uno muy grande serían miles de figuras —una
+  textura, no una cuenta— y otros tantos nodos que dibujar. El único tope duro
+  sigue siendo `MIN_ALTO_PERSONA`: donde no cabe ni una figura entera, el
+  cuadro se pinta con el relleno liso de siempre, que es preferible a media
+  persona asomando.
+
+  **Dentro del cuadro el rótulo estorba, así que pesa lo menos posible**: el
+  nombre va mucho más pequeño que en cuadros y de un solo renglón, con puntos
+  suspensivos —el entero está en el globo—, y el renglón de la cifra la lleva
+  **pelada, sin la palabra de detrás** (`window.cifraDesnudaDelCriterio`):
+  «#1 · 96%», no «#1 · 96% contestadas». Al lado ya está el nombre del
+  departamento y encima el título del gráfico dice qué se mide; en avance de
+  revisión, además, el «798/800» de detrás partía el renglón en dos. Eso vale
+  para los dos treemaps —cuadros también—; lo que se queda entero es «5.0
+  días» y «sin contestar», que no son una palabra de adorno detrás de un
+  número sino la medida completa. El encabezado del gráfico y el globo sí
+  siguen diciéndolo todo: ahí hay sitio, y en avance de revisión el conteo es
+  información y no adorno.
 
   Las figuras se cuentan enteras, así que el redondeo reserva los dos extremos
   para lo exacto igual que `pctTexto`: ni cero de color cuando algo hay, ni
