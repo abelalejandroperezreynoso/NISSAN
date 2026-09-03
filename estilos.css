@@ -3384,9 +3384,12 @@ html.modal-abierto {
     flex-wrap: wrap;
     justify-content: center;
     gap: 1px;
-    /* Cinco por renglón y las demás abajo: el ancho es el de la foto, y con
-       `margin: auto` la fila queda centrada bajo ella. */
-    max-width: 60px;
+    /* Ancho fijo, el de la foto: caben cinco por renglón y las demás bajan al
+       siguiente. La caja tiene que llevar **la clase** —el contenedor del
+       panel del usuario la lleva en el marcado y los de las listas se la pone
+       `huecoDeEstrellas`—: sin ella no hay flex que valga y las estrellas se
+       apilan en vertical, una por renglón. */
+    width: 60px;
     margin: 4px auto 0;
     line-height: 0;
 }
@@ -3395,7 +3398,7 @@ html.modal-abierto {
    principal, el reporte de equipo, todos los colaboradores—, donde la foto
    mide 45 o 50px. */
 .estrellas-insignias--chico {
-    max-width: 45px;
+    width: 45px;
     margin-top: 2px;
     /* El hueco se reserva aunque no haya estrellas: si no, los nombres de una
        misma fila quedan a distinta altura según quién tenga insignias. */

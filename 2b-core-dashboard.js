@@ -990,7 +990,7 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
                                 ${headerAvatarHtml}
                                 <div id="badge-count-${user.id}" class="notification-badge" style="display:none;">0</div>
                             </div>
-                            <div id="estrellas-insignias"></div>
+                            <div id="estrellas-insignias" class="estrellas-insignias"></div>
                         </div>
 
                         <div style="overflow: hidden;">
