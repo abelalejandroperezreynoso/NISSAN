@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Mapa de Activos</title>
 
-    <link rel="stylesheet" href="estilos.css">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-03-1">
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -495,7 +495,7 @@
                 <h2 style="margin:0; color:#0f172a; font-size:1.25rem; display:flex; align-items:center; gap:8px;">🗺️ Mapa de Activos</h2>
                 <div id="resumen-global">Cargando…</div>
             </div>
-            <button onclick="window.location.href='10-refacciones.html'" class="ios-boton-icono ios-boton-icono--destructivo" title="Volver a Refacciones" aria-label="Volver a Refacciones"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></svg></button>
+            <button onclick="window.irAPantalla('10-refacciones.html')" class="ios-boton-icono ios-boton-icono--destructivo" title="Volver a Refacciones" aria-label="Volver a Refacciones"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5l11 11"/><path d="M17.5 6.5l-11 11"/></svg></button>
         </div>
 
         <!-- Punto de vista. El mapa reparte siempre las mismas solicitudes;
@@ -602,7 +602,7 @@
         </div>
     </div>
 
-    <script src="1-config.js"></script>
+    <script src="1-config.js?v=2026-09-03-1"></script>
 
     <script>
         window.addEventListener('load', async () => {
@@ -1692,7 +1692,7 @@
             // todas sus acciones— vive en 10-refacciones.html y no se copia
             // aquí: el mapa manda a esa pantalla diciéndole cuál abrir.
             window.abrirSolicitudEnPanel = (idSolicitud) => {
-                window.location.href = '10-refacciones.html?solicitud=' + encodeURIComponent(idSolicitud);
+                window.irAPantalla('10-refacciones.html?solicitud=' + encodeURIComponent(idSolicitud));
             };
 
             function esMia(req, campo) {

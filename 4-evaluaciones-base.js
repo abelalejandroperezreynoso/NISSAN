@@ -616,6 +616,18 @@ window.confirmarEvaluacionSub = (evalId, title, empId, empName, mode) => {
 };
 
 window.responderDirecto = async (evalId, title, mode = 'self') => {
+    // Una encuesta se contesta con el cuestionario de hoy, y quien la abre con
+    // la versión anterior de la aplicación no lo tiene: un tipo de pregunta que
+    // ese código no conoce —la evidencia fotográfica, sin ir más lejos— no
+    // dibuja ningún control, se envía en `null` y la respuesta queda incompleta
+    // sin que nadie se entere. Aquí sí se puede parar, así que se para: es el
+    // único sitio de la aplicación donde el aviso de versión no admite un
+    // «Ahora no». Si no hay red o no hay `version.json`, se sigue como siempre.
+    if (window.comprobarVersionApp && await window.comprobarVersionApp({ forzar: true })) {
+        window.avisarVersionNueva({ bloqueante: true });
+        return;
+    }
+
     window.evalModeRespondiendo = mode;
     document.body.style.cursor = 'wait';
     try {

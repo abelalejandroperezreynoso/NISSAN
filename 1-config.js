@@ -13,6 +13,15 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 window.PASSWORD_ADMIN = "ensamble";
 window.TAMANO_PAGINA = 5;
 
+// --- VERSIÓN DE LA APLICACIÓN ---
+// Se sube a mano en cada cambio que tenga que llegar a los teléfonos, y tiene
+// que coincidir con la de `version.json` (`./subir-version.sh` cambia las dos
+// y las etiquetas `?v=` de las tres pantallas de una vez). Es lo único que
+// permite que un dispositivo con el JavaScript viejo cargado se entere de que
+// hay una versión nueva; ver el bloque «Comprobación de versión» al final de
+// este archivo.
+window.VERSION_APP = '2026-09-03-1';
+
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
 window.MODO_AHORRO_DATOS = false;
@@ -1615,4 +1624,178 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
             window.confirmarClaveAdmin();
         }
     };
+})();
+
+// ==========================================================================
+// COMPROBACIÓN DE VERSIÓN
+// ==========================================================================
+// Esta aplicación no tiene service worker ni paso de compilación: el navegador
+// se guarda los `.js` y el `.html` con su propia caché, y una instalada en la
+// pantalla de inicio puede pasarse semanas abierta sin recargar el documento
+// ni una vez. El resultado es que un teléfono sigue ejecutando el JavaScript
+// de hace un mes contra la base de datos de hoy, y eso no se nota hasta que
+// algo nuevo pasa de largo: una pregunta de un tipo que ese código no conoce
+// —una evidencia fotográfica— no dibuja ningún control, se envía en `null` y
+// la respuesta queda incompleta sin que nadie avise. Pasó de verdad.
+//
+// La versión que sirve el servidor vive en `version.json`, que se pide con
+// `cache: 'no-store'` y con un parámetro distinto cada vez: es la única
+// petición que no puede venir de la caché, así que es la que descubre el
+// desfase. Al encontrarlo se recarga a una URL con `?v=` nueva, que el
+// navegador tampoco ha visto y por eso tiene que pedir a la red.
+//
+//     await window.comprobarVersionApp()             // ¿hay una más nueva?
+//     await window.comprobarVersionApp({forzar:true})// sin esperar al intervalo
+//     window.avisarVersionNueva({ bloqueante: true })// la hoja que lo dice
+//     window.urlDePantalla('index.html')             // navegar sin caché vieja
+//
+// Sin `version.json` en el servidor, o sin red, todo se comporta como antes:
+// no se avisa de nada y no se bloquea nada.
+(() => {
+    const ARCHIVO = 'version.json';
+    const ESPERA_MAXIMA = 6000;          // ms antes de rendirse
+    const INTERVALO = 5 * 60 * 1000;     // ms entre comprobaciones normales
+
+    let ultimaComprobacion = 0;
+    let versionEnServidor = null;
+    let enCurso = null;
+
+    const leerVersionDelServidor = async () => {
+        const control = new AbortController();
+        const corte = setTimeout(() => control.abort(), ESPERA_MAXIMA);
+        try {
+            const resp = await fetch(`${ARCHIVO}?t=${Date.now()}`, {
+                cache: 'no-store',
+                signal: control.signal
+            });
+            if (!resp.ok) return null;
+            const datos = await resp.json();
+            const v = datos && datos.version;
+            return (typeof v === 'string' && v) ? v : null;
+        } catch (e) {
+            // Sin red o sin archivo se sigue con lo que hay: avisar de una
+            // versión nueva que no se ha podido comprobar sería peor.
+            return null;
+        } finally {
+            clearTimeout(corte);
+        }
+    };
+
+    // Lo que ya se sabe, sin preguntar a nadie.
+    window.hayVersionNueva = () =>
+        !!versionEnServidor && versionEnServidor !== window.VERSION_APP;
+
+    window.comprobarVersionApp = async ({ forzar = false } = {}) => {
+        if (window.hayVersionNueva()) return true;
+        if (enCurso) return enCurso;
+        if (!forzar && Date.now() - ultimaComprobacion < INTERVALO) return false;
+
+        enCurso = (async () => {
+            ultimaComprobacion = Date.now();
+            const v = await leerVersionDelServidor();
+            if (v) versionEnServidor = v;
+            enCurso = null;
+            return window.hayVersionNueva();
+        })();
+        return enCurso;
+    };
+
+    // La URL de otra pantalla, con la versión pegada. Las tres páginas son
+    // documentos distintos y navegar entre ellas es pedir un `.html` que el
+    // navegador puede tener guardado viejo; con la versión en la URL no.
+    window.urlDePantalla = (archivo) => {
+        try {
+            const destino = new URL(archivo, window.location.href);
+            destino.searchParams.set('v', versionEnServidor || window.VERSION_APP);
+            return destino.toString();
+        } catch (e) {
+            return archivo;
+        }
+    };
+
+    window.irAPantalla = (archivo) => {
+        window.location.href = window.urlDePantalla(archivo);
+    };
+
+    window.recargarAVersionNueva = () => {
+        const btn = document.getElementById('btn-version-actualizar');
+        if (btn) { btn.disabled = true; window.textoBoton(btn, 'Actualizando…'); }
+        try {
+            const destino = new URL(window.location.href);
+            destino.searchParams.set('v', versionEnServidor || String(Date.now()));
+            window.location.replace(destino.toString());
+        } catch (e) {
+            window.location.reload();
+        }
+    };
+
+    const MARCADO = `
+    <div id="modal-version-nueva" class="hoja-overlay" style="z-index:5400;">
+        <div class="hoja-contenido" style="max-width: 420px; overflow: hidden; padding: 12px 20px 20px;">
+            <div class="hoja-encabezado">
+                <div style="min-width:0;">
+                    <h3 class="hoja-titulo">Hay una versión nueva</h3>
+                    <div class="hoja-subtitulo" id="sub-version-nueva"></div>
+                </div>
+            </div>
+            <p id="texto-version-nueva" style="margin:4px 0 18px; color:#3c3c43; font-size:0.95rem; line-height:1.45;"></p>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button id="btn-version-luego" onclick="window.cerrarAvisoVersion()" style="padding:10px 18px; background:#f2f2f7; color:#1c1c1e; border:none; border-radius:10px; font-weight:600; cursor:pointer; font-family:inherit; font-size:0.95rem;">Ahora no</button>
+                <button id="btn-version-actualizar" onclick="window.recargarAVersionNueva()" style="padding:10px 20px; background:#007aff; color:white; border:none; border-radius:10px; font-weight:600; cursor:pointer; font-family:inherit; font-size:0.95rem;"><span data-texto>Actualizar</span></button>
+            </div>
+        </div>
+    </div>`;
+
+    const montarHoja = () => {
+        let hoja = document.getElementById('modal-version-nueva');
+        if (hoja) return hoja;
+        const envoltorio = document.createElement('div');
+        envoltorio.innerHTML = MARCADO.trim();
+        hoja = envoltorio.firstElementChild;
+        document.body.appendChild(hoja);
+        return hoja;
+    };
+
+    // Bloqueante quiere decir que no hay «Ahora no»: se usa donde seguir con la
+    // versión vieja estropearía el trabajo, que hoy es al abrir una encuesta.
+    window.avisarVersionNueva = ({ bloqueante = false } = {}) => {
+        if (!window.hayVersionNueva()) return;
+        const hoja = montarHoja();
+
+        const sub = document.getElementById('sub-version-nueva');
+        if (sub) sub.innerText = `${window.VERSION_APP} → ${versionEnServidor}`;
+
+        const texto = document.getElementById('texto-version-nueva');
+        if (texto) {
+            texto.innerText = bloqueante
+                ? 'Este dispositivo está usando una versión anterior de la aplicación y podría no mostrar todas las preguntas de la encuesta. Actualiza antes de contestarla.'
+                : 'Este dispositivo está usando una versión anterior de la aplicación. Actualiza para tener los cambios más recientes.';
+        }
+
+        const luego = document.getElementById('btn-version-luego');
+        if (luego) luego.style.display = bloqueante ? 'none' : '';
+
+        hoja.style.display = 'flex';
+    };
+
+    window.cerrarAvisoVersion = () => {
+        const hoja = document.getElementById('modal-version-nueva');
+        if (hoja) hoja.style.display = 'none';
+    };
+
+    const comprobarYAvisar = async (opciones) => {
+        if (await window.comprobarVersionApp(opciones)) window.avisarVersionNueva();
+    };
+
+    // Al arrancar, sin competir con la primera carga de datos.
+    window.addEventListener('load', () => setTimeout(() => comprobarYAvisar(), 3000));
+
+    // Y al volver a primer plano, que es el único momento en que se entera una
+    // aplicación instalada que lleva semanas abierta y no ha recargado nunca.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') comprobarYAvisar();
+    });
+    window.addEventListener('pageshow', (e) => {
+        if (e.persisted) comprobarYAvisar({ forzar: true });
+    });
 })();

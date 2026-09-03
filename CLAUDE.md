@@ -40,6 +40,8 @@ Los mensajes de commit van en español.
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
 | `manifest.json` | Manifiesto PWA; su `scope` cubre las tres páginas |
+| `version.json` | La versión que sirve el servidor; la aplicación compara con la suya |
+| `subir-version.sh` | Sube la versión en los cuatro sitios donde vive |
 
 Las pantallas independientes (`10-refacciones.html`, `11-mapa-activos.html`)
 cargan `1-config.js` por su cuenta y llevan su propio `<script>` inline.
@@ -61,6 +63,63 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 - La sesión se guarda en `localStorage` bajo la clave `usuarioLogueado`.
 
 ## Trampas conocidas
+
+- **Un teléfono puede llevar semanas con el JavaScript viejo.** No hay service
+  worker ni paso de compilación: el navegador se guarda los `.js` y el `.html`
+  con su propia caché, y una aplicación instalada en la pantalla de inicio
+  puede pasarse semanas abierta sin recargar el documento ni una vez —la sesión
+  dura treinta días—. El teléfono sigue ejecutando el código de hace un mes
+  contra la base de hoy, y eso **no se nota hasta que algo nuevo pasa de
+  largo**: una pregunta de un tipo que ese código no conoce no entra en ninguna
+  rama del `if` que dibuja los controles, así que **se dibuja el enunciado y
+  nada debajo**, se envía en `null` y la respuesta queda incompleta. Pasó con
+  la evidencia fotográfica: se agregó el 25 de agosto y durante semanas
+  llegaron respuestas sin foto de gente cuyo teléfono tenía el código de antes
+  del 23, que era también anterior a exigir contestarlo todo. Un dispositivo
+  con código de entre las dos fechas se queda al revés, sin poder enviar.
+
+  Contra eso hay tres cosas, y las tres tienen que ir juntas:
+
+  - **La versión viaja en la URL de cada archivo** (`1-config.js?v=2026-09-03-1`)
+    en las tres pantallas, y también al navegar de una a otra, que por eso se
+    hace con **`window.irAPantalla('index.html')`** y nunca con
+    `location.href = 'index.html'`: son documentos distintos y ese `.html` lo
+    puede servir la caché. Los archivos de un CDN se quedan sin `?v=`.
+  - **`version.json` dice qué versión hay en el servidor**, y se pide con
+    `cache: 'no-store'` y un parámetro distinto cada vez: es la única petición
+    que no puede venir de la caché, así que es la que descubre el desfase. Se
+    comprueba al cargar, **al volver a primer plano** —el único momento en que
+    se entera una aplicación instalada que no recarga nunca— y al abrir una
+    encuesta. Al encontrarlo se avisa con una hoja y se recarga a una URL con
+    `?v=` nueva, que el navegador tampoco ha visto y tiene que pedir a la red.
+
+    ```js
+    await window.comprobarVersionApp({ forzar: true })  // ¿hay una más nueva?
+    window.hayVersionNueva()                            // lo que ya se sabe
+    window.avisarVersionNueva({ bloqueante: true })     // la hoja, sin «Ahora no»
+    ```
+
+  - **`window.responderDirecto` no abre una encuesta con la versión vieja.** Es
+    el único sitio de la aplicación donde el aviso no admite un «Ahora no»:
+    contestar con el cuestionario incompleto estropea el trabajo de quien la
+    llena y no se nota hasta que alguien la revisa. En todo lo demás el aviso
+    se puede posponer.
+
+  **Los cuatro sitios donde vive la versión se cambian con
+  `./subir-version.sh`** —`version.json`, `window.VERSION_APP` de `1-config.js`
+  y el `?v=` de las tres pantallas—. No es un paso de compilación: los archivos
+  se siguen sirviendo y editando tal cual, y el script sólo evita el olvido.
+  Cambiarlos por separado rompe cosas: si `version.json` y `VERSION_APP` no
+  coinciden, la aplicación avisa de una versión nueva que ya tiene y **deja de
+  dejar contestar encuestas**; si falta el `?v=`, el HTML nuevo puede acabar
+  cargando el JavaScript viejo. **Se sube la versión en cada cambio que tenga
+  que llegar a los teléfonos**, y los archivos se despliegan juntos.
+
+  Nada de esto alcanza a un dispositivo que ya arrastra la versión anterior:
+  ese código no trae la comprobación. A ésos sólo los rescata una recarga —en
+  iOS, cerrar la aplicación del todo desde el conmutador y volver a abrirla—,
+  y de ahí en adelante quedan protegidos. Sin `version.json` en el servidor, o
+  sin red, todo se comporta como antes: no se avisa ni se bloquea nada.
 
 - **Fuente de 16px en los campos de formulario.** Safari en iOS ignora el
   `user-scalable=no` del viewport, así que cualquier `input`, `select` o
