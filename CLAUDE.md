@@ -1422,6 +1422,21 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   total se lee en las unidades de cada criterio sin tener que contar figuras a
   ojo, y vale igual para las tres formas y para los niveles de dentro.
 
+  **Debajo, en 80% Líderes, van los grupos de supervisor**: «5/12 grupos con
+  alguien al mínimo». Un grupo cuenta en cuanto **uno** de los suyos cumple en
+  todas, porque entre un grupo sin nadie y otro con uno hay toda la diferencia
+  y el porcentaje de personas no la enseña. Lo cuenta
+  `window.gruposDelNivel(nodos)`, y sólo para los criterios que traen
+  `cuentaAlGrupo` —hoy ése—: en los demás el renglón no se dibuja.
+
+  Los grupos se cuentan **desde la gente que se está viendo**, no sumando las
+  filas: en el desglose por puesto un mismo grupo aparecería una vez por
+  puesto. La clave es el par departamento + supervisor, que «Sin Supervisor»
+  existe en más de un departamento y no es el mismo grupo. Donde las fichas no
+  dicen de qué grupo es cada quien —el último nivel, donde el cuadro ya es una
+  persona— el renglón no sale; en barras, los niveles de dentro arman su propio
+  encabezado y tampoco lo llevan.
+
   Ahí estuvieron antes dos renglones que se quitaron a propósito: una nota que
   describía el dibujo («llena los cuadros», «una figura es una persona») y el
   señalamiento del peor del nivel, con su `window.extremoDelCriterio` y la

@@ -2851,6 +2851,20 @@ html.modal-abierto {
     white-space: nowrap;
 }
 
+/* Cuántos grupos de supervisor tienen a alguien que cumpla. Va debajo del
+   título porque no cabe en su renglón: en un teléfono el total ya se lo lleva
+   entero. */
+.stats-grafico-grupos {
+    font-size: 0.75rem;
+    color: #64748b;
+    line-height: 1.35;
+    margin: -4px 0 10px;
+}
+
+.stats-grafico-grupos b {
+    color: #0f172a;
+}
+
 /* Conmutador de cuadros y barras. */
 .stats-conmutador {
     display: flex;

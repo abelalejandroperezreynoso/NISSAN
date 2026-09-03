@@ -477,7 +477,11 @@ window.CRITERIOS_STATS = [
           if (evaluadas === 0) return { cifra: '—', detalle: 'sin calificar' };
           if (evaluadas === 1) return { cifra: (d.personasAlMinimo || 0) > 0 ? 'Sí' : 'No', detalle: 'en todas' };
           return { cifra: `${window.pctTexto(d.personasAlMinimo || 0, evaluadas)}%`, detalle: `${d.personasAlMinimo || 0}/${evaluadas}` };
-      } },
+      },
+      // Este criterio cuenta además grupos de supervisor: uno cuenta en cuanto
+      // tiene a **alguien** al mínimo. Un grupo entero sin nadie es otra cosa
+      // que un grupo con uno solo, y el porcentaje de personas no lo separa.
+      cuentaAlGrupo: (ficha) => window.cumpleMinimoEnTodas(ficha) },
     { clave: 'certificadas', etiqueta: 'Certificadas', nombre: 'certificadas', color: '#eab308', relleno: '#fde68a',
       valor: (d) => d.assignedCount > 0 ? (d.certificadas || 0) / d.assignedCount : 0 },
     // En falsas y mal revisadas lo malo es tener muchas, así que el puesto #1
@@ -1903,17 +1907,56 @@ window.totalDelNivel = (nodos) => {
     return total;
 };
 
+// Los grupos de supervisor que hay detrás del gráfico y cuántos tienen a
+// alguien que cumpla. Un grupo cuenta en cuanto **uno** de los suyos lo
+// consigue: entre un grupo sin nadie y otro con uno hay toda la diferencia, y
+// el porcentaje de personas no la enseña.
+//
+// Se cuentan desde la gente que se está viendo y no sumando las filas, que en
+// el desglose por puesto repetirían el mismo grupo una vez por puesto. La
+// clave es el par departamento + supervisor: «Sin Supervisor» existe en más
+// de un departamento y no es el mismo grupo.
+//
+// Sólo lo hacen los criterios que traen `cuentaAlGrupo`, y sólo donde las
+// fichas dicen de qué grupo es cada quien: en el último nivel, donde el cuadro
+// ya es una persona, no hay grupos que contar.
+window.gruposDelNivel = (nodos) => {
+    const criterio = window.criterioStats();
+    if (!criterio.cuentaAlGrupo) return null;
+
+    const grupos = new Map();
+    (nodos || []).forEach(n => {
+        (n.gente || []).forEach(ficha => {
+            if (!ficha || !ficha.supervisor) return;
+            const clave = (ficha.departamento || '') + ' ▸ ' + ficha.supervisor;
+            if (!grupos.has(clave)) grupos.set(clave, false);
+            if (criterio.cuentaAlGrupo(ficha)) grupos.set(clave, true);
+        });
+    });
+
+    if (grupos.size === 0) return null;
+    let conAlguno = 0;
+    grupos.forEach(tiene => { if (tiene) conAlguno++; });
+    return { total: grupos.size, conAlguno: conAlguno };
+};
+
 // Encabezado del gráfico: qué se está midiendo y cuánto suma el nivel entero.
 // Lo comparten el nivel de arriba y los de dentro.
 window.encabezadoDelGrafico = (nodos) => {
     const criterio = window.criterioStats();
     const total = window.cifraDelCriterio(window.totalDelNivel(nodos));
+    const grupos = window.gruposDelNivel(nodos);
 
     return '<div class="stats-grafico-titulo">' +
             `<span class="stats-grafico-punto" style="background:${criterio.color};"></span>` +
             criterio.etiqueta +
             `<span class="stats-grafico-total" style="color:${criterio.color};">${window.sanitizeForHTML(total)}</span>` +
-        '</div>';
+        '</div>' +
+        (grupos
+            ? '<div class="stats-grafico-grupos">' +
+                  `<b>${grupos.conAlguno}/${grupos.total} grupos</b> con alguien al mínimo` +
+              '</div>'
+            : '');
 };
 
 // Un nivel de dentro del desglose dibujado en cuadros: encabezado con
