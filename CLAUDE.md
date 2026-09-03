@@ -1422,10 +1422,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   total se lee en las unidades de cada criterio sin tener que contar figuras a
   ojo, y vale igual para las tres formas y para los niveles de dentro.
 
-  **Debajo, en 80% Líderes, van los grupos de supervisor**: «5/12 grupos con
-  alguien al mínimo». Un grupo cuenta en cuanto **uno** de los suyos cumple en
-  todas, porque entre un grupo sin nadie y otro con uno hay toda la diferencia
-  y el porcentaje de personas no la enseña. Lo cuenta
+  **Debajo de esa cifra, en 80% Líderes, van los grupos de supervisor**: «42% ·
+  5/12 grupos», alineado con ella a la derecha. Un grupo cuenta en cuanto
+  **uno** de los suyos cumple en todas, porque entre un grupo sin nadie y otro
+  con uno hay toda la diferencia y el porcentaje de personas no la enseña. El
+  renglón va corto y de una sola línea —qué cuenta lo dice su globo—: dos
+  cifras que se parten dejan el encabezado más alto que el propio gráfico. Lo
+  cuenta
   `window.gruposDelNivel(nodos)`, y sólo para los criterios que traen
   `cuentaAlGrupo` —hoy ése—: en los demás el renglón no se dibuja.
 

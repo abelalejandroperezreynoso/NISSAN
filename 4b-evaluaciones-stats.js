@@ -1947,16 +1947,24 @@ window.encabezadoDelGrafico = (nodos) => {
     const total = window.cifraDelCriterio(window.totalDelNivel(nodos));
     const grupos = window.gruposDelNivel(nodos);
 
+    // Las dos cifras van juntas y a la derecha, una debajo de otra: la de la
+    // gente y, si el criterio los cuenta, la de los grupos.
     return '<div class="stats-grafico-titulo">' +
             `<span class="stats-grafico-punto" style="background:${criterio.color};"></span>` +
             criterio.etiqueta +
-            `<span class="stats-grafico-total" style="color:${criterio.color};">${window.sanitizeForHTML(total)}</span>` +
-        '</div>' +
-        (grupos
-            ? '<div class="stats-grafico-grupos">' +
-                  `<b>${grupos.conAlguno}/${grupos.total} grupos</b> con alguien al mínimo` +
-              '</div>'
-            : '');
+            '<span class="stats-grafico-cifras">' +
+                `<span class="stats-grafico-total" style="color:${criterio.color};">${window.sanitizeForHTML(total)}</span>` +
+                (grupos
+                    // Corta a propósito: a esa altura de la pantalla no cabe
+                    // la frase entera sin partirse, y lo que cuenta el
+                    // renglón lo dice el globo.
+                    ? `<span class="stats-grafico-grupos" title="Grupos de supervisor con al menos una persona que cumple en todas sus encuestas">` +
+                          `${window.pctTexto(grupos.conAlguno, grupos.total)}% · ` +
+                          `${grupos.conAlguno}/${grupos.total} grupos` +
+                      '</span>'
+                    : '') +
+            '</span>' +
+        '</div>';
 };
 
 // Un nivel de dentro del desglose dibujado en cuadros: encabezado con

@@ -2844,25 +2844,32 @@ html.modal-abierto {
 /* Cuánto suma el nivel entero, con la misma medida del criterio: es lo que
    dice cuánta gente hay marcada en el gráfico sin contar figuras a ojo. Va del
    color del criterio, como los rellenos que resume. */
+/* Las cifras del nivel, a la derecha del nombre del criterio y una debajo de
+   otra: la de la gente y la de los grupos. */
+.stats-grafico-cifras {
+    margin-left: auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+}
+
 .stats-grafico-total {
     font-size: 0.8rem;
     font-weight: 800;
-    margin-left: auto;
     white-space: nowrap;
 }
 
-/* Cuántos grupos de supervisor tienen a alguien que cumpla. Va debajo del
-   título porque no cabe en su renglón: en un teléfono el total ya se lo lleva
-   entero. */
+/* Cuántos grupos de supervisor tienen a alguien que cumpla, debajo del total.
+   De un solo renglón: en un teléfono, dos cifras que se parten dejan el
+   encabezado más alto que el propio gráfico. */
 .stats-grafico-grupos {
     font-size: 0.75rem;
+    font-weight: 700;
     color: #64748b;
-    line-height: 1.35;
-    margin: -4px 0 10px;
-}
-
-.stats-grafico-grupos b {
-    color: #0f172a;
+    line-height: 1.3;
+    white-space: nowrap;
 }
 
 /* Conmutador de cuadros y barras. */
