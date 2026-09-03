@@ -16,6 +16,9 @@ window.invalidarCacheDashboard = () => {
     window.CACHE_DASHBOARD.timestamp = 0;
     window.CACHE_DASHBOARD.ultimos = null;
     window.CACHE_DASHBOARD.pendientes = {};
+    // Las insignias también: una encuesta recién calificada puede haber
+    // ganado —o perdido— una estrella.
+    window.insigniasPorEmpleado = {};
 };
 
 // Variables Globales

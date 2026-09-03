@@ -3380,13 +3380,32 @@ html.modal-abierto {
    en el ancho de la foto y las demás bajan a otro renglón; con ninguna, el
    contenedor no ocupa nada. */
 .estrellas-insignias {
-    width: 60px;
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 1px;
-    margin-top: 4px;
+    /* Cinco por renglón y las demás abajo: el ancho es el de la foto, y con
+       `margin: auto` la fila queda centrada bajo ella. */
+    max-width: 60px;
+    margin: 4px auto 0;
     line-height: 0;
+}
+
+/* Junto a las fotos pequeñas de las listas de gente —el equipo del panel
+   principal, el reporte de equipo, todos los colaboradores—, donde la foto
+   mide 45 o 50px. */
+.estrellas-insignias--chico {
+    max-width: 45px;
+    margin-top: 2px;
+    /* El hueco se reserva aunque no haya estrellas: si no, los nombres de una
+       misma fila quedan a distinta altura según quién tenga insignias. */
+    min-height: 8px;
+}
+
+.estrellas-insignias--chico .estrella-insignia {
+    width: 8px;
+    height: 8px;
+    stroke-width: 1;
 }
 
 .estrella-insignia {

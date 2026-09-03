@@ -1789,6 +1789,35 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   esconde y las estrellas se vacían—: un hueco vacío en el panel no dice más
   que la ausencia del parche.
 
+  **Las mismas estrellas salen junto a cada persona de las listas de gente**:
+  el equipo del panel principal, el reporte de equipo y sus miembros, el
+  expediente de alguien y su equipo a cargo, y el panel de todos los
+  colaboradores. Va como el badge de pendientes: la lista se dibuja con el
+  hueco puesto y el cálculo lo rellena cuando llega.
+
+  ```js
+  window.huecoDeEstrellas(empId, chico)   // el <div data-estrellas> del renglón
+  window.calcularInsigniasBatch(ids)      // calcula lo que falte y pinta
+  window.pintarEstrellasInsignias()       // rellena los huecos con lo ya sabido
+  ```
+
+  Lo calculado se guarda en `window.insigniasPorEmpleado` y **no se vuelve a
+  pedir**: filtrar el panel de todos los colaboradores repinta la lista entera
+  y las estrellas salen de la caché sin tocar la base. Las del propio usuario
+  las deja puestas el panel de su perfil, que ya las tenía. La caché se vacía
+  con `invalidarCacheDashboard`, porque una encuesta recién calificada puede
+  haber ganado —o perdido— una estrella.
+
+  El cálculo va **de cien personas en cien**, pintando lo que va saliendo, y
+  las respuestas se piden **por páginas de mil filas**: PostgREST no devuelve
+  más de mil por consulta y el panel de todos los colaboradores pide las de la
+  plantilla entera. Las encuestas activas se piden una sola vez por sesión
+  (`cargarEncuestasParaInsignias`, que guarda la promesa y no el resultado).
+
+  El hueco de las listas reserva su alto aunque no haya estrellas
+  (`.estrellas-insignias--chico`, `min-height`): sin eso, los nombres de una
+  misma fila quedan a distinta altura según quién tenga insignias.
+
   **La fila se centra con los márgenes automáticos de la primera y la última,
   nunca con `justify-content: center`.** Centrando así, en cuanto la fila
   desborda —y desborda: crece con el catálogo de clasificaciones— el navegador

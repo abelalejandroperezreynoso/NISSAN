@@ -471,21 +471,131 @@ window.svgEstrella = () => '<svg class="estrella-insignia" viewBox="0 0 24 24" a
     + '<path d="M12 1.8l3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 17.6l-6.2 3.3 1.2-6.9-5-4.9 6.9-1z"/>'
     + '</svg>';
 
-window.dibujarEstrellasInsignias = (cuantas) => {
-    const caja = document.getElementById('estrellas-insignias');
+// Llena una caja de estrellas con las insignias de alguien. Es lo que usan
+// tanto el panel del propio usuario como las listas de gente, para que las
+// estrellas se dibujen y se expliquen igual en todas partes.
+window.llenarEstrellas = (caja, insignias) => {
     if (!caja) return;
+    const lista = insignias || [];
 
-    if (!cuantas) { caja.innerHTML = ''; caja.removeAttribute('title'); return; }
+    if (lista.length === 0) { caja.innerHTML = ''; caja.removeAttribute('title'); return; }
 
-    caja.className = 'estrellas-insignias';
-    caja.title = cuantas === 1
-        ? '1 clasificación con todas sus encuestas al mínimo'
-        : `${cuantas} clasificaciones con todas sus encuestas al mínimo`;
-    caja.innerHTML = window.svgEstrella().repeat(cuantas);
+    const nombres = lista.map(i => i.nombre).join(', ');
+    caja.title = lista.length === 1
+        ? `1 clasificación con todas sus encuestas al mínimo: ${nombres}`
+        : `${lista.length} clasificaciones con todas sus encuestas al mínimo: ${nombres}`;
+    caja.innerHTML = window.svgEstrella().repeat(lista.length);
 };
 
-window.dibujarInsigniasClasificacion = (insignias) => {
-    window.dibujarEstrellasInsignias((insignias || []).length);
+window.dibujarEstrellasInsignias = (insignias) => {
+    window.llenarEstrellas(document.getElementById('estrellas-insignias'), insignias);
+};
+
+// ------------------------------------------
+// LAS INSIGNIAS DE OTRA GENTE
+// ------------------------------------------
+// Las mismas estrellas salen junto a cada persona de las listas —el equipo del
+// panel principal, el reporte de equipo y el panel de todos los colaboradores—,
+// y para eso hay que calcular las insignias de mucha gente a la vez. Va como el
+// badge de pendientes: la lista se dibuja con el hueco puesto
+// (`window.huecoDeEstrellas`) y el cálculo lo rellena cuando llega.
+window.insigniasPorEmpleado = {};
+
+window.huecoDeEstrellas = (empId, chico) =>
+    `<div class="estrellas-insignias${chico ? ' estrellas-insignias--chico' : ''}" data-estrellas="${empId}"></div>`;
+
+// Rellena todos los huecos que haya en pantalla con lo que ya se sepa. Un
+// hueco de alguien todavía sin calcular se queda vacío, que es lo mismo que se
+// ve cuando no tiene ninguna.
+window.pintarEstrellasInsignias = () => {
+    document.querySelectorAll('[data-estrellas]').forEach(caja => {
+        const insignias = window.insigniasPorEmpleado[String(caja.dataset.estrellas)];
+        if (insignias) window.llenarEstrellas(caja, insignias);
+    });
+};
+
+// Las encuestas activas con lo que hace falta para saber a quién le tocan. Se
+// piden una sola vez por sesión —y se guarda la promesa, no el resultado, para
+// que dos listas a la vez no las pidan dos veces—.
+window.promesaEncuestasInsignias = null;
+window.cargarEncuestasParaInsignias = () => {
+    if (!window.promesaEncuestasInsignias) {
+        window.promesaEncuestasInsignias = window.camposConMinimo(
+            'id, category, is_obligatory, mode, target_positions, target_departments, target_employees')
+            .then(campos => sb.from('evaluations').select(campos).eq('active', true))
+            .then(({ data, error }) => (error ? null : (data || [])))
+            .catch(() => null);
+    }
+    return window.promesaEncuestasInsignias;
+};
+
+// Las respuestas calificadas de un grupo de personas, de la más reciente a la
+// más vieja. Va por páginas porque PostgREST devuelve mil filas como mucho, y
+// el panel de todos los colaboradores pide las de la plantilla entera.
+window.respuestasCalificadasDe = async (ids) => {
+    const filas = [];
+    const tam = 1000;
+    let desde = 0;
+
+    while (true) {
+        const { data, error } = await sb.from('evaluation_responses')
+            .select('employee_id, evaluation_id, grades_json, submitted_at')
+            .in('employee_id', ids)
+            .in('review_status', ['Revisado', 'Certificada'])
+            .order('submitted_at', { ascending: false })
+            .range(desde, desde + tam - 1);
+
+        if (error || !data || data.length === 0) break;
+        data.forEach(r => filas.push(r));
+        if (data.length < tam) break;
+        desde += tam;
+    }
+    return filas;
+};
+
+// De cien en cien, y pintando lo que va saliendo: así una lista larga enseña
+// las primeras estrellas sin esperar a la última página. Lo que ya está
+// calculado no se vuelve a pedir.
+window.calcularInsigniasBatch = async (ids) => {
+    window.pintarEstrellasInsignias();
+
+    const faltan = Array.from(new Set((ids || []).map(String)))
+        .filter(id => id && !window.insigniasPorEmpleado[id]);
+    if (faltan.length === 0) return;
+
+    const encuestas = await window.cargarEncuestasParaInsignias();
+    if (!encuestas) return;
+
+    for (let i = 0; i < faltan.length; i += 100) {
+        const bloque = faltan.slice(i, i + 100);
+        const respuestas = await window.respuestasCalificadasDe(bloque);
+
+        const suyas = {};
+        respuestas.forEach(r => {
+            const id = String(r.employee_id);
+            if (!suyas[id]) suyas[id] = [];
+            suyas[id].push(r);
+        });
+
+        bloque.forEach(id => {
+            const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === id);
+            window.insigniasPorEmpleado[id] = emp
+                ? window.insigniasGanadas(encuestas, suyas[id] || [], emp, window.tieneEquipoDirecto(id))
+                : [];
+        });
+
+        window.pintarEstrellasInsignias();
+    }
+};
+
+window.dibujarInsigniasClasificacion = (insignias, empId) => {
+    window.dibujarEstrellasInsignias(insignias);
+    // Las del propio usuario ya están calculadas: se guardan para que las
+    // listas de gente no vuelvan a pedirlas.
+    if (empId) {
+        window.insigniasPorEmpleado[String(empId)] = insignias || [];
+        window.pintarEstrellasInsignias();
+    }
 
     const caja = document.getElementById('insignias-clasificacion');
     if (!caja) return;
@@ -540,7 +650,8 @@ window.cargarRadarGeneralDashboard = async (userId) => {
         try {
             const yo = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(userId));
             window.dibujarInsigniasClasificacion(
-                window.insigniasGanadas(activeEvals, responses, yo, window.tieneEquipoDirecto(userId)));
+                window.insigniasGanadas(activeEvals, responses, yo, window.tieneEquipoDirecto(userId)),
+                userId);
         } catch (e) {
             console.error('Error insignias por clasificación:', e);
         }
@@ -1158,8 +1269,9 @@ window.renderizarVistaRapidaEquipo = (forzarRender = false) => {
                 <div id="badge-count-${emp.id}" class="notification-badge" style="display:none;">0</div>
                 ${badgeInactivo}
             </div>
+            ${window.huecoDeEstrellas(emp.id, true)}
             <div style="font-size:0.7rem; color:#334155; text-align:center; line-height:1.2; max-width:70px; white-space:normal; ${opacityStyle}">
-                ${emp.name.split(' ')[0]} 
+                ${emp.name.split(' ')[0]}
             </div>
         `;
         container.appendChild(div);
@@ -1193,7 +1305,10 @@ window.renderizarVistaRapidaEquipo = (forzarRender = false) => {
         else btnEquipo.style.display = 'none';
     }
 
-    setTimeout(() => window.calcularPendientesBatch(idsParaCalculo), 500);
+    setTimeout(() => {
+        window.calcularPendientesBatch(idsParaCalculo);
+        window.calcularInsigniasBatch(idsParaCalculo);
+    }, 500);
 };
 
 // --- NUEVA LÓGICA DE ORDENAMIENTO ---
@@ -1313,12 +1428,17 @@ div.innerHTML = `
                 <div id="badge-count-${emp.id}" class="notification-badge" style="display:${displayBadge};">${textBadge}</div>
                 ${badgeInactivo}
             </div>
+            ${window.huecoDeEstrellas(emp.id, true)}
             <div style="font-size:0.7rem; color:#334155; text-align:center; line-height:1.2; width:70px; word-wrap: break-word; ${opacityStyle}">
                 ${emp.name.split(' ')[0]} ${emp.name.split(' ')[1] ? emp.name.split(' ')[1].charAt(0) + '.' : ''}
             </div>
         `;
         container.appendChild(div);
     });
+
+    // Lo ya calculado sale de inmediato —al filtrar se redibuja la lista
+    // entera— y lo que falte lo va rellenando el cálculo.
+    window.calcularInsigniasBatch(ordenados.map(e => e.id));
 };
 
 window.actualizarResumenPendientesEnModal = (empId) => {
@@ -1789,17 +1909,23 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
     const hoverIcon = empId !== 'EQUIPO' ? `<div class="avatar-edit-overlay">📷</div>` : '';
     
     avatarWrapper.innerHTML = `
-        <div class="avatar-circle-large" ${editableAction} title="Cambiar foto">
-            ${avatarImgHtml}
-            ${hoverIcon}
-            <input type="file" id="inp-avatar-upload" style="display:none;" accept="image/*" onchange="window.cambiarFotoPerfil(this, '${empId}')">
+        <div style="display:flex; flex-direction:column; align-items:center;">
+            <div class="avatar-circle-large" ${editableAction} title="Cambiar foto">
+                ${avatarImgHtml}
+                ${hoverIcon}
+                <input type="file" id="inp-avatar-upload" style="display:none;" accept="image/*" onchange="window.cambiarFotoPerfil(this, '${empId}')">
+            </div>
+            ${empId !== 'EQUIPO' ? window.huecoDeEstrellas(empId, false) : ''}
         </div>
     `;
     
     const modalContent = modal.querySelector('div');
     const headerDiv = modalContent.querySelector('div');
     headerDiv.insertAdjacentElement('afterend', avatarWrapper);
-    
+
+    // Sus estrellas, tenga equipo o no: las de su gente van más abajo.
+    if (empId !== 'EQUIPO') window.calcularInsigniasBatch([empId]);
+
     if (window.todosLosEmpleadosData && empId !== 'EQUIPO') {
         const susSubordinados = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(empId));
         if (susSubordinados.length > 0) {
@@ -1833,17 +1959,19 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
                             <div id="badge-count-${sub.id}" class="notification-badge" style="display:none; width:16px; height:16px; font-size:0.6rem; right:-2px; top:-2px;">0</div>
                             ${subBadgeInactivo}
                         </div>
+                        ${window.huecoDeEstrellas(sub.id, true)}
                         <div style="font-size:0.65rem; color:#334155; text-align:center; line-height:1.1; max-width:60px; white-space:normal; ${subOpacityStyle}">
-                            ${sub.name.split(' ')[0]} 
+                            ${sub.name.split(' ')[0]}
                         </div>
                      `;
                 subContainer.appendChild(subDiv);
             });
-            
+
             subWrapper.appendChild(subContainer);
             avatarWrapper.insertAdjacentElement('afterend', subWrapper);
-            
+
             setTimeout(() => window.calcularPendientesBatch(susSubordinados.map(s => s.id)), 200);
+            window.calcularInsigniasBatch(susSubordinados.map(s => s.id));
         }
     }
     
@@ -2281,18 +2409,21 @@ window.abrirStatsEquipo = async (isBack = false) => {
             const myTextBadge = (myStats && myStats.total > 0) ? (myStats.total > 99 ? '99+' : myStats.total) : '0';
 
             avatarWrapper.innerHTML = `
-                <div style="position: relative; display: inline-block;">
-                    
-                    <div class="avatar-circle-large" ${clickAction} title="Cambiar foto">
-                        ${avatarImgHtml}
-                        <div class="avatar-edit-overlay">📷</div>
-                        <input type="file" id="inp-avatar-upload" style="display:none;" accept="image/*" onchange="window.cambiarFotoPerfil(this, '${user.id}')">
-                    </div>
-                    
-                    <div id="badge-count-${user.id}" class="notification-badge" style="display:${myDisplayBadge}; position:absolute; top:-5px; right:-5px; width:24px; height:24px; font-size:0.8rem; z-index:10; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
-                        ${myTextBadge}
-                    </div>
+                <div style="display:flex; flex-direction:column; align-items:center;">
+                    <div style="position: relative; display: inline-block;">
 
+                        <div class="avatar-circle-large" ${clickAction} title="Cambiar foto">
+                            ${avatarImgHtml}
+                            <div class="avatar-edit-overlay">📷</div>
+                            <input type="file" id="inp-avatar-upload" style="display:none;" accept="image/*" onchange="window.cambiarFotoPerfil(this, '${user.id}')">
+                        </div>
+
+                        <div id="badge-count-${user.id}" class="notification-badge" style="display:${myDisplayBadge}; position:absolute; top:-5px; right:-5px; width:24px; height:24px; font-size:0.8rem; z-index:10; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                            ${myTextBadge}
+                        </div>
+
+                    </div>
+                    ${window.huecoDeEstrellas(user.id, false)}
                 </div>
             `;
             
@@ -2328,8 +2459,9 @@ window.abrirStatsEquipo = async (isBack = false) => {
                         <div id="badge-count-${sub.id}" class="notification-badge" style="display:none; width:16px; height:16px; font-size:0.6rem; right:-2px; top:-2px;">0</div>
                         ${subBadgeInactivo}
                     </div>
+                    ${window.huecoDeEstrellas(sub.id, true)}
                     <div style="font-size:0.65rem; color:#334155; text-align:center; line-height:1.2; max-width:60px; white-space:normal; ${subOpacityStyle}">
-                        ${sub.name.split(' ')[0]} 
+                        ${sub.name.split(' ')[0]}
                     </div>
                  `;
                  subContainer.appendChild(subDiv);
@@ -2346,7 +2478,10 @@ window.abrirStatsEquipo = async (isBack = false) => {
             
             subWrapper.appendChild(subContainer);
             avatarWrapper.insertAdjacentElement('afterend', subWrapper);
-        
+
+            // Las estrellas del jefe y las de su equipo, en cuanto se sepan.
+            window.calcularInsigniasBatch([user.id].concat(misDirectos.map(e => e.id)));
+
         if (window.radarChartInstances) { window.radarChartInstances.forEach(c => c.destroy()); window.radarChartInstances = []; }
         if(containerScroll) containerScroll.innerHTML = '';
     
