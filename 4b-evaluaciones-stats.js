@@ -739,8 +739,13 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         const empId = String(e.id);
 
         // NUEVO: Agregado contador "certificadas", "malRevisadas" y "revisadasAltas"
-        if (!statsCache[dept]) statsCache[dept] = { employeesCount: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0, supervisors: {} };
-        if (!statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup] = { employeesCount: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0 };
+        // `personasAsignadas` es la gente de la que habla el gráfico de personas:
+        // los que tienen al menos una encuesta de este filtro. No es la
+        // plantilla entera (`employeesCount`) a propósito: a quien no le toca
+        // ninguna encuesta no le puede tocar ninguna respuesta, así que su
+        // figura no podría colorearse nunca y sólo engordaría el gris.
+        if (!statsCache[dept]) statsCache[dept] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0, supervisors: {} };
+        if (!statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0 };
 
         statsCache[dept].employeesCount++;
         statsCache[dept].supervisors[sup].employeesCount++;
@@ -748,7 +753,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         let empAssignments = 0;
 
         const empPuestoKey = getPuesto(e);
-        if (!puestoCache[empPuestoKey]) puestoCache[empPuestoKey] = { employeesCount: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0 };
+        if (!puestoCache[empPuestoKey]) puestoCache[empPuestoKey] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0 };
         puestoCache[empPuestoKey].employeesCount++;
         
         // Se calcula una vez por persona y no por encuesta: `tieneEquipoDirecto`
@@ -770,6 +775,12 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         statsCache[dept].supervisors[sup].assignedCount += empAssignments;
         puestoCache[empPuestoKey].assignedCount += empAssignments;
         totalAsignadasGlobal += empAssignments;
+
+        if (empAssignments > 0) {
+            statsCache[dept].personasAsignadas++;
+            statsCache[dept].supervisors[sup].personasAsignadas++;
+            puestoCache[empPuestoKey].personasAsignadas++;
+        }
     });
 
     const uniqueResponseMap = {};
@@ -1900,6 +1911,9 @@ window.vistaCuadrosDentro = ({ titulo, subtitulo, volver, nodos, alTocar }) => {
 // Las filas por colaborador no usan los mismos nombres que las cachés por
 // departamento y por puesto, así que se traducen antes de medirlas o dibujarlas.
 window.filaCanonica = (emp) => ({
+    // Una fila de colaborador es una persona, así que su cuadro lleva una
+    // figura y se llena por partes con lo que haya hecho.
+    personasAsignadas: 1,
     assignedCount: emp.totalAssigned || 0,
     responses: emp.totalResp || 0,
     reviewed: emp.reviewedCount || 0,
@@ -1956,6 +1970,9 @@ window.nodosDeCuadros = (mapa) => {
         nodos.push({
             nombre: nombre,
             datos: d,
+            // Cuánta gente hay detrás de este cuadro. Es lo que cuenta el
+            // gráfico de personas: una figura por persona, ni una más.
+            personas: d.personasAsignadas || 0,
             asignadas: asignadas,
             respuestas: d.responses || 0,
             procesadas: window.procesadasDe(d),
@@ -1988,32 +2005,65 @@ window.dibujarCuadrosDesglose = () => {
 // bandas casi iguales; catorce figuras de veinte contra dieciséis se cuentan
 // de un vistazo.
 
-// La proporción de la figura (ancho entre alto) y el tamaño por debajo del
-// cual deja de leerse como una persona y se ve como una mota.
+// La proporción de la figura (ancho entre alto) y los dos tamaños entre los
+// que se mueve: por debajo del mínimo deja de leerse como una persona y se ve
+// como una mota; por encima del máximo, el cuadro de una sola persona sacaría
+// un monigote gigante.
 window.ASPECTO_PERSONA = 10 / 24;
-window.MIN_ALTO_PERSONA = 12;
+window.MIN_ALTO_PERSONA = 10;
+// El máximo es alto a propósito: en el último nivel cada cuadro es **una**
+// persona, así que el tamaño común lo marca el cuadro más pequeño de ese
+// nivel y no la cantidad de gente. Con un tope bajo, esos cuadros salían con
+// un monigote diminuto perdido en el centro. Donde hay mucha gente el tope no
+// llega a tocarse nunca: manda el cuadro más apretado.
+window.MAX_ALTO_PERSONA = 72;
 window.COLOR_PERSONA_VACIA = '#cbd5e1';
 
-// --- TODAS LAS FIGURAS MIDEN LO MISMO ---
-// El tamaño se decide una vez para el lienzo entero y no cuadro por cuadro.
-// Con figuras de tamaños distintos no había forma de comparar dos cuadros:
-// uno enseñaba diez gigantes y otro sesenta diminutas, y la vista leía tamaño
-// donde no había ninguna medida. Siendo único, cada figura vale lo mismo en
-// todo el gráfico y la cuenta de cada cuadro es su tamaño, que es lo asignado.
-window.ALTO_CELDA_PERSONA = 24;
-// Y los dos guardarraíles del tamaño único, que sólo entran en lienzos
-// extremos: en uno pequeño, 24px no dejarían casi a nadie dentro; en uno muy
-// grande serían miles de figuras —una textura, no una cuenta— y otros tantos
-// nodos que dibujar.
-window.MIN_FIGURAS_LIENZO = 90;
-window.MAX_FIGURAS_LIENZO = 900;
+// --- UNA FIGURA ES UNA PERSONA ---
+// No es un relleno con forma de gente: **el número de figuras de un cuadro es
+// el número de personas que hay detrás de él** —las del departamento, las del
+// grupo del supervisor, las del puesto—, y en el último nivel, donde el cuadro
+// ES una persona, hay exactamente una. Sin eso, las figuras eran decoración:
+// se dibujaban las que cupieran, así que dos cuadros con la misma plantilla
+// enseñaban distinta gente según lo grandes que hubieran salido.
+//
+// Lo que se cuenta es la gente **a la que le toca alguna encuesta del filtro**
+// (`personasAsignadas`) y no la plantilla entera: a quien no le toca ninguna
+// no le puede tocar ninguna respuesta, así que su figura no podría colorearse
+// nunca y sólo engordaría el gris.
 
-window.altoCeldaDeLienzo = (ancho, alto) => {
-    const area = Math.max(ancho * alto, 1);
-    const dePocas = Math.sqrt((area / window.MIN_FIGURAS_LIENZO) / window.ASPECTO_PERSONA);
-    const deMuchas = Math.sqrt((area / window.MAX_FIGURAS_LIENZO) / window.ASPECTO_PERSONA);
-    return Math.max(window.MIN_ALTO_PERSONA,
-        Math.min(dePocas, Math.max(window.ALTO_CELDA_PERSONA, deMuchas)));
+// El tamaño sigue siendo **uno solo para todo el lienzo**, y ahora además
+// tiene que dar cabida al conteo de cada cuadro: es el mayor tamaño al que
+// todos los cuadros meten a su gente entera.
+//
+// Un cuadro que no la mete ni al tamaño mínimo **queda fuera del acuerdo** y
+// cae al relleno liso de siempre: arrastrar a los demás con él dejaría el
+// gráfico entero en figuras diminutas por culpa de uno.
+window.celdaDeTodosLosCuadros = (cajas) => {
+    let celda = window.MAX_ALTO_PERSONA;
+    (cajas || []).forEach(c => {
+        const cabe = window.celdaQueCabe(c.ancho, c.alto, c.personas);
+        if (cabe >= window.MIN_ALTO_PERSONA && cabe < celda) celda = cabe;
+    });
+    return Math.max(window.MIN_ALTO_PERSONA, Math.min(window.MAX_ALTO_PERSONA, celda));
+};
+
+// El mayor tamaño de celda al que `personas` figuras enteras caben en una
+// caja. Se prueba renglón a renglón: con `filas` renglones hacen falta
+// `ceil(personas / filas)` columnas, y la celda más grande es la menor de las
+// dos que consienten el alto y el ancho. El mejor de esos repartos es la
+// respuesta; son treinta vueltas como mucho.
+window.celdaQueCabe = (ancho, alto, personas) => {
+    if (!(personas > 0) || ancho <= 0 || alto <= 0) return 0;
+
+    let mejor = 0;
+    const tope = Math.max(1, Math.floor(alto / window.MIN_ALTO_PERSONA));
+    for (let filas = 1; filas <= tope; filas++) {
+        const columnas = Math.ceil(personas / filas);
+        const celda = Math.min(alto / filas, (ancho / columnas) / window.ASPECTO_PERSONA);
+        if (celda > mejor) mejor = celda;
+    }
+    return mejor;
 };
 
 window.SVG_PERSONA_ID = 'stats-icono-persona';
@@ -2045,63 +2095,127 @@ window.montarIconoPersona = () => {
     document.body.appendChild(caja);
 };
 
-// Cuánta gente cabe en una caja, con la celda que ya trae decidida el lienzo.
-// Al ser el tamaño único, aquí no se elige nada: se cuenta cuántas filas y
-// cuántas columnas caben enteras y se acabó. Antes esto probaba renglón a
-// renglón buscando el reparto de mejor proporción, que es lo que hacía que
-// cada cuadro acabara con figuras de un tamaño distinto.
+// Cómo se colocan las `personas` de un cuadro con la celda que ya trae
+// decidida el lienzo. Aquí no se elige el tamaño ni la cantidad: las figuras
+// son las que son, y lo único que se reparte es en cuántos renglones caben.
 //
-// Devuelve null cuando en la caja no cabe ni una figura entera. Ese cuadro se
-// pinta con el relleno liso de siempre, que es preferible a media persona
-// asomando.
-window.rejillaDePersonas = (ancho, alto, altoCelda) => {
-    const anchoCelda = altoCelda * window.ASPECTO_PERSONA;
-    const columnas = Math.floor(ancho / anchoCelda);
-    const filas = Math.floor(alto / altoCelda);
-    if (columnas < 1 || filas < 1) return null;
+// Devuelve null cuando no caben todas. Ese cuadro se pinta con el relleno liso
+// de siempre: enseñar veinte figuras donde hay treinta personas sería mentir,
+// y es justo lo que este gráfico vino a arreglar.
+window.rejillaDePersonas = (ancho, alto, altoCelda, personas) => {
+    if (!(personas > 0)) return null;
 
-    // La celda no se estira para repartir el sobrante: el paso entre figuras
-    // tiene que ser el mismo en todos los cuadros, o dos cuadros con las
-    // mismas figuras se leerían como cargas distintas. El sobrante se va a los
-    // márgenes —el bloque queda centrado de ancho y apoyado en el suelo—.
-    return {
-        filas: filas,
-        columnas: columnas,
-        total: columnas * filas,
-        altoCelda: altoCelda,
-        anchoCelda: anchoCelda
-    };
+    const anchoCelda = altoCelda * window.ASPECTO_PERSONA;
+    const topeColumnas = Math.floor(ancho / anchoCelda);
+    const topeFilas = Math.floor(alto / altoCelda);
+    if (topeColumnas < 1 || topeFilas < 1 || topeColumnas * topeFilas < personas) return null;
+
+    // **La figura no se estira, pero el hueco entre figuras sí.** El tamaño es
+    // el mismo en todo el gráfico —eso es lo que se compara—, y con él fijo lo
+    // único que queda por decidir es en cuántos renglones se reparte la gente.
+    // Amontonarla contra el suelo dejaba medio cuadro en blanco: el tamaño
+    // único lo manda el cuadro más apretado de todos, así que a los demás les
+    // sobra sitio por definición. El hueco no mide nada, así que puede crecer.
+    //
+    // Se elige el reparto **menos desproporcionado**: el que deja los huecos
+    // igual de anchos que de altos. Con 64 personas en una caja de 205×116,
+    // tres renglones dejan el doble de aire por arriba que por los lados y
+    // cuatro lo dejan parejo; los dos llenan la caja igual de bien, pero uno
+    // se lee como una rejilla y el otro como tres tiras sueltas.
+    let mejor = null;
+    for (let filas = 1; filas <= topeFilas; filas++) {
+        const columnas = Math.ceil(personas / filas);
+        if (columnas > topeColumnas) continue;
+
+        const pasoX = ancho / columnas;
+        const pasoY = alto / filas;
+        const holguraX = pasoX / anchoCelda;
+        const holguraY = pasoY / altoCelda;
+        const desproporcion = Math.max(holguraX, holguraY) / Math.min(holguraX, holguraY);
+        // A igualdad de proporción, el reparto que desperdicia menos sitios.
+        const sobran = filas * columnas - personas;
+
+        if (mejor && (desproporcion > mejor.desproporcion + 1e-9 ||
+            (desproporcion > mejor.desproporcion - 1e-9 && sobran >= mejor.sobran))) continue;
+
+        mejor = {
+            filas: filas, columnas: columnas, total: personas,
+            pasoX: pasoX, pasoY: pasoY, altoCelda: altoCelda, anchoCelda: anchoCelda,
+            desproporcion: desproporcion, sobran: sobran
+        };
+    }
+
+    return mejor;
 };
 
 // El lienzo de figuras de un cuadro. Se pintan de abajo arriba, que es como
 // subía el relleno: lo que queda en gris es exactamente lo que falta.
+// Cuánto se ve de una figura a medio llenar cuando la medida no da ni para
+// eso: por debajo, la última persona no se distingue de las grises.
+window.MINIMO_VISIBLE_PERSONA = 0.12;
+
+// Cada figura se llena por sí sola, así que la cuenta ya no se redondea: 14.6
+// personas son catorce enteras y una llena hasta las rodillas. Antes había que
+// redondear a figuras enteras y reservar los dos extremos —como en `pctTexto`—
+// para no decir cero habiendo algo ni todo faltando algo; hoy eso lo resuelve
+// el propio dibujo, y lo único que se fuerza es que la fracción se vea.
+window.__nRecortePersona = 0;
+
 window.lienzoDeGente = (rejilla, ancho, alto, proporcion, color) => {
     window.montarIconoPersona();
 
     const total = rejilla.total;
-    let pintadas = Math.round(proporcion * total);
-    // Los dos extremos son los que no pueden mentir, igual que en `pctTexto`:
-    // ni cero figuras de color cuando algo hay, ni todas cuando falta algo.
-    if (proporcion > 0 && pintadas < 1) pintadas = 1;
-    if (proporcion < 1 && pintadas >= total) pintadas = total - 1;
+    let valor = proporcion * total;
+    if (proporcion > 0) valor = Math.max(valor, window.MINIMO_VISIBLE_PERSONA);
+    if (proporcion < 1) valor = Math.min(valor, total - window.MINIMO_VISIBLE_PERSONA);
+    valor = Math.max(0, Math.min(total, valor));
 
-    // El bloque se apoya en el suelo del cuadro —lo que sobra de alto queda
-    // arriba, que es donde va el rótulo— y se centra de ancho.
-    const y0 = alto - rejilla.filas * rejilla.altoCelda;
-    const x0 = (ancho - rejilla.columnas * rejilla.anchoCelda) / 2;
+    // La rejilla ocupa la caja entera; cada figura va centrada en su hueco.
     const altoFigura = rejilla.altoCelda * 0.86;
     const anchoFigura = altoFigura * window.ASPECTO_PERSONA;
 
+    const figura = (x, y, relleno) => '<use href="#' + window.SVG_PERSONA_ID + '"'
+        + ' x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '"'
+        + ' width="' + anchoFigura.toFixed(1) + '" height="' + altoFigura.toFixed(1) + '"'
+        + ' fill="' + relleno + '"/>';
+
     let figuras = '';
+    let recortes = '';
+
     for (let i = 0; i < total; i++) {
-        const fila = rejilla.filas - 1 - Math.floor(i / rejilla.columnas);
+        // Se llena de abajo arriba y de izquierda a derecha, que es como sube
+        // el relleno liso: lo que queda en gris es lo que falta. El renglón de
+        // arriba es el que puede quedar a medias.
+        const fila = Math.floor(i / rejilla.columnas);
         const columna = i % rejilla.columnas;
-        const x = x0 + columna * rejilla.anchoCelda + (rejilla.anchoCelda - anchoFigura) / 2;
-        const y = y0 + fila * rejilla.altoCelda + (rejilla.altoCelda - altoFigura) / 2;
-        figuras += '<use href="#' + window.SVG_PERSONA_ID + '"'
-            + ' x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '"'
-            + ' width="' + anchoFigura.toFixed(1) + '" height="' + altoFigura.toFixed(1) + '"'
-            + ' fill="' + (i < pintadas ? color : window.COLOR_PERSONA_VACIA) + '"/>';
+        const x = columna * rejilla.pasoX + (rejilla.pasoX - anchoFigura) / 2;
+        const y = alto - (fila + 1) * rejilla.pasoY + (rejilla.pasoY - altoFigura) / 2;
+
+        if (i + 1 <= valor + 1e-9) {
+            figuras += figura(x, y, color);
+        } else if (valor - i > 1e-9) {
+            // La persona a medias: la figura gris entera y encima la de color
+            // recortada por abajo, que es como se llena un vaso.
+            //
+            // El recorte va sobre un `<g>` que envuelve al `<use>`, y no como
+            // degradado sobre el propio `<use>`: un `<symbol>` con `viewBox`
+            // abre su propio sistema de coordenadas, así que dentro de él
+            // `userSpaceOnUse` se resuelve contra la caja del icono (0 0 10 24)
+            // y no contra la del lienzo. El degradado caía entero fuera de esa
+            // caja y la figura salía toda del color de la última parada: gris,
+            // siempre, pasara lo que pasara con la medida. El `<g>` sí vive en
+            // las coordenadas del lienzo.
+            const alturaLlena = altoFigura * (valor - i);
+            const id = 'persona-parcial-' + (++window.__nRecortePersona);
+            recortes += '<clipPath id="' + id + '" clipPathUnits="userSpaceOnUse">'
+                + '<rect x="' + x.toFixed(1) + '" y="' + (y + altoFigura - alturaLlena).toFixed(1) + '"'
+                + ' width="' + anchoFigura.toFixed(1) + '" height="' + alturaLlena.toFixed(1) + '"/>'
+                + '</clipPath>';
+            figuras += figura(x, y, window.COLOR_PERSONA_VACIA)
+                + '<g clip-path="url(#' + id + ')">' + figura(x, y, color) + '</g>';
+        } else {
+            figuras += figura(x, y, window.COLOR_PERSONA_VACIA);
+        }
     }
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -2111,8 +2225,8 @@ window.lienzoDeGente = (rejilla, ancho, alto, proporcion, color) => {
     // 1:1 y `none` sólo evita que un redondeo de medio píxel escale las
     // figuras.
     svg.setAttribute('preserveAspectRatio', 'none');
-    svg.innerHTML = figuras;
-    return { svg: svg, pintadas: pintadas, total: total };
+    svg.innerHTML = (recortes ? '<defs>' + recortes + '</defs>' : '') + figuras;
+    return { svg: svg, total: total };
 };
 
 window.dibujarCuadros = (nodos, alTocar) => {
@@ -2147,16 +2261,24 @@ window.dibujarCuadros = (nodos, alTocar) => {
     // escala rige las barras.
     const escala = window.escalaDelNivel(ordenados.map(n => n.datos));
 
+    const enPersonas = window.formaDesgloseActual() === 'personas';
+
+    // Qué mide el tamaño del cuadro. En cuadros, lo asignado, como siempre.
+    // **En personas, la gente**, que es lo único coherente con lo que se
+    // dibuja dentro: si el cuadro midiera lo asignado, un departamento con
+    // muchas encuestas por cabeza saldría enorme y medio vacío, y el de al
+    // lado saldría pequeño y a reventar. Midiendo la gente, todos los cuadros
+    // salen igual de llenos y las figuras caben a un tamaño mayor.
+    //
+    // No es la misma repartición que en cuadros, y eso se ve al cambiar de
+    // forma: son dos gráficos que miden dos cosas. Lo asignado sigue en el
+    // globo.
+    const peso = (n) => enPersonas ? (n.personas || 0) : n.asignadas;
+
     // Un departamento sin encuestas asignadas no puede desaparecer del todo o
     // no habría manera de abrirlo; se le deja un peso mínimo y queda diminuto.
-    const mayor = nodos.reduce((m, n) => Math.max(m, n.asignadas), 0);
-    const cuadros = window.repartirEnCuadros(nodos.map(n => Math.max(n.asignadas, mayor * 0.02, 0.5)), ancho, alto);
-
-    const enPersonas = window.formaDesgloseActual() === 'personas';
-    // Una sola vez para todo el lienzo, no cuadro por cuadro: es lo que hace
-    // que todas las figuras midan lo mismo y que la cuenta de un cuadro se
-    // pueda comparar con la del de al lado.
-    const altoCelda = enPersonas ? window.altoCeldaDeLienzo(ancho, alto) : 0;
+    const mayor = nodos.reduce((m, n) => Math.max(m, peso(n)), 0);
+    const cuadros = window.repartirEnCuadros(nodos.map(n => Math.max(peso(n), mayor * 0.02, 0.5)), ancho, alto);
 
     // En personas el dibujo va en dos pasadas. La primera monta los cuadros
     // con su rótulo; la segunda mide lo que ese rótulo acabó ocupando y
@@ -2264,24 +2386,34 @@ window.dibujarCuadros = (nodos, alTocar) => {
         }
         if (chapa) {
             cuerpo.appendChild(chapa);
-            pendientes.push({ el: el, chapa: chapa, cuerpo: cuerpo, w: w, h: h, pct: pctCriterio });
+            pendientes.push({ el: el, chapa: chapa, cuerpo: cuerpo,
+                w: w, h: h, pct: pctCriterio, personas: n.personas || 0 });
         }
 
         el.appendChild(cuerpo);
         lienzo.appendChild(el);
     });
 
-    // Segunda pasada: ahora sí se mide el rótulo y se reparte la gente en lo
-    // que queda por debajo. Un cuadro donde no caben ni tres figuras legibles
-    // se pinta con el relleno liso de siempre, que es preferible a media
-    // persona asomando.
+    // Segunda pasada. Primero se miden **todas** las chapas y sólo después se
+    // dibuja: el tamaño de la figura es uno solo para el lienzo entero y sale
+    // de la caja más apretada de todas, así que no se puede saber hasta tener
+    // medida la última. Con las lecturas juntas y por delante de las
+    // escrituras, el navegador recalcula la maqueta una vez y no una por
+    // cuadro.
+    pendientes.forEach(pd => { pd.alto = pd.h - pd.chapa.offsetHeight; });
+    const altoCelda = window.celdaDeTodosLosCuadros(
+        pendientes.map(pd => ({ ancho: pd.w, alto: pd.alto, personas: pd.personas })));
+
     pendientes.forEach(pd => {
-        const rejilla = window.rejillaDePersonas(pd.w, pd.h - pd.chapa.offsetHeight, altoCelda);
+        const rejilla = window.rejillaDePersonas(pd.w, pd.alto, altoCelda, pd.personas);
         if (rejilla) {
             const gente = window.lienzoDeGente(rejilla, pd.w, pd.h, pd.pct / 100, criterio.color);
-            pd.el.title += `\n👥 ${gente.pintadas} de ${gente.total} figuras`;
+            pd.el.title += `\n👥 ${gente.total} ${gente.total === 1 ? 'persona' : 'personas'}`;
             pd.el.insertBefore(gente.svg, pd.cuerpo);
         } else {
+            // Su gente no cabe entera ni al tamaño mínimo. Enseñar veinte
+            // figuras donde hay treinta personas sería mentir, así que ese
+            // cuadro se queda con el relleno liso.
             const relleno = document.createElement('div');
             relleno.className = 'stats-cuadro-relleno';
             relleno.style.background = criterio.relleno;

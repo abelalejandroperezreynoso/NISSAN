@@ -1334,12 +1334,27 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   en píxeles, así que al girar el teléfono hay que rehacerlo — de eso se
   encarga el oyente de `resize` que se registra una sola vez.
 
-  **Y hay una tercera forma, «Personas», que es el mismo treemap relleno de
-  gente.** Misma geometría, mismo orden, mismos toques y el mismo criterio: lo
-  único que cambia es que en vez de subir una banda lisa, el cuadro se llena de
-  figuras y se pintan de color las que le tocan al criterio. Es lo que el
-  relleno no sabe hacer: un 62% y un 71% dan dos bandas casi iguales, mientras
-  que catorce figuras de veinte contra dieciséis se cuentan de un vistazo.
+  **Y hay una tercera forma, «Personas», donde una figura es una persona.**
+  No es un relleno con forma de gente: **el número de figuras de un cuadro es
+  el número de personas que hay detrás de él** —las del departamento, las del
+  grupo del supervisor, las del puesto— y, en el último nivel, donde el cuadro
+  ES una persona, hay exactamente una. Lo que colorea el criterio no son
+  figuras enteras: **cada figura se llena por partes**, así que 14.6 personas
+  son catorce enteras y una llena hasta las rodillas. Es lo que el relleno liso
+  no sabe hacer: un 62% y un 71% dan dos bandas casi iguales, mientras que
+  catorce figuras de veinte contra dieciséis se cuentan de un vistazo.
+
+  Hubo antes una versión donde las figuras eran decoración —se dibujaban las
+  que cupieran— y no servía: dos cuadros con la misma plantilla enseñaban
+  distinta gente según lo grandes que hubieran salido.
+
+  Se cuenta la gente **a la que le toca alguna encuesta del filtro**
+  (`personasAsignadas`, que llenan las tres cachés del motor) y no la plantilla
+  entera (`employeesCount`, que se escribía y no lo leía nadie): a quien no le
+  toca ninguna encuesta no le puede tocar ninguna respuesta, así que su figura
+  no podría colorearse nunca y sólo engordaría el gris. Toda caché nueva que
+  vaya a dibujarse aquí tiene que llevar ese contador, y `filaCanonica` —la
+  fila de un colaborador— lo trae en 1.
 
   Por eso no es un gráfico aparte sino un valor más de `formaDesglose`
   (`window.FORMAS_DESGLOSE`), y **nadie lee esa variable a pelo**: se pregunta
@@ -1349,9 +1364,52 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   preguntan por `!== 'barras'`.
 
   ```js
-  window.rejillaDePersonas(ancho, alto)   // {filas, columnas, total…} o null
+  window.celdaDeTodosLosCuadros(cajas)                   // el tamaño común
+  window.celdaQueCabe(ancho, alto, personas)             // el mayor que admite una caja
+  window.rejillaDePersonas(ancho, alto, celda, personas) // el reparto, o null
   window.lienzoDeGente(rejilla, ancho, alto, proporcion, color)
   ```
+
+  **En esta forma el cuadro mide la gente, no lo asignado.** Es lo único
+  coherente con lo que se dibuja dentro: midiendo lo asignado, un departamento
+  con muchas encuestas por cabeza salía enorme y medio vacío y el de al lado
+  pequeño y a reventar. Midiendo la gente, todos salen igual de llenos y las
+  figuras caben más grandes. Son dos repartos distintos y se nota al cambiar de
+  forma: son dos gráficos que miden dos cosas, y lo asignado sigue en el globo.
+
+  **Todas las figuras miden lo mismo**, y el tamaño se decide una vez para el
+  lienzo entero: es el mayor al que **todos** los cuadros meten a su gente
+  entera, o sea el que consiente el cuadro más apretado. Un cuadro que no la
+  mete ni a `MIN_ALTO_PERSONA` **queda fuera del acuerdo** y cae al relleno
+  liso de siempre —enseñar veinte figuras donde hay treinta personas sería
+  mentir—; arrastrar a los demás con él dejaría el gráfico entero en figuras
+  diminutas por culpa de uno. `MAX_ALTO_PERSONA` es alto a propósito: en el
+  último nivel cada cuadro es una persona, así que el tamaño lo marca el cuadro
+  más pequeño y no la cantidad de gente, y con un tope bajo esos cuadros salían
+  con un monigote perdido en el centro.
+
+  **La figura no se estira, pero el hueco entre figuras sí.** Como el tamaño lo
+  manda el cuadro más apretado, a los demás les sobra sitio por definición y
+  amontonar la gente contra el suelo dejaba medio cuadro en blanco. El hueco no
+  mide nada, así que puede crecer: `rejillaDePersonas` reparte la gente por la
+  caja entera y elige el reparto **menos desproporcionado**, el que deja los
+  huecos igual de anchos que de altos. Con 64 personas en 205×116, tres
+  renglones dejan el doble de aire por arriba que por los lados y cuatro lo
+  dejan parejo; los dos llenan la caja igual, pero uno se lee como una rejilla
+  y el otro como tres tiras sueltas.
+
+  **La figura a medias se hace con un recorte, nunca con un degradado sobre el
+  `<use>`.** Un `<symbol>` con `viewBox` abre su propio sistema de coordenadas,
+  así que dentro de él `userSpaceOnUse` se resuelve contra la caja del icono
+  (`0 0 10 24`) y no contra la del lienzo: el degradado caía entero fuera de esa
+  caja y **la figura salía toda gris pasara lo que pasara con la medida**, que
+  es un fallo que no se ve —parece simplemente que a nadie le falta poco—. Lo
+  que se hace es dibujar la figura gris entera y encima la de color envuelta en
+  un `<g clip-path>`, que sí vive en las coordenadas del lienzo. Como el dibujo
+  ya dice la fracción exacta, no hay que redondear a figuras enteras ni
+  reservar los dos extremos como en `pctTexto`; lo único que se fuerza es
+  `MINIMO_VISIBLE_PERSONA`, para que la última persona no se confunda con las
+  grises.
 
   La figura vive **una sola vez** en el documento, colgada de `<body>` en un
   `<symbol>` que monta `window.montarIconoPersona()`, y cada cuadro la reusa
@@ -1359,36 +1417,16 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   desglose porque ese contenedor se reescribe entero con `innerHTML` a cada
   repintado y se la llevaría por delante.
 
-  **El rótulo se mide, no se estima, y por eso el dibujo va en dos pasadas.**
-  La gente se reparte en el hueco que queda por debajo de la chapa del título,
-  y la cifra («#2 · 93% contestadas») cabe de un renglón en un cuadro ancho y
-  de tres en uno estrecho: por catorce píxeles de más, la primera fila de
-  figuras se quedaba escondida detrás. La primera pasada monta todos los
-  cuadros con su rótulo y la segunda lee `offsetHeight` y dibuja, así que el
-  navegador recalcula la maqueta una sola vez y no una por cuadro. Quien toque
-  ese bucle tiene que mantener las escrituras en la primera y las lecturas en
-  la segunda.
-
-  **Todas las figuras del gráfico miden lo mismo**, y por eso el tamaño se
-  decide una vez para el lienzo entero (`window.altoCeldaDeLienzo(ancho,
-  alto)`) y no cuadro por cuadro. Con el tamaño elegido cuadro a cuadro, uno
-  enseñaba diez figuras gigantes y el de al lado sesenta diminutas: la vista
-  leía tamaño donde no había ninguna medida, y las cuentas de dos cuadros no
-  se podían comparar. Siendo único, cada figura vale lo mismo en todo el
-  gráfico y la cuenta de un cuadro es su área, que es lo asignado.
-  `rejillaDePersonas` ya no elige nada: cuenta cuántas filas y columnas caben
-  enteras con esa celda. **Y la celda no se estira** para repartir el sobrante
-  —el paso entre figuras tiene que ser el mismo en todos los cuadros—: lo que
-  sobra se va a los márgenes, con el bloque centrado de ancho y apoyado en el
-  suelo.
-
-  El tamaño único es `ALTO_CELDA_PERSONA` y sólo se mueve en lienzos extremos,
-  entre `MIN_FIGURAS_LIENZO` y `MAX_FIGURAS_LIENZO`: en un lienzo pequeño no
-  entraría casi nadie, y en uno muy grande serían miles de figuras —una
-  textura, no una cuenta— y otros tantos nodos que dibujar. El único tope duro
-  sigue siendo `MIN_ALTO_PERSONA`: donde no cabe ni una figura entera, el
-  cuadro se pinta con el relleno liso de siempre, que es preferible a media
-  persona asomando.
+  **El dibujo va en dos pasadas, y todas las lecturas van juntas antes de las
+  escrituras.** La gente se reparte en el hueco que queda por debajo de la
+  chapa del título, y esa chapa hay que medirla: la cifra cabe de un renglón en
+  un cuadro ancho y de tres en uno estrecho, y por catorce píxeles de más la
+  primera fila de figuras se quedaba escondida detrás. Además el tamaño común
+  sale de la caja más apretada de todas, así que no se sabe hasta tener medida
+  la última. La primera pasada monta todos los cuadros con su rótulo; la
+  segunda lee **todos** los `offsetHeight`, decide el tamaño y sólo entonces
+  dibuja. Así el navegador recalcula la maqueta una vez y no una por cuadro, y
+  quien toque ese bucle tiene que mantener ese orden.
 
   **Dentro del cuadro el rótulo estorba, así que pesa lo menos posible**: el
   nombre va mucho más pequeño que en cuadros y de un solo renglón, con puntos
@@ -1402,11 +1440,6 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   número sino la medida completa. El encabezado del gráfico y el globo sí
   siguen diciéndolo todo: ahí hay sitio, y en avance de revisión el conteo es
   información y no adorno.
-
-  Las figuras se cuentan enteras, así que el redondeo reserva los dos extremos
-  para lo exacto igual que `pctTexto`: ni cero de color cuando algo hay, ni
-  todas cuando falta algo. La geometría del relleno liso sigue yendo sin
-  redondear.
 
   Una sección que crece con el catálogo no se apila: va en `.stats-carrusel`,
   una fila que se arrastra con el dedo y engancha las tarjetas de una en una.
