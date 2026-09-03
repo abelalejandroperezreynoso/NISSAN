@@ -1416,7 +1416,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   Casi todos los criterios miden **sobre las asignadas**, que es lo que hace
   comparables las barras y los cuadros entre sí. Las tres excepciones son
-  calificación, que ya viene en porcentaje; **≥80% en todas**, que mide sobre
+  calificación, que ya viene en porcentaje; **80% Líderes**, que mide sobre
   la gente y no sobre las encuestas (más abajo); y **avance de revisión**, que se
   mide sobre las **contestadas**: dice qué parte de lo que ya entregaron lleva
   calificada quien revisa, y meter en el denominador una encuesta que nadie
@@ -1428,7 +1428,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   cualquier veredicto —revisada, certificada, falsa o mal revisada—, que es lo
   que reúne `window.procesadasDe(fila)`.
 
-  **«Revisadas ≥80%» y «≥80% en todas» no son el mismo filtro.** El primero
+  **«Revisadas ≥80%» y «80% Líderes» no son el mismo filtro.** El primero
   cuenta encuestas —qué parte de lo asignado se calificó por encima del
   mínimo—, así que quien saca un 100 y un 60 sale a la mitad y quien saca dos
   ochentas sale entero, y un promedio que llega al 80 tapa la encuesta que se

@@ -464,7 +464,7 @@ window.CRITERIOS_STATS = [
     // ninguna— y no sobre las encuestas, que es lo que ya dice el criterio de
     // arriba. Quien no tiene ni una calificada dice «sin calificar» y queda
     // fuera del renglón del peor, igual que en avance de revisión.
-    { clave: 'minimo_en_todas', etiqueta: '≥80% en todas', nombre: 'al mínimo en todas', color: '#0f766e', relleno: '#99f6e4',
+    { clave: 'minimo_en_todas', etiqueta: '80% Líderes', nombre: 'al mínimo en todas', color: '#0f766e', relleno: '#99f6e4',
       extremo: 'El que menos gente tiene al mínimo',
       valor: (d) => (d.personasEvaluadas || 0) > 0 ? (d.personasAlMinimo || 0) / d.personasEvaluadas : 0,
       texto: (d) => {
@@ -2024,7 +2024,7 @@ window.vistaCuadrosDentro = ({ titulo, subtitulo, volver, nodos, alTocar }) => {
 // la identidad que va al globo y los contadores con los que se llena su figura.
 // Sus campos se llaman de otra manera que en las cachés, y de traducirlos se
 // encarga `filaCanonica`, que es por donde pasa.
-// Los contadores de «≥80% en todas» los pone `conMinimoEnTodas`: una fila de
+// Los contadores de «80% Líderes» los pone `conMinimoEnTodas`: una fila de
 // colaborador es una persona, así que se resuelve con lo suyo y no hay nada
 // que sumar.
 window.fichaDeColaborador = (emp) => window.conMinimoEnTodas({
