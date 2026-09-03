@@ -2745,7 +2745,17 @@ html.modal-abierto {
 .stats-cuadro-cuerpo--personas {
     justify-content: flex-start;
     padding: 0;
+    /* El cuerpo cubre el cuadro entero por encima de las figuras, así que sin
+       esto el ratón no llega a tocar a nadie y el globo de cada persona no
+       aparecía nunca. Al dejarlo pasar, el toque sigue llegando igual al
+       cuadro —el manejador está en el padre— y el globo que sale es el de la
+       figura que hay debajo del cursor. */
+    pointer-events: none;
 }
+
+/* La chapa sí atiende: sobre el rótulo lo que interesa es el globo del cuadro
+   entero, no el de la persona que quede detrás. */
+.stats-cuadro-chapa { pointer-events: auto; }
 
 .stats-cuadro-chapa {
     width: 100%;

@@ -1356,6 +1356,51 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   vaya a dibujarse aquí tiene que llevar ese contador, y `filaCanonica` —la
   fila de un colaborador— lo trae en 1.
 
+  **Y cada figura es alguien con nombre.** El motor arma `porEmpleado`, una
+  fila por persona con su ficha —nombre, puesto, departamento, área— y **los
+  mismos contadores que su departamento**, incrementados al lado de ellos en la
+  pasada de respuestas. Cada fila de caché guarda además la lista de ids de su
+  gente (`empleados`), y `window.genteDeLaFila(fila)` cambia esos ids por sus
+  fichas —o devuelve las que la fila ya traiga puestas, que es el caso de un
+  colaborador, donde la fila **es** una persona (`window.fichaDeColaborador`)—.
+  Una caché nueva que quiera dibujarse aquí necesita esa lista, o su cuadro se
+  quedará sin figuras que enseñar.
+
+  **Lo que cada figura lleva llena es lo suyo**, no un trozo del promedio del
+  grupo (`window.llenadoDeLaPersona`). Es lo que permite que el globo diga un
+  nombre y un porcentaje sin contradecir al dibujo: la figura de Luis está
+  llena hasta donde llega Luis. Van ordenadas de más llena a menos y se colocan
+  de abajo arriba, así que el cuadro se sigue leyendo como el relleno liso —lo
+  de arriba es lo que falta— pero ahora enseña **la distribución** y no sólo el
+  promedio: se ve si el 64% del grupo es todo el mundo a medias o media
+  plantilla al día y la otra media sin empezar.
+
+  De ahí sale una diferencia que hay que conocer: el rótulo del cuadro dice el
+  agregado del grupo —lo mismo que las barras y los cuadros— y las figuras
+  dicen a cada quien. Coinciden cuando toda la gente del cuadro tiene el mismo
+  número de encuestas asignadas, que es lo normal dentro de un puesto, y se
+  separan un poco cuando no. No es un descuadre: son el promedio y su reparto.
+
+  Aquí el criterio se mide **siempre en absoluto**, también prontitud, que en
+  los cuadros y en las barras se estira con la escala del nivel
+  (`escalaRelativa`). Esa escala existe para separar promedios de departamento
+  que se parecen demasiado; entre personas no hace falta —varían de sobra— y
+  encima aplastaría a media plantilla contra el 0 o el 100 según con quién le
+  tocara compartir cuadro. Por lo mismo la nota del encabezado en esta forma se
+  decide antes que la de la escala relativa: dice «una figura es una persona»,
+  que es lo que describe el dibujo.
+
+  **El globo de cada figura es un `<title>` dentro de su `<use>`**, como el
+  resto de los globos de la aplicación, y lo arma `window.globoDePersona`. Para
+  que el ratón lo alcance, `.stats-cuadro-cuerpo--personas` va con
+  `pointer-events: none`: ese cuerpo cubre el cuadro entero por encima de las
+  figuras y sin eso el globo no aparecía nunca. El toque sigue llegando al
+  cuadro —el manejador está en el padre— y sólo la chapa del rótulo vuelve a
+  atender, para que sobre el nombre salga el globo del cuadro y no el de la
+  persona que quede detrás. En un teléfono no hay ratón, así que el detalle por
+  persona es cosa del escritorio: el toque entra al nivel de abajo, como
+  siempre.
+
   Por eso no es un gráfico aparte sino un valor más de `formaDesglose`
   (`window.FORMAS_DESGLOSE`), y **nadie lee esa variable a pelo**: se pregunta
   con `window.formaDesgloseActual()`, que devuelve cuadros ante cualquier cosa
@@ -1367,7 +1412,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.celdaDeTodosLosCuadros(cajas)                   // el tamaño común
   window.celdaQueCabe(ancho, alto, personas)             // el mayor que admite una caja
   window.rejillaDePersonas(ancho, alto, celda, personas) // el reparto, o null
-  window.lienzoDeGente(rejilla, ancho, alto, proporcion, color)
+  window.lienzoDeGente(rejilla, ancho, alto, gente, color)
+  window.genteDeLaFila(fila)                             // las fichas de un nodo
+  window.llenadoDeLaPersona(ficha)                       // cuánto lleva, de 0 a 1
+  window.globoDePersona(ficha)                           // lo que dice su globo
   ```
 
   **En esta forma el cuadro mide la gente, no lo asignado.** Es lo único
@@ -1405,11 +1453,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   caja y **la figura salía toda gris pasara lo que pasara con la medida**, que
   es un fallo que no se ve —parece simplemente que a nadie le falta poco—. Lo
   que se hace es dibujar la figura gris entera y encima la de color envuelta en
-  un `<g clip-path>`, que sí vive en las coordenadas del lienzo. Como el dibujo
-  ya dice la fracción exacta, no hay que redondear a figuras enteras ni
-  reservar los dos extremos como en `pctTexto`; lo único que se fuerza es
-  `MINIMO_VISIBLE_PERSONA`, para que la última persona no se confunda con las
-  grises.
+  un `<g clip-path>`, que sí vive en las coordenadas del lienzo; las dos llevan
+  el mismo `<title>`, porque según dónde caiga el cursor se toca una o la otra.
+  Como el dibujo ya dice la fracción exacta, no hay que redondear a figuras
+  enteras ni reservar los dos extremos como en `pctTexto`; lo único que se
+  fuerza es `MINIMO_VISIBLE_PERSONA`, para que quien apenas ha empezado no se
+  confunda con quien no ha hecho nada, ni quien va casi al día con quien ya
+  terminó.
 
   La figura vive **una sola vez** en el documento, colgada de `<body>` en un
   `<symbol>` que monta `window.montarIconoPersona()`, y cada cuadro la reusa

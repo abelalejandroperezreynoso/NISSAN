@@ -725,9 +725,20 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
 
     const statsCache = {};
     const puestoCache = {};
+    // Una fila por persona, con su ficha y sus mismos contadores. Es lo que
+    // convierte cada figura del gráfico de personas en alguien con nombre: el
+    // cuadro guarda la lista de ids y el dibujo saca de aquí a quién le toca
+    // cada figura, cuánto lleva y qué decir en el globo.
+    const porEmpleado = {};
     const getDept = (e) => (e.department || e.departamento || e.dept || "Sin Departamento").trim();
     const getSup = (e) => (e.sup || e.supervisor || e.supervisor_name || "Sin Supervisor").trim();
     const getPuesto = (e) => (e.puesto || e.Puesto || "").trim() || "Sin Puesto";
+    const getAreaEmp = (e) => {
+        if (e.areas && e.areas.name) return e.areas.name;
+        if (e.area && typeof e.area === 'object' && e.area.name) return e.area.name;
+        if (e.area && typeof e.area === 'string' && e.area.trim() !== '') return e.area.trim();
+        return "Sin Área";
+    };
 
     let totalAsignadasGlobal = 0;
     const radarGroupingUsersAssigned = {};
@@ -744,8 +755,8 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         // plantilla entera (`employeesCount`) a propósito: a quien no le toca
         // ninguna encuesta no le puede tocar ninguna respuesta, así que su
         // figura no podría colorearse nunca y sólo engordaría el gris.
-        if (!statsCache[dept]) statsCache[dept] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0, supervisors: {} };
-        if (!statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0 };
+        if (!statsCache[dept]) statsCache[dept] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0, empleados: [], supervisors: {} };
+        if (!statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0, empleados: [] };
 
         statsCache[dept].employeesCount++;
         statsCache[dept].supervisors[sup].employeesCount++;
@@ -753,8 +764,16 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         let empAssignments = 0;
 
         const empPuestoKey = getPuesto(e);
-        if (!puestoCache[empPuestoKey]) puestoCache[empPuestoKey] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0 };
+        if (!puestoCache[empPuestoKey]) puestoCache[empPuestoKey] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0, empleados: [] };
         puestoCache[empPuestoKey].employeesCount++;
+
+        porEmpleado[empId] = {
+            nombre: e.name || e.nombre || 'Sin nombre',
+            departamento: dept, supervisor: sup, puesto: empPuestoKey, area: getAreaEmp(e),
+            assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0,
+            malRevisadas: 0, revisadasAltas: 0, sumScore: 0, countScore: 0,
+            sumDias: 0, countDias: 0, sumProntitud: 0, countProntitud: 0
+        };
         
         // Se calcula una vez por persona y no por encuesta: `tieneEquipoDirecto`
         // recorre la plantilla entera.
@@ -776,10 +795,17 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         puestoCache[empPuestoKey].assignedCount += empAssignments;
         totalAsignadasGlobal += empAssignments;
 
+        porEmpleado[empId].assignedCount = empAssignments;
+
+        // Sólo entra en la lista quien tiene algo asignado: son las figuras
+        // que se van a dibujar, y su cuenta es `personasAsignadas`.
         if (empAssignments > 0) {
             statsCache[dept].personasAsignadas++;
             statsCache[dept].supervisors[sup].personasAsignadas++;
             puestoCache[empPuestoKey].personasAsignadas++;
+            statsCache[dept].empleados.push(empId);
+            statsCache[dept].supervisors[sup].empleados.push(empId);
+            puestoCache[empPuestoKey].empleados.push(empId);
         }
     });
 
@@ -929,6 +955,11 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             }
         }
 
+        // La fila de la persona lleva los mismos contadores que su
+        // departamento, y se incrementa al lado de ellos: es la que rellena su
+        // propia figura en el gráfico de personas y la que cuenta su globo.
+        const suya = porEmpleado[empId];
+
         if (statsCache[dept]) {
             statsCache[dept].responses++;
             if (statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].responses++;
@@ -937,6 +968,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         if (puestoCache[empPuestoKey]) {
             puestoCache[empPuestoKey].responses++;
         }
+        if (suya) suya.responses++;
 
         const sumarTiempos = (fila) => {
             if (!fila) return;
@@ -952,6 +984,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         sumarTiempos(statsCache[dept]);
         if (statsCache[dept]) sumarTiempos(statsCache[dept].supervisors[sup]);
         sumarTiempos(puestoCache[empPuestoKey]);
+        sumarTiempos(suya);
         if (r.diasAtencion !== null) { totalDiasAtencion += r.diasAtencion; countDiasAtencion++; }
 
         if(!evalPerfMap[title]) evalPerfMap[title] = { sum: 0, countRevisadas: 0, countTotal: 0 };
@@ -961,15 +994,19 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         if (r.review_status === 'Falsa') {
             if (statsCache[dept]) { statsCache[dept].falsas++; if(statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].falsas++; }
             if (puestoCache[empPuestoKey]) puestoCache[empPuestoKey].falsas++;
+            if (suya) suya.falsas++;
         } else if (r.review_status === 'Certificada') {
             if (statsCache[dept]) { statsCache[dept].certificadas++; if(statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].certificadas++; }
             if (puestoCache[empPuestoKey]) puestoCache[empPuestoKey].certificadas++;
+            if (suya) suya.certificadas++;
         } else if (r.review_status === 'Revisado') {
             if (statsCache[dept]) { statsCache[dept].reviewed++; if(statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].reviewed++; }
             if (puestoCache[empPuestoKey]) puestoCache[empPuestoKey].reviewed++;
+            if (suya) suya.reviewed++;
         } else if (r.review_status === 'Mal Revisada') {
             if (statsCache[dept]) { statsCache[dept].malRevisadas++; if(statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].malRevisadas++; }
             if (puestoCache[empPuestoKey]) puestoCache[empPuestoKey].malRevisadas++;
+            if (suya) suya.malRevisadas++;
         }
         
         // 1. CALCULAMOS EL PUNTAJE PARA TODAS LAS RESPUESTAS
@@ -1022,6 +1059,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             if (puestoCache[empPuestoKey]) {
                 puestoCache[empPuestoKey].revisadasAltas = (puestoCache[empPuestoKey].revisadasAltas || 0) + 1;
             }
+            if (suya) suya.revisadasAltas++;
         }
 
         // 3. Lógica Global Original: Tanto Revisado como Certificada suman puntos y cuentan como progreso general
@@ -1038,6 +1076,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         puestoCache[empPuestoKey].sumScore += finalScore;
         puestoCache[empPuestoKey].countScore++;
         }
+        if (suya) { suya.sumScore += finalScore; suya.countScore++; }
         totalRevisadas++;
         totalScoreSum += finalScore;
             
@@ -1114,6 +1153,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     window.encuestasStatsCacheForDrilldown = {
         statsCache,
         puestoCache,
+        porEmpleado,
         cleanResponses: dataset,
         activeEvalsList: evalsList
     };
@@ -1869,9 +1909,12 @@ window.encabezadoDelGrafico = (forma, nodos) => {
     const criterio = window.criterioStats();
     const peor = window.extremoDelCriterio(nodos);
 
+    // En personas la nota va antes que la de la escala relativa: ahí cada
+    // figura se llena con lo suyo en absoluto, así que «del más rápido al más
+    // lento» —que habla de la escala del nivel— no describiría el dibujo.
     const nota = forma === 'barras' ? 'ordena las columnas'
+        : forma === 'personas' ? 'una figura es una persona'
         : criterio.escalaRelativa ? 'del más rápido al más lento'
-        : forma === 'personas' ? 'colorea a las personas'
         : 'llena los cuadros';
 
     return '<div class="stats-grafico-titulo">' +
@@ -1910,10 +1953,35 @@ window.vistaCuadrosDentro = ({ titulo, subtitulo, volver, nodos, alTocar }) => {
 
 // Las filas por colaborador no usan los mismos nombres que las cachés por
 // departamento y por puesto, así que se traducen antes de medirlas o dibujarlas.
+// La ficha de un colaborador con la forma que espera el gráfico de personas:
+// la identidad que va al globo y los contadores con los que se llena su figura.
+// Sus campos se llaman de otra manera que en las cachés, y de traducirlos se
+// encarga `filaCanonica`, que es por donde pasa.
+window.fichaDeColaborador = (emp) => ({
+    nombre: emp.name,
+    departamento: emp.dept,
+    puesto: emp.job,
+    area: emp.area,
+    assignedCount: emp.totalAssigned || 0,
+    responses: emp.totalResp || 0,
+    reviewed: emp.reviewedCount || 0,
+    certificadas: emp.certificadasCount || 0,
+    falsas: emp.falsasCount || 0,
+    malRevisadas: emp.malRevisadasCount || 0,
+    revisadasAltas: emp.revisadasAltasCount || 0,
+    sumScore: emp.sumScore || 0,
+    countScore: emp.countScore || 0,
+    sumDias: emp.sumDias || 0,
+    countDias: emp.countDias || 0,
+    sumProntitud: emp.sumProntitud || 0,
+    countProntitud: emp.countProntitud || 0
+});
+
 window.filaCanonica = (emp) => ({
     // Una fila de colaborador es una persona, así que su cuadro lleva una
-    // figura y se llena por partes con lo que haya hecho.
+    // figura —ella misma— y se llena por partes con lo que haya hecho.
     personasAsignadas: 1,
+    gente: [window.fichaDeColaborador(emp)],
     assignedCount: emp.totalAssigned || 0,
     responses: emp.totalResp || 0,
     reviewed: emp.reviewedCount || 0,
@@ -1961,6 +2029,18 @@ window.anchoPorPixelDeTexto = (() => {
 // fila tiene que traer los nombres canónicos de las cachés
 // (`assignedCount`, `responses`, `reviewed`…), que son los que mide cada
 // criterio de CRITERIOS_STATS.
+// Las fichas de la gente de una fila de caché. La fila guarda sólo los ids
+// —una lista por departamento, por supervisor y por puesto— y las fichas viven
+// una sola vez en `porEmpleado`. Una fila que ya venga con las fichas puestas
+// —la de un colaborador, que es una persona— se devuelve tal cual.
+window.genteDeLaFila = (d) => {
+    if (Array.isArray(d.gente)) return d.gente;
+    const fichas = window.encuestasStatsCacheForDrilldown
+        && window.encuestasStatsCacheForDrilldown.porEmpleado;
+    if (!fichas || !Array.isArray(d.empleados)) return [];
+    return d.empleados.map(id => fichas[id]).filter(Boolean);
+};
+
 window.nodosDeCuadros = (mapa) => {
     const nodos = [];
     Object.keys(mapa).forEach(nombre => {
@@ -1970,9 +2050,11 @@ window.nodosDeCuadros = (mapa) => {
         nodos.push({
             nombre: nombre,
             datos: d,
-            // Cuánta gente hay detrás de este cuadro. Es lo que cuenta el
-            // gráfico de personas: una figura por persona, ni una más.
+            // Cuánta gente hay detrás de este cuadro y quiénes son. Es lo que
+            // cuenta y lo que dibuja el gráfico de personas: una figura por
+            // persona, ni una más, y cada una con su nombre y lo suyo.
             personas: d.personasAsignadas || 0,
+            gente: window.genteDeLaFila(d),
             asignadas: asignadas,
             respuestas: d.responses || 0,
             procesadas: window.procesadasDe(d),
@@ -2151,70 +2233,109 @@ window.rejillaDePersonas = (ancho, alto, altoCelda, personas) => {
 // El lienzo de figuras de un cuadro. Se pintan de abajo arriba, que es como
 // subía el relleno: lo que queda en gris es exactamente lo que falta.
 // Cuánto se ve de una figura a medio llenar cuando la medida no da ni para
-// eso: por debajo, la última persona no se distingue de las grises.
+// eso: por debajo, esa persona no se distingue de las que no han hecho nada.
 window.MINIMO_VISIBLE_PERSONA = 0.12;
 
-// Cada figura se llena por sí sola, así que la cuenta ya no se redondea: 14.6
-// personas son catorce enteras y una llena hasta las rodillas. Antes había que
-// redondear a figuras enteras y reservar los dos extremos —como en `pctTexto`—
-// para no decir cero habiendo algo ni todo faltando algo; hoy eso lo resuelve
-// el propio dibujo, y lo único que se fuerza es que la fracción se vea.
 window.__nRecortePersona = 0;
 
-window.lienzoDeGente = (rejilla, ancho, alto, proporcion, color) => {
+// Lo que cada figura lleva llena, de 0 a 1: **lo suyo**, no un trozo del
+// promedio del grupo. Es lo que hace que el globo pueda decir un nombre y un
+// porcentaje sin contradecir al dibujo: la figura de Luis está llena hasta
+// donde llega Luis.
+//
+// Aquí el criterio se mide siempre en absoluto, también prontitud, que en los
+// cuadros y en las barras se estira con la escala del nivel (`escalaRelativa`).
+// Esa escala existe para separar promedios de departamento que se parecen
+// demasiado; entre personas no hace falta —varían de sobra— y encima
+// aplastaría a media plantilla contra el 0 o el 100 según con quién le tocara
+// compartir cuadro.
+window.llenadoDeLaPersona = (ficha) => {
+    const valor = window.criterioStats().valor(ficha);
+    return Math.max(0, Math.min(1, valor || 0));
+};
+
+// Lo que dice el globo de una figura: quién es, de dónde y cómo va.
+window.globoDePersona = (ficha) => {
+    const criterio = window.criterioStats();
+    const calificacion = ficha.countScore > 0
+        ? window.pctTexto(ficha.sumScore / ficha.countScore / 100) : null;
+
+    return [
+        ficha.nombre || 'Sin nombre',
+        ficha.puesto ? 'Puesto: ' + ficha.puesto : '',
+        ficha.departamento ? 'Departamento: ' + ficha.departamento : '',
+        ficha.area ? '📍 Área: ' + ficha.area : '',
+        criterio.etiqueta + ': ' + window.cifraDelCriterio(ficha),
+        'Asignadas: ' + (ficha.assignedCount || 0) + ' · Contestadas: ' + (ficha.responses || 0),
+        calificacion === null ? '' : '⭐ Calificación: ' + calificacion + '%'
+    ].filter(Boolean).join('\n');
+};
+
+// El lienzo de figuras de un cuadro: una por persona, cada una llena hasta
+// donde llegue esa persona y con su globo.
+//
+// Van ordenadas de más llena a menos y se colocan de abajo arriba, así que el
+// cuadro se sigue leyendo como se leía el relleno liso —lo de arriba es lo que
+// falta—, sólo que ahora se puede señalar quién es cada cual.
+window.lienzoDeGente = (rejilla, ancho, alto, gente, color) => {
     window.montarIconoPersona();
 
-    const total = rejilla.total;
-    let valor = proporcion * total;
-    if (proporcion > 0) valor = Math.max(valor, window.MINIMO_VISIBLE_PERSONA);
-    if (proporcion < 1) valor = Math.min(valor, total - window.MINIMO_VISIBLE_PERSONA);
-    valor = Math.max(0, Math.min(total, valor));
+    const ordenada = (gente || []).slice()
+        .sort((a, b) => window.llenadoDeLaPersona(b) - window.llenadoDeLaPersona(a));
 
     // La rejilla ocupa la caja entera; cada figura va centrada en su hueco.
     const altoFigura = rejilla.altoCelda * 0.86;
     const anchoFigura = altoFigura * window.ASPECTO_PERSONA;
 
-    const figura = (x, y, relleno) => '<use href="#' + window.SVG_PERSONA_ID + '"'
+    const figura = (x, y, relleno, globo) => '<use href="#' + window.SVG_PERSONA_ID + '"'
         + ' x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '"'
         + ' width="' + anchoFigura.toFixed(1) + '" height="' + altoFigura.toFixed(1) + '"'
-        + ' fill="' + relleno + '"/>';
+        + ' fill="' + relleno + '">'
+        + (globo ? '<title>' + window.sanitizeForHTML(globo) + '</title>' : '')
+        + '</use>';
 
     let figuras = '';
     let recortes = '';
 
-    for (let i = 0; i < total; i++) {
-        // Se llena de abajo arriba y de izquierda a derecha, que es como sube
-        // el relleno liso: lo que queda en gris es lo que falta. El renglón de
-        // arriba es el que puede quedar a medias.
+    for (let i = 0; i < rejilla.total; i++) {
+        // Se llena de abajo arriba y de izquierda a derecha, que es como subía
+        // el relleno liso. El renglón de arriba es el que puede quedar a
+        // medias de figuras.
         const fila = Math.floor(i / rejilla.columnas);
         const columna = i % rejilla.columnas;
         const x = columna * rejilla.pasoX + (rejilla.pasoX - anchoFigura) / 2;
         const y = alto - (fila + 1) * rejilla.pasoY + (rejilla.pasoY - altoFigura) / 2;
 
-        if (i + 1 <= valor + 1e-9) {
-            figuras += figura(x, y, color);
-        } else if (valor - i > 1e-9) {
+        const ficha = ordenada[i];
+        const globo = ficha ? window.globoDePersona(ficha) : '';
+        let llena = ficha ? window.llenadoDeLaPersona(ficha) : 0;
+        if (llena > 0) llena = Math.max(llena, window.MINIMO_VISIBLE_PERSONA);
+        if (llena < 1) llena = Math.min(llena, 1 - window.MINIMO_VISIBLE_PERSONA);
+
+        if (llena >= 1) {
+            figuras += figura(x, y, color, globo);
+        } else if (llena > 0) {
             // La persona a medias: la figura gris entera y encima la de color
             // recortada por abajo, que es como se llena un vaso.
             //
             // El recorte va sobre un `<g>` que envuelve al `<use>`, y no como
             // degradado sobre el propio `<use>`: un `<symbol>` con `viewBox`
             // abre su propio sistema de coordenadas, así que dentro de él
-            // `userSpaceOnUse` se resuelve contra la caja del icono (0 0 10 24)
-            // y no contra la del lienzo. El degradado caía entero fuera de esa
-            // caja y la figura salía toda del color de la última parada: gris,
-            // siempre, pasara lo que pasara con la medida. El `<g>` sí vive en
-            // las coordenadas del lienzo.
-            const alturaLlena = altoFigura * (valor - i);
+            // `userSpaceOnUse` se resuelve contra la caja del icono
+            // (0 0 10 24) y no contra la del lienzo. El degradado caía entero
+            // fuera de esa caja y la figura salía toda del color de la última
+            // parada: gris, siempre, pasara lo que pasara con la medida. El
+            // `<g>` sí vive en las coordenadas del lienzo.
+            const alturaLlena = altoFigura * llena;
             const id = 'persona-parcial-' + (++window.__nRecortePersona);
             recortes += '<clipPath id="' + id + '" clipPathUnits="userSpaceOnUse">'
                 + '<rect x="' + x.toFixed(1) + '" y="' + (y + altoFigura - alturaLlena).toFixed(1) + '"'
                 + ' width="' + anchoFigura.toFixed(1) + '" height="' + alturaLlena.toFixed(1) + '"/>'
                 + '</clipPath>';
-            figuras += figura(x, y, window.COLOR_PERSONA_VACIA)
-                + '<g clip-path="url(#' + id + ')">' + figura(x, y, color) + '</g>';
+            figuras += figura(x, y, window.COLOR_PERSONA_VACIA, globo)
+                + '<g clip-path="url(#' + id + ')">' + figura(x, y, color, globo) + '</g>';
         } else {
-            figuras += figura(x, y, window.COLOR_PERSONA_VACIA);
+            figuras += figura(x, y, window.COLOR_PERSONA_VACIA, globo);
         }
     }
 
@@ -2226,7 +2347,7 @@ window.lienzoDeGente = (rejilla, ancho, alto, proporcion, color) => {
     // figuras.
     svg.setAttribute('preserveAspectRatio', 'none');
     svg.innerHTML = (recortes ? '<defs>' + recortes + '</defs>' : '') + figuras;
-    return { svg: svg, total: total };
+    return { svg: svg, total: rejilla.total };
 };
 
 window.dibujarCuadros = (nodos, alTocar) => {
@@ -2386,8 +2507,8 @@ window.dibujarCuadros = (nodos, alTocar) => {
         }
         if (chapa) {
             cuerpo.appendChild(chapa);
-            pendientes.push({ el: el, chapa: chapa, cuerpo: cuerpo,
-                w: w, h: h, pct: pctCriterio, personas: n.personas || 0 });
+            pendientes.push({ el: el, chapa: chapa, cuerpo: cuerpo, w: w, h: h,
+                pct: pctCriterio, personas: n.personas || 0, gente: n.gente || [] });
         }
 
         el.appendChild(cuerpo);
@@ -2407,8 +2528,9 @@ window.dibujarCuadros = (nodos, alTocar) => {
     pendientes.forEach(pd => {
         const rejilla = window.rejillaDePersonas(pd.w, pd.alto, altoCelda, pd.personas);
         if (rejilla) {
-            const gente = window.lienzoDeGente(rejilla, pd.w, pd.h, pd.pct / 100, criterio.color);
-            pd.el.title += `\n👥 ${gente.total} ${gente.total === 1 ? 'persona' : 'personas'}`;
+            const gente = window.lienzoDeGente(rejilla, pd.w, pd.h, pd.gente, criterio.color);
+            pd.el.title += `\n👥 ${gente.total} ${gente.total === 1 ? 'persona' : 'personas'}`
+                + ' (pasa el cursor por una para ver quién es)';
             pd.el.insertBefore(gente.svg, pd.cuerpo);
         } else {
             // Su gente no cabe entera ni al tamaño mínimo. Enseñar veinte
