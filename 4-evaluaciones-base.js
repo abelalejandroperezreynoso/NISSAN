@@ -400,7 +400,6 @@ window.cargarVistaEvaluaciones = async () => {
     });
 
     const sortedKeys = Object.keys(groups).sort();
-    const freqMap = { 'once': 'Única vez', 'weekly': 'Semanal', 'biweekly': 'Quincenal', 'monthly': 'Mensual', 'quarterly': 'Trimestral', 'semiannual': 'Semestral', 'yearly': 'Anual', 'biennial': 'Cada 2 años' };
 
     // A quién le toca una encuesta vive en `1-config.js`: la pantalla que
     // certifica por clasificación tiene que preguntar lo mismo de otras

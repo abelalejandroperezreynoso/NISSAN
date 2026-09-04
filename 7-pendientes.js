@@ -917,12 +917,17 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     bloqueEstadoHtml = window.bloqueDeReintento(r, item.vencimiento.vencida);
                 } else if (item.vencimiento.tipoAviso === 'relanzada') {
                     // La contestó y relanzaron la encuesta, así que toca otra
-                    // vuelta. La rama no pinta nada a propósito: se queda con
-                    // el «¡Pendiente!» y la etiqueta de tiempo que llevan todos
-                    // los demás, y así es como se lee, como un pendiente más.
-                    // Lo que no puede es caerse al `else` de abajo, que sin
-                    // periodo —una encuesta de «única vez» no lo tiene— diría
-                    // «Vence en 0 días».
+                    // vuelta. Se queda con el «¡Pendiente!» de cualquier otra
+                    // tarjeta, y sin más etiqueta que la de la frecuencia: la
+                    // roja de «cuándo apareció» —que aquí diría «Hoy», el día
+                    // del relanzamiento— pinta de urgencia algo que no la
+                    // tiene, y las de vencimiento no aplican porque una
+                    // encuesta de «única vez» no tiene periodo que vencer.
+                    //
+                    // Por eso la rama no puede desaparecer aunque casi no haga
+                    // nada: al caer en el `else` de abajo diría «Vence en 0
+                    // días».
+                    badgeTiempoHtml = '';
                 } else if (item.vencimiento.vencida) {
                     const etiquetaVencida = item.vencimiento.tipoAviso === 'nunca' ? 'Nunca contestada' : 'Vencida';
                     badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">🚨 ${etiquetaVencida}</span>`;
@@ -957,12 +962,13 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     textoUltima = `Última vez: ${d}/${m}/${y}`;
                 }
 
-                let freqText = "";
-                if (item.original_data && item.original_data.frequency) {
-                    const fMap = { 'weekly': 'Semanal', 'biweekly': 'Quincenal', 'monthly': 'Mensual', 'quarterly': 'Trimestral', 'semiannual': 'Semestral', 'yearly': 'Anual', 'biennial': 'Bienal' };
-                    freqText = fMap[item.original_data.frequency] || item.original_data.frequency;
-                }
-                const badgeFreqHtml = freqText ? `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">⏱️ ${freqText}</span>` : '';
+                // Cómo se llama cada frecuencia lo dice `1-config.js`: aquí
+                // había tres copias del mismo mapa y ninguna traducía `once`,
+                // así que una encuesta de única vez enseñaba «⏱️ once», el
+                // valor crudo de la base. Sin frecuencia también es de única
+                // vez, que es lo que da por hecho el resto de la aplicación.
+                const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
+                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">⏱️ ${freqText}</span>`;
                 
                 return `
                 <div class="incident-card" style="border-left: 5px solid #ef4444;">
@@ -1020,12 +1026,9 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     textoUltima = `Última vez: ${d}/${m}/${y}`;
                 }
 
-                let freqText = "";
-                if (item.original_data && item.original_data.frequency) {
-                    const fMap = { 'weekly': 'Semanal', 'biweekly': 'Quincenal', 'monthly': 'Mensual', 'quarterly': 'Trimestral', 'semiannual': 'Semestral', 'yearly': 'Anual', 'biennial': 'Bienal' };
-                    freqText = fMap[item.original_data.frequency] || item.original_data.frequency;
-                }
-                const badgeFreqHtml = freqText ? `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">⏱️ ${freqText}</span>` : '';
+                // Cómo se llama cada frecuencia lo dice `1-config.js`.
+                const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
+                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">⏱️ ${freqText}</span>`;
 
                 return `
                 <div class="incident-card" style="border-left: 5px solid #be185d;">
@@ -1174,12 +1177,9 @@ if (item.virtual_type === 'waiting_boss') {
                     textoUltima = `Última vez: ${d}/${m}/${y}`;
                 }
 
-                let freqText = "";
-                if (item.original_data && item.original_data.frequency) {
-                    const fMap = { 'weekly': 'Semanal', 'biweekly': 'Quincenal', 'monthly': 'Mensual', 'quarterly': 'Trimestral', 'semiannual': 'Semestral', 'yearly': 'Anual', 'biennial': 'Bienal' };
-                    freqText = fMap[item.original_data.frequency] || item.original_data.frequency;
-                }
-                const badgeFreqHtml = freqText ? `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">⏱️ ${freqText}</span>` : '';
+                // Cómo se llama cada frecuencia lo dice `1-config.js`.
+                const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
+                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">⏱️ ${freqText}</span>`;
 
                 return `
                 <div class="incident-card" style="border-left: 5px solid #2563eb;">

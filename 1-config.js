@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-04-10';
+window.VERSION_APP = '2026-09-04-11';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1380,6 +1380,27 @@ window.respuestaDelPeriodo = (ev, respuestas, fecha) => {
 // porque una clasificación puede mezclar frecuencias y no hay un periodo de la
 // clasificación como tal.
 window.PESO_FRECUENCIA = { once: 0, biennial: 1, yearly: 2, semiannual: 3, quarterly: 4, monthly: 5, biweekly: 6, weekly: 7 };
+
+// Cómo se llama cada frecuencia en pantalla. Vive aquí porque lo escriben el
+// panel de pendientes —tres veces, una por tipo de tarjeta—, la lista de
+// encuestas y el panel de detalles, y las copias ya habían discrepado: unas
+// decían «Cada 2 años» y otras «Bienal», y ninguna de las del panel de
+// pendientes traducía `once`, así que la tarjeta de una encuesta de única vez
+// enseñaba «⏱️ once», el valor crudo de la base.
+//
+// Sin frecuencia, con `'once'` o con un valor que no esté en la lista se
+// responde «Única vez», que es lo que significa no tener ritmo.
+window.NOMBRE_FRECUENCIA = {
+    weekly: 'Semanal',
+    biweekly: 'Quincenal',
+    monthly: 'Mensual',
+    quarterly: 'Trimestral',
+    semiannual: 'Semestral',
+    yearly: 'Anual',
+    biennial: 'Cada 2 años'
+};
+
+window.textoDeFrecuencia = (frecuencia) => window.NOMBRE_FRECUENCIA[frecuencia] || 'Única vez';
 
 window.encuestaQueMarcaElRitmo = (encuestas) => {
     const lista = encuestas || [];

@@ -106,8 +106,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     if (evalData) {
         const desc = evalData.description ? `<div style="margin-bottom:5px;"><b>Descripción:</b> ${evalData.description}</div>` : '';
         
-        const freqMap = { 'once': 'Única vez', 'weekly': 'Semanal', 'biweekly': 'Quincenal', 'monthly': 'Mensual', 'quarterly': 'Trimestral', 'semiannual': 'Semestral', 'yearly': 'Anual', 'biennial': 'Cada 2 años' };
-        const freq = evalData.frequency ? freqMap[evalData.frequency] || evalData.frequency : 'Única vez';
+        const freq = window.textoDeFrecuencia(evalData.frequency);
         const freqHtml = `<div style="font-size:0.8rem; color:#64748b;"><b>Frecuencia:</b> ${freq}</div>`;
         const obligHtml = (evalData.is_obligatory === false) ? `<div style="font-size:0.8rem; color:#22c55e; font-weight:bold; margin-top:4px;">✨ Encuesta Opcional</div>` : '';
         const areaHtml = (evalData.evaluates_area === true) ? `<div style="font-size:0.8rem; color:#be185d; font-weight:bold; margin-top:4px;">📍 Mide resultados por Área</div>` : '';

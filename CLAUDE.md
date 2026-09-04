@@ -190,6 +190,18 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   rechace no da error, sólo afecta a cero filas—, o el panel diría que la orden
   se dio sin que nadie vaya a salir.
 
+- **Cómo se llama cada frecuencia lo dice `1-config.js`.** `window.textoDeFrecuencia(frecuencia)`
+  —sobre el mapa `window.NOMBRE_FRECUENCIA`— traduce `weekly` a «Semanal» y
+  responde «Única vez» a `once`, a la frecuencia vacía y a cualquier valor que
+  no conozca, que es lo que significa no tener ritmo. Había cinco copias de ese
+  mapa repartidas por las pantallas y ya habían discrepado —unas decían «Cada 2
+  años» y otras «Bienal»—, pero lo que se veía era otra cosa: **ninguna de las
+  tres del panel de pendientes traducía `once`**, y como el fallback era el
+  valor crudo de la base, la tarjeta de una encuesta de única vez enseñaba
+  «⏱️ once». Toda pantalla que escriba una frecuencia pasa por el ayudante.
+  La excepción es el mapa con emoji de `4-evaluaciones-base.js` («📅 Semanal»),
+  que adorna cada frecuencia con su icono y se queda aparte.
+
 - **Fuente de 16px en los campos de formulario.** Safari en iOS ignora el
   `user-scalable=no` del viewport, así que cualquier `input`, `select` o
   `textarea` con fuente menor a 16px provoca zoom automático al enfocarlo.
@@ -1138,19 +1150,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   hoy. Ese caso es un `tipoAviso` propio, `'relanzada'`, sin atraso acumulado
   —el instante lo pone a cero—.
 
-  **Y su rama no pinta nada, a propósito.** Llevó tres cosas y las tres
+  **Y su rama casi no pinta nada, a propósito.** Llevó tres cosas y las tres
   sobraban: una insignia «🔄 Relanzada», un `.pendiente-nota` azul contando que
   la encuesta se volvió a lanzar y el estado «¡Se volvió a lanzar!». Quien
   acaba de contestarla ya sabe que se relanzó, y un pendiente que se explica
   más que los demás parece un problema en vez de otra vuelta. Hoy la tarjeta se
-  lee **como cualquier otro pendiente**: el «¡Pendiente!» y la etiqueta de
-  tiempo que llevan todos, y el recuadro de siempre con el periodo y la última
-  vez que la contestó —que ahí sigue diciendo la fecha de la respuesta que dejó
-  de contar—. Con ellas se fueron `window.bloqueDeRelanzamiento`, la variante
+  lee **como cualquier otro pendiente**: el «¡Pendiente!» de siempre, la
+  etiqueta de la frecuencia y el recuadro con el periodo y la última vez que la
+  contestó —que ahí sigue diciendo la fecha de la respuesta que dejó de
+  contar—. Con ellas se fueron `window.bloqueDeRelanzamiento`, la variante
   `.pendiente-nota.relanzada` de `estilos.css` y el campo `relanzamiento` que
   devolvía `esEvaluacionPendiente`, que no alimentaban nada más.
 
-  Lo que la rama **no** puede es desaparecer: sin ella el pendiente cae al
+  Lo único que sí hace la rama es **apagar la etiqueta roja de «cuándo apareció
+  el pendiente»** (`badgeTiempoHtml`), que en las demás tarjetas de encuesta
+  tapa alguna de vencimiento y aquí quedaba a la vista diciendo «⌛ Hoy» —el
+  día del relanzamiento— en el rojo de lo urgente, que es justo lo que un
+  relanzamiento no es.
+
+  Y **no puede desaparecer** aunque haga tan poco: sin ella el pendiente cae al
   `else` que anuncia el vencimiento, y una encuesta de «única vez» no tiene
   periodo, así que diría «Vence en 0 días».
 
