@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-04-7';
+window.VERSION_APP = '2026-09-04-8';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -666,6 +666,51 @@ window.reintentoDeRespuesta = (ev, resp, fecha) => {
              fechaRespuesta: resp.submitted_at };
 };
 
+// ==========================================
+// RELANZAR UNA ENCUESTA
+// ==========================================
+// Volver a pedir una encuesta que la gente ya contestó: la clasificación se
+// repite, la capacitación se vuelve a dar, el evento se celebra otra vez. Lo
+// hace quien la revisa —el instructor que la imparte, que es quien sabe cuándo
+// toca— desde el panel de detalles de la encuesta.
+//
+// Es **un instante, no un interruptor**, que es la misma idea que la orden de
+// cerrar sesiones: `relaunched_at` sella la hora en que se dio y toda respuesta
+// anterior deja de cerrar el pendiente, así que la encuesta vuelve a salir
+// entre los de todo el mundo. En cuanto cada quien la contesta de nuevo, su
+// respuesta es posterior al instante y su pendiente se cierra solo; un
+// interruptor encendido y olvidado la estaría pidiendo para siempre. Volver a
+// relanzarla es adelantar el instante, y no hay nada que apagar después.
+//
+// Lo que **no** hace es tocar las respuestas anteriores: siguen en el
+// historial, en las estadísticas y en lo que ya estuviera certificado. Lo
+// único que pierden es la capacidad de cerrar el pendiente.
+window.fechaDeRelanzamiento = (ev) => {
+    if (!ev || !ev.relaunched_at) return null;
+    const f = new Date(ev.relaunched_at);
+    return isNaN(f.getTime()) ? null : f;
+};
+
+// ¿Esta respuesta sigue contando después del último relanzamiento? Sin
+// relanzamiento —o sin la columna, que su script se corre a mano— cuentan
+// todas, que es lo de siempre. Una respuesta sin fecha de envío se deja pasar:
+// ante la duda, contestada.
+window.respuestaTrasRelanzar = (ev, resp) => {
+    const relanzada = window.fechaDeRelanzamiento(ev);
+    if (!relanzada || !resp || !resp.submitted_at) return true;
+    const enviada = new Date(resp.submitted_at);
+    return isNaN(enviada.getTime()) || enviada.getTime() >= relanzada.getTime();
+};
+
+window.respuestasTrasRelanzar = (ev, respuestas) =>
+    (respuestas || []).filter(r => window.respuestaTrasRelanzar(ev, r));
+
+// Relanzar es de quien revisa la encuesta, por lo mismo que corregir a quién va
+// dirigida: es quien la imparte. El modo administrador es aparte y lo resuelve
+// cada pantalla, como en `puedeEditarDestinatarios`.
+window.puedeRelanzarEncuesta = (ev, empleadoId) =>
+    window.revisoresDeEncuesta(ev).includes(String(empleadoId));
+
 // El nombre del área es texto libre: la respuesta guarda el que tenía el
 // empleado ese día y la pantalla de estadísticas agrupa por el de su ficha. Se
 // comparan siempre normalizados, o «Planta 1» y «PLANTA 1 » serían dos áreas.
@@ -1190,6 +1235,15 @@ window.camposConReintento = (campos) =>
 
 window.camposConMinimo = (campos) =>
     window.camposConColumna(campos, 'evaluations', 'requires_min_score');
+
+// El instante del último relanzamiento. Toda consulta que vaya a decidir un
+// pendiente tiene que traerlo: sin él, `esEvaluacionPendiente` no se entera de
+// que las respuestas de antes ya no cuentan y la encuesta se queda cerrada
+// para quien ya la había contestado.
+window.hayColumnaRelanzamiento = () => window.hayColumna('evaluations', 'relaunched_at');
+
+window.camposConRelanzamiento = (campos) =>
+    window.camposConColumna(campos, 'evaluations', 'relaunched_at');
 
 // ==========================================
 // QUÉ CLASIFICACIONES SE CERTIFICAN

@@ -1519,8 +1519,8 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
         // por la ventana de las encuestas que pasan lista sin poder esperar.
         await window.cargarVentanasDeAsistencia();
 
-        const camposEvals = await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-            'id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')));
+        const camposEvals = await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+            'id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))));
         const { data: activeEvalsDb } = await sb.from('evaluations')
             .select(camposEvals)
             .eq('active', true);

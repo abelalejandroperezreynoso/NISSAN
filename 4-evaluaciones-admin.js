@@ -38,8 +38,10 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     const yaEsta = window.encuestaEnCache(evaluationId);
     if (yaEsta) return yaEsta;
 
-    // Sólo lo que hace falta para saber quién la revisa.
-    const campos = await window.camposConRevisores('id, title, mode');
+    // Sólo lo que hace falta para saber quién la revisa, más el instante del
+    // último relanzamiento: a este panel se llega también desde el inicio, sin
+    // haber pasado por la lista, y es donde se dice cuándo se relanzó.
+    const campos = await window.camposConRelanzamiento(await window.camposConRevisores('id, title, mode'));
     const { data } = await sb.from('evaluations').select(campos).eq('id', evaluationId).single();
     if (data) window.cacheEncuestasRevision[String(evaluationId)] = data;
     return data || null;
@@ -163,6 +165,24 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             </button>`;
     }
 
+    // Relanzar es de quien la revisa, por lo mismo que corregir a quién va
+    // dirigida: es el instructor que la imparte y quien sabe cuándo toca
+    // repetirla. Va aquí abajo, con el mismo peso que aquélla, y dice desde
+    // cuándo corre la vuelta en curso para que nadie la relance dos veces sin
+    // darse cuenta.
+    let relanzarBtnHtml = '';
+    if (evalData && (window.modoAdminActivo || window.puedeRelanzarEncuesta(evalData, user.id))) {
+        const relanzada = window.fechaDeRelanzamiento(evalData);
+        const notaRelanzada = relanzada
+            ? `<div style="text-align:center; font-size:0.75rem; color:#64748b; margin-top:6px;">Última vez que se relanzó: ${relanzada.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>`
+            : '';
+        relanzarBtnHtml = `
+            <button onclick="window.abrirRelanzarEncuesta('${evalId}')"
+                    style="width:100%; margin-top:10px; padding:10px 16px; background:white; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:10px; cursor:pointer; font-weight:600; font-size:0.9rem; display:flex; align-items:center; justify-content:center; gap:8px;">
+                🔄 Relanzar encuesta
+            </button>${notaRelanzada}`;
+    }
+
     // --- LO ÚLTIMO QUE SACÓ ESTA PERSONA AQUÍ ---
     // Es lo que viene a mirar quien abre su propia encuesta, y estaba enterrado
     // en la lista de respuestas de todo el equipo. `responses` ya viene ordenada
@@ -216,6 +236,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             </div>
             ${actionButtonHtml}
             ${destinatariosBtnHtml}
+            ${relanzarBtnHtml}
         </div>
     `;
 
@@ -3386,8 +3407,11 @@ window.listaDeTiposHTML = (wrapper) => {
 // Debajo del campo, en cuanto se elige la hora: hasta cuándo se podrá
 // registrar. Es la misma cuenta que hará el teléfono de quien la conteste, así
 // que quien crea la encuesta ve el plazo real y no tiene que calcularlo.
+// La misma fecha se pide en dos sitios —la tarjeta de la pregunta al crear la
+// encuesta y la hoja de relanzarla—, así que el aviso se busca en el
+// contenedor que toque en cada uno.
 window.pintarPlazoAsistencia = (campo) => {
-    const wrapper = campo.closest('.pregunta-wrapper');
+    const wrapper = campo.closest('.pregunta-wrapper, .form-group');
     const aviso = wrapper ? wrapper.querySelector('.plazo-asistencia') : null;
     if (!aviso) return;
 
@@ -3831,6 +3855,241 @@ window.destinatariosDeLaHoja = () => {
 // El guardado del revisor: sólo los destinatarios. No pasa por el guardado
 // entero porque ése lee el título, la escala y las preguntas, que en esta hoja
 // están escondidas —y las escribiría con lo que hubiera quedado en los campos—.
+// ==========================================
+// RELANZAR UNA ENCUESTA
+// ==========================================
+// Volver a pedir una encuesta que la gente ya contestó: la clasificación se
+// repite, la capacitación se vuelve a dar, el evento se celebra otra vez. Lo
+// hace quien la revisa —el instructor que la imparte, que es quien sabe cuándo
+// toca— desde el botón del panel de detalles.
+//
+// La regla de qué significa relanzar vive en `1-config.js`
+// (`window.fechaDeRelanzamiento` y `window.respuestasTrasRelanzar`): es un
+// instante, y toda respuesta anterior deja de cerrar el pendiente sin dejar de
+// existir. Aquí sólo está la hoja que lo pide y la escritura.
+//
+// El cuerpo de la hoja se arma al abrirla y se vacía al cerrarla, así que los
+// ids de sus campos existen sólo mientras está a la vista.
+window.relanzandoEncuesta = null;
+
+window.cerrarRelanzarEncuesta = () => {
+    const hoja = document.getElementById('modal-relanzar-encuesta');
+    if (hoja) hoja.style.display = 'none';
+    const cuerpo = document.getElementById('cuerpo-relanzar-eval');
+    if (cuerpo) cuerpo.innerHTML = '';
+    window.relanzandoEncuesta = null;
+};
+
+window.abrirRelanzarEncuesta = async (evalId) => {
+    const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
+    if (!user) return;
+
+    const ev = await window.encuestaDeLaRespuesta(evalId);
+    if (!ev) { alert("No se encontró la encuesta."); return; }
+
+    if (!window.modoAdminActivo && !window.puedeRelanzarEncuesta(ev, user.id)) {
+        alert("Sólo quien revisa esta encuesta puede relanzarla.");
+        return;
+    }
+
+    // El script de `sql/` se corre a mano. Sin la columna no hay dónde sellar
+    // el instante, y escribirla reventaría la petición entera.
+    if (!(await window.hayColumnaRelanzamiento())) {
+        alert("Todavía no se puede relanzar: falta correr el script sql/relanzar-encuesta.sql en Supabase.");
+        return;
+    }
+
+    const hoja = document.getElementById('modal-relanzar-encuesta');
+    const cuerpo = document.getElementById('cuerpo-relanzar-eval');
+    if (!hoja || !cuerpo) return;
+
+    const subtitulo = document.getElementById('subtitulo-relanzar-eval');
+    if (subtitulo) subtitulo.innerText = ev.title || '';
+
+    cuerpo.innerHTML = `<div style="text-align:center; padding:30px; color:#64748b;"><div class="spinner" style="margin:0 auto 15px auto;"></div><p>Cargando…</p></div>`;
+    hoja.style.display = 'flex';
+
+    // Sólo las de asistencia: son las únicas que hay que volver a fechar.
+    const { data: preguntas } = await sb.from('evaluation_questions')
+        .select('id, question_text, question_type, options')
+        .eq('evaluation_id', evalId)
+        .eq('question_type', window.TIPO_PREGUNTA_ASISTENCIA)
+        .order('order_index');
+
+    const asistencias = preguntas || [];
+
+    // Cuántas respuestas dejarán de cerrar el pendiente. Va con
+    // `{ count: 'exact', head: true }`: interesa el número, no las filas.
+    const relanzadaAntes = window.fechaDeRelanzamiento(ev);
+    let consulta = sb.from('evaluation_responses')
+        .select('id', { count: 'exact', head: true })
+        .eq('evaluation_id', evalId);
+    if (relanzadaAntes) consulta = consulta.gte('submitted_at', relanzadaAntes.toISOString());
+    const { count } = await consulta;
+
+    // La hoja pudo cerrarse mientras se pedían las dos cosas.
+    if (hoja.style.display === 'none') return;
+
+    window.relanzandoEncuesta = { id: evalId, titulo: ev.title || '', asistencias };
+
+    const cuantas = (typeof count === 'number') ? count : null;
+    const lineaCuantas = cuantas === null
+        ? '<div style="font-size:0.85rem; color:#94a3b8; margin-top:8px;">No se pudo contar cuántas respuestas lleva esta vuelta.</div>'
+        : `<div style="font-size:0.85rem; color:#334155; margin-top:8px;">Esta vuelta lleva <strong>${cuantas}</strong> ${cuantas === 1 ? 'respuesta' : 'respuestas'}: ${cuantas === 1 ? 'dejará' : 'dejarán'} de cerrar el pendiente.</div>`;
+
+    const lineaAnterior = relanzadaAntes
+        // Sin punto final: la hora ya acaba en «p.m.» y se verían dos seguidos.
+        ? `<div style="font-size:0.85rem; color:#64748b; margin-top:8px;">La vuelta en curso arrancó el ${window.fechaYHoraLegible(relanzadaAntes)}</div>`
+        : '';
+
+    // Una encuesta que pasa lista no se puede relanzar sin decir a qué evento:
+    // el enunciado nombra uno que ya pasó y la hora vieja esconde el pendiente
+    // —fuera de su ventana no aparece—, así que relanzarla tal cual no le
+    // llegaría a nadie. Por eso los dos campos son obligatorios.
+    let bloqueAsistencia = '';
+    if (asistencias.length > 0) {
+        const campos = asistencias.map((q, i) => {
+            const texto = window.sanitizeForHTML(q.question_text || '');
+            return `
+                <div class="form-group" style="margin-bottom:${i === asistencias.length - 1 ? '0' : '18px'};">
+                    <label style="font-size:0.8rem; color:#64748b; margin-bottom:4px; display:block;">A qué se asiste</label>
+                    <input type="text" class="inp-relanzar-enunciado" data-pregunta="${q.id}" value="${texto}"
+                           placeholder="Ej. Capacitación de seguridad del 4 de octubre"
+                           style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:16px; font-family:inherit;">
+                    <label style="font-size:0.8rem; color:#64748b; margin:12px 0 4px; display:block;">Cuándo es</label>
+                    <input type="datetime-local" class="inp-relanzar-fecha" data-pregunta="${q.id}" value=""
+                           onchange="window.pintarPlazoAsistencia(this)"
+                           style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:8px; font-size:16px; font-family:inherit;">
+                    <div class="plazo-asistencia" style="font-size:0.8rem; color:#15803d; font-weight:600; margin-top:6px;"></div>
+                </div>`;
+        }).join('');
+
+        bloqueAsistencia = `
+            <div class="hoja-grupo-titulo">El nuevo evento</div>
+            <div class="hoja-grupo">
+                <div style="font-size:0.85rem; color:#15803d; background:#f0fdf4; border:1px dashed #bbf7d0; border-radius:8px; padding:10px; margin-bottom:14px;">
+                    🙋 Esta encuesta pasa lista, así que hay que decir a qué evento y cuándo. Sólo se podrá registrar a esa hora y durante los ${window.MINUTOS_PARA_REGISTRAR_ASISTENCIA} minutos siguientes; pasados, no haberla contestado cuenta como inasistencia.
+                </div>
+                ${campos}
+            </div>`;
+    }
+
+    cuerpo.innerHTML = `
+        <div class="hoja-grupo-titulo">Qué va a pasar</div>
+        <div class="hoja-grupo">
+            <div style="font-size:0.9rem; color:#334155; line-height:1.45;">
+                Se le volverá a pedir a todo el que la tenga asignada, aunque ya la haya contestado.
+            </div>
+            <div style="font-size:0.85rem; color:#64748b; margin-top:8px; line-height:1.45;">
+                Lo contestado hasta ahora <strong>no se borra</strong>: sigue en el historial, en las estadísticas y en lo que ya estuviera certificado. Lo único que deja de hacer es cerrar el pendiente, y a cada quien se le cerrará en cuanto la conteste de nuevo.
+            </div>
+            ${lineaCuantas}
+            ${lineaAnterior}
+        </div>
+        ${bloqueAsistencia}`;
+};
+
+window.confirmarRelanzarEncuesta = async () => {
+    const enCurso = window.relanzandoEncuesta;
+    if (!enCurso) return;
+
+    const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
+    const ev = await window.encuestaDeLaRespuesta(enCurso.id);
+    if (!window.modoAdminActivo && !(user && window.puedeRelanzarEncuesta(ev, user.id))) {
+        alert("Sólo quien revisa esta encuesta puede relanzarla.");
+        return;
+    }
+
+    // Lo que hay que reescribir de cada pregunta de asistencia antes de dar la
+    // orden. Los dos campos son obligatorios: sin ellos el pendiente saldría
+    // nombrando un evento que ya pasó, o no saldría siquiera.
+    const cambiosPreguntas = [];
+    for (const q of (enCurso.asistencias || [])) {
+        const campoTexto = document.querySelector(`.inp-relanzar-enunciado[data-pregunta="${q.id}"]`);
+        const campoFecha = document.querySelector(`.inp-relanzar-fecha[data-pregunta="${q.id}"]`);
+        const texto = campoTexto ? campoTexto.value.trim() : '';
+        const cuando = campoFecha ? campoFecha.value.trim() : '';
+
+        if (!texto) { alert("Falta decir a qué se asiste."); if (campoTexto) campoTexto.focus(); return; }
+        if (!cuando) { alert("Falta la fecha y la hora del nuevo evento."); if (campoFecha) campoFecha.focus(); return; }
+
+        const fecha = new Date(cuando);
+        if (isNaN(fecha.getTime())) { alert("La fecha del evento no es válida."); if (campoFecha) campoFecha.focus(); return; }
+
+        // El `datetime-local` da hora local sin zona; se guarda en ISO para que
+        // el teléfono de quien la conteste lea el mismo instante aunque esté en
+        // otro huso. Lo demás de `options` se respeta.
+        const opciones = window.opcionesDePregunta(q).slice();
+        opciones[window.PLAZA_FECHA_EVENTO] = fecha.toISOString();
+
+        cambiosPreguntas.push({ id: q.id, question_text: texto, options: opciones });
+    }
+
+    const cuantas = cambiosPreguntas.length;
+    const aviso = cuantas > 0
+        ? `Se volverá a pedir esta encuesta a todo el que la tenga asignada, con la nueva fecha del evento.\n\nLo ya contestado se conserva, pero deja de contar para esta vuelta.\n\n¿Relanzar «${enCurso.titulo}»?`
+        : `Se volverá a pedir esta encuesta a todo el que la tenga asignada, aunque ya la hubiera contestado.\n\nLo ya contestado se conserva, pero deja de contar para esta vuelta.\n\n¿Relanzar «${enCurso.titulo}»?`;
+    if (!confirm(aviso)) return;
+
+    const btn = document.getElementById('btn-relanzar-eval');
+    const subtitulo = document.getElementById('subtitulo-relanzar-eval');
+    if (btn) btn.disabled = true;
+    if (subtitulo) subtitulo.innerText = 'Relanzando…';
+
+    try {
+        // Primero las preguntas y después el instante, y no al revés: si la
+        // base rechaza la fecha nueva, la encuesta se queda como estaba en vez
+        // de quedar relanzada nombrando el evento del mes pasado.
+        for (const cambio of cambiosPreguntas) {
+            const { id, ...datos } = cambio;
+            const { data, error } = await sb.from('evaluation_questions')
+                .update(datos).eq('id', id).select('id');
+            if (error) throw error;
+            // PostgREST responde con éxito a un update que las políticas de RLS
+            // rechazan: afecta a cero filas y no da error. Aquí escribe alguien
+            // que no tiene por qué ser administrador.
+            if (!data || data.length === 0) {
+                alert("❌ La base no aceptó la nueva fecha del evento: no se modificó ninguna fila. Pide a un administrador que revise los permisos de la tabla de preguntas.");
+                return;
+            }
+        }
+
+        const instante = new Date().toISOString();
+        const { data, error } = await sb.from('evaluations')
+            .update({ relaunched_at: instante })
+            .eq('id', enCurso.id)
+            .select('id');
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            alert("❌ La base no aceptó el relanzamiento: no se modificó ninguna fila. Pide a un administrador que revise los permisos de la tabla de encuestas.");
+            return;
+        }
+
+        // La lista y la encuesta que quedaron en memoria traen el instante
+        // viejo, y de esas cachés salen los pendientes.
+        window.evalCache = null;
+        delete window.cacheEncuestasRevision[String(enCurso.id)];
+        if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+        // Aquí se movió la hora de una asistencia, y de esa caché salen los
+        // pendientes de las encuestas que pasan lista.
+        if (cambiosPreguntas.length > 0) await window.cargarVentanasDeAsistencia(true);
+
+        const titulo = enCurso.titulo;
+        const id = enCurso.id;
+        window.cerrarRelanzarEncuesta();
+        alert("✅ Encuesta relanzada");
+        if (window.abrirHistorialEvaluacion) await window.abrirHistorialEvaluacion(id, titulo);
+    } catch (e) {
+        alert("❌ Error: " + e.message);
+        console.error(e);
+    } finally {
+        if (btn) btn.disabled = false;
+        const sub = document.getElementById('subtitulo-relanzar-eval');
+        if (sub && window.relanzandoEncuesta) sub.innerText = window.relanzandoEncuesta.titulo;
+    }
+};
+
 window.guardarDestinatariosEncuesta = async () => {
     const eid = window.idEditandoEval;
     if (!eid) { alert("No hay ninguna encuesta abierta."); return; }

@@ -290,6 +290,53 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             </div>`;
     };
 
+    // Un pendiente que reaparece porque relanzaron la encuesta tampoco se
+    // explica solo: quien lo mira ya la contestó y la tarjeta le vuelve a pedir
+    // lo mismo sin decir por qué. Dice las tres cosas que faltan: que la
+    // encuesta se volvió a pedir, cuándo se dio esa orden y que lo que entregó
+    // antes sigue guardado —no se le perdió nada— pero ya no cierra el
+    // pendiente.
+    //
+    // Con `persona` habla de un tercero, igual que el de reintento: es la
+    // encuesta de modo jefe, que la repone quien evalúa y no el evaluado.
+    window.bloqueDeRelanzamiento = (relanzamiento, persona) => {
+        if (!relanzamiento) return '';
+
+        const cuando = fechaCorta(relanzamiento.fecha);
+        const anterior = fechaCorta(relanzamiento.fechaRespuesta);
+        const quien = persona ? window.sanitizeForHTML(String(persona).trim()) : '';
+
+        const titulo = '🔄 La encuesta se volvió a lanzar';
+
+        const orden = cuando
+            ? `Quien la revisa la relanzó el <strong>${cuando}</strong>`
+            : 'Quien la revisa la volvió a lanzar';
+
+        let previa;
+        if (quien) {
+            previa = anterior
+                ? `La evaluación de ${quien} del ${anterior} sigue guardada, pero ya no cuenta para esta vuelta.`
+                : `Lo evaluado antes sigue guardado, pero ya no cuenta para esta vuelta.`;
+        } else {
+            previa = anterior
+                ? `La que entregaste el ${anterior} sigue guardada, pero ya no cuenta para esta vuelta.`
+                : 'Lo que entregaste antes sigue guardado, pero ya no cuenta para esta vuelta.';
+        }
+
+        const accion = quien
+            ? `Vuelve a evaluar a ${quien} con lo de esta vuelta.`
+            : 'Contéstala otra vez con lo de esta vuelta.';
+
+        return `
+            <div class="pendiente-nota relanzada">
+                <div class="pendiente-nota-titulo">${titulo}</div>
+                <div class="pendiente-nota-texto">
+                    ${orden}. ${previa}
+                </div>
+                <div class="pendiente-nota-accion">📝 ${accion}</div>
+            </div>`;
+    };
+
     // 'fechaAlta' (el created_at de la encuesta) sirve de origen para contar la
     // racha cuando el empleado no la ha contestado nunca.
     //
@@ -302,7 +349,16 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
     // quitarlo. Lo demás —el periodo, la racha, «mal revisada»— no depende de
     // quién mire y se decide igual para los dos.
     window.esEvaluacionPendiente = (respuestas, evalId, frecuencia, fechaAlta, encuesta, contestaQuienMira = true) => {
-        const resps = respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [];
+        const todas = respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [];
+
+        // Relanzar la encuesta es un instante: lo contestado antes sigue en el
+        // historial pero deja de cerrar el pendiente, así que aquí se aparta.
+        // Sin relanzamiento —o sin la columna, que su script se corre a mano—
+        // no se aparta nada y todo se comporta como antes.
+        const relanzada = window.fechaDeRelanzamiento
+            ? window.fechaDeRelanzamiento(encuesta) : null;
+        const resps = relanzada ? window.respuestasTrasRelanzar(encuesta, todas) : todas;
+        const descartadas = relanzada ? todas.filter(r => !resps.includes(r)) : [];
 
         // Sin frecuencia repetitiva ('once', o sin dato) no hay periodos que contar.
         const now = new Date();
@@ -318,6 +374,25 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         const periodo = AVISO_CIERRE.hasOwnProperty(frecuencia) ? window.periodoVigente(frecuencia, now) : null;
 
         if (resps.length === 0) {
+            // La contestó, pero antes del relanzamiento. No es «nunca
+            // contestada» ni una racha de descuidos suyos: la encuesta se
+            // volvió a pedir y todavía no la ha repuesto, así que se explica
+            // aparte y sin atraso acumulado —el instante lo pone a cero—.
+            if (descartadas.length > 0) {
+                descartadas.sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at));
+                const diasRestantes = periodo ? Math.ceil((periodo.fin - now) / 86400000) : 0;
+                return {
+                    mostrar: true,
+                    diasFaltantes: Math.max(diasRestantes, 0),
+                    vencida: false,
+                    tipoAviso: 'relanzada',
+                    ultimaFecha: descartadas[0].submitted_at,
+                    periodosOmitidos: 0,
+                    frecuencia: frecuencia,
+                    relanzamiento: { fecha: relanzada, fechaRespuesta: descartadas[0].submitted_at }
+                };
+            }
+
             // Nunca contestada: la racha corre desde que se dio de alta la encuesta.
             const omitidos = (periodo && fechaAlta) ? window.periodosOmitidos(frecuencia, new Date(fechaAlta), periodo) : 0;
             return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'nunca', ultimaFecha: null, periodosOmitidos: omitidos, frecuencia: frecuencia };
@@ -480,8 +555,8 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             // las pregunta sin poder esperar, así que la caché se llena antes.
             await window.cargarVentanasDeAsistencia();
 
-            const camposEvals = await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-                'id, title, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')));
+            const camposEvals = await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+                'id, title, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))));
             const { data: activeEvalsDb } = await sb.from('evaluations')
                         .select(camposEvals)
                         .eq('active', true);
@@ -888,6 +963,14 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     txtEstado = "¡Vuelve a contestarla!";
                     colorEstado = color;
                     bloqueEstadoHtml = window.bloqueDeReintento(r, item.vencimiento.vencida);
+                } else if (item.vencimiento.tipoAviso === 'relanzada') {
+                    // Tampoco falta contestarla: la contestó y relanzaron la
+                    // encuesta, así que lo que se pide es contestarla otra vez.
+                    // No va en rojo: nadie se ha descuidado, la orden es de hoy.
+                    badgeTiempoHtml = `<span style="background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #bfdbfe;">🔄 Relanzada</span>`;
+                    txtEstado = "¡Se volvió a lanzar!";
+                    colorEstado = "#1d4ed8";
+                    bloqueEstadoHtml = window.bloqueDeRelanzamiento(item.vencimiento.relanzamiento);
                 } else if (item.vencimiento.vencida) {
                     const etiquetaVencida = item.vencimiento.tipoAviso === 'nunca' ? 'Nunca contestada' : 'Vencida';
                     badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">🚨 ${etiquetaVencida}</span>`;
@@ -971,9 +1054,14 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 // quién se evalúa, que aquí el resultado no es del que mira.
                 const esReintento = !!(item.vencimiento && item.vencimiento.tipoAviso === 'reintento');
                 const nombreSub = (item.sub_name || '').trim().split(' ')[0];
-                const notaReintentoHtml = esReintento
-                    ? window.bloqueDeReintento(item.vencimiento.reintento, item.vencimiento.vencida, nombreSub)
-                    : '';
+                let notaReintentoHtml = '';
+                if (esReintento) {
+                    notaReintentoHtml = window.bloqueDeReintento(item.vencimiento.reintento, item.vencimiento.vencida, nombreSub);
+                } else if (item.vencimiento && item.vencimiento.tipoAviso === 'relanzada') {
+                    // Aquí también se evaluó ya y la tarjeta vuelve a pedirlo:
+                    // relanzaron la encuesta y toca otra vuelta.
+                    notaReintentoHtml = window.bloqueDeRelanzamiento(item.vencimiento.relanzamiento, nombreSub);
+                }
                 
                 let textoUltima = "Nunca evaluado";
                 if (item.vencimiento && item.vencimiento.ultimaFecha) {
