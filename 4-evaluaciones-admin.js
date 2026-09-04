@@ -2648,6 +2648,32 @@ window.renderConfiguracionEscala = () => {
             </div>`
         );
     }
+
+    // Los recuadros de la guía de cada pregunta son uno por valor, así que
+    // cambiar el máximo cambia cuántos hay.
+    window.renderGuiasDeEscala();
+};
+
+// El «Puntaje máximo» de la hoja, puesto desde fuera sin perder las etiquetas
+// ya escritas: `renderConfiguracionEscala` rehace los campos vacíos, así que
+// hay que devolverles su valor.
+window.ajustarMaximoDeEscala = (max) => {
+    const inp = document.getElementById('eval-max-scale');
+    if (!inp || !Number.isFinite(parseFloat(max))) return;
+    if (parseFloat(inp.value) === parseFloat(max)) return;
+
+    const previas = {};
+    document.querySelectorAll('#dynamic-labels-container input[id^="lbl-range-"]').forEach(el => {
+        if (el.value.trim()) previas[el.id] = el.value;
+    });
+
+    inp.value = max;
+    window.renderConfiguracionEscala();
+
+    Object.keys(previas).forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = previas[id];
+    });
 };
 
 // Sin la columna en la base no se puede nombrar a nadie: se deja la casilla
@@ -3067,19 +3093,24 @@ window.editarEvaluacion = async (id, soloDestinatarios = false) => {
         container.innerHTML = '';
         if (error) { alert("Error cargando preguntas"); return; }
 
-        let hasHalfPoints = false;
+        // La escala con la que se guardaron las preguntas manda sobre lo que
+        // dijeran las etiquetas: `range_labels` es opcional y sin ellas el
+        // máximo se quedaba en 5, de modo que guardar una encuesta del 0 al 8
+        // la encogía sin avisar —y ahora, además, dejaría fuera los recuadros
+        // de guía de los valores perdidos—.
+        let hasHalfPoints = false, maxDeLasPreguntas = null;
         if (qs && qs.length > 0) {
             const rangeQ = qs.find(q => q.question_type === 'range');
             if (rangeQ) {
-                let opts = rangeQ.options;
-                if (typeof opts === 'string') { try { opts = JSON.parse(opts); } catch(e){} }
-                if (Array.isArray(opts) && opts.length > 2 && String(opts[2]) === '0.5') {
-                    hasHalfPoints = true;
-                }
+                const opts = window.opcionesDePregunta(rangeQ);
+                if (opts.length > 2 && String(opts[2]) === '0.5') hasHalfPoints = true;
+                const max = parseFloat(opts[1]);
+                if (!isNaN(max) && max > 0) maxDeLasPreguntas = max;
             }
         }
         const chkHalfPoints = document.getElementById('eval-half-points');
         if(chkHalfPoints) chkHalfPoints.checked = hasHalfPoints;
+        if (maxDeLasPreguntas !== null) window.ajustarMaximoDeEscala(maxDeLasPreguntas);
 
         if (qs && qs.length > 0) {
             qs.forEach(q => {
@@ -3133,9 +3164,10 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
         : `<button onclick="this.closest('.pregunta-wrapper').remove(); window.renumerarPreguntas();" style="margin-left:auto; color:#64748b; border:none; cursor:pointer;">✕ Quitar</button>`;
 
     // La guía de una escala viaja en la cuarta posición de `options`; el resto
-    // de los tipos no la tienen y el campo va escondido.
-    const guiaEscala = (tp === 'range' && typeof op[window.PLAZA_GUIA_ESCALA] === 'string')
-        ? window.sanitizeForHTML(op[window.PLAZA_GUIA_ESCALA]) : '';
+    // de los tipos no la tienen y el bloque va escondido. Los recuadros se
+    // dibujan más abajo, cuando la tarjeta ya está en el documento: cuántos son
+    // depende del máximo y de los puntos medios, que se leen de la hoja.
+    const guiaGuardada = (tp === 'range') ? op[window.PLAZA_GUIA_ESCALA] : null;
 
     const showTextContainer = (tp === 'text');
     const showOptionsContainer = (tp === 'multiple' || tp === 'checklist' || tp === 'list_match');
@@ -3176,9 +3208,11 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
         <div style="padding:10px; background:#fdf2f8; border:1px dashed #fbcfe8; border-radius:8px; font-size:0.85rem; color:#be185d;">
             📊 <b>Nota:</b> Esta pregunta se auto-evaluará utilizando el "Puntaje Máximo" global configurado arriba.
         </div>
-        <label style="font-size:0.8rem; color:#64748b; margin:12px 0 3px; display:block;">Qué significa cada valor (opcional):</label>
-        <textarea class="inp-guia-escala" rows="4" placeholder="0 = no existe el estándar&#10;1 = existe pero no se aplica&#10;…" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #94a3b8; border-radius:6px; background:#fdf4ff; font-family:inherit;">${guiaEscala}</textarea>
-        <div style="font-size:0.75rem; color:#94a3b8; margin-top:4px;">Sale plegado bajo la pregunta al contestarla y al calificarla. Es de esta pregunta; las etiquetas cortas de «Escala de puntajes» son de toda la encuesta.</div>
+        <label style="font-size:0.8rem; color:#64748b; margin:12px 0 6px; display:block;">Qué significa cada valor (opcional):</label>
+        <div class="guia-escala-valores"></div>
+        <label style="font-size:0.8rem; color:#64748b; margin:12px 0 3px; display:block;">Nota general (opcional):</label>
+        <textarea class="inp-guia-nota" rows="2" placeholder="Lo que valga para toda la pregunta y no para un valor…" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #94a3b8; border-radius:6px; background:#fdf4ff; font-family:inherit;"></textarea>
+        <div style="font-size:0.75rem; color:#94a3b8; margin-top:6px;">Sale plegado bajo la pregunta al contestarla y al calificarla. Es de esta pregunta; las etiquetas cortas de «Escala de puntajes» son de toda la encuesta.</div>
     </div>
 
     <div class="photo-info-container" style="display:${showPhotoInfo?'block':'none'}; margin-top:15px; padding:10px; background:#eff6ff; border:1px dashed #bfdbfe; border-radius:8px; font-size:0.85rem; color:#1d4ed8;">
@@ -3194,8 +3228,112 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     if(showOptionsContainer && op.length>0) op.forEach(o=>window.agregarInputOpcion(l, o, correctas.includes(String(o))));
     else if(showOptionsContainer) window.agregarInputOpcion(l);
     window.actualizarMarcasCorrectas(d);
+    // Los recuadros se montan siempre, aunque la pregunta no sea de escala: si
+    // se cambia el tipo a «Rango Numérico» ya están puestos, y mientras tanto
+    // el bloque entero va escondido.
+    window.montarGuiaDeEscala(d, guiaGuardada);
     window.verificarRestriccionesModo();
     window.renumerarPreguntas();
+};
+
+// ==========================================
+// LA GUÍA DE UNA ESCALA, RECUADRO POR VALOR
+// ==========================================
+// Un recuadro por cada valor que ofrece la escala —0, 0.5, 1… hasta el máximo—
+// en vez del campo de texto libre que había antes: quien escribe la guía no
+// tiene que inventarse el formato ni acordarse de cuántos valores hay, y quien
+// contesta lee cada valor con su significado al lado.
+//
+// Cuántos son lo dicen el «Puntaje máximo» y los «puntos medios» de la hoja,
+// que son de toda la encuesta: cambiarlos redibuja los recuadros de todas las
+// preguntas de escala a la vez.
+window.maximoDeEscalaDeLaHoja = () => {
+    const inp = document.getElementById('eval-max-scale');
+    const max = inp ? parseInt(inp.value, 10) : 5;
+    return (Number.isFinite(max) && max > 0) ? max : 5;
+};
+
+window.pasoDeEscalaDeLaHoja = () => {
+    const chk = document.getElementById('eval-half-points');
+    return (chk && chk.checked) ? 0.5 : 1;
+};
+
+// Lo tecleado hasta ahora, sobre lo que ya se sabía. Lo que se guarda en la
+// tarjeta y no en el documento es lo que sobrevive a bajar el máximo y volver
+// a subirlo: los recuadros desaparecen, pero lo escrito en ellos vuelve.
+window.recogerGuiaDeEscala = (wrapper) => {
+    const guia = wrapper._guiaEscala || {};
+    wrapper.querySelectorAll('.inp-guia-valor').forEach(inp => {
+        const texto = inp.value.trim();
+        if (texto) guia[inp.dataset.valor] = texto;
+        else delete guia[inp.dataset.valor];
+    });
+    wrapper._guiaEscala = guia;
+    return guia;
+};
+
+window.renderRecuadrosGuia = (wrapper) => {
+    const caja = wrapper ? wrapper.querySelector('.guia-escala-valores') : null;
+    if (!caja) return;
+
+    const guia = window.recogerGuiaDeEscala(wrapper);
+    const valores = window.valoresDeEscala(0, window.maximoDeEscalaDeLaHoja(), window.pasoDeEscalaDeLaHoja());
+
+    caja.innerHTML = valores.map(v => {
+        const clave = String(v);
+        return `
+        <div class="guia-valor-fila">
+            <span class="guia-valor-numero">${clave}</span>
+            <input type="text" class="inp-guia-valor" data-valor="${clave}"
+                   value="${window.sanitizeForHTML(guia[clave] || '')}"
+                   placeholder="Qué significa un ${clave}">
+        </div>`;
+    }).join('');
+};
+
+// Todas a la vez: es lo que llaman el «Puntaje máximo» y la casilla de puntos
+// medios, que son de la encuesta entera.
+window.renderGuiasDeEscala = () => {
+    document.querySelectorAll('#questions-container .pregunta-wrapper').forEach(window.renderRecuadrosGuia);
+};
+
+// Lo guardado, repartido en los recuadros. Un objeto es la guía de hoy; un
+// texto es una guía vieja y se reparte por renglones, dejando en la nota lo
+// que no hable de ningún valor —así no se pierde nada al abrirla—.
+window.montarGuiaDeEscala = (wrapper, guardado) => {
+    let valores = {}, nota = '';
+
+    if (typeof guardado === 'string') {
+        const repartida = window.guiaDesdeTextoLibre(guardado);
+        valores = repartida.valores;
+        nota = repartida.nota;
+    } else if (guardado && typeof guardado === 'object' && !Array.isArray(guardado)) {
+        Object.keys(guardado).forEach(llave => {
+            if (llave === window.LLAVE_NOTA_GUIA) return;
+            const valor = parseFloat(llave);
+            const texto = typeof guardado[llave] === 'string' ? guardado[llave].trim() : '';
+            if (!isNaN(valor) && texto) valores[String(window.claveDeValorEscala(valor))] = texto;
+        });
+        const general = guardado[window.LLAVE_NOTA_GUIA];
+        nota = typeof general === 'string' ? general.trim() : '';
+    }
+
+    wrapper._guiaEscala = valores;
+    const campoNota = wrapper.querySelector('.inp-guia-nota');
+    if (campoNota) campoNota.value = nota;
+    window.renderRecuadrosGuia(wrapper);
+};
+
+// Lo que se escribe en `options`: sólo los valores que la escala ofrece hoy
+// —lo que quedó fuera al bajar el máximo no se guarda— más la nota general.
+window.guiaDeLaPregunta = (wrapper) => {
+    const valores = {};
+    wrapper.querySelectorAll('.inp-guia-valor').forEach(inp => {
+        const texto = inp.value.trim();
+        if (texto) valores[inp.dataset.valor] = texto;
+    });
+    const campoNota = wrapper.querySelector('.inp-guia-nota');
+    return window.guiaDeEscalaParaGuardar(valores, campoNota ? campoNota.value : '');
 };
 
 // El orden de las preguntas es el que tengan aquí: `guardarNuevaEvaluacion`
@@ -3305,6 +3443,9 @@ window.toggleTipoPregunta = (s) => {
         if(t) t.style.display = 'block';
     } else if (s.value === 'range') {
         if(rInfo) rInfo.style.display = 'block';
+        // El máximo o los puntos medios pueden haber cambiado mientras esta
+        // pregunta era de otro tipo y sus recuadros estaban escondidos.
+        window.renderRecuadrosGuia(w);
     } else if (s.value === window.TIPO_PREGUNTA_FOTO) {
         // Una evidencia no tiene opciones ni respuesta modelo: sólo el
         // enunciado, que dice qué fotografiar.
@@ -3577,8 +3718,7 @@ window.guardarNuevaEvaluacion = async () => {
                 const chkHalf = document.getElementById('eval-half-points');
                 const step = (chkHalf && chkHalf.checked) ? 0.5 : 1;
                 ops = [0, globalMaxVal, step];
-                const campoGuia = d.querySelector('.inp-guia-escala');
-                const guia = campoGuia ? campoGuia.value.trim() : '';
+                const guia = window.guiaDeLaPregunta(d);
                 if (guia) ops[window.PLAZA_GUIA_ESCALA] = guia;
                 corr = "";
             } else {

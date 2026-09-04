@@ -917,8 +917,10 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                 if (opts.length > 2 && (String(opts[2]) === '0.5')) step = 0.5;
             }
             let rangeHtml = '<div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;">';
-            for (let i = min; i <= max; i += step) {
-                const val = Math.round(i * 10) / 10;
+            // Los valores salen del helper y no de un bucle propio: son las
+            // mismas llaves con las que la guía nombra cada valor, y dos
+            // redondeos distintos las dejarían sin casar.
+            window.valoresDeEscala(min, max, step).forEach(val => {
                 let labelText = '';
                 if (rangeLabels[val]) { labelText = `<div style="font-size:0.7rem; color:#64748b; margin-top:4px; max-width:60px; text-align:center; line-height:1.1; word-wrap:break-word;">${rangeLabels[val]}</div>`; }
                 rangeHtml += `
@@ -927,7 +929,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                     <div class="range-circle" style="width:42px; height:42px; border-radius:50%; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; font-weight:bold; color:#64748b; background:white; transition:all 0.2s; font-size:0.85rem;">${val}</div>
                     ${labelText}
                 </label>`;
-            }
+            });
             rangeHtml += '</div>';
             inputHtml = rangeHtml;
         }

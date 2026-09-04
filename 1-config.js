@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-03-13';
+window.VERSION_APP = '2026-09-04-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -563,33 +563,150 @@ window.maximoDeEscala = (pregunta) => {
     return 5;
 };
 
-// Una pregunta de escala puede llevar su propia guía: el texto largo que
-// explica qué representa cada valor **en esa pregunta**. Es otra cosa que las
-// etiquetas de `range_labels`, que son de la encuesta entera y caben en dos
-// palabras debajo del círculo; ésta se lee plegada y puede ocupar párrafos.
+// Los valores que ofrece una escala, del mínimo al máximo de paso en paso.
+// Se redondea a un decimal porque sumar 0.5 en coma flotante acaba dando
+// 2.9999999999, y ese número no casaría con ninguna llave de la guía. Lo
+// preguntan los círculos al contestar y los recuadros de la guía al crearla,
+// así que vive aquí y no en cada pantalla.
+window.valoresDeEscala = (min, max, paso) => {
+    const desde = parseFloat(min);
+    const hasta = parseFloat(max);
+    const salto = parseFloat(paso);
+    if (!isFinite(desde) || !isFinite(hasta) || !isFinite(salto) || salto <= 0) return [];
+
+    const valores = [];
+    // El tope de 200 es una red de seguridad: un paso diminuto guardado a mano
+    // en la base colgaría el navegador en este bucle.
+    for (let v = desde; v <= hasta + 1e-9 && valores.length < 200; v += salto) {
+        valores.push(window.claveDeValorEscala(v));
+    }
+    return valores;
+};
+
+// Un valor de la escala redondeado a un decimal, que es como se nombra en la
+// guía. Devuelve número; la llave de la guía es este número en texto.
+window.claveDeValorEscala = (valor) => {
+    const numero = parseFloat(valor);
+    return isNaN(numero) ? valor : Math.round(numero * 10) / 10;
+};
+
+// Una pregunta de escala puede llevar su propia guía: qué representa cada
+// valor **en esa pregunta**. Es otra cosa que las etiquetas de `range_labels`,
+// que son de la encuesta entera y caben en dos palabras debajo del círculo.
 //
 // Viaja en la cuarta posición de `options`, que para una escala es
 // `[min, max, paso, guía]`, y no en una columna nueva: así no hay otro script
 // que correr a mano. Todo lo que ya lee `options` de una escala mira sólo las
 // tres primeras y no se entera.
+//
+// Esa cuarta posición tiene dos formas, y las dos se entienden:
+//
+//   'texto libre'                          — como se escribía antes
+//   { '0': '…', '1.5': '…', __nota: '…' }  — un recuadro por cada valor
+//
+// La segunda es la de hoy: la hoja de crear la encuesta dibuja un recuadro por
+// cada valor que ofrece la escala —0, 0.5, 1… hasta el máximo— y quien la
+// escribe no tiene que inventarse el formato ni acordarse de todos los
+// valores. La primera es lo que hay guardado de antes y se sigue leyendo tal
+// cual; al abrir esa pregunta para editarla se reparte en recuadros lo que
+// venga escrito como «0 = …» y el resto se queda en la nota general, que es lo
+// único que no es de ningún valor en concreto.
 window.PLAZA_GUIA_ESCALA = 3;
+window.LLAVE_NOTA_GUIA = '__nota';
 
-window.guiaDeEscala = (pregunta) => {
-    if (!pregunta || pregunta.question_type !== 'range') return '';
+window.guiaDeEscalaCruda = (pregunta) => {
+    if (!pregunta || pregunta.question_type !== 'range') return null;
     const guia = window.opcionesDePregunta(pregunta)[window.PLAZA_GUIA_ESCALA];
-    return typeof guia === 'string' ? guia.trim() : '';
+    return (guia === undefined) ? null : guia;
 };
+
+// La nota general: lo que no habla de ningún valor en concreto. En una guía
+// vieja —texto libre— es todo lo que hay.
+window.guiaDeEscala = (pregunta) => {
+    const guia = window.guiaDeEscalaCruda(pregunta);
+    if (typeof guia === 'string') return guia.trim();
+    if (guia && typeof guia === 'object' && !Array.isArray(guia)) {
+        const nota = guia[window.LLAVE_NOTA_GUIA];
+        return typeof nota === 'string' ? nota.trim() : '';
+    }
+    return '';
+};
+
+// Qué dice la guía de cada valor, con la llave normalizada a un decimal: lo
+// guardado puede venir como '1' o como '1.0' y las dos son el mismo círculo.
+window.guiaPorValor = (pregunta) => {
+    const guia = window.guiaDeEscalaCruda(pregunta);
+    const mapa = {};
+    if (!guia || typeof guia !== 'object' || Array.isArray(guia)) return mapa;
+
+    Object.keys(guia).forEach(llave => {
+        if (llave === window.LLAVE_NOTA_GUIA) return;
+        const valor = parseFloat(llave);
+        if (isNaN(valor)) return;
+        const texto = typeof guia[llave] === 'string' ? guia[llave].trim() : '';
+        if (texto) mapa[String(window.claveDeValorEscala(valor))] = texto;
+    });
+    return mapa;
+};
+
+window.textoGuiaDeValor = (pregunta, valor) =>
+    window.guiaPorValor(pregunta)[String(window.claveDeValorEscala(valor))] || '';
 
 // El mismo desplegable en las dos pantallas donde se ve una escala: al
 // contestarla y al calificarla. Sin guía no dibuja nada.
 window.bloqueGuiaEscala = (pregunta) => {
-    const guia = window.guiaDeEscala(pregunta);
-    if (!guia) return '';
+    const porValor = window.guiaPorValor(pregunta);
+    const nota = window.guiaDeEscala(pregunta);
+    const valores = Object.keys(porValor).sort((a, b) => parseFloat(a) - parseFloat(b));
+    if (!valores.length && !nota) return '';
+
+    const filas = valores.map(v => `
+                    <div class="guia-escala-fila">
+                        <span class="guia-escala-valor">${window.sanitizeForHTML(v)}</span>
+                        <span class="guia-escala-significado">${window.sanitizeForHTML(porValor[v])}</span>
+                    </div>`).join('');
+
+    const listaHtml = filas ? `<div class="guia-escala-lista">${filas}</div>` : '';
+    const notaHtml = nota ? `<div class="guia-escala-texto">${window.sanitizeForHTML(nota)}</div>` : '';
+
     return `
         <details class="hoja-plegable guia-escala">
             <summary class="hoja-plegable-resumen"><span>📖 Qué significa cada valor</span></summary>
-            <div class="hoja-plegable-cuerpo guia-escala-texto">${window.sanitizeForHTML(guia)}</div>
+            <div class="hoja-plegable-cuerpo guia-escala-cuerpo">${listaHtml}${notaHtml}</div>
         </details>`;
+};
+
+// Lo escrito a mano en una guía vieja, repartido en recuadros: los renglones
+// que empiezan por un número y un separador —«0 = no existe», «1: a medias»—
+// son de ese valor y lo demás se queda en la nota. Sin esto, abrir una de esas
+// preguntas para editarla dejaría el texto en un campo que ya no existe.
+window.guiaDesdeTextoLibre = (texto) => {
+    const valores = {};
+    const sueltos = [];
+
+    String(texto || '').split(/\r?\n/).forEach(renglon => {
+        const casa = renglon.match(/^\s*(\d+(?:[.,]\d+)?)\s*[=:.–—-]\s*(.+?)\s*$/);
+        if (casa) valores[String(window.claveDeValorEscala(casa[1].replace(',', '.')))] = casa[2];
+        else if (renglon.trim()) sueltos.push(renglon.trim());
+    });
+
+    return { valores, nota: sueltos.join('\n') };
+};
+
+// La guía tal como se guarda, a partir de sus dos mitades. Vacía por completo
+// devuelve null: en `options` no se escribe una cuarta posición que no dice
+// nada.
+window.guiaDeEscalaParaGuardar = (valores, nota) => {
+    const guia = {};
+    Object.keys(valores || {}).forEach(llave => {
+        const texto = String(valores[llave] || '').trim();
+        if (texto) guia[llave] = texto;
+    });
+
+    const general = String(nota || '').trim();
+    if (general) guia[window.LLAVE_NOTA_GUIA] = general;
+
+    return Object.keys(guia).length ? guia : null;
 };
 
 // Si esta pregunta lleva campo de motivo. Una que se califica sola no: ahí sí

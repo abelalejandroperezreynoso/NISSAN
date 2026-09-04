@@ -3292,13 +3292,98 @@ html.modal-abierto {
     border-color: #c026d3;
 }
 
-.guia-escala-texto {
+.guia-escala-cuerpo {
     padding-top: 10px;
     border-top-color: #f0abfc;
+}
+
+/* Un renglón por valor: el número en su chapa y al lado lo que significa. Es
+   lo que se escribe recuadro a recuadro en la hoja de crear la encuesta. */
+.guia-escala-lista {
+    display: grid;
+    gap: 8px;
+}
+
+.guia-escala-fila {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.guia-escala-valor {
+    flex-shrink: 0;
+    min-width: 26px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    background: #f5d0fe;
+    color: #86198f;
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-align: center;
+}
+
+.guia-escala-significado {
+    min-width: 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    color: #334155;
+}
+
+/* La nota general: lo que no habla de ningún valor en concreto, y lo único que
+   trae una guía vieja, escrita a mano de corrido. Conserva sus saltos de
+   línea. */
+.guia-escala-texto {
     font-size: 0.9rem;
     line-height: 1.5;
     color: #334155;
     white-space: pre-wrap;
+}
+
+.guia-escala-lista + .guia-escala-texto {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #f0abfc;
+}
+
+/* --- Los recuadros de la guía, en la hoja de crear la encuesta -------------
+   Uno por cada valor que ofrece la escala. Cuántos son lo dicen el «Puntaje
+   máximo» y los puntos medios, así que la lista se rehace al cambiarlos. La
+   fuente del campo se queda en 16px: Safari en iOS hace zoom al enfocar
+   cualquier campo por debajo de eso. */
+.guia-escala-valores {
+    display: grid;
+    gap: 6px;
+}
+
+.guia-valor-fila {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.guia-valor-numero {
+    flex-shrink: 0;
+    min-width: 34px;
+    padding: 6px 4px;
+    border-radius: 8px;
+    background: #fae8ff;
+    border: 1px solid #f0abfc;
+    color: #86198f;
+    font-size: 0.85rem;
+    font-weight: 800;
+    text-align: center;
+}
+
+.pregunta-wrapper .inp-guia-valor {
+    flex: 1 1 auto;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 8px;
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    background: #fdf4ff;
+    font-family: inherit;
+    font-size: 16px;
 }
 
 /* ==========================================

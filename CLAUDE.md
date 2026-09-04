@@ -747,17 +747,30 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   Lo contestado antes de que existiera esta regla no trae motivo, y la pantalla
   de calificar lo dice en lugar de dejar el hueco en blanco.
-- **Una escala puede explicar qué significa cada valor.** «¿Existe un estándar
-  de 5S?» del 0 al 3 no se contesta igual si nadie dice qué es un 2, y dos
-  personas calificando lo mismo ponen números distintos. Por eso cada pregunta
-  de tipo `range` lleva su propia guía: un texto largo, con los saltos de línea
-  con que se escribió, que sale **plegado** entre el enunciado y los círculos
-  —al contestarla y al calificarla, que el criterio tiene que ser el mismo para
-  los dos—.
+- **Una escala explica qué significa cada valor, y se escribe recuadro a
+  recuadro.** «¿Existe un estándar de 5S?» del 0 al 3 no se contesta igual si
+  nadie dice qué es un 2, y dos personas calificando lo mismo ponen números
+  distintos. Por eso cada pregunta de tipo `range` lleva su propia guía: **un
+  recuadro por cada valor que ofrece la escala** —0, 0.5, 1… hasta el máximo—
+  más una nota general para lo que no es de ningún valor en concreto. Sale
+  **plegada** entre el enunciado y los círculos, al contestarla y al
+  calificarla, que el criterio tiene que ser el mismo para los dos.
+
+  Cuántos recuadros hay lo dicen el «Puntaje máximo» y la casilla de puntos
+  medios, que son **de la encuesta entera**: cambiar cualquiera de los dos
+  redibuja los de todas las preguntas de escala a la vez
+  (`window.renderGuiasDeEscala`). Lo escrito en un recuadro que desaparece al
+  bajar el máximo **no se pierde mientras la hoja siga abierta** —se guarda en
+  la propia tarjeta, en `wrapper._guiaEscala`, y vuelve al subirlo—, pero
+  guardar la encuesta escribe sólo los valores que la escala ofrece en ese
+  momento.
 
   ```js
-  window.guiaDeEscala(pregunta)      // '' si no tiene
-  window.bloqueGuiaEscala(pregunta)  // el <details>, o '' si no hay nada que decir
+  window.valoresDeEscala(min, max, paso)     // [0, 0.5, 1 …], redondeados a un decimal
+  window.guiaPorValor(pregunta)              // { '0': '…', '2.5': '…' }
+  window.textoGuiaDeValor(pregunta, valor)   // lo que dice de un valor
+  window.guiaDeEscala(pregunta)              // la nota general, '' si no hay
+  window.bloqueGuiaEscala(pregunta)          // el <details>, o '' si no hay nada que decir
   ```
 
   Es **de la pregunta**, y no hay que confundirla con las etiquetas de
@@ -771,11 +784,32 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   campo, que llega unas veces como arreglo y otras como el texto JSON de
   PostgREST, se hace en un solo sitio: `window.opcionesDePregunta()`.
 
-  El campo para escribirla está en la tarjeta de la pregunta, dentro del bloque
-  que ya sólo salía para las escalas (`.range-info-container`), así que aparece
-  y desaparece al cambiar el tipo como el resto de los campos. Cambiar una
-  pregunta de escala a otro tipo **pierde la guía**, igual que se pierden las
-  opciones: `guardarNuevaEvaluacion` rearma `options` desde cero según el tipo.
+  Esa cuarta posición tiene **dos formas, y las dos se leen**: el objeto de hoy
+  —`{ '0': '…', '2.5': '…', __nota: '…' }`, con la nota bajo
+  `window.LLAVE_NOTA_GUIA`— y el texto libre de antes, que es lo que hay
+  guardado en las encuestas viejas. Al abrir una de ésas para editarla,
+  `window.guiaDesdeTextoLibre` reparte en recuadros los renglones que empiezan
+  por un número y un separador («0 = no existe», «1: a medias») y deja el resto
+  en la nota general: sin eso, el texto se quedaría en un campo que ya no
+  existe y se perdería al guardar. Las llaves se normalizan a un decimal
+  (`window.claveDeValorEscala`), que es como las nombra `valoresDeEscala`, o un
+  '1.0' guardado a mano no casaría con ningún círculo.
+
+  Los recuadros están en la tarjeta de la pregunta, dentro del bloque que ya
+  sólo salía para las escalas (`.range-info-container`), así que aparecen y
+  desaparecen al cambiar el tipo como el resto de los campos —y se redibujan al
+  volver a `range`, por si el máximo cambió mientras estaban escondidos—.
+  Cambiar una pregunta de escala a otro tipo **pierde la guía**, igual que se
+  pierden las opciones: `guardarNuevaEvaluacion` rearma `options` desde cero
+  según el tipo.
+
+  **El «Puntaje máximo» de la hoja sale de las preguntas, no sólo de las
+  etiquetas.** `range_labels` es opcional, así que al editar una encuesta del 0
+  al 8 sin etiquetas el campo se quedaba en 5 y guardar la encogía sin avisar
+  —y ahora, además, dejaría fuera los recuadros de los valores perdidos—.
+  `editarEvaluacion` lo toma de `options[1]` de la primera pregunta de escala y
+  lo pone con `window.ajustarMaximoDeEscala`, que devuelve a su sitio las
+  etiquetas ya escritas: `renderConfiguracionEscala` rehace esos campos vacíos.
 
 - **Quién califica una respuesta.** Tampoco lo dice ninguna tabla por defecto:
   la califica el **jefe inmediato** de quien contestó, y esa regla la sostiene
