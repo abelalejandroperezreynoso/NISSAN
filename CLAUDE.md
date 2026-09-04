@@ -1356,6 +1356,71 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   vecina y no hay nada más que recalcular. Cualquier cosa que quite o agregue
   una tarjeta tiene que llamar a `window.renumerarPreguntas()`, que es quien
   pone el número y apaga la flecha del primero y la del último.
+- **El tipo de pregunta se elige de una lista que explica cada tipo.** Nadie
+  adivina en qué se diferencian «Checklist» y «Recall» leyendo dos palabras, y
+  equivocarse ahí no se arregla después: cambiar el tipo de una pregunta ya
+  contestada parte su historial (más abajo). El desplegable nativo de iOS no
+  daba dónde decirlo —enseña una línea por opción y recorta lo que no cabe—,
+  así que ya no se usa.
+
+  El catálogo vive en `1-config.js`, con el nombre, el icono y el `detalle` de
+  cada tipo:
+
+  ```js
+  window.TIPOS_DE_PREGUNTA      // [{ valor, icono, nombre, detalle }, …]
+  window.tipoDePregunta(valor)  // null si no está
+  ```
+
+  Está ahí y no en el marcado porque la hoja lo dibuja **dos veces** —el botón
+  que dice el tipo elegido y la lista donde se elige— y dos copias acabarían
+  diciendo cosas distintas. El `detalle` cuenta las dos cosas que el nombre no
+  dice: **cómo se contesta** y **quién la califica**.
+
+  **El `<select>` sigue siendo la verdad, sólo que escondido.** Lo leen el
+  guardado, `editarEvaluacion`, `actualizarMarcasCorrectas` y las restricciones
+  del modo jefe, y ninguno tuvo que enterarse del cambio. Lo que se ve es un
+  botón (`.tipo-pregunta-boton`) que despliega `.tipos-pregunta` dentro de la
+  propia tarjeta.
+
+  ```js
+  window.pintarBotonTipo(wrapper)     // el botón dice lo que valga el <select>
+  window.listaDeTiposHTML(wrapper)    // las filas, con lo que el modo permita
+  window.alternarTiposPregunta(btn)
+  window.elegirTipoPregunta(el, valor)
+  ```
+
+  **Poner `.value` a mano no dispara el `onchange`**, así que `elegirTipoPregunta`
+  llama a `toggleTipoPregunta` ella misma. Y `toggleTipoPregunta` es el embudo
+  donde se repinta el botón: por ahí pasan los dos caminos que cambian el tipo
+  —la elección de la lista y el «vuelve a escala» que impone
+  `verificarRestriccionesModo` en modo jefe—, así que el botón no puede quedarse
+  diciendo el tipo anterior.
+
+  **Qué tipos valen no se vuelve a decidir aquí**: la lista mira el `disabled`
+  que `verificarRestriccionesModo` ya le puso a cada `<option>`, y por eso se
+  rehace cada vez que se abre —el modo se puede haber cambiado desde que se
+  montó la tarjeta—. El porqué se dice **una sola vez arriba** y no en cada fila
+  apagada: la misma frase cuatro veces tapaba las dos opciones que sí valen.
+
+  **Va desplegada dentro de la tarjeta, no en otra hoja.** Apilar una hoja sobre
+  `#modal-crear-eval` deja dos tiradores a la vista, y lo que se elige aquí es
+  un campo del formulario que ya está abierto. De paso desaparece una rueda de
+  las que descolocan la hoja al cerrarse (ver `TIPOS_SIN_TECLADO`).
+
+  El botón lleva **su propio renglón**, debajo del número y las flechas: ahí
+  dentro le quedaban 91px en un iPhone de 375 y «Rango Numérico» se leía «Rango
+  N…». Es además el control que manda en la tarjeta —de él dependen todos los
+  campos de abajo—, así que ser el más ancho es lo que le toca.
+
+  Ojo con `.tipos-pregunta`, que es un flex y se esconde con el atributo
+  `hidden`: un `display` de autor le gana al `[hidden]` de la hoja del
+  navegador, así que necesita su propia regla `[hidden] { display: none }` o se
+  queda desplegada para siempre.
+
+  Un tipo nuevo se añade al catálogo y aparece solo en la hoja; lo que sí hay
+  que tocar aparte es qué campos enseña (`toggleTipoPregunta`) y cómo se
+  contesta y se califica.
+
 - **Editar una encuesta parte su historial en dos.** `answers_json` y
   `grades_json` guardan cada respuesta bajo el **id de la pregunta**
   (`evaluation_questions.id`). Editar el enunciado conserva el id, así que la

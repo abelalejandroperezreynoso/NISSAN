@@ -2174,13 +2174,152 @@ textarea:focus {
     max-width: 100%;
 }
 
-/* Un <select> mide por su opción más larga —aquí «Recall (Lista de
-   Memoria)»— y, sin `min-width:0`, un elemento flex se niega a encoger por
-   debajo de eso: en una pantalla de 320px empujaba al botón de quitar fuera
-   de la tarjeta. */
-.pregunta-wrapper .inp-tipo {
+/* --- El tipo de pregunta ----------------------------------------------------
+   El `<select>` sigue en el marcado —es lo que leen el guardado y las
+   restricciones del modo jefe— pero va escondido: el desplegable nativo de iOS
+   enseña una línea por opción y recorta lo que no cabe, así que no había dónde
+   decir en qué se diferencia un «Checklist» de un «Recall». En su lugar hay un
+   botón que despliega la lista dentro de la propia tarjeta, con la explicación
+   de cada tipo bajo su nombre.
+
+   Va en su propio renglón, y no dentro de la fila del número y las flechas:
+   ahí le quedaban 91px en un iPhone de 375 y «Rango Numérico» se leía «Rango
+   N…». Es además el control que manda en la tarjeta —de él dependen todos los
+   campos de abajo—, así que ser el más ancho es lo que le toca. */
+.pregunta-wrapper .tipo-pregunta-boton {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+    padding: 9px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: white;
+    color: #1e293b;
+    font-size: 16px;   /* Safari en iOS hace zoom por debajo de 16px */
+    font-weight: 600;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pregunta-wrapper .tipo-pregunta-boton[aria-expanded="true"] {
+    border-color: #7e22ce;
+    box-shadow: 0 0 0 2px #f3e8ff;
+}
+
+.tipo-pregunta-icono { flex-shrink: 0; }
+
+/* El nombre se recorta antes que empujar la flecha o el botón de quitar. */
+.tipo-pregunta-nombre {
     flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tipo-pregunta-flecha {
+    flex-shrink: 0;
+    color: #94a3b8;
+    font-size: 0.8rem;
+}
+
+/* La lista desplegada. Va a lo ancho de la tarjeta, debajo de la fila del
+   encabezado, y se cierra en cuanto se elige. */
+.tipos-pregunta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+    padding: 6px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+}
+
+/* Un `display` de autor le gana al `[hidden]` de la hoja del navegador, así
+   que sin esta regla la lista se quedaría siempre desplegada. */
+.tipos-pregunta[hidden] { display: none; }
+
+/* Por qué hay tipos apagados. Va una vez arriba y no repetido en cada fila:
+   la misma frase cuatro veces tapaba las dos opciones que sí valen. */
+.tipos-pregunta-aviso {
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #fffbeb;
+    border: 1px dashed #fde68a;
+    color: #b45309;
+    font-size: 0.78rem;
+    line-height: 1.35;
+}
+
+.tipo-opcion {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: #f8fafc;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.tipo-opcion.es-elegido {
+    background: #faf5ff;
+    border-color: #d8b4fe;
+}
+
+.tipo-opcion:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.tipo-opcion-icono {
+    flex-shrink: 0;
+    font-size: 1.1rem;
+    line-height: 1.3;
+}
+
+/* `min-width:0` para que el detalle se parta en vez de estirar la fila. */
+.tipo-opcion-texto {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.tipo-opcion-nombre {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.tipo-opcion-detalle {
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: #64748b;
+}
+
+.tipo-opcion-nota {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #b45309;
+}
+
+.tipo-opcion-marca {
+    flex-shrink: 0;
+    width: 14px;
+    color: #7e22ce;
+    font-weight: bold;
 }
 
 /* Fila de casilla con su explicación debajo, al estilo de una lista de

@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-04-4';
+window.VERSION_APP = '2026-09-04-5';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -375,6 +375,65 @@ window.esPreguntaDeFoto = (pregunta) =>
 // no puntúan: quedan como constancia de lo que vio mientras evaluaba. Un texto
 // o unas opciones se quedarían sin calificar y sin nadie que los revisara.
 window.TIPOS_EN_MODO_JEFE = ['range', window.TIPO_PREGUNTA_FOTO];
+
+// ==========================================
+// LOS TIPOS DE PREGUNTA, CON SU EXPLICACIÓN
+// ==========================================
+// El catálogo de lo que se puede preguntar. Vive aquí y no en el marcado de
+// `index.html` porque la hoja de crear encuestas lo dibuja dos veces —el
+// control que dice el tipo elegido y la lista donde se elige— y dos copias
+// acabarían diciendo cosas distintas.
+//
+// `detalle` es lo que se lee al elegir, y por eso cuenta las dos cosas que no
+// se ven en el nombre: **cómo se contesta** y **quién la califica**. Elegir
+// entre «Checklist» y «Recall» a ciegas es lo que hacía falta adivinar antes,
+// y de ahí salían encuestas con el tipo equivocado que ya no se podían
+// cambiar sin partir el historial.
+//
+// Un tipo nuevo se añade aquí y aparece solo en la hoja; lo que sí hay que
+// tocar aparte es qué controles enseña (`toggleTipoPregunta`) y cómo se
+// contesta y se califica.
+window.TIPOS_DE_PREGUNTA = [
+    {
+        valor: 'text',
+        icono: '\u270D\uFE0F',
+        nombre: 'Texto Abierto',
+        detalle: 'Se contesta escribiendo. Puedes dejar una respuesta modelo como referencia, pero la califica quien revise.'
+    },
+    {
+        valor: 'multiple',
+        icono: '\u{1F518}',
+        nombre: 'Opci\u00f3n M\u00faltiple',
+        detalle: 'Se elige una sola opci\u00f3n. Si marcas cu\u00e1l es la correcta se califica sola; si no, se pide adem\u00e1s el porqu\u00e9 y la califica quien revise.'
+    },
+    {
+        valor: 'checklist',
+        icono: '\u2611\uFE0F',
+        nombre: 'Checklist',
+        detalle: 'Se marcan todas las que apliquen. Marcando las correctas se califica sola, y hay que acertarlas todas sin ninguna de m\u00e1s.'
+    },
+    {
+        valor: 'list_match',
+        icono: '\u{1F9E0}',
+        nombre: 'Recall (Lista de Memoria)',
+        detalle: 'Sale un rengl\u00f3n en blanco por cada elemento que registres y se escriben de memoria. Quien revise da por bueno cada uno por separado.'
+    },
+    {
+        valor: 'range',
+        icono: '\u{1F4CA}',
+        nombre: 'Rango Num\u00e9rico',
+        detalle: 'Una escala del 0 al puntaje m\u00e1ximo de la encuesta. Se califica sola, pide explicar todo lo que baje del tope y puedes decir qu\u00e9 significa cada valor.'
+    },
+    {
+        valor: window.TIPO_PREGUNTA_FOTO,
+        icono: '\u{1F4F7}',
+        nombre: 'Evidencia fotogr\u00e1fica',
+        detalle: 'El enunciado dice qu\u00e9 hay que fotografiar y la respuesta es la foto, que se reduce antes de subirla. Para pedir varias, agrega otra pregunta as\u00ed.'
+    }
+];
+
+window.tipoDePregunta = (valor) =>
+    window.TIPOS_DE_PREGUNTA.find(t => t.valor === valor) || null;
 
 // ==========================================
 // PLAZO PARA VOLVER A CONTESTAR

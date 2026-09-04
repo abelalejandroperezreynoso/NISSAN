@@ -3204,20 +3204,17 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     const optionsLabel = (tp === 'list_match') ? "Elementos Correctos (Respuesta Modelo):" : "Opciones:";
 
     d.innerHTML=`
-    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px;">
         <span class="pregunta-numero" style="flex-shrink:0; width:24px; height:24px; border-radius:50%; background:#e2e8f0; color:#475569; font-size:0.8rem; font-weight:700; display:flex; align-items:center; justify-content:center;"></span>
         <button type="button" onclick="window.moverPregunta(this, -1)" class="mover-pregunta" title="Subir" aria-label="Subir esta pregunta" style="flex-shrink:0; width:30px; height:30px; border:1px solid #cbd5e1; background:white; color:#475569; border-radius:8px; cursor:pointer; font-size:0.9rem; line-height:1; padding:0;">↑</button>
         <button type="button" onclick="window.moverPregunta(this, 1)" class="mover-pregunta" title="Bajar" aria-label="Bajar esta pregunta" style="flex-shrink:0; width:30px; height:30px; border:1px solid #cbd5e1; background:white; color:#475569; border-radius:8px; cursor:pointer; font-size:0.9rem; line-height:1; padding:0;">↓</button>
-        <select class="inp-tipo" style="flex:1 1 120px; min-width:0;" onchange="window.toggleTipoPregunta(this)" ${isBoss ? 'disabled' : ''}>
-            <option value="text" ${tp==='text'?'selected':''}>Texto Abierto</option>
-            <option value="multiple" ${tp==='multiple'?'selected':''}>Opción Múltiple</option>
-            <option value="checklist" ${tp==='checklist'?'selected':''}>Checklist</option>
-            <option value="list_match" ${tp==='list_match'?'selected':''}>Recall (Lista de Memoria)</option>
-            <option value="range" ${tp==='range'?'selected':''}>Rango Numérico</option>
-            <option value="photo" ${tp==='photo'?'selected':''}>📷 Evidencia fotográfica</option>
+        <select class="inp-tipo" style="display:none;" onchange="window.toggleTipoPregunta(this)" ${isBoss ? 'disabled' : ''}>
+            ${window.TIPOS_DE_PREGUNTA.map(t => `<option value="${t.valor}" ${tp === t.valor ? 'selected' : ''}>${t.nombre}</option>`).join('')}
         </select>
         ${btnDeleteHTML}
     </div>
+    <button type="button" class="tipo-pregunta-boton" onclick="window.alternarTiposPregunta(this)" aria-expanded="false"></button>
+    <div class="tipos-pregunta" hidden></div>
     <input type="text" class="inp-pregunta" value="${t}" placeholder="${showPhotoInfo ? 'Qué hay que fotografiar…' : 'Escribe la pregunta aquí...'}" style="width:100%;padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
     
     <div class="options-container" style="display:${showOptionsContainer?'block':'none'};margin-top:10px;">
@@ -3260,8 +3257,108 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     // se cambia el tipo a «Rango Numérico» ya están puestos, y mientras tanto
     // el bloque entero va escondido.
     window.montarGuiaDeEscala(d, guiaGuardada);
+    window.pintarBotonTipo(d);
     window.verificarRestriccionesModo();
     window.renumerarPreguntas();
+};
+
+// ==========================================
+// ELEGIR EL TIPO DE PREGUNTA
+// ==========================================
+// El `<select>` sigue siendo la verdad —lo leen el guardado, la edición y las
+// restricciones del modo jefe—, pero ya no se ve: en su lugar va un botón que
+// dice el tipo elegido y despliega la lista de `window.TIPOS_DE_PREGUNTA` con
+// la explicación de cada uno debajo del nombre.
+//
+// El desplegable nativo de iOS no admite ese segundo renglón: enseña una línea
+// por opción y recorta lo que no cabe, así que había que saberse de memoria en
+// qué se diferencian «Checklist» y «Recall». Y de paso desaparece una rueda de
+// las que descolocan la hoja al cerrarse (ver `TIPOS_SIN_TECLADO`).
+//
+// Va desplegado dentro de la propia tarjeta y no en otra hoja: apilar una hoja
+// sobre `#modal-crear-eval` deja dos tiradores a la vista, y aquí lo que se
+// elige es un campo del formulario que ya está abierto.
+window.pintarBotonTipo = (wrapper) => {
+    const sel = wrapper.querySelector('.inp-tipo');
+    const btn = wrapper.querySelector('.tipo-pregunta-boton');
+    if (!sel || !btn) return;
+
+    const tipo = window.tipoDePregunta(sel.value);
+    const nombre = tipo ? tipo.nombre : sel.value;
+    btn.innerHTML = `<span class="tipo-pregunta-icono">${tipo ? tipo.icono : '❓'}</span>
+        <span class="tipo-pregunta-nombre">${window.sanitizeForHTML(nombre)}</span>
+        <span class="tipo-pregunta-flecha" aria-hidden="true">▾</span>`;
+    btn.title = tipo ? tipo.detalle : '';
+    btn.setAttribute('aria-label', `Tipo de pregunta: ${nombre}. Toca para cambiarlo.`);
+};
+
+// La lista se rehace cada vez que se abre: qué tipos valen depende del modo de
+// la encuesta, que se puede haber cambiado desde que se montó la tarjeta. Lo
+// dice el propio `<option>`, al que `verificarRestriccionesModo` ya le pone su
+// `disabled`, así que la regla no se escribe aquí por segunda vez.
+window.listaDeTiposHTML = (wrapper) => {
+    const sel = wrapper.querySelector('.inp-tipo');
+    if (!sel) return '';
+
+    // El porqué se dice una sola vez y arriba: repetido en cada fila apagada
+    // eran cuatro párrafos iguales que tapaban las dos opciones que sí valen.
+    const hayBloqueados = window.TIPOS_DE_PREGUNTA.some(t => {
+        const o = Array.from(sel.options).find(op => op.value === t.valor);
+        return !o || o.disabled;
+    });
+    const aviso = hayBloqueados
+        ? `<div class="tipos-pregunta-aviso">Una evaluación de modo jefe se guarda ya calificada al enviarla, así que sólo admite lo que se puntúa solo y las evidencias, que no puntúan.</div>`
+        : '';
+
+    return aviso + window.TIPOS_DE_PREGUNTA.map(t => {
+        const opcion = Array.from(sel.options).find(o => o.value === t.valor);
+        const bloqueado = !opcion || opcion.disabled;
+        const elegido = sel.value === t.valor;
+
+        const nota = bloqueado
+            ? `<span class="tipo-opcion-nota">No disponible</span>`
+            : '';
+
+        return `<button type="button" class="tipo-opcion${elegido ? ' es-elegido' : ''}"
+                        ${bloqueado ? 'disabled' : ''} ${elegido ? 'aria-current="true"' : ''}
+                        onclick="window.elegirTipoPregunta(this, '${t.valor}')">
+            <span class="tipo-opcion-icono" aria-hidden="true">${t.icono}</span>
+            <span class="tipo-opcion-texto">
+                <span class="tipo-opcion-nombre">${window.sanitizeForHTML(t.nombre)}</span>
+                <span class="tipo-opcion-detalle">${window.sanitizeForHTML(t.detalle)}</span>
+                ${nota}
+            </span>
+            <span class="tipo-opcion-marca" aria-hidden="true">${elegido ? '✓' : ''}</span>
+        </button>`;
+    }).join('');
+};
+
+window.alternarTiposPregunta = (btn) => {
+    const wrapper = btn.closest('.pregunta-wrapper');
+    const lista = wrapper ? wrapper.querySelector('.tipos-pregunta') : null;
+    if (!lista) return;
+
+    const abrir = lista.hidden;
+    if (abrir) lista.innerHTML = window.listaDeTiposHTML(wrapper);
+    lista.hidden = !abrir;
+    btn.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+};
+
+window.elegirTipoPregunta = (el, valor) => {
+    const wrapper = el.closest('.pregunta-wrapper');
+    const sel = wrapper ? wrapper.querySelector('.inp-tipo') : null;
+    if (!sel) return;
+
+    sel.value = valor;
+
+    const lista = wrapper.querySelector('.tipos-pregunta');
+    if (lista) lista.hidden = true;
+    const btn = wrapper.querySelector('.tipo-pregunta-boton');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+
+    // Poner `.value` a mano no dispara el `onchange` del `<select>`, que es
+    // quien enseña y esconde los campos de cada tipo.
+    window.toggleTipoPregunta(sel);
 };
 
 // ==========================================
@@ -3491,6 +3588,10 @@ window.toggleTipoPregunta = (s) => {
     // Las casillas de «correcta» son de opción múltiple y checklist; en
     // «Recall» sobran, y al cambiar de tipo hay que apagarlas.
     window.actualizarMarcasCorrectas(w);
+
+    // El botón dice el tipo, y aquí pasan los dos caminos que lo cambian: la
+    // elección de la lista y el «vuelve a escala» del modo jefe.
+    window.pintarBotonTipo(w);
 };
 
 // Cada opción lleva delante su casilla de «ésta es correcta». Marcar alguna es
