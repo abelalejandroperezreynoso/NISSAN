@@ -617,6 +617,10 @@ window.columnaDeCriterio = ({ fila, escala, atributos, titulo, rotulo, opacidad,
     const criterio = window.criterioStats();
     const { cifra, detalle } = window.cifraCortaDelCriterio(fila);
     const alto = window.alturaDeCriterio(fila, escala);
+    // Los grupos de supervisor de esta columna, en los criterios que los
+    // cuentan. Sin el porcentaje delante: la columna mide 78px en un teléfono
+    // y el porcentaje ya está arriba, que es el de las personas.
+    const grupos = window.gruposDeLaFila(fila);
 
     const estilo = (clicable ? '' : 'cursor:default;') + (opacidad ? `opacity:${opacidad};` : '');
 
@@ -628,6 +632,7 @@ window.columnaDeCriterio = ({ fila, escala, atributos, titulo, rotulo, opacidad,
                 ${cifra}
                 ${detalle ? `<span class="stats-columna-detalle">${detalle}</span>` : ''}
             </div>
+            ${grupos ? `<div class="stats-columna-grupos" title="${window.LEYENDA_GRUPOS}">${window.textoGruposCorto(grupos)}</div>` : ''}
             <div class="stats-columna-barra">
                 <div class="stats-columna-relleno" style="height:${alto}%; background:${criterio.color};"></div>
             </div>
@@ -1907,10 +1912,10 @@ window.totalDelNivel = (nodos) => {
     return total;
 };
 
-// Los grupos de supervisor que hay detrás del gráfico y cuántos tienen a
-// alguien que cumpla. Un grupo cuenta en cuanto **uno** de los suyos lo
-// consigue: entre un grupo sin nadie y otro con uno hay toda la diferencia, y
-// el porcentaje de personas no la enseña.
+// Los grupos de supervisor que hay detrás de un puñado de fichas y cuántos
+// tienen a alguien que cumpla. Un grupo cuenta en cuanto **uno** de los suyos
+// lo consigue: entre un grupo sin nadie y otro con uno hay toda la diferencia,
+// y el porcentaje de personas no la enseña.
 //
 // Se cuentan desde la gente que se está viendo y no sumando las filas, que en
 // el desglose por puesto repetirían el mismo grupo una vez por puesto. La
@@ -1920,18 +1925,16 @@ window.totalDelNivel = (nodos) => {
 // Sólo lo hacen los criterios que traen `cuentaAlGrupo`, y sólo donde las
 // fichas dicen de qué grupo es cada quien: en el último nivel, donde el cuadro
 // ya es una persona, no hay grupos que contar.
-window.gruposDelNivel = (nodos) => {
+window.contarGrupos = (gente) => {
     const criterio = window.criterioStats();
     if (!criterio.cuentaAlGrupo) return null;
 
     const grupos = new Map();
-    (nodos || []).forEach(n => {
-        (n.gente || []).forEach(ficha => {
-            if (!ficha || !ficha.supervisor) return;
-            const clave = (ficha.departamento || '') + ' ▸ ' + ficha.supervisor;
-            if (!grupos.has(clave)) grupos.set(clave, false);
-            if (criterio.cuentaAlGrupo(ficha)) grupos.set(clave, true);
-        });
+    (gente || []).forEach(ficha => {
+        if (!ficha || !ficha.supervisor) return;
+        const clave = (ficha.departamento || '') + ' ▸ ' + ficha.supervisor;
+        if (!grupos.has(clave)) grupos.set(clave, false);
+        if (criterio.cuentaAlGrupo(ficha)) grupos.set(clave, true);
     });
 
     if (grupos.size === 0) return null;
@@ -1939,6 +1942,51 @@ window.gruposDelNivel = (nodos) => {
     grupos.forEach(tiene => { if (tiene) conAlguno++; });
     return { total: grupos.size, conAlguno: conAlguno };
 };
+
+// Los del nivel entero, que es lo que dice el encabezado del gráfico: la gente
+// de todos los cuadros que se están viendo, junta.
+window.gruposDelNivel = (nodos) => {
+    const gente = [];
+    (nodos || []).forEach(n => { (n.gente || []).forEach(f => gente.push(f)); });
+    return window.contarGrupos(gente);
+};
+
+// Los de **una sola fila** —un departamento, un puesto—, que es lo que dicen
+// su cuadro y su columna. Un porcentaje de personas no separa al departamento
+// donde cumple mucha gente de un mismo grupo del que reparte a uno por grupo,
+// y son dos cosas distintas.
+//
+// Una fila que **es** un grupo no lo dice: «1/1 grupos» no compara nada, y si
+// su gente cumple o no ya lo está diciendo el relleno. Por eso el nivel de los
+// supervisores se queda sin este renglón, igual que el de los colaboradores,
+// donde las fichas ni siquiera dicen de qué grupo son.
+window.gruposDeLaFila = (fila) => {
+    const grupos = window.contarGrupos(window.genteDeLaFila(fila || {}));
+    return grupos && grupos.total > 1 ? grupos : null;
+};
+
+// Los de un cuadro, contados una sola vez por dibujo. Recorren a toda su
+// gente, y en la forma de personas se preguntan decenas de veces por cuadro
+// —una por cada altura de lienzo que se prueba—, así que el resultado se
+// guarda en el propio nodo junto al criterio con el que salió: al cambiar de
+// criterio se vuelve a contar.
+window.gruposDelCuadro = (n) => {
+    const clave = window.criterioStats().clave;
+    if (!n.__grupos || n.__grupos.clave !== clave) {
+        n.__grupos = { clave: clave, valor: window.gruposDeLaFila(n.datos) };
+    }
+    return n.__grupos.valor;
+};
+
+// Cómo se dicen los grupos. La forma larga es la del encabezado y la de dentro
+// de un cuadro; la corta es la de una columna de barras, que mide 78px en un
+// teléfono y no admite el porcentaje delante. La leyenda es lo que le queda a
+// un renglón que no puede explicarse a sí mismo sin partirse en tres líneas.
+window.textoGrupos = (g) => `${window.pctTexto(g.conAlguno, g.total)}% · ${g.conAlguno}/${g.total} grupos`;
+window.textoGruposCorto = (g) => `${g.conAlguno}/${g.total} grupos`;
+window.LEYENDA_GRUPOS = 'Grupos de supervisor con al menos una persona que cumple en todas sus encuestas';
+window.lineaGrupos = (g) => `👥 Grupos con alguien que cumple: ${g.conAlguno}/${g.total}`
+    + ` (${window.pctTexto(g.conAlguno, g.total)}%)`;
 
 // Encabezado del gráfico: qué se está midiendo y cuánto suma el nivel entero.
 // Lo comparten el nivel de arriba y los de dentro.
@@ -1958,9 +2006,8 @@ window.encabezadoDelGrafico = (nodos) => {
                     // Corta a propósito: a esa altura de la pantalla no cabe
                     // la frase entera sin partirse, y lo que cuenta el
                     // renglón lo dice el globo.
-                    ? `<span class="stats-grafico-grupos" title="Grupos de supervisor con al menos una persona que cumple en todas sus encuestas">` +
-                          `${window.pctTexto(grupos.conAlguno, grupos.total)}% · ` +
-                          `${grupos.conAlguno}/${grupos.total} grupos` +
+                    ? `<span class="stats-grafico-grupos" title="${window.LEYENDA_GRUPOS}">` +
+                          window.textoGrupos(grupos) +
                       '</span>'
                     : '') +
             '</span>' +
@@ -2402,7 +2449,7 @@ window.lienzoDeGente = (rejilla, ancho, alto, gente, color) => {
 // Vive aparte porque lo necesitan dos: el dibujo, para escribirlo, y la
 // búsqueda de la altura del lienzo, para estimar cuánto sitio se lleva antes
 // de que exista ningún cuadro.
-window.medidasDelRotulo = (w, h, nombre, enPersonas) => {
+window.medidasDelRotulo = (w, h, nombre, enPersonas, conGrupos) => {
     const area = w * h;
 
     // En personas el título va mucho más pequeño y de un solo renglón: cada
@@ -2430,7 +2477,12 @@ window.medidasDelRotulo = (w, h, nombre, enPersonas) => {
         // tres letras y unos puntos suspensivos, y ese renglón vale menos que
         // la fila de figuras que se está comiendo.
         hayDato: area >= 2600 && h >= 44 && (!enPersonas || w >= 70),
-        tamDato: enPersonas ? Math.max(7, tam * 0.8) : Math.max(8, tam * 0.62)
+        tamDato: enPersonas ? Math.max(7, tam * 0.8) : Math.max(8, tam * 0.62),
+        // Y el de los grupos es el tercero, así que pide más sitio todavía: es
+        // el que primero sobra si hay que elegir, porque lo dice también el
+        // globo. En personas se paga además con una fila de figuras.
+        hayGrupos: !!conGrupos && area >= 4200 && h >= 62 && (!enPersonas || w >= 84),
+        tamGrupos: enPersonas ? Math.max(7, tam * 0.72) : Math.max(7, tam * 0.5)
     };
 };
 
@@ -2454,9 +2506,10 @@ window.PASO_ALTO_LIENZO = 8;
 // de maqueta por cada uno. Como en personas el título y la cifra van a un solo
 // renglón cada uno, la cuenta se queda muy cerca; y aunque se pase, lo único
 // que hay en juego es cuál de dos alturas parecidas se elige.
-window.altoRotuloEstimado = (w, h, nombre) => {
-    const m = window.medidasDelRotulo(w, h, nombre, true);
-    return m.tamTitulo * 1.2 + (m.hayDato ? m.tamDato * 1.25 : 0) + 7;
+window.altoRotuloEstimado = (w, h, nombre, conGrupos) => {
+    const m = window.medidasDelRotulo(w, h, nombre, true, conGrupos);
+    return m.tamTitulo * 1.2 + (m.hayDato ? m.tamDato * 1.25 : 0)
+        + (m.hayGrupos ? m.tamGrupos * 1.25 : 0) + 7;
 };
 
 // Cómo de bien sale el reparto a una altura dada: cuántos cuadros se quedarían
@@ -2470,7 +2523,7 @@ window.balanceDeReparto = (nodos, pesos, ancho, alto) => {
         const n = nodos[c.indice];
         const w = Math.max(c.ancho - 1, 1);
         const h = Math.max(c.alto - 1, 1);
-        const region = h - window.altoRotuloEstimado(w, h, n.nombre);
+        const region = h - window.altoRotuloEstimado(w, h, n.nombre, window.gruposDelCuadro(n));
         const cabe = window.celdaQueCabe(w, region, n.personas || 0);
 
         if (!(n.personas > 0)) return;
@@ -2600,11 +2653,16 @@ window.dibujarCuadros = (nodos, alTocar) => {
         else el.style.cursor = 'default';
 
         // --- El rótulo, que es quien decide cuánto sitio le queda a la gente ---
-        const { tamTitulo, tamDato, hayDato } = window.medidasDelRotulo(w, h, n.nombre, enPersonas);
+        // Los grupos de supervisor de este cuadro, que sólo cuenta el criterio
+        // que los mira: en los demás no hay renglón que escribir.
+        const grupos = window.gruposDelCuadro(n);
+        const { tamTitulo, tamDato, hayDato, tamGrupos, hayGrupos } =
+            window.medidasDelRotulo(w, h, n.nombre, enPersonas, grupos);
 
         el.title = `${n.nombre}\nAsignadas: ${n.asignadas}\nContestadas: ${n.respuestas}`
             + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación: ${n.calificacion}%`)
-            + `\n${criterio.etiqueta}: ${window.cifraDelCriterio(n.datos)} (puesto ${puesto[n.nombre]} de ${nodos.length})`;
+            + `\n${criterio.etiqueta}: ${window.cifraDelCriterio(n.datos)} (puesto ${puesto[n.nombre]} de ${nodos.length})`
+            + (grupos ? `\n${window.lineaGrupos(grupos)}` : '');
 
         // Un cuadro, una medida: la del criterio elegido y nada más.
         // Participación llevaba encima una segunda banda con lo ya revisado,
@@ -2647,6 +2705,18 @@ window.dibujarCuadros = (nodos, alTocar) => {
             dato.style.fontSize = tamDato + 'px';
             dato.innerText = `#${puesto[n.nombre]} · ` + window.cifraDesnudaDelCriterio(n.datos);
             destino.appendChild(dato);
+        }
+
+        // El renglón de los grupos va debajo de la cifra y dice otra cosa que
+        // ella: la de arriba es de personas y ésta de grupos de supervisor.
+        // Aquí sí lleva la palabra detrás —«5/8 grupos»—, que sin ella las dos
+        // cifras del cuadro se leerían como la misma medida dos veces.
+        if (hayGrupos) {
+            const linea = document.createElement('div');
+            linea.className = 'stats-cuadro-grupos';
+            linea.style.fontSize = tamGrupos + 'px';
+            linea.innerText = window.textoGrupos(grupos);
+            destino.appendChild(linea);
         }
         if (chapa) {
             cuerpo.appendChild(chapa);
@@ -2709,6 +2779,7 @@ if (!window.__cuadrosDesgloseEscucha) {
 window.globoDeFila = (encabezado, fila) => {
     const criterio = window.criterioStats();
     const calificacion = fila.countScore > 0 ? window.pctTexto(fila.sumScore / fila.countScore / 100) : null;
+    const grupos = window.gruposDeLaFila(fila);
 
     return `${encabezado}`
         + `&#10;Asignadas: ${fila.assignedCount || 0}`
@@ -2718,7 +2789,8 @@ window.globoDeFila = (encabezado, fila) => {
         + `&#10;Falsas/Anuladas: ${fila.falsas || 0}`
         + `&#10;Mal Revisadas: ${fila.malRevisadas || 0}`
         + (calificacion === null ? '' : `&#10;⭐ Calificación: ${calificacion}%`)
-        + `&#10;${criterio.etiqueta}: ${window.cifraDelCriterio(fila)}`;
+        + `&#10;${criterio.etiqueta}: ${window.cifraDelCriterio(fila)}`
+        + (grupos ? `&#10;${window.lineaGrupos(grupos)}` : '');
 };
 
 // El gráfico de barras de un mapa {nombre: fila}. Departamento y puesto sólo

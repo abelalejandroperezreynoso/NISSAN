@@ -2698,6 +2698,17 @@ html.modal-abierto {
 
 .stats-cuadro-dato { font-weight: 700; line-height: 1.25; }
 
+/* El renglón de los grupos de supervisor, debajo de la cifra: dice otra cosa
+   que ella —la de arriba cuenta personas y ésta grupos—, así que va más
+   pequeño y en gris para que no compitan. Sólo lo escriben los criterios que
+   cuentan grupos, y sólo en los cuadros donde cabe. */
+.stats-cuadro-grupos {
+    font-weight: 700;
+    line-height: 1.25;
+    color: #475569;
+    max-width: 100%;
+}
+
 /* --- El mismo treemap, relleno de gente ---
    La forma «Personas» no cambia ni la geometría ni el orden ni los toques:
    sólo sustituye la banda lisa que sube por figuras, y pinta de color las que
@@ -2761,7 +2772,8 @@ html.modal-abierto {
    media altura del cuadro: cuatro filas de figuras menos por un texto que
    está entero en el globo. Aquí lo que hay que leer es la gente. */
 .stats-cuadro-chapa .stats-cuadro-titulo,
-.stats-cuadro-chapa .stats-cuadro-dato {
+.stats-cuadro-chapa .stats-cuadro-dato,
+.stats-cuadro-chapa .stats-cuadro-grupos {
     display: block;
     white-space: nowrap;
     overflow: hidden;
@@ -2981,6 +2993,19 @@ html.modal-abierto {
     font-size: 0.55rem;
     font-weight: 700;
     color: #94a3b8;
+}
+
+/* Los grupos de supervisor de la columna, entre la cifra y la barra. Sin el
+   porcentaje delante: la columna mide 78px en un teléfono y el porcentaje de
+   arriba ya es el de las personas. Lo que cuenta lo dice su globo. */
+.stats-columna-grupos {
+    font-size: 0.55rem;
+    font-weight: 700;
+    color: #64748b;
+    line-height: 1.2;
+    text-align: center;
+    white-space: nowrap;
+    margin: -2px 0 4px;
 }
 
 /* Una sola barra por columna, la del criterio. El canal gris de detrás es lo

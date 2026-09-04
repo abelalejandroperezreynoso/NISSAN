@@ -1486,6 +1486,30 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `window.gruposDelNivel(nodos)`, y sólo para los criterios que traen
   `cuentaAlGrupo` —hoy ése—: en los demás el renglón no se dibuja.
 
+  **Y cada cuadro y cada columna dicen además los suyos**: bajo su cifra, el cuadro
+  de un departamento lleva «67% · 2/3 grupos» y la columna de barras, que mide
+  78px en un teléfono, la forma corta «2/3 grupos» —el porcentaje de arriba ya
+  es el de las personas—. Es lo que separa al departamento donde cumple mucha
+  gente de un mismo grupo del que reparte a uno por grupo, que en el porcentaje
+  de personas se ven igual. Lo cuenta `window.gruposDeLaFila(fila)`, que es
+  `contarGrupos` sobre la gente de esa fila y **calla cuando el cuadro es un
+  solo grupo**: «1/1 grupos» no compara nada, y si su gente cumple o no ya lo
+  dice el relleno. Por eso el nivel de los supervisores no lo lleva, y el de
+  los colaboradores tampoco —ahí las fichas ni siquiera dicen de qué grupo
+  son—. Los cuatro sitios que lo escriben pasan por `window.textoGrupos`,
+  `window.textoGruposCorto` y `window.lineaGrupos` (la del globo), o acabarían
+  diciendo lo mismo de cuatro maneras.
+
+  Dentro de un cuadro es el tercer renglón, así que es el primero que sobra:
+  `medidasDelRotulo` lo da por cabido con bastante más sitio que la cifra
+  (`hayGrupos`) y en la forma de personas pide además 84px de ancho, porque ahí
+  cada renglón de la chapa es una fila de figuras menos. Y como en personas el
+  alto del rótulo se **estima** para elegir la altura del lienzo,
+  `altoRotuloEstimado` tiene que saber si ese renglón va: se le pasa desde
+  `balanceDeReparto`, que lo consulta con `window.gruposDelCuadro(n)` —el mismo
+  conteo, guardado en el nodo junto al criterio con el que salió, porque ahí se
+  pregunta una vez por cada altura que se prueba—.
+
   Los grupos se cuentan **desde la gente que se está viendo**, no sumando las
   filas: en el desglose por puesto un mismo grupo aparecería una vez por
   puesto. La clave es el par departamento + supervisor, que «Sin Supervisor»
