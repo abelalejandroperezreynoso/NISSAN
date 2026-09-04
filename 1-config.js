@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-04-5';
+window.VERSION_APP = '2026-09-04-6';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -369,6 +369,20 @@ window.TIPO_PREGUNTA_FOTO = 'photo';
 window.esPreguntaDeFoto = (pregunta) =>
     !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_FOTO;
 
+// Una pregunta de asistencia no se contesta: se confirma. Sirve para pasar
+// lista de una junta o una capacitación —la encuesta se dirige a quien tenía
+// que ir y cada quien registra que fue—, así que no hay respuesta buena ni
+// mala que calificar y **se da por cumplida al enviarla**: el envío le escribe
+// su calificación, como hacen la escala y las opciones marcadas.
+//
+// El valor que se guarda es este texto y no la hora: cuándo se registró ya lo
+// dice `submitted_at` de la respuesta, y así todo lo que ya imprime
+// `answers_json` por su llave lo enseña legible sin tener que formatear nada.
+window.TIPO_PREGUNTA_ASISTENCIA = 'attendance';
+window.TEXTO_ASISTENCIA = 'Asistí';
+window.esPreguntaDeAsistencia = (pregunta) =>
+    !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_ASISTENCIA;
+
 // Lo que admite una encuesta de modo `boss`. Esa encuesta se guarda ya
 // calificada al enviarla —la contesta el jefe y su palabra es el veredicto—,
 // así que sólo caben las preguntas que se puntúan solas y las evidencias, que
@@ -428,12 +442,29 @@ window.TIPOS_DE_PREGUNTA = [
         valor: window.TIPO_PREGUNTA_FOTO,
         icono: '\u{1F4F7}',
         nombre: 'Evidencia fotogr\u00e1fica',
-        detalle: 'El enunciado dice qu\u00e9 hay que fotografiar y la respuesta es la foto, que se reduce antes de subirla. Para pedir varias, agrega otra pregunta as\u00ed.'
+        detalle: 'El enunciado dice qu\u00e9 hay que fotografiar y la respuesta es la foto, que se reduce antes de subirla. Para pedir varias, agrega otra pregunta as\u00ed.',
+        enunciado: 'Qu\u00e9 hay que fotografiar\u2026'
+    },
+    {
+        valor: window.TIPO_PREGUNTA_ASISTENCIA,
+        icono: '\u{1F64B}',
+        nombre: 'Registro de asistencia',
+        detalle: 'No se contesta: se confirma. Para pasar lista de una junta o una capacitaci\u00f3n; queda registrada al enviar y nadie tiene que calificarla.',
+        enunciado: 'A qu\u00e9 se asisti\u00f3\u2026'
     }
 ];
 
 window.tipoDePregunta = (valor) =>
     window.TIPOS_DE_PREGUNTA.find(t => t.valor === valor) || null;
+
+// Lo que el campo del enunciado pide para cada tipo. Casi todos preguntan algo
+// —«Escribe la pregunta»— pero una evidencia pide qué fotografiar y una
+// asistencia a qué se asistió, que no son preguntas. Sale de aquí para que la
+// hoja lo cambie al cambiar de tipo y no sólo al montar la tarjeta.
+window.enunciadoDeTipo = (valor) => {
+    const tipo = window.tipoDePregunta(valor);
+    return (tipo && tipo.enunciado) || 'Escribe la pregunta aqu\u00ed...';
+};
 
 // ==========================================
 // PLAZO PARA VOLVER A CONTESTAR

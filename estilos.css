@@ -2174,6 +2174,60 @@ textarea:focus {
     max-width: 100%;
 }
 
+/* --- Registro de asistencia ------------------------------------------------
+   Una pregunta que no se contesta, se confirma. La casilla va grande y ocupa
+   la tarjeta entera: es el único control de la pregunta y el dedo no tiene que
+   buscarlo. El verde lo pone `window.pintarAsistencia` con una clase, y no
+   `:has()` en esta hoja, porque la casilla es hija de la etiqueta y no su
+   hermana. */
+.asistencia-registro {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 16px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.asistencia-registro.esta-marcado {
+    background: #f0fdf4;
+    border-style: solid;
+    border-color: #86efac;
+}
+
+.asistencia-registro input[type="checkbox"] {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    margin: 0;
+    accent-color: #16a34a;
+}
+
+.asistencia-texto {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.asistencia-titulo {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #334155;
+}
+
+.asistencia-registro.esta-marcado .asistencia-titulo { color: #15803d; }
+
+.asistencia-ayuda {
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
 /* --- El tipo de pregunta ----------------------------------------------------
    El `<select>` sigue en el marcado —es lo que leen el guardado y las
    restricciones del modo jefe— pero va escondido: el desplegable nativo de iOS

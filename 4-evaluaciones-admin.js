@@ -595,6 +595,12 @@ window.verDetalleRespuesta = async (resp) => {
     window.respuestasTempAdmin = resp.answers_json || {};
     const responseDate = new Date(resp.submitted_at);
 
+    // Cuándo se registró la asistencia: es cuando se envió la respuesta, así
+    // que la pregunta no tiene que guardar ninguna hora suya.
+    const diaDeLaRespuesta = isNaN(responseDate.getTime())
+        ? ''
+        : responseDate.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+
     if(questions) questions.forEach((q, index) => {
         if (q.created_at) {
             const questionDate = new Date(q.created_at);
@@ -641,6 +647,12 @@ window.verDetalleRespuesta = async (resp) => {
             if(pct < 80) { color = '#b45309'; bg = '#fef3c7'; }
             if(pct < 60) { color = '#991b1b'; bg = '#fee2e2'; }
             resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${bg}; color:${color}; padding:3px 10px; border-radius:12px; font-size:0.85rem; font-weight:bold;">${val}/${max} (${pct}%)</span>`;
+        } else if (window.esPreguntaDeAsistencia(q)) {
+            // Aquí no se acierta ni se falla: o se registró o no. «CORRECTO»
+            // sobre una asistencia se lee como si hubiera habido algo que
+            // calificar.
+            const registrada = (gradeObj && gradeObj.status === 'correct') || rawRespuesta === window.TEXTO_ASISTENCIA;
+            resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${registrada?'#dcfce7':'#f1f5f9'}; color:${registrada?'#166534':'#64748b'}; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${registrada?'REGISTRADA':'SIN REGISTRAR'}</span>`;
         } else {
             let status = "pending";
             if (typeof gradeObj === 'string') status = gradeObj;
@@ -649,11 +661,26 @@ window.verDetalleRespuesta = async (resp) => {
             resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${status==='correct'?'#dcfce7':(status==='incorrect'?'#fee2e2':'#f1f5f9')}; color:${status==='correct'?'#166534':(status==='incorrect'?'#991b1b':'#64748b')}; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${status==='correct'?'CORRECTO':(status==='incorrect'?'INCORRECTO':'PENDIENTE')}</span>`;
         }
 
+        // Una asistencia no se lee ni se califica: se confirmó al enviarla y
+        // eso es todo lo que había que saber. Ni siquiera en modo
+        // administrador aparece un campo para editarla —lo que se corregiría
+        // sería que alguien fue o no fue, y eso se arregla borrando la
+        // respuesta, no reescribiéndola—; `guardarCalificacionAdmin` parte de
+        // una copia de `answers_json`, así que el valor sobrevive intacto.
+        if (window.esPreguntaDeAsistencia(q)) {
+            const registrada = rawRespuesta === window.TEXTO_ASISTENCIA;
+            contentHtml = registrada
+                ? `<div style="display:flex; align-items:center; gap:10px; background:#f0fdf4; border:1px solid #bbf7d0; padding:14px; border-radius:10px; color:#15803d; font-weight:600;">
+                       <span style="font-size:1.2rem;">🙋</span>
+                       <span>Asistencia registrada${diaDeLaRespuesta ? ` · ${window.sanitizeForHTML(diaDeLaRespuesta)}` : ''}</span>
+                   </div>`
+                : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin registrar)</div>`;
+        }
         // Una evidencia se mira, no se lee: su respuesta es la URL de la foto y
         // se pinta igual se pueda calificar o no. Editarla desde aquí no tiene
         // sentido —habría que volver a tomarla—, así que ni el administrador
         // ve un campo de texto con la URL dentro.
-        if (window.esPreguntaDeFoto(q)) {
+        else if (window.esPreguntaDeFoto(q)) {
             const urlEvidencia = typeof rawRespuesta === 'string' ? rawRespuesta : '';
             contentHtml = urlEvidencia
                 ? `<img src="${window.sanitizeForHTML(urlEvidencia)}" alt="Evidencia"
@@ -3201,6 +3228,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     const showOptionsContainer = (tp === 'multiple' || tp === 'checklist' || tp === 'list_match');
     const showRangeInfo = (tp === 'range');
     const showPhotoInfo = (tp === 'photo');
+    const showAttendanceInfo = (tp === window.TIPO_PREGUNTA_ASISTENCIA);
     const optionsLabel = (tp === 'list_match') ? "Elementos Correctos (Respuesta Modelo):" : "Opciones:";
 
     d.innerHTML=`
@@ -3215,7 +3243,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     </div>
     <button type="button" class="tipo-pregunta-boton" onclick="window.alternarTiposPregunta(this)" aria-expanded="false"></button>
     <div class="tipos-pregunta" hidden></div>
-    <input type="text" class="inp-pregunta" value="${t}" placeholder="${showPhotoInfo ? 'Qué hay que fotografiar…' : 'Escribe la pregunta aquí...'}" style="width:100%;padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+    <input type="text" class="inp-pregunta" value="${t}" placeholder="${window.enunciadoDeTipo(tp)}" style="width:100%;padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
     
     <div class="options-container" style="display:${showOptionsContainer?'block':'none'};margin-top:10px;">
         <label class="lbl-options" style="font-size:0.8rem; color:#64748b; margin-bottom:5px; display:block;">${optionsLabel}</label>
@@ -3242,6 +3270,10 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
 
     <div class="photo-info-container" style="display:${showPhotoInfo?'block':'none'}; margin-top:15px; padding:10px; background:#eff6ff; border:1px dashed #bfdbfe; border-radius:8px; font-size:0.85rem; color:#1d4ed8;">
         📷 <b>Evidencia:</b> el enunciado de arriba es lo que se le pide fotografiar. La foto se guarda reducida a ${window.MAX_LADO_FOTO_EVAL}px junto a la respuesta, y la califica quien revise si la encuesta pasa a revisión. Para pedir varias evidencias, agrega otra pregunta de este tipo.
+    </div>
+
+    <div class="attendance-info-container" style="display:${showAttendanceInfo?'block':'none'}; margin-top:15px; padding:10px; background:#f0fdf4; border:1px dashed #bbf7d0; border-radius:8px; font-size:0.85rem; color:#15803d;">
+        🙋 <b>Asistencia:</b> el enunciado de arriba dice a qué se asistió («Capacitación de seguridad del 4 de septiembre»). Quien la reciba sólo tiene que confirmarlo, y al enviar queda registrada y calificada sola: nadie tiene que revisarla. Quien no asista, simplemente no la contesta y sigue apareciéndole como pendiente.
     </div>`;
     
     document.getElementById('questions-container').appendChild(d);
@@ -3558,11 +3590,13 @@ window.toggleTipoPregunta = (s) => {
     const lbl = w.querySelector('.lbl-options');
     const rInfo = w.querySelector('.range-info-container');
     const fInfo = w.querySelector('.photo-info-container');
-    
+    const aInfo = w.querySelector('.attendance-info-container');
+
     if(o) o.style.display = 'none';
     if(t) t.style.display = 'none';
     if(rInfo) rInfo.style.display = 'none';
     if(fInfo) fInfo.style.display = 'none';
+    if(aInfo) aInfo.style.display = 'none';
 
     if (s.value === 'text') {
         if(t) t.style.display = 'block';
@@ -3575,6 +3609,10 @@ window.toggleTipoPregunta = (s) => {
         // Una evidencia no tiene opciones ni respuesta modelo: sólo el
         // enunciado, que dice qué fotografiar.
         if(fInfo) fInfo.style.display = 'block';
+    } else if (s.value === window.TIPO_PREGUNTA_ASISTENCIA) {
+        // Tampoco la asistencia: el enunciado dice a qué se asistió y no hay
+        // nada más que configurar.
+        if(aInfo) aInfo.style.display = 'block';
     } else {
         if(o) {
             o.style.display = 'block';
@@ -3584,6 +3622,12 @@ window.toggleTipoPregunta = (s) => {
             }
         }
     }
+
+    // El enunciado no siempre es una pregunta: una evidencia pide qué
+    // fotografiar y una asistencia a qué se asistió. Lo dice el catálogo, y se
+    // repone aquí porque antes sólo se ponía al montar la tarjeta.
+    const campoEnunciado = w.querySelector('.inp-pregunta');
+    if (campoEnunciado) campoEnunciado.placeholder = window.enunciadoDeTipo(s.value);
 
     // Las casillas de «correcta» son de opción múltiple y checklist; en
     // «Recall» sobran, y al cambiar de tipo hay que apagarlas.
@@ -3931,6 +3975,13 @@ window.guardarNuevaEvaluacion = async () => {
                 const items = [];
                 d.querySelectorAll('.inp-opt-val').forEach(r=>{if(r.value.trim())items.push(r.value.trim());});
                 corr = JSON.stringify(items);
+                ops = [];
+            } else if (tp === window.TIPO_PREGUNTA_ASISTENCIA) {
+                // No hay nada que configurar, y el campo de «Respuesta Modelo»
+                // sigue en el marcado aunque esté escondido: sin vaciarlo se
+                // guardaría lo que hubiera quedado escrito antes de cambiar el
+                // tipo de la pregunta.
+                corr = "";
                 ops = [];
             } else if (tp==='range') {
                 const chkHalf = document.getElementById('eval-half-points');

@@ -601,6 +601,60 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `window.subirFotoEvaluacion(blob, prefijo)`; lo que cambia es dónde acaba la
   URL: la del área bajo `__foto_area`, la de cada evidencia bajo el id de su
   pregunta, que es donde va la respuesta de cualquier otra.
+- **El registro de asistencia no se contesta: se confirma.** Es para pasar
+  lista de una junta o una capacitación. La encuesta se dirige a quien tenía
+  que ir, el enunciado dice a qué —«Capacitación de seguridad del 4 de
+  septiembre»— y quien la recibe sólo marca «Sí, asistí». **Quien no asistió no
+  la contesta**, y le sigue saliendo como pendiente: no hay opción de «no fui»
+  porque la ausencia ya se ve sola en la lista de quién falta.
+
+  ```js
+  window.TIPO_PREGUNTA_ASISTENCIA         // 'attendance'
+  window.esPreguntaDeAsistencia(pregunta)
+  window.TEXTO_ASISTENCIA                 // 'Asistí', lo que se guarda
+  ```
+
+  **Se califica sola al enviarla**, como la escala y las opciones marcadas:
+  `enviarRespuestasEval` le escribe su `grades_json` —`status: 'correct'`, con
+  `auto: true`— y suma a `autoGradedCount`, así que una encuesta que sólo pasa
+  lista se guarda ya `'Revisado'`. Tenía que ser así: dejarla sin calificar le
+  crearía a alguien un pendiente de revisión donde no hay nada que decidir, y
+  dejarla **sin nota ninguna** —como la evidencia en modo jefe— sería peor,
+  porque entonces `calcularScoreRespuesta` daría 0 sobre cero preguntas y la
+  clasificación no se certificaría nunca sin apagarle el puntaje mínimo a mano.
+
+  Por eso **no entra en `TIPOS_EN_MODO_JEFE`** aunque cumpla el requisito de
+  puntuarse sola: ahí el puntaje es el veredicto del jefe sobre la persona, y
+  un 100 regalado por haber asistido lo diluye. Es la misma razón por la que la
+  evidencia fotográfica no puntúa en ese modo.
+
+  No lleva opciones, ni respuesta modelo, ni motivo, y **`guardarNuevaEvaluacion`
+  le vacía `correct_answer_text` a propósito**: el campo de «Respuesta Modelo»
+  sigue en el marcado aunque esté escondido, así que sin vaciarlo se guardaría
+  lo que hubiera quedado escrito antes de cambiar el tipo.
+
+  Al calificar se enseña «🙋 Asistencia registrada · 4 de septiembre de 2026» y
+  la insignia dice **REGISTRADA** o **SIN REGISTRAR**, no «CORRECTO»: ahí no se
+  acertó nada. **Ni en modo administrador aparece un campo para editarla** —lo
+  que se corregiría sería que alguien fue o no fue, y eso se resuelve borrando
+  la respuesta—; el valor sobrevive porque `guardarCalificacionAdmin` parte de
+  una copia de `answers_json`. La fecha sale de `submitted_at`, así que la
+  pregunta no guarda ninguna hora suya.
+
+  **El enunciado de cada tipo lo dice el catálogo** (`enunciado` en
+  `TIPOS_DE_PREGUNTA`, leído con `window.enunciadoDeTipo`): casi todos piden
+  «Escribe la pregunta», pero una asistencia pide «A qué se asistió…» y una
+  evidencia «Qué hay que fotografiar…», que no son preguntas. Se repone en
+  `toggleTipoPregunta` y no sólo al montar la tarjeta, que es donde estaba
+  antes: al cambiar de tipo, el campo seguía pidiendo una pregunta donde ya no
+  se preguntaba nada.
+
+  Es un tipo nuevo, así que **cae de lleno en la trampa del teléfono con el
+  JavaScript viejo** (la primera de esta lista): ese código no conoce
+  `attendance`, no entra en ninguna rama del `if` que dibuja los controles y
+  enseña el enunciado con nada debajo. Por eso la versión se sube en el mismo
+  cambio.
+
 - **Una evaluación por área lleva foto, y la foto se encoge antes de subir.**
   Las encuestas con `evaluates_area` piden una fotografía del área que se está
   evaluando: sin ella la evaluación es la palabra de quien la llenó contra

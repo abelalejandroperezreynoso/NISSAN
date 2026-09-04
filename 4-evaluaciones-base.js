@@ -910,6 +910,21 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                     </div>
                 </div>`;
         }
+        else if (window.esPreguntaDeAsistencia(q)) {
+            // No hay nada que contestar: el enunciado dice a qué se asistió y
+            // esto sólo lo confirma. Va como una casilla grande y no como un
+            // botón que envíe: la encuesta puede llevar más preguntas y se
+            // entrega entera, como todas.
+            inputHtml = `
+                <label for="chk-asistencia-${q.id}" class="asistencia-registro">
+                    <input type="checkbox" id="chk-asistencia-${q.id}" class="resp-asistencia" data-id="${q.id}"
+                           onchange="window.pintarAsistencia(this)">
+                    <span class="asistencia-texto">
+                        <span class="asistencia-titulo">Sí, asistí</span>
+                        <span class="asistencia-ayuda">Tócalo para registrar tu asistencia.</span>
+                    </span>
+                </label>`;
+        }
         else if (q.question_type === 'range') {
             let min = 0, step = 1;
             const max = window.maximoDeEscala(q);
@@ -1012,6 +1027,14 @@ window.mostrarFotoArea = async (input) => {
 // Las evidencias de cada pregunta, por id. Se encogen al elegirlas, igual que
 // la del área, y `enviarRespuestasEval` las sube al final.
 window.fotosPreguntaListas = {};
+
+// La casilla de asistencia se pinta de verde al marcarse. Se hace con una
+// clase y no con `:has()` en la hoja de estilos: la etiqueta es la madre de la
+// casilla, no su hermana, y así funciona igual en los Safari que no lo traen.
+window.pintarAsistencia = (chk) => {
+    const etiqueta = chk.closest('.asistencia-registro');
+    if (etiqueta) etiqueta.classList.toggle('esta-marcado', chk.checked);
+};
 
 window.mostrarFotoPregunta = async (input, qid) => {
     const previo = document.getElementById(`previo-foto-preg-${qid}`);
@@ -1180,6 +1203,9 @@ window.enviarRespuestasEval = async () => {
                     val = '';
                     evidenciasPorSubir.push({ id: q.id, blob: window.fotosPreguntaListas[q.id] });
                 }
+            } else if (window.esPreguntaDeAsistencia(q)) {
+                const el = document.querySelector(`.resp-asistencia[data-id="${q.id}"]`);
+                if (el && el.checked) val = window.TEXTO_ASISTENCIA;
             }
             
             answersMap[q.id] = val;
@@ -1232,6 +1258,19 @@ window.enviarRespuestasEval = async () => {
                         // el id de la pregunta y ese texto puede cambiar o
                         // desaparecer del cuestionario más adelante.
                         question: q.question_text || ''
+                    };
+                    autoGradedCount++;
+                } else if (window.esPreguntaDeAsistencia(q)) {
+                    // Pasar lista no tiene respuesta buena ni mala: haberla
+                    // confirmado es todo lo que se preguntaba. Se califica al
+                    // enviarla para no dejarle a nadie un pendiente de revisión
+                    // que no tiene nada que decidir; y si la encuesta es sólo
+                    // de asistencia, `autoGradedCount` la guarda ya 'Revisado'.
+                    autoGradesMap[q.id] = {
+                        type: 'standard',
+                        status: 'correct',
+                        question: q.question_text || '',
+                        auto: true
                     };
                     autoGradedCount++;
                 } else if (window.seCalificaSola(q)) {
