@@ -756,6 +756,26 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **plegada** entre el enunciado y los círculos, al contestarla y al
   calificarla, que el criterio tiene que ser el mismo para los dos.
 
+  **Al contestar, la guía es además el control.** Cada renglón lleva a la
+  izquierda el círculo del valor que explica, así que se elige mientras se lee:
+  con explicaciones de un párrafo, leerlas todas, cerrar la guía y buscar el
+  número abajo es perder el hilo. Y con la guía abierta **los círculos de abajo
+  se esconden** —serían lo mismo dos veces—; cerrada vuelven a salir, que es
+  como se contesta rápido una escala que ya se conoce. Lo hace `estilos.css`
+  con `.guia-escala--elegible[open] + .range-circulos`, y por eso el contenedor
+  de los círculos tiene clase en vez de un `style` en línea: una regla de la
+  hoja no le ganaría a un estilo en el atributo.
+
+  Eso es el segundo argumento de `bloqueGuiaEscala(pregunta, elegible)`, que
+  pasa sólo la pantalla de contestar; la de calificar la enseña para leerla,
+  que allí el control es otro. Lleva un renglón **cada valor que ofrece la
+  escala**, también los que nadie explicó —«Sin descripción»—: con la guía
+  abierta, si no, no habría manera de elegirlos. Los dos sitios comparten el
+  `name` del grupo de radios, así que sólo uno puede quedar marcado y el envío
+  sigue leyendo un `input[name="range-N"]:checked`; lo que **no** se puede es
+  pintar por `checked`, porque marcar el círculo de un sitio desmarca al gemelo
+  del otro: `updateRangeVisual` compara por **valor** y repinta los dos.
+
   Cuántos recuadros hay lo dicen el «Puntaje máximo» y la casilla de puntos
   medios, que son **de la encuesta entera**: cambiar cualquiera de los dos
   redibuja los de todas las preguntas de escala a la vez

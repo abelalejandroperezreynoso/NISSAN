@@ -850,6 +850,9 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
 
     window.preguntasCacheActual.forEach((q, index) => {
         let inputHtml = '';
+        // Los valores de la escala, si es una: los dibujan los círculos y
+        // también la guía, que aquí es el otro sitio desde donde se elige.
+        let valoresDeLaEscala = [], maxDeLaEscala = 0;
         const commonStyle = "width:100%; padding:15px; border:1px solid #cbd5e1; border-radius:8px; font-size:1rem; font-family:inherit; box-sizing: border-box;";
         
         if (q.question_type === 'text') {
@@ -916,11 +919,15 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                 min = parseInt(opts[0]);
                 if (opts.length > 2 && (String(opts[2]) === '0.5')) step = 0.5;
             }
-            let rangeHtml = '<div style="display:flex; flex-wrap:wrap; gap:8px; justify-content:center;">';
             // Los valores salen del helper y no de un bucle propio: son las
             // mismas llaves con las que la guía nombra cada valor, y dos
-            // redondeos distintos las dejarían sin casar.
-            window.valoresDeEscala(min, max, step).forEach(val => {
+            // redondeos distintos las dejarían sin casar. Se guardan fuera
+            // porque la guía dibuja un renglón por cada uno.
+            maxDeLaEscala = max;
+            valoresDeLaEscala = window.valoresDeEscala(min, max, step);
+
+            let rangeHtml = '<div class="range-circulos">';
+            valoresDeLaEscala.forEach(val => {
                 let labelText = '';
                 if (rangeLabels[val]) { labelText = `<div style="font-size:0.7rem; color:#64748b; margin-top:4px; max-width:60px; text-align:center; line-height:1.1; word-wrap:break-word;">${rangeLabels[val]}</div>`; }
                 rangeHtml += `
@@ -953,9 +960,15 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                 </div>`;
         }
 
-        // La guía de la escala va entre el enunciado y los círculos: se lee qué
-        // significa cada valor y luego se elige. Sin guía no dibuja nada.
-        const guiaHtml = window.bloqueGuiaEscala(q);
+        // La guía de la escala va entre el enunciado y los círculos, y aquí es
+        // además el control: cada renglón lleva su círculo a la izquierda, así
+        // que se elige mientras se lee. Con la guía abierta, los círculos de
+        // abajo se esconden —lo hace `estilos.css`— para no ofrecer lo mismo
+        // dos veces. Sin guía no dibuja nada y los círculos son lo único que
+        // hay.
+        const guiaHtml = window.bloqueGuiaEscala(q, valoresDeLaEscala.length
+            ? { valores: valoresDeLaEscala, nombre: `range-${q.id}`, id: q.id, max: maxDeLaEscala }
+            : null);
 
         container.insertAdjacentHTML('beforeend', `<div id="pregunta-card-${q.id}" class="pregunta-card" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${q.question_text}</label>${guiaHtml}${inputHtml}${comentarioHtml}</div>`);
     });
@@ -1031,12 +1044,24 @@ window.mostrarFotoPregunta = async (input, qid) => {
 };
 
 window.updateRangeVisual = (input) => {
-    const container = input.closest('div');
-    container.querySelectorAll('.range-circle').forEach(c => {
-        c.style.background = 'white'; c.style.color = '#64748b'; c.style.borderColor = '#cbd5e1'; c.style.transform = 'scale(1)';
+    // El mismo valor se puede elegir en dos sitios —los círculos de abajo y los
+    // renglones de la guía—, así que se repintan todos los del grupo y no sólo
+    // los del contenedor donde se tocó. Se compara por **valor** y no por
+    // `checked`: los dos círculos de un mismo número son radios distintos del
+    // mismo grupo, de modo que marcar uno desmarca al otro y el elegido se
+    // quedaría sin pintar en el sitio donde no se tocó.
+    const elegido = String(input.value);
+    document.querySelectorAll('.resp-range').forEach(radio => {
+        if (radio.name !== input.name) return;
+        const circulo = radio.nextElementSibling;
+        if (!circulo || !circulo.classList.contains('range-circle')) return;
+
+        const esEste = String(radio.value) === elegido;
+        circulo.style.background = esEste ? '#2563eb' : 'white';
+        circulo.style.color = esEste ? 'white' : '#64748b';
+        circulo.style.borderColor = esEste ? '#2563eb' : '#cbd5e1';
+        circulo.style.transform = esEste ? 'scale(1.1)' : 'scale(1)';
     });
-    const label = input.nextElementSibling;
-    label.style.background = '#2563eb'; label.style.color = 'white'; label.style.borderColor = '#2563eb'; label.style.transform = 'scale(1.1)';
 
     // El tope de la escala es el «todo bien» y no pide explicación; el rótulo
     // lo dice en cuanto se elige, para no reclamarla al enviar.

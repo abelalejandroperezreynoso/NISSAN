@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-04-1';
+window.VERSION_APP = '2026-09-04-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -654,24 +654,69 @@ window.textoGuiaDeValor = (pregunta, valor) =>
 
 // El mismo desplegable en las dos pantallas donde se ve una escala: al
 // contestarla y al calificarla. Sin guía no dibuja nada.
-window.bloqueGuiaEscala = (pregunta) => {
+//
+// Al contestar la guía es **además el control**: cada renglón lleva a la
+// izquierda el círculo del valor que explica, así se elige mientras se lee en
+// vez de leerlo todo, cerrar y buscar el número abajo —con explicaciones de un
+// párrafo, para cuando se llega a los círculos ya no se sabe cuál era cuál—.
+// Eso es lo que pide `elegible`:
+//
+//   { valores, nombre, id, max }
+//
+// `valores` son los que ofrece la escala, no sólo los explicados: un valor sin
+// explicación lleva igualmente su renglón, o con la guía abierta no habría
+// manera de elegirlo. `nombre` es el `name` del grupo de radios —el mismo que
+// el de los círculos de abajo, así que sólo uno de los dos puede quedar
+// marcado y el envío sigue leyendo uno solo—, y `max` es el tope, que es lo
+// que mira `updateRangeVisual` para el rótulo del motivo.
+//
+// La pantalla de calificar la enseña sólo para leerla: ahí el control es otro y
+// lo maneja `syncGradeWithAnswer`.
+window.bloqueGuiaEscala = (pregunta, elegible) => {
     const porValor = window.guiaPorValor(pregunta);
     const nota = window.guiaDeEscala(pregunta);
-    const valores = Object.keys(porValor).sort((a, b) => parseFloat(a) - parseFloat(b));
-    if (!valores.length && !nota) return '';
+    const explicados = Object.keys(porValor).sort((a, b) => parseFloat(a) - parseFloat(b));
+    if (!explicados.length && !nota) return '';
 
-    const filas = valores.map(v => `
+    // Sin ningún valor explicado no hay nada que elegir renglón a renglón: la
+    // guía es sólo la nota general y los círculos se quedan donde están.
+    const eligeAqui = !!(elegible && Array.isArray(elegible.valores) && elegible.valores.length && explicados.length);
+    const valores = eligeAqui ? elegible.valores.map(v => String(v)) : explicados;
+
+    const filas = valores.map(v => {
+        const valor = window.sanitizeForHTML(v);
+        const texto = window.sanitizeForHTML(porValor[v] || '');
+
+        if (!eligeAqui) {
+            return `
                     <div class="guia-escala-fila">
-                        <span class="guia-escala-valor">${window.sanitizeForHTML(v)}</span>
-                        <span class="guia-escala-significado">${window.sanitizeForHTML(porValor[v])}</span>
-                    </div>`).join('');
+                        <span class="guia-escala-valor">${valor}</span>
+                        <span class="guia-escala-significado">${texto}</span>
+                    </div>`;
+        }
+
+        const significado = texto || '<span class="guia-escala-sin-texto">Sin descripción</span>';
+        return `
+                    <label class="guia-escala-fila guia-escala-fila--elegible">
+                        <input type="radio" name="${window.sanitizeForHTML(elegible.nombre)}" value="${valor}" class="resp-range"
+                               data-id="${window.sanitizeForHTML(elegible.id)}" data-max="${window.sanitizeForHTML(elegible.max)}"
+                               style="display:none;" onchange="updateRangeVisual(this)">
+                        <span class="range-circle guia-escala-boton">${valor}</span>
+                        <span class="guia-escala-significado">${significado}</span>
+                    </label>`;
+    }).join('');
 
     const listaHtml = filas ? `<div class="guia-escala-lista">${filas}</div>` : '';
     const notaHtml = nota ? `<div class="guia-escala-texto">${window.sanitizeForHTML(nota)}</div>` : '';
+    // La pista va **dentro** del mismo <span> que el rótulo: el resumen es un
+    // flex con `gap`, así que cada nodo suelto cuenta como elemento y en un
+    // teléfono la pista se quedaba colgada a la derecha del título partido en
+    // dos renglones.
+    const pista = eligeAqui ? ' <span class="hoja-plegable-nota">y elige aquí</span>' : '';
 
     return `
-        <details class="hoja-plegable guia-escala">
-            <summary class="hoja-plegable-resumen"><span>📖 Qué significa cada valor</span></summary>
+        <details class="hoja-plegable guia-escala${eligeAqui ? ' guia-escala--elegible' : ''}">
+            <summary class="hoja-plegable-resumen"><span>📖 Qué significa cada valor${pista}</span></summary>
             <div class="hoja-plegable-cuerpo guia-escala-cuerpo">${listaHtml}${notaHtml}</div>
         </details>`;
 };
