@@ -1136,20 +1136,23 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **Quien ya la había contestado no ve «Nunca contestada».** Sería mentirle: la
   contestó, y la racha de periodos omitidos no es suya sino de una orden de
   hoy. Ese caso es un `tipoAviso` propio, `'relanzada'`, sin atraso acumulado
-  —el instante lo pone a cero—; lo único que lo distingue en la tarjeta es el
-  estado, «¡Se volvió a lanzar!» en azul, porque aquí nadie se ha descuidado.
+  —el instante lo pone a cero—.
 
-  **Y nada más: ni insignia, ni recuadro de explicación.** Los llevó al
-  principio —una insignia «🔄 Relanzada» junto a la del periodo y un
-  `.pendiente-nota` azul contando que la encuesta se volvió a lanzar, cuándo y
-  que lo entregado seguía guardado—, y sobraban las dos cosas: quien acaba de
-  contestarla ya sabe que se relanzó, y un pendiente que se explica más que los
-  demás parece un problema en vez de otra vuelta. La tarjeta se lee como
-  cualquier otro pendiente, con su recuadro de siempre —el periodo y la última
-  vez que la contestó, que ahí sigue diciendo la fecha de la respuesta que dejó
-  de contar—. Con ellos se fueron `window.bloqueDeRelanzamiento`, la variante
+  **Y su rama no pinta nada, a propósito.** Llevó tres cosas y las tres
+  sobraban: una insignia «🔄 Relanzada», un `.pendiente-nota` azul contando que
+  la encuesta se volvió a lanzar y el estado «¡Se volvió a lanzar!». Quien
+  acaba de contestarla ya sabe que se relanzó, y un pendiente que se explica
+  más que los demás parece un problema en vez de otra vuelta. Hoy la tarjeta se
+  lee **como cualquier otro pendiente**: el «¡Pendiente!» y la etiqueta de
+  tiempo que llevan todos, y el recuadro de siempre con el periodo y la última
+  vez que la contestó —que ahí sigue diciendo la fecha de la respuesta que dejó
+  de contar—. Con ellas se fueron `window.bloqueDeRelanzamiento`, la variante
   `.pendiente-nota.relanzada` de `estilos.css` y el campo `relanzamiento` que
   devolvía `esEvaluacionPendiente`, que no alimentaban nada más.
+
+  Lo que la rama **no** puede es desaparecer: sin ella el pendiente cae al
+  `else` que anuncia el vencimiento, y una encuesta de «única vez» no tiene
+  periodo, así que diría «Vence en 0 días».
 
   **Una encuesta de asistencia no se puede relanzar sin volver a fecharla**, y
   la hoja no deja: el enunciado nombra un evento que ya pasó y la hora vieja

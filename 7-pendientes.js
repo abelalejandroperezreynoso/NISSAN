@@ -916,13 +916,13 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     colorEstado = color;
                     bloqueEstadoHtml = window.bloqueDeReintento(r, item.vencimiento.vencida);
                 } else if (item.vencimiento.tipoAviso === 'relanzada') {
-                    // Tampoco falta contestarla: la contestó y relanzaron la
-                    // encuesta, así que lo que se pide es contestarla otra vez.
-                    // Sin insignia y sin recuadro: la tarjeta se lee como
-                    // cualquier otro pendiente y lo dice el estado, en azul
-                    // porque nadie se ha descuidado —la orden es de hoy—.
-                    txtEstado = "¡Se volvió a lanzar!";
-                    colorEstado = "#1d4ed8";
+                    // La contestó y relanzaron la encuesta, así que toca otra
+                    // vuelta. La rama no pinta nada a propósito: se queda con
+                    // el «¡Pendiente!» y la etiqueta de tiempo que llevan todos
+                    // los demás, y así es como se lee, como un pendiente más.
+                    // Lo que no puede es caerse al `else` de abajo, que sin
+                    // periodo —una encuesta de «única vez» no lo tiene— diría
+                    // «Vence en 0 días».
                 } else if (item.vencimiento.vencida) {
                     const etiquetaVencida = item.vencimiento.tipoAviso === 'nunca' ? 'Nunca contestada' : 'Vencida';
                     badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">🚨 ${etiquetaVencida}</span>`;
