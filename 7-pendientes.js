@@ -290,53 +290,6 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             </div>`;
     };
 
-    // Un pendiente que reaparece porque relanzaron la encuesta tampoco se
-    // explica solo: quien lo mira ya la contestó y la tarjeta le vuelve a pedir
-    // lo mismo sin decir por qué. Dice las tres cosas que faltan: que la
-    // encuesta se volvió a pedir, cuándo se dio esa orden y que lo que entregó
-    // antes sigue guardado —no se le perdió nada— pero ya no cierra el
-    // pendiente.
-    //
-    // Con `persona` habla de un tercero, igual que el de reintento: es la
-    // encuesta de modo jefe, que la repone quien evalúa y no el evaluado.
-    window.bloqueDeRelanzamiento = (relanzamiento, persona) => {
-        if (!relanzamiento) return '';
-
-        const cuando = fechaCorta(relanzamiento.fecha);
-        const anterior = fechaCorta(relanzamiento.fechaRespuesta);
-        const quien = persona ? window.sanitizeForHTML(String(persona).trim()) : '';
-
-        const titulo = '🔄 La encuesta se volvió a lanzar';
-
-        const orden = cuando
-            ? `Quien la revisa la relanzó el <strong>${cuando}</strong>`
-            : 'Quien la revisa la volvió a lanzar';
-
-        let previa;
-        if (quien) {
-            previa = anterior
-                ? `La evaluación de ${quien} del ${anterior} sigue guardada, pero ya no cuenta para esta vuelta.`
-                : `Lo evaluado antes sigue guardado, pero ya no cuenta para esta vuelta.`;
-        } else {
-            previa = anterior
-                ? `La que entregaste el ${anterior} sigue guardada, pero ya no cuenta para esta vuelta.`
-                : 'Lo que entregaste antes sigue guardado, pero ya no cuenta para esta vuelta.';
-        }
-
-        const accion = quien
-            ? `Vuelve a evaluar a ${quien} con lo de esta vuelta.`
-            : 'Contéstala otra vez con lo de esta vuelta.';
-
-        return `
-            <div class="pendiente-nota relanzada">
-                <div class="pendiente-nota-titulo">${titulo}</div>
-                <div class="pendiente-nota-texto">
-                    ${orden}. ${previa}
-                </div>
-                <div class="pendiente-nota-accion">📝 ${accion}</div>
-            </div>`;
-    };
-
     // 'fechaAlta' (el created_at de la encuesta) sirve de origen para contar la
     // racha cuando el empleado no la ha contestado nunca.
     //
@@ -388,8 +341,7 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
                     tipoAviso: 'relanzada',
                     ultimaFecha: descartadas[0].submitted_at,
                     periodosOmitidos: 0,
-                    frecuencia: frecuencia,
-                    relanzamiento: { fecha: relanzada, fechaRespuesta: descartadas[0].submitted_at }
+                    frecuencia: frecuencia
                 };
             }
 
@@ -966,11 +918,11 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 } else if (item.vencimiento.tipoAviso === 'relanzada') {
                     // Tampoco falta contestarla: la contestó y relanzaron la
                     // encuesta, así que lo que se pide es contestarla otra vez.
-                    // No va en rojo: nadie se ha descuidado, la orden es de hoy.
-                    badgeTiempoHtml = `<span style="background:#eff6ff; color:#1d4ed8; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #bfdbfe;">🔄 Relanzada</span>`;
+                    // Sin insignia y sin recuadro: la tarjeta se lee como
+                    // cualquier otro pendiente y lo dice el estado, en azul
+                    // porque nadie se ha descuidado —la orden es de hoy—.
                     txtEstado = "¡Se volvió a lanzar!";
                     colorEstado = "#1d4ed8";
-                    bloqueEstadoHtml = window.bloqueDeRelanzamiento(item.vencimiento.relanzamiento);
                 } else if (item.vencimiento.vencida) {
                     const etiquetaVencida = item.vencimiento.tipoAviso === 'nunca' ? 'Nunca contestada' : 'Vencida';
                     badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">🚨 ${etiquetaVencida}</span>`;
@@ -1057,10 +1009,6 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 let notaReintentoHtml = '';
                 if (esReintento) {
                     notaReintentoHtml = window.bloqueDeReintento(item.vencimiento.reintento, item.vencimiento.vencida, nombreSub);
-                } else if (item.vencimiento && item.vencimiento.tipoAviso === 'relanzada') {
-                    // Aquí también se evaluó ya y la tarjeta vuelve a pedirlo:
-                    // relanzaron la encuesta y toca otra vuelta.
-                    notaReintentoHtml = window.bloqueDeRelanzamiento(item.vencimiento.relanzamiento, nombreSub);
                 }
                 
                 let textoUltima = "Nunca evaluado";

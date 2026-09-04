@@ -1136,14 +1136,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **Quien ya la había contestado no ve «Nunca contestada».** Sería mentirle: la
   contestó, y la racha de periodos omitidos no es suya sino de una orden de
   hoy. Ese caso es un `tipoAviso` propio, `'relanzada'`, sin atraso acumulado
-  —el instante lo pone a cero—, con su insignia azul «🔄 Relanzada» y con
-  `window.bloqueDeRelanzamiento(relanzamiento, persona)` en lugar del bloque
-  del periodo, que dice las tres cosas que faltan: que la encuesta se volvió a
-  lanzar, cuándo se dio esa orden y que lo que entregó **sigue guardado** pero
-  ya no cuenta para esta vuelta. Es el mismo sitio y la misma clase
-  `.pendiente-nota` que el bloque de reintento —con la variante `.relanzada`,
-  que va en azul porque aquí nadie se ha descuidado— y con `persona` habla en
-  tercera persona para la encuesta de modo jefe, igual que aquél.
+  —el instante lo pone a cero—; lo único que lo distingue en la tarjeta es el
+  estado, «¡Se volvió a lanzar!» en azul, porque aquí nadie se ha descuidado.
+
+  **Y nada más: ni insignia, ni recuadro de explicación.** Los llevó al
+  principio —una insignia «🔄 Relanzada» junto a la del periodo y un
+  `.pendiente-nota` azul contando que la encuesta se volvió a lanzar, cuándo y
+  que lo entregado seguía guardado—, y sobraban las dos cosas: quien acaba de
+  contestarla ya sabe que se relanzó, y un pendiente que se explica más que los
+  demás parece un problema en vez de otra vuelta. La tarjeta se lee como
+  cualquier otro pendiente, con su recuadro de siempre —el periodo y la última
+  vez que la contestó, que ahí sigue diciendo la fecha de la respuesta que dejó
+  de contar—. Con ellos se fueron `window.bloqueDeRelanzamiento`, la variante
+  `.pendiente-nota.relanzada` de `estilos.css` y el campo `relanzamiento` que
+  devolvía `esEvaluacionPendiente`, que no alimentaban nada más.
 
   **Una encuesta de asistencia no se puede relanzar sin volver a fecharla**, y
   la hoja no deja: el enunciado nombra un evento que ya pasó y la hora vieja

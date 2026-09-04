@@ -3457,27 +3457,6 @@ html.modal-abierto {
     color: #991b1b;
 }
 
-/* Relanzar la encuesta no es un descuido de nadie: la orden es de hoy y lo que
-   se pide es otra vuelta, así que la nota va en el azul de su insignia y no en
-   el ámbar de lo que está a punto de vencer. */
-.pendiente-nota.relanzada {
-    background: #eff6ff;
-    border-color: #bfdbfe;
-}
-
-.pendiente-nota.relanzada .pendiente-nota-titulo,
-.pendiente-nota.relanzada .pendiente-nota-accion {
-    color: #1e40af;
-}
-
-.pendiente-nota.relanzada .pendiente-nota-texto {
-    color: #1d4ed8;
-}
-
-.pendiente-nota.relanzada .pendiente-nota-accion {
-    border-top-color: #bfdbfe;
-}
-
 /* En un iPhone 12 mini la tarjeta mide 329px y el encabezado repartía ese ancho
    en tres columnas: el icono (60px), el texto y el botón (90px). A la columna
    del texto le quedaban 107px, así que el título salía en tres renglones, cada
