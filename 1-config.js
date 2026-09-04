@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-04-6';
+window.VERSION_APP = '2026-09-04-7';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -382,6 +382,144 @@ window.TIPO_PREGUNTA_ASISTENCIA = 'attendance';
 window.TEXTO_ASISTENCIA = 'Asistí';
 window.esPreguntaDeAsistencia = (pregunta) =>
     !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_ASISTENCIA;
+
+// ==========================================
+// LA HORA DE UN REGISTRO DE ASISTENCIA
+// ==========================================
+// Pasar lista sin hora no sirve de mucho: quien no fue puede registrarse al
+// día siguiente. Por eso una pregunta de asistencia lleva **la fecha y la hora
+// del evento**, y sólo se puede registrar dentro de la hora siguiente. Antes
+// no aparece —todavía no ha pasado nada que confirmar— y después tampoco: no
+// haberla contestado es la inasistencia.
+//
+// Viaja en la **primera posición de `options`**, que para este tipo no guardaba
+// nada, así que no hay columna nueva ni script que correr. Es la misma idea que
+// la guía de una escala en la cuarta posición.
+//
+// La fecha es opcional: sin ella la pregunta se comporta como antes —siempre
+// registrable—, que es lo que deja en pie a las que ya estaban creadas.
+window.PLAZA_FECHA_EVENTO = 0;
+window.MINUTOS_PARA_REGISTRAR_ASISTENCIA = 60;
+
+window.fechaDelEvento = (pregunta) => {
+    if (!window.esPreguntaDeAsistencia(pregunta)) return null;
+    const crudo = window.opcionesDePregunta(pregunta)[window.PLAZA_FECHA_EVENTO];
+    if (!crudo || typeof crudo !== 'string') return null;
+    const fecha = new Date(crudo);
+    return isNaN(fecha.getTime()) ? null : fecha;
+};
+
+window.ventanaDeLaPregunta = (pregunta) => {
+    const inicio = window.fechaDelEvento(pregunta);
+    if (!inicio) return null;
+    return {
+        inicio,
+        fin: new Date(inicio.getTime() + window.MINUTOS_PARA_REGISTRAR_ASISTENCIA * 60000)
+    };
+};
+
+// Los cuatro estados en los que puede estar una pregunta de asistencia. Por
+// aquí pasan el formulario —que apaga la casilla—, el envío —que no acepta un
+// registro fuera de hora— y la pantalla de calificar.
+window.estadoDeAsistencia = (pregunta, ahora) => {
+    const ventana = window.ventanaDeLaPregunta(pregunta);
+    if (!ventana) return { estado: 'sin-fecha' };
+
+    const t = (ahora instanceof Date ? ahora : new Date()).getTime();
+    if (t < ventana.inicio.getTime()) return { estado: 'antes', ...ventana };
+    if (t > ventana.fin.getTime()) return { estado: 'cerrada', ...ventana };
+    return { estado: 'abierta', ...ventana };
+};
+
+window.fechaYHoraLegible = (fecha) => !(fecha instanceof Date) || isNaN(fecha.getTime())
+    ? ''
+    : fecha.toLocaleString('es-MX', {
+        day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
+    });
+
+// S\u00f3lo la hora. Sacarla partiendo el texto de `fechaYHoraLegible` por la
+// coma funciona en es-MX y se rompe en cuanto el formato cambia.
+window.horaLegible = (fecha) => !(fecha instanceof Date) || isNaN(fecha.getTime())
+    ? ''
+    : fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+// Lo que se le dice a quien la mira, seg\u00fan en qu\u00e9 momento llegue. Sin punto
+// final: en espa\u00f1ol la hora ya acaba en «a.m.» y se ve\u00edan dos seguidos.
+window.avisoDeAsistencia = (pregunta, ahora) => {
+    const est = window.estadoDeAsistencia(pregunta, ahora);
+    if (est.estado === 'sin-fecha') return '';
+
+    if (est.estado === 'antes') {
+        return `Se podr\u00e1 registrar el ${window.fechaYHoraLegible(est.inicio)}, y hasta las ${window.horaLegible(est.fin)}`;
+    }
+    if (est.estado === 'cerrada') {
+        return `El plazo cerr\u00f3 el ${window.fechaYHoraLegible(est.fin)} y ya no se puede registrar`;
+    }
+    return `Tienes hasta las ${window.horaLegible(est.fin)} para registrarla`;
+};
+
+// ------------------------------------------------------------------
+// LA VENTANA DE UNA ENCUESTA ENTERA
+// ------------------------------------------------------------------
+// El pendiente es de la encuesta, no de una pregunta suelta, y las pantallas
+// que lo deciden —`esEvaluacionPendiente` y el badge del panel— parten de
+// `evaluations` y no traen las preguntas. Por eso las ventanas se piden una
+// sola vez por sesión y se guardan aquí, como la caché de clasificaciones que
+// se certifican: quien pregunta lo hace sin poder esperar.
+//
+// La consulta trae **sólo** las preguntas de asistencia, que son pocas.
+//
+// Si una encuesta tuviera varias con fechas distintas —no es para lo que está
+// pensada: una encuesta de asistencia es de un evento— la ventana va de la
+// primera a la última, para que ninguna se quede sin poder registrarse. Cada
+// pregunta sigue exigiendo la suya al contestarla.
+window.ventanasAsistencia = null;
+let promesaVentanasAsistencia = null;
+
+window.cargarVentanasDeAsistencia = (recargar = false) => {
+    if (recargar) { promesaVentanasAsistencia = null; window.ventanasAsistencia = null; }
+    if (promesaVentanasAsistencia) return promesaVentanasAsistencia;
+
+    promesaVentanasAsistencia = sb.from('evaluation_questions')
+        .select('evaluation_id, options, question_type')
+        .eq('question_type', window.TIPO_PREGUNTA_ASISTENCIA)
+        .then(({ data, error }) => {
+            const mapa = {};
+            if (!error && data) {
+                data.forEach(q => {
+                    const ventana = window.ventanaDeLaPregunta(q);
+                    if (!ventana) return;
+                    const clave = String(q.evaluation_id);
+                    const ya = mapa[clave];
+                    mapa[clave] = ya
+                        ? { inicio: ya.inicio < ventana.inicio ? ya.inicio : ventana.inicio,
+                            fin: ya.fin > ventana.fin ? ya.fin : ventana.fin }
+                        : ventana;
+                });
+            }
+            // Un fallo deja el mapa vacío: sin ventana todo se comporta como
+            // antes, que es preferible a esconderle el pendiente a todo el
+            // mundo porque una consulta no respondió.
+            window.ventanasAsistencia = mapa;
+            return mapa;
+        })
+        .catch(() => { window.ventanasAsistencia = {}; return {}; });
+
+    return promesaVentanasAsistencia;
+};
+
+window.ventanaDeAsistencia = (evaluationId) =>
+    (window.ventanasAsistencia || {})[String(evaluationId)] || null;
+
+// ¿Hay que esconder el pendiente de esta encuesta? Sólo si tiene ventana y
+// estamos fuera de ella. Mientras la caché no esté cargada no hay ventana y
+// todo se comporta como antes, igual que con las clasificaciones.
+window.asistenciaFueraDeHora = (evaluationId, ahora) => {
+    const v = window.ventanaDeAsistencia(evaluationId);
+    if (!v) return false;
+    const t = (ahora instanceof Date ? ahora : new Date()).getTime();
+    return t < v.inicio.getTime() || t > v.fin.getTime();
+};
 
 // Lo que admite una encuesta de modo `boss`. Esa encuesta se guarda ya
 // calificada al enviarla —la contesta el jefe y su palabra es el veredicto—,

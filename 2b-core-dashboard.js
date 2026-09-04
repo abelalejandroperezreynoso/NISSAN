@@ -1515,6 +1515,10 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
         // `requires_min_score` va con `retry_days`: sin ella el badge daba por
         // hecho que toda encuesta exige el 80% y contaba como pendiente hasta
         // las respuestas de las que lo tienen apagado.
+        // Igual que en el panel de pendientes: `esEvaluacionPendiente` pregunta
+        // por la ventana de las encuestas que pasan lista sin poder esperar.
+        await window.cargarVentanasDeAsistencia();
+
         const camposEvals = await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
             'id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')));
         const { data: activeEvalsDb } = await sb.from('evaluations')

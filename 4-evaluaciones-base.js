@@ -915,13 +915,23 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             // esto sólo lo confirma. Va como una casilla grande y no como un
             // botón que envíe: la encuesta puede llevar más preguntas y se
             // entrega entera, como todas.
+            //
+            // Con fecha y hora, la casilla sólo se puede tocar dentro de su
+            // plazo. Fuera de él se enseña igual pero apagada y diciendo por
+            // qué: esconderla dejaría el enunciado con nada debajo, que es
+            // exactamente lo que no se puede distinguir de un teléfono con el
+            // JavaScript viejo.
+            const est = window.estadoDeAsistencia(q);
+            const cerrada = est.estado === 'antes' || est.estado === 'cerrada';
+            const aviso = window.avisoDeAsistencia(q);
+
             inputHtml = `
-                <label for="chk-asistencia-${q.id}" class="asistencia-registro">
+                <label for="chk-asistencia-${q.id}" class="asistencia-registro${cerrada ? ' esta-cerrado' : ''}">
                     <input type="checkbox" id="chk-asistencia-${q.id}" class="resp-asistencia" data-id="${q.id}"
-                           onchange="window.pintarAsistencia(this)">
+                           ${cerrada ? 'disabled' : ''} onchange="window.pintarAsistencia(this)">
                     <span class="asistencia-texto">
-                        <span class="asistencia-titulo">Sí, asistí</span>
-                        <span class="asistencia-ayuda">Tócalo para registrar tu asistencia.</span>
+                        <span class="asistencia-titulo">${est.estado === 'cerrada' ? 'Fuera de plazo' : (est.estado === 'antes' ? 'Todavía no' : 'Sí, asistí')}</span>
+                        <span class="asistencia-ayuda">${aviso || 'Tócalo para registrar tu asistencia.'}</span>
                     </span>
                 </label>`;
         }
@@ -1175,6 +1185,7 @@ window.enviarRespuestasEval = async () => {
         const faltanMotivos = [];
         const faltanRespuestas = [];
         const evidenciasPorSubir = [];
+        const fueraDePlazo = [];
 
         window.preguntasCacheActual.forEach((q, indice) => {
             let val = null;
@@ -1205,7 +1216,13 @@ window.enviarRespuestasEval = async () => {
                 }
             } else if (window.esPreguntaDeAsistencia(q)) {
                 const el = document.querySelector(`.resp-asistencia[data-id="${q.id}"]`);
-                if (el && el.checked) val = window.TEXTO_ASISTENCIA;
+                // Se comprueba también aquí y no sólo al dibujar: la hoja pudo
+                // quedarse abierta desde antes del evento —o pasarse la hora
+                // con ella abierta— y el reloj corre igual.
+                const enHora = window.estadoDeAsistencia(q).estado !== 'antes'
+                            && window.estadoDeAsistencia(q).estado !== 'cerrada';
+                if (el && el.checked && enHora) val = window.TEXTO_ASISTENCIA;
+                if (el && el.checked && !enHora) fueraDePlazo.push({ numero: indice + 1, texto: q.question_text || '', id: q.id });
             }
             
             answersMap[q.id] = val;
@@ -1304,6 +1321,32 @@ window.enviarRespuestasEval = async () => {
             c.style.border = '1px solid #e2e8f0';
             c.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
         });
+
+        // Una asistencia marcada fuera de su plazo se para aquí y va antes que
+        // lo que falta: no es un descuido de quien la llena, es que el plazo se
+        // pasó con la hoja abierta, y decirle «falta contestar» sería mentirle.
+        if (fueraDePlazo.length > 0) {
+            fueraDePlazo.forEach(f => {
+                const card = document.getElementById(`pregunta-card-${f.id}`);
+                if (card) {
+                    card.style.border = '2px solid #ef4444';
+                    card.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.12)';
+                }
+            });
+
+            alert(
+                'El plazo para registrar la asistencia ya cerró:\n\n' +
+                fueraDePlazo.map(f => `   ${f.numero}. ${f.texto}`).join('\n') +
+                '\n\nVuelve a abrir la encuesta para ver hasta cuándo había. ' +
+                'Si el plazo pasó, cuenta como inasistencia y hay que avisarle a quien la imparte.'
+            );
+
+            const card = document.getElementById(`pregunta-card-${fueraDePlazo[0].id}`);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            if (btn) { btn.disabled = false; btn.innerText = "Enviar Respuestas"; }
+            return;
+        }
 
         if (faltanRespuestas.length > 0 || faltanMotivos.length > 0) {
             const lista = (titulo, faltas) => faltas.length === 0 ? ''

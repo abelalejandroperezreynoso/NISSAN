@@ -641,6 +641,77 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   una copia de `answers_json`. La fecha sale de `submitted_at`, así que la
   pregunta no guarda ninguna hora suya.
 
+  **Una asistencia lleva la fecha y la hora del evento, y sólo se registra en
+  su hora.** Pasar lista sin hora no sirve de mucho: quien no fue se registra al
+  día siguiente. Con fecha, el pendiente **no aparece antes del evento** —no ha
+  pasado todavía nada que confirmar— y hay
+  `window.MINUTOS_PARA_REGISTRAR_ASISTENCIA` (60) para hacerlo; pasados, ya no
+  se puede y **no haberla contestado es la inasistencia**, que es como esta
+  aplicación cuenta a quien falta desde siempre.
+
+  ```js
+  window.PLAZA_FECHA_EVENTO              // 0: la primera posición de `options`
+  window.fechaDelEvento(pregunta)        // Date, o null
+  window.ventanaDeLaPregunta(pregunta)   // { inicio, fin }
+  window.estadoDeAsistencia(pregunta, ahora)  // 'sin-fecha' | 'antes' | 'abierta' | 'cerrada'
+  window.avisoDeAsistencia(pregunta)     // lo que se le dice a quien la mira
+  ```
+
+  Viaja en la **primera posición de `options`**, que para este tipo no guardaba
+  nada, así que no hay columna nueva ni script que correr: es la misma idea que
+  la guía de una escala en la cuarta. Se guarda en **ISO** y no como la hora
+  local que da el `datetime-local`, para que el teléfono de quien la conteste
+  lea el mismo instante aunque esté en otro huso; `window.valorLocalDeFecha`
+  hace el camino de vuelta para el campo, porque `toISOString()` ahí enseñaría
+  UTC.
+
+  **La fecha es opcional**: sin ella la pregunta se comporta como antes
+  —siempre registrable—, que es lo que deja en pie a las que ya estaban
+  creadas.
+
+  **El pendiente es de la encuesta, pero la hora es de la pregunta**, y las
+  pantallas que deciden el pendiente —`esEvaluacionPendiente` y el badge del
+  panel— parten de `evaluations` y no traen las preguntas. Por eso las ventanas
+  se piden **una sola vez por sesión** y se guardan en una caché, como las
+  clasificaciones que se certifican, y quien pregunta lo hace sin poder
+  esperar:
+
+  ```js
+  await window.cargarVentanasDeAsistencia()      // la llena; `true` la rehace
+  window.ventanaDeAsistencia(evaluationId)
+  window.asistenciaFueraDeHora(evaluationId, ahora)
+  ```
+
+  La consulta trae **sólo** las preguntas de asistencia, que son pocas. La
+  piden `cargarVistaPendientes` y `calcularPendientesBatch` antes de decidir
+  nada, y `guardarNuevaEvaluacion` la rehace al guardar —ahí es donde se
+  escriben las preguntas, así que puede haber una asistencia nueva o con la
+  hora movida—. **Mientras la caché no esté cargada no hay ventana y todo se
+  comporta como antes**: es preferible enseñar un pendiente de más que
+  esconderle a la plantilla entera los suyos porque una consulta no respondió.
+
+  Si una encuesta tuviera varias asistencias con fechas distintas —no es para
+  lo que está pensada: una encuesta de asistencia es de un evento— la ventana
+  de la encuesta va de la primera a la última, para que ninguna se quede sin
+  poder registrarse. **Cada pregunta sigue exigiendo la suya al contestarla**,
+  que es donde se decide de verdad.
+
+  **Fuera de plazo la casilla se enseña igual, apagada y diciendo por qué**
+  (`.asistencia-registro.esta-cerrado`). Esconderla dejaría el enunciado con
+  nada debajo, que es exactamente lo que no se distingue de un teléfono con el
+  JavaScript viejo.
+
+  Y **el envío lo vuelve a comprobar**, no sólo el formulario: la hoja pudo
+  quedarse abierta desde antes del evento, o pasarse la hora con ella abierta, y
+  el reloj corre igual. Ese aviso va **antes** que el de lo que falta y por
+  separado: no es un descuido de quien la llena, así que decirle «falta
+  contestar» sería mentirle.
+
+  Lo que **no** mira la ventana es el calendario: una encuesta programada a una
+  persona concreta en `scheduled_evaluations` sigue apareciendo en su día. Es la
+  misma excepción que ya tenía con `active`, y por lo mismo — esa programación
+  es una asignación explícita.
+
   **El enunciado de cada tipo lo dice el catálogo** (`enunciado` en
   `TIPOS_DE_PREGUNTA`, leído con `window.enunciadoDeTipo`): casi todos piden
   «Escribe la pregunta», pero una asistencia pide «A qué se asistió…» y una

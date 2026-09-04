@@ -306,6 +306,15 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
 
         // Sin frecuencia repetitiva ('once', o sin dato) no hay periodos que contar.
         const now = new Date();
+
+        // Una encuesta que pasa lista sólo se puede contestar en la hora de su
+        // evento: antes no ha pasado nada que confirmar y después no haberla
+        // contestado ES la inasistencia, así que seguir pidiéndola no lleva a
+        // ninguna parte. Sin ventana —sin fecha, o con la caché aún sin
+        // cargar— todo se comporta como antes.
+        if (window.asistenciaFueraDeHora && window.asistenciaFueraDeHora(evalId, now)) {
+            return { mostrar: false };
+        }
         const periodo = AVISO_CIERRE.hasOwnProperty(frecuencia) ? window.periodoVigente(frecuencia, now) : null;
 
         if (resps.length === 0) {
@@ -467,6 +476,10 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             // como `retry_days`: sin ella, `exigeMinimo` da por hecho que la
             // encuesta exige el 80% y se pedía repetir hasta las encuestas que
             // lo tienen apagado.
+            // Las ventanas de las encuestas que pasan lista: `esEvaluacionPendiente`
+            // las pregunta sin poder esperar, así que la caché se llena antes.
+            await window.cargarVentanasDeAsistencia();
+
             const camposEvals = await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
                 'id, title, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')));
             const { data: activeEvalsDb } = await sb.from('evaluations')

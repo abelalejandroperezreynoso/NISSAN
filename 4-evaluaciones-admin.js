@@ -669,12 +669,20 @@ window.verDetalleRespuesta = async (resp) => {
         // una copia de `answers_json`, así que el valor sobrevive intacto.
         if (window.esPreguntaDeAsistencia(q)) {
             const registrada = rawRespuesta === window.TEXTO_ASISTENCIA;
-            contentHtml = registrada
+
+            // Cuándo era el evento, si la pregunta lo dice: es lo que explica
+            // que alguien no la tenga registrada.
+            const cuando = window.fechaDelEvento(q);
+            const lineaEvento = cuando
+                ? `<div style="font-size:0.8rem; color:#64748b; margin-top:8px;">📅 El evento fue el ${window.sanitizeForHTML(window.fechaYHoraLegible(cuando))}, con ${window.MINUTOS_PARA_REGISTRAR_ASISTENCIA} minutos para registrarlo</div>`
+                : '';
+
+            contentHtml = (registrada
                 ? `<div style="display:flex; align-items:center; gap:10px; background:#f0fdf4; border:1px solid #bbf7d0; padding:14px; border-radius:10px; color:#15803d; font-weight:600;">
                        <span style="font-size:1.2rem;">🙋</span>
                        <span>Asistencia registrada${diaDeLaRespuesta ? ` · ${window.sanitizeForHTML(diaDeLaRespuesta)}` : ''}</span>
                    </div>`
-                : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin registrar)</div>`;
+                : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin registrar)</div>`) + lineaEvento;
         }
         // Una evidencia se mira, no se lee: su respuesta es la URL de la foto y
         // se pinta igual se pueda calificar o no. Editarla desde aquí no tiene
@@ -3272,8 +3280,16 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
         📷 <b>Evidencia:</b> el enunciado de arriba es lo que se le pide fotografiar. La foto se guarda reducida a ${window.MAX_LADO_FOTO_EVAL}px junto a la respuesta, y la califica quien revise si la encuesta pasa a revisión. Para pedir varias evidencias, agrega otra pregunta de este tipo.
     </div>
 
-    <div class="attendance-info-container" style="display:${showAttendanceInfo?'block':'none'}; margin-top:15px; padding:10px; background:#f0fdf4; border:1px dashed #bbf7d0; border-radius:8px; font-size:0.85rem; color:#15803d;">
-        🙋 <b>Asistencia:</b> el enunciado de arriba dice a qué se asistió («Capacitación de seguridad del 4 de septiembre»). Quien la reciba sólo tiene que confirmarlo, y al enviar queda registrada y calificada sola: nadie tiene que revisarla. Quien no asista, simplemente no la contesta y sigue apareciéndole como pendiente.
+    <div class="attendance-info-container" style="display:${showAttendanceInfo?'block':'none'}; margin-top:15px;">
+        <label style="font-size:0.8rem; color:#64748b; margin-bottom:6px; display:block;">Cuándo es el evento (opcional):</label>
+        <input type="datetime-local" class="inp-fecha-evento" value="${window.valorLocalDeFecha(window.fechaDelEvento({ question_type: tp, options: op }))}"
+               onchange="window.pintarPlazoAsistencia(this)"
+               style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-size:16px; font-family:inherit;">
+        <div class="plazo-asistencia" style="font-size:0.8rem; color:#15803d; font-weight:600; margin-top:6px;"></div>
+        <div style="margin-top:10px; padding:10px; background:#f0fdf4; border:1px dashed #bbf7d0; border-radius:8px; font-size:0.85rem; color:#15803d;">
+            🙋 <b>Asistencia:</b> el enunciado de arriba dice a qué se asistió («Capacitación de seguridad del 4 de septiembre»). Quien la reciba sólo tiene que confirmarlo, y al enviar queda registrada y calificada sola: nadie tiene que revisarla.
+            Con fecha y hora, el pendiente <b>no aparece antes del evento</b> y hay ${window.MINUTOS_PARA_REGISTRAR_ASISTENCIA} minutos para registrarlo; pasados, ya no se puede y cuenta como inasistencia. Sin fecha se puede registrar en cualquier momento.
+        </div>
     </div>`;
     
     document.getElementById('questions-container').appendChild(d);
@@ -3289,6 +3305,8 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     // se cambia el tipo a «Rango Numérico» ya están puestos, y mientras tanto
     // el bloque entero va escondido.
     window.montarGuiaDeEscala(d, guiaGuardada);
+    const campoFechaEvento = d.querySelector('.inp-fecha-evento');
+    if (campoFechaEvento && campoFechaEvento.value) window.pintarPlazoAsistencia(campoFechaEvento);
     window.pintarBotonTipo(d);
     window.verificarRestriccionesModo();
     window.renumerarPreguntas();
@@ -3363,6 +3381,33 @@ window.listaDeTiposHTML = (wrapper) => {
             <span class="tipo-opcion-marca" aria-hidden="true">${elegido ? '✓' : ''}</span>
         </button>`;
     }).join('');
+};
+
+// Debajo del campo, en cuanto se elige la hora: hasta cuándo se podrá
+// registrar. Es la misma cuenta que hará el teléfono de quien la conteste, así
+// que quien crea la encuesta ve el plazo real y no tiene que calcularlo.
+window.pintarPlazoAsistencia = (campo) => {
+    const wrapper = campo.closest('.pregunta-wrapper');
+    const aviso = wrapper ? wrapper.querySelector('.plazo-asistencia') : null;
+    if (!aviso) return;
+
+    const fecha = campo.value.trim() ? new Date(campo.value) : null;
+    if (!fecha || isNaN(fecha.getTime())) {
+        aviso.innerText = '';
+        return;
+    }
+
+    const fin = new Date(fecha.getTime() + window.MINUTOS_PARA_REGISTRAR_ASISTENCIA * 60000);
+    aviso.innerText = `Se podrá registrar el ${window.fechaYHoraLegible(fecha)}, y hasta las ${window.horaLegible(fin)}`;
+};
+
+// El valor que espera un `<input type="datetime-local">`: hora local, sin zona
+// y sin segundos. `toISOString()` daría UTC y el campo enseñaría otra hora.
+window.valorLocalDeFecha = (fecha) => {
+    if (!(fecha instanceof Date) || isNaN(fecha.getTime())) return '';
+    const dos = (n) => String(n).padStart(2, '0');
+    return `${fecha.getFullYear()}-${dos(fecha.getMonth() + 1)}-${dos(fecha.getDate())}` +
+           `T${dos(fecha.getHours())}:${dos(fecha.getMinutes())}`;
 };
 
 window.alternarTiposPregunta = (btn) => {
@@ -3977,12 +4022,22 @@ window.guardarNuevaEvaluacion = async () => {
                 corr = JSON.stringify(items);
                 ops = [];
             } else if (tp === window.TIPO_PREGUNTA_ASISTENCIA) {
-                // No hay nada que configurar, y el campo de «Respuesta Modelo»
+                // Lo único que se configura es cuándo es el evento, y va en la
+                // primera posición de `options`. El campo de «Respuesta Modelo»
                 // sigue en el marcado aunque esté escondido: sin vaciarlo se
                 // guardaría lo que hubiera quedado escrito antes de cambiar el
                 // tipo de la pregunta.
                 corr = "";
                 ops = [];
+                const campoFecha = d.querySelector('.inp-fecha-evento');
+                const cuando = campoFecha ? campoFecha.value.trim() : '';
+                if (cuando) {
+                    // El `datetime-local` da hora local sin zona; se guarda en
+                    // ISO para que el teléfono de quien la contesta lea el
+                    // mismo instante aunque esté en otro huso.
+                    const fecha = new Date(cuando);
+                    if (!isNaN(fecha.getTime())) ops[window.PLAZA_FECHA_EVENTO] = fecha.toISOString();
+                }
             } else if (tp==='range') {
                 const chkHalf = document.getElementById('eval-half-points');
                 const step = (chkHalf && chkHalf.checked) ? 0.5 : 1;
@@ -4008,6 +4063,10 @@ window.guardarNuevaEvaluacion = async () => {
                 alert("✅ Guardado correctamente");
                 document.getElementById('modal-crear-eval').style.display='none';
                 window.evalCache = null;
+                // Aquí sí se escriben las preguntas, así que puede haber una
+                // asistencia nueva o con la hora movida, y de esa caché salen
+                // los pendientes.
+                await window.cargarVentanasDeAsistencia(true);
                 cargarVistaEvaluaciones();
             }catch(e){ alert("❌ Error: " + e.message); console.error(e); }
         };
