@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-04-3">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-04-4">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -435,6 +435,8 @@
                         <div id="lista-empleados-seleccionados-eval" style="display:flex; flex-wrap:wrap; gap:8px; min-height:30px;">
                             <span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Ninguno seleccionado.</span>
                         </div>
+                        <p class="form-ayuda" style="margin-top:10px;">Si eres revisor de esta encuesta, la ficha de quien agregues lleva tu nombre (👁️): su respuesta la calificas tú y no le aparece como pendiente a los demás revisores. Para devolverla al reparto común, quítalo y vuelve a agregarlo desde una cuenta que no sea revisora.</p>
+                        <p id="aviso-asignador-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/asignador-por-encuesta.sql</code> en Supabase para que cada revisor se quede con los colaboradores que asigna. Mientras tanto, el pendiente les aparece a todos los revisores.</p>
                     </div>
                 </div>
 
@@ -768,20 +770,20 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-04-3"></script>
-    <script src="2a-core-nav.js?v=2026-09-04-3"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-04-3"></script>
-    <script src="3-incidentes.js?v=2026-09-04-3"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-04-3"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-04-3"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-04-3"></script>
-    <script src="5-objetivos.js?v=2026-09-04-3"></script>
-    <script src="6-calendario.js?v=2026-09-04-3"></script>
-    <script src="7-pendientes.js?v=2026-09-04-3"></script>
-    <script src="8-hallazgos.js?v=2026-09-04-3"></script>
-    <script src="9-estadisticas.js?v=2026-09-04-3"></script>
+    <script src="1-config.js?v=2026-09-04-4"></script>
+    <script src="2a-core-nav.js?v=2026-09-04-4"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-04-4"></script>
+    <script src="3-incidentes.js?v=2026-09-04-4"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-04-4"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-04-4"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-04-4"></script>
+    <script src="5-objetivos.js?v=2026-09-04-4"></script>
+    <script src="6-calendario.js?v=2026-09-04-4"></script>
+    <script src="7-pendientes.js?v=2026-09-04-4"></script>
+    <script src="8-hallazgos.js?v=2026-09-04-4"></script>
+    <script src="9-estadisticas.js?v=2026-09-04-4"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="10-refacciones.js?v=2026-09-04-3"></script> 
+    <script src="10-refacciones.js?v=2026-09-04-4"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

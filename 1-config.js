@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-04-3';
+window.VERSION_APP = '2026-09-04-4';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -815,12 +815,72 @@ window.revisoresDeEncuesta = (ev) => {
 
 window.tieneRevisoresPropios = (ev) => window.revisoresDeEncuesta(ev).length > 0;
 
+// Quién dirigió la encuesta a cada persona. Un revisor puede corregir a quién
+// va dirigida —es el instructor que la imparte—, y al hacerlo queda apuntado
+// que fue él: `assigned_by` es un objeto `{ idEmpleado: idRevisor }` dentro de
+// la propia fila de la encuesta. Llega como jsonb o como texto, según cómo se
+// creara la columna, igual que las tres listas de destinatarios.
+window.asignacionesDeEncuesta = (ev) => {
+    if (!ev) return {};
+    let v = ev.assigned_by;
+    if (typeof v === 'string') {
+        try { v = JSON.parse(v); } catch (e) { return {}; }
+    }
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+};
+
+// El id que quedó apuntado, tal cual. Que siga valiendo —que esa persona siga
+// siendo revisora y no sea quien contestó— lo decide quien lo use.
+window.revisorQueAsigno = (ev, empleadoId) => {
+    const apuntado = window.asignacionesDeEncuesta(ev)[String(empleadoId)];
+    return apuntado === undefined || apuntado === null ? '' : String(apuntado).trim();
+};
+
 // Los revisores que le quedan a UNA respuesta. Nadie se califica a sí mismo,
 // así que la respuesta de un revisor se la quedan los demás revisores; si no
 // hay más, la lista sale vacía y la revisión vuelve a su jefe inmediato, que
 // es preferible a dejarla sin nadie que pueda tocarla.
-window.revisoresDeLaRespuesta = (ev, empleadoQueContesto) =>
-    window.revisoresDeEncuesta(ev).filter(id => String(id) !== String(empleadoQueContesto));
+//
+// Y si a esta persona la dirigió a la encuesta uno de los revisores, la
+// respuesta es **suya y de nadie más**: quien la asignó es quien sabe qué
+// esperaba de ella, y a los demás revisores no tiene por qué aparecerles el
+// pendiente. Se cae al reparto de siempre en cuanto lo apuntado deja de valer
+// —el revisor que asignó ya no lo es, o resulta ser quien contestó—, porque
+// dejar la respuesta sin nadie que pueda calificarla es peor.
+window.revisoresDeLaRespuesta = (ev, empleadoQueContesto) => {
+    const todos = window.revisoresDeEncuesta(ev)
+        .filter(id => String(id) !== String(empleadoQueContesto));
+
+    const asigno = window.revisorQueAsigno(ev, empleadoQueContesto);
+    if (asigno && todos.includes(asigno)) return [asigno];
+
+    return todos;
+};
+
+// Lo que hay que guardar en `assigned_by`, a partir del mapa que se ha ido
+// armando en la hoja. Se queda sólo con lo que sigue teniendo sentido: la
+// persona tiene que seguir entre los destinatarios concretos —con «todos los
+// colaboradores» no hay a quién apuntar y el mapa se vacía— y quien la asignó
+// tiene que seguir siendo revisor. Sin esta poda, quitar a alguien de la lista
+// dejaría su apunte colgando y volvería a mandar si se le vuelve a agregar.
+window.asignacionesVigentes = (mapa, targetEmployees, revisores) => {
+    const destinatarios = (Array.isArray(targetEmployees) ? targetEmployees : [])
+        .map(x => String(x).trim());
+    if (destinatarios.some(x => x.toUpperCase() === 'ALL')) return {};
+
+    const revisoresOk = (revisores || []).map(x => String(x).trim());
+    const limpio = {};
+
+    Object.keys(mapa || {}).forEach(empId => {
+        const asigno = String((mapa || {})[empId] || '').trim();
+        if (!asigno) return;
+        if (!destinatarios.includes(String(empId))) return;
+        if (!revisoresOk.includes(asigno)) return;
+        limpio[String(empId)] = asigno;
+    });
+
+    return limpio;
+};
 
 // La pregunta que hacen todas las pantallas: ¿le toca a esta persona calificar
 // esta respuesta? El modo administrador es aparte y lo resuelve cada pantalla.
@@ -878,13 +938,24 @@ window.hayColumna = (tabla, columna) => {
 
 window.hayColumnaRevisores = () => window.hayColumna('evaluations', 'reviewer_employees');
 
+window.hayColumnaAsignador = () => window.hayColumna('evaluations', 'assigned_by');
+
 // Para las consultas que piden columnas por nombre: pedir una que no existe no
 // devuelve la fila sin ese campo, revienta la consulta entera.
 window.camposConColumna = async (campos, tabla, columna) =>
     (await window.hayColumna(tabla, columna)) ? `${campos}, ${columna}` : campos;
 
-window.camposConRevisores = (campos) =>
-    window.camposConColumna(campos, 'evaluations', 'reviewer_employees');
+window.camposConAsignador = (campos) =>
+    window.camposConColumna(campos, 'evaluations', 'assigned_by');
+
+// Las dos columnas viajan juntas a propósito: `leTocaRevisar` mira las dos, y
+// una consulta que trajera sólo la lista de revisores repartiría el pendiente
+// entre todos ellos sin enterarse de que ya tiene dueño. Toda pantalla que
+// pregunte quién revisa pasa por aquí, así que ninguna puede olvidarse de la
+// mitad.
+window.camposConRevisores = async (campos) =>
+    window.camposConAsignador(
+        await window.camposConColumna(campos, 'evaluations', 'reviewer_employees'));
 
 window.camposConReintento = (campos) =>
     window.camposConColumna(campos, 'evaluations', 'retry_days');

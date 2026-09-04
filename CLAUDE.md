@@ -845,6 +845,54 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.encuestasQueRevisa(encuestas, revisorId)
   ```
 
+  **Y entre varios revisores, la respuesta es de quien asignó a esa persona.**
+  Con dos o tres revisores nombrados, la respuesta de cualquier destinatario le
+  aparecía como pendiente a todos a la vez, y ninguno sabía si le tocaba a él o
+  ya la había calificado otro. Como esos mismos revisores son quienes corrigen
+  a quién va dirigida —más abajo—, la aplicación apunta **quién dirigió la
+  encuesta a cada persona** y le deja a él la revisión: a los demás deja de
+  salirles el pendiente.
+
+  ```js
+  window.asignacionesDeEncuesta(ev)     // { idEmpleado: idRevisor }
+  window.revisorQueAsigno(ev, empId)    // '' si no hay apunte
+  window.asignacionesVigentes(mapa, targetEmployees, revisores)  // la poda al guardar
+  ```
+
+  El apunte vive en `evaluations.assigned_by`, una columna nueva cuyo script se
+  corre a mano (`sql/asignador-por-encuesta.sql`); sin ella todo se comporta
+  como antes —el pendiente se reparte entre todos los revisores— y la hoja lo
+  avisa. Como `leTocaRevisar` mira las dos columnas, **viajan juntas**:
+  `window.camposConRevisores` encadena `camposConAsignador`, de modo que
+  ninguna consulta puede traerse la lista de revisores y olvidarse del apunte,
+  que es justo lo que volvería a repartir el pendiente entre todos.
+
+  Un apunte que deja de tener sentido **se cae solo**, sin limpiar nada: si
+  quien asignó ya no es revisor de la encuesta, o resulta ser quien contestó,
+  se vuelve al reparto entre todos. Dejar la respuesta sin nadie que pueda
+  calificarla sería peor que repartirla de más.
+
+  Se sella **al agregar a la persona en la hoja**, no al guardar: al guardar no
+  hay forma de saber cuál de los destinatarios acaba de poner quien está
+  mirando, y se quedarían todos a su nombre —incluidos los que puso otro
+  revisor, o el administrador que creó la encuesta—. Sólo se queda con ellos
+  quien sea revisor de esa encuesta (`window.apuntarQuienAsigno`), así que un
+  administrador que no lo sea sigue repartiendo como siempre; y nadie se asigna
+  a sí mismo. La ficha del destinatario lo dice —«· 👁️ Ana»
+  (`window.selloDeAsignacion`)—, y quitarlo y volver a agregarlo desde una
+  cuenta que no sea revisora es cómo se devuelve al reparto común.
+
+  Al guardar, `asignacionesVigentes` poda: se van los que ya no están entre los
+  destinatarios, los que asignó alguien que ya no revisa y todo el mapa si se
+  marcó «todos los colaboradores», que ahí no hay a quién apuntar.
+
+  Los dos conteos del panel que contaban **de un plumazo** —el badge de
+  `calcularPendientesBatch` y la tarjeta de `cargarEncuestasQueReviso`— ya no
+  pueden: se traen `employee_id` y pasan respuesta por respuesta por
+  `leTocaRevisar`, como hacía el panel de pendientes. Lo que sí sigue viéndolo
+  todo es el historial de la encuesta: un revisor tiene que poder mirar cómo va
+  la que imparte aunque no le toque calificar cada respuesta.
+
   **Nadie califica su propia respuesta.** La de un revisor se la quedan los
   demás revisores; si no hay más, la lista sale vacía y vuelve a su jefe
   inmediato, que es preferible a dejarla sin nadie que pueda tocarla. Por eso

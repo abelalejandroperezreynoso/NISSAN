@@ -1098,13 +1098,20 @@ window.cargarEncuestasQueReviso = async (userId) => {
         // inmediato. Es el mismo filtro del badge de `calcularPendientesBatch`.
         const porCalificar = {};
         const { data: respuestas } = await sb.from('evaluation_responses')
-            .select('evaluation_id')
+            .select('evaluation_id, employee_id')
             .in('review_status', ['Pendiente', 'Mal Revisada'])
             .in('evaluation_id', mias.map(e => e.id))
             .neq('employee_id', empStrId);
 
+        // No basta con que la encuesta sea suya: si a ese colaborador lo dirigió
+        // a la encuesta otro de los revisores, la respuesta es de aquél y aquí
+        // no se cuenta. Lo decide la misma regla que los pendientes.
+        const miasPorId = {};
+        mias.forEach(ev => { miasPorId[String(ev.id)] = ev; });
+
         (respuestas || []).forEach(r => {
             const clave = String(r.evaluation_id);
+            if (!window.leTocaRevisar(miasPorId[clave], r.employee_id, empStrId)) return;
             porCalificar[clave] = (porCalificar[clave] || 0) + 1;
         });
 
@@ -1622,12 +1629,22 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
             // contarlo.
             const evalsQueRevisa = window.encuestasQueRevisa(activeEvals, empStrId);
             if (evalsQueRevisa.length > 0) {
-                const { count: countNombrado } = await sb.from('evaluation_responses')
-                    .select('id', { count: 'exact', head: true })
+                // Ya no se cuentan de un plumazo: una respuesta de alguien a
+                // quien dirigió a la encuesta otro revisor es de aquél, así que
+                // hace falta mirar de quién es cada una con la misma regla que
+                // usa el panel de pendientes.
+                const revisadasPorId = {};
+                evalsQueRevisa.forEach(ev => { revisadasPorId[String(ev.id)] = ev; });
+
+                const { data: nombradas } = await sb.from('evaluation_responses')
+                    .select('id, employee_id, evaluation_id')
                     .in('review_status', ['Pendiente', 'Mal Revisada'])
                     .in('evaluation_id', evalsQueRevisa.map(e => e.id))
                     .neq('employee_id', empStrId);
-                countPorCalificar += (countNombrado || 0);
+
+                countPorCalificar += (nombradas || []).filter(r =>
+                    window.leTocaRevisar(revisadasPorId[String(r.evaluation_id)], r.employee_id, empStrId)
+                ).length;
             }
 
             const esJefe = window.todosLosEmpleadosData.some(e => String(e.supId) === empStrId);

@@ -82,9 +82,14 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     if (window.modoAdminActivo) {
         responses = todasLasRespuestas || [];
     } else if (todasLasRespuestas) {
+        // Quien revisa la encuesta las ve todas aunque no le toque calificar
+        // cada una: con destinatarios asignados, la respuesta la califica quien
+        // asignó a esa persona, pero el resto de los revisores tiene que poder
+        // seguir viendo cómo va la encuesta que imparte.
         responses = todasLasRespuestas.filter(r =>
             r.employee_id === user.id ||
             window.esSupervisorDirecto(r.employee_id) ||
+            window.revisoresDeEncuesta(encuestaDeLaLista).includes(String(user.id)) ||
             window.leTocaRevisar(encuestaDeLaLista, r.employee_id, user.id)
         );
     }
@@ -108,8 +113,15 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // Quién la califica sólo se dice cuando no es lo de siempre: con el
         // jefe inmediato no hay nada que aclarar.
         const nombrados = window.revisoresDeEncuesta(evalData);
+        // Con destinatarios asignados el reparto deja de ser «entre todos», y
+        // conviene decirlo: es lo que explica que a un revisor le aparezcan
+        // unas respuestas y no otras.
+        const hayAsignados = Object.keys(window.asignacionesDeEncuesta(evalData)).length > 0;
+        const notaAsignados = hayAsignados
+            ? `<div style="font-size:0.75rem; color:#7e22ce; font-weight:normal; margin-top:2px;">Cada quien califica a los colaboradores que dirigió a esta encuesta.</div>`
+            : '';
         const revisoresHtml = nombrados.length > 0
-            ? `<div style="font-size:0.8rem; color:#7e22ce; font-weight:bold; margin-top:4px;">👁️ La revisa ${window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))}</div>`
+            ? `<div style="font-size:0.8rem; color:#7e22ce; font-weight:bold; margin-top:4px;">👁️ La revisa ${window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))}${notaAsignados}</div>`
             : '';
 
         if(desc || freq) {
@@ -2957,9 +2969,12 @@ window.abrirModalCrearEval = async () => {
     if(inpReintento) inpReintento.value = 0;
     await window.avisarSiFaltaColumnaCertificacion();
 
+    window.encuestaEnEdicion = null;
+    window.asignacionesEnEdicion = {};
     window.prepararSelectorPersonas('destinatarios', null);
         window.prepararSelectorPersonas('revisores', null);
         await window.avisarSiFaltaColumnaRevisores();
+        await window.avisarSiFaltaColumnaAsignador();
 
         await window.prepararInputCategorias('General');
         const modeInput = document.getElementById('eval-mode-input');
@@ -3022,6 +3037,10 @@ window.editarEvaluacion = async (id, soloDestinatarios = false) => {
                     : evaluacion.target_employees;
             } catch (e) { targetEmployeesData = null; }
         }
+        // Antes de pintar las fichas: cada una dice quién asignó a esa
+        // persona, y eso se lee de aquí.
+        window.encuestaEnEdicion = evaluacion;
+        window.asignacionesEnEdicion = { ...window.asignacionesDeEncuesta(evaluacion) };
         window.prepararSelectorPersonas('destinatarios', targetEmployeesData);
 
         // Un revisor sólo cambia a quién va dirigida: el resto de la hoja está
@@ -3031,6 +3050,11 @@ window.editarEvaluacion = async (id, soloDestinatarios = false) => {
         if (soloDestinatarios) {
             const subtituloHoja = document.getElementById('subtitulo-crear-eval');
             if (subtituloHoja) subtituloHoja.innerText = evaluacion.title || '';
+            // Las fichas se pintaron antes de que `editandoSoloDestinatarios`
+            // pudiera decir de dónde salen los revisores, así que los sellos se
+            // vuelven a pintar ya con esa respuesta.
+            window.pintarPersonasEval('destinatarios');
+            await window.avisarSiFaltaColumnaAsignador();
             document.getElementById('modal-crear-eval').style.display = 'flex';
             return;
         }
@@ -3038,7 +3062,11 @@ window.editarEvaluacion = async (id, soloDestinatarios = false) => {
         // Los revisores propios se leen con el mismo helper que usan las demás
         // pantallas, que es el que aguanta que la columna venga como texto.
         window.prepararSelectorPersonas('revisores', window.revisoresDeEncuesta(evaluacion));
+        // Un sello sólo se enseña si quien asignó sigue siendo revisor, y eso
+        // no se sabía hasta tener el selector de revisores puesto.
+        window.pintarPersonasEval('destinatarios');
         await window.avisarSiFaltaColumnaRevisores();
+        await window.avisarSiFaltaColumnaAsignador();
 
         const chkOblig = document.getElementById('chk-eval-obligatoria');
     if(chkOblig) {
@@ -3520,6 +3548,71 @@ window.actualizarMarcasCorrectas = (wrapper) => {
     }
 };
 
+// ==========================================
+// QUIÉN ASIGNÓ A CADA DESTINATARIO
+// ==========================================
+// El mapa `{ idEmpleado: idRevisor }` mientras la hoja está abierta. Se llena
+// al abrirla con lo que traiga la encuesta y se va sellando según se agrega
+// gente; al guardar se poda con `window.asignacionesVigentes`.
+window.asignacionesEnEdicion = {};
+
+// La encuesta tal como estaba al abrir la hoja. Hace falta en el modo
+// restringido del revisor, donde el bloque de revisores está escondido y los
+// que valen son los que ya tenía la encuesta.
+window.encuestaEnEdicion = null;
+
+// Los revisores que tiene la hoja ahora mismo. En el modo restringido no se
+// leen del selector —no está a la vista y el revisor no los puede tocar—.
+window.revisoresDeLaHoja = () => {
+    if (window.editandoSoloDestinatarios) {
+        return window.revisoresDeEncuesta(window.encuestaEnEdicion);
+    }
+    const ids = window.idsDelSelector('revisores');
+    if (!Array.isArray(ids)) return [];
+    return ids.map(String).filter(x => x.trim() !== '' && x.toUpperCase() !== 'ALL');
+};
+
+// Quien agrega a un destinatario se queda con su revisión, pero sólo si es
+// revisor de esta encuesta: un administrador que no lo sea reparte como
+// siempre. Nunca se pisa un apunte anterior —el de otro revisor es suyo— y
+// nadie se asigna a sí mismo, que acabaría calificando su propia respuesta.
+window.apuntarQuienAsigno = (empleadoId) => {
+    const clave = String(empleadoId);
+    if (window.asignacionesEnEdicion[clave]) return;
+
+    const user = JSON.parse(localStorage.getItem("usuarioLogueado") || 'null');
+    if (!user) return;
+
+    const yo = String(user.id);
+    if (yo === clave) return;
+    if (!window.revisoresDeLaHoja().includes(yo)) return;
+
+    window.asignacionesEnEdicion[clave] = yo;
+};
+
+// Lo que la ficha dice detrás del nombre. Sólo sale cuando hay apunte y sigue
+// valiendo: así se ve de un vistazo a quién le va a tocar calificarla, y quitar
+// y volver a agregar a alguien es la forma de devolverlo al reparto común.
+window.selloDeAsignacion = (empleadoId) => {
+    const asigno = String(window.asignacionesEnEdicion[String(empleadoId)] || '');
+    if (!asigno || !window.revisoresDeLaHoja().includes(asigno)) return '';
+
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === asigno);
+    const nombre = emp && emp.name ? emp.name.split(' ')[0] : `ID ${asigno}`;
+    return `<small style="margin-left:5px; font-weight:normal; color:#9333ea;" title="Revisa ${window.sanitizeForHTML(emp && emp.name ? emp.name : asigno)}">· 👁️ ${window.sanitizeForHTML(nombre)}</small>`;
+};
+
+// Sin la columna, apuntar quién asignó no se puede guardar: el pendiente se
+// sigue repartiendo entre todos los revisores, como hasta ahora. Sólo se dice
+// donde importa —una encuesta con revisores nombrados—, que si no es ruido para
+// el administrador que sólo está dirigiendo la encuesta.
+window.avisarSiFaltaColumnaAsignador = async () => {
+    const aviso = document.getElementById('aviso-asignador-no-disponible');
+    if (!aviso) return;
+    const hay = await window.hayColumnaAsignador();
+    aviso.style.display = (!hay && window.revisoresDeLaHoja().length > 0) ? 'block' : 'none';
+};
+
 // Las tres columnas de «A quién va dirigida», leídas de la hoja. Devuelve null
 // —tras avisar— en el único caso que no se puede guardar: haber desmarcado
 // «Todos los colaboradores» sin nombrar a nadie. Lo comparten el guardado
@@ -3561,6 +3654,17 @@ window.guardarDestinatariosEncuesta = async () => {
 
     const destinatarios = window.destinatariosDeLaHoja();
     if (!destinatarios) return;
+
+    // Quién asignó a cada quien. Los revisores no se tocan desde esta hoja, así
+    // que salen de la encuesta. Sin la columna se guardan sólo los
+    // destinatarios y el pendiente se reparte como hasta ahora.
+    if (await window.hayColumnaAsignador()) {
+        destinatarios.assigned_by = window.asignacionesVigentes(
+            window.asignacionesEnEdicion,
+            destinatarios.target_employees,
+            window.revisoresDeEncuesta(evaluacion)
+        );
+    }
 
     const btn = document.getElementById('btn-guardar-eval');
     if (btn) btn.disabled = true;
@@ -3664,6 +3768,19 @@ window.guardarNuevaEvaluacion = async () => {
                 // nombramiento; el resto de la encuesta sí, y la hoja ya avisó.
                 if (await window.hayColumnaRevisores()) {
                     payload.reviewer_employees = revisores;
+                }
+
+                // Quién dirigió la encuesta a cada persona. Se poda con los
+                // revisores que quedan, así que quitar a uno de la lista
+                // devuelve a su gente al reparto común sin tocar nada más; y
+                // con «todos los colaboradores» marcado el mapa se vacía, que
+                // ahí no hay a quién apuntar.
+                if (await window.hayColumnaAsignador()) {
+                    payload.assigned_by = window.asignacionesVigentes(
+                        window.asignacionesEnEdicion,
+                        destinatarios.target_employees,
+                        revisores
+                    );
                 }
 
                 const chkUmbral = document.getElementById('chk-eval-umbral');
@@ -3790,6 +3907,14 @@ window.guardarNuevaEvaluacion = async () => {
                 caja.style.display = 'block';
                 window.pintarPersonasEval(clave);
             }
+
+            // Cambiar los revisores cambia qué apuntes siguen valiendo: el
+            // sello de una ficha desaparece en cuanto quien asignó deja de ser
+            // revisor, que es también lo que hará el guardado.
+            if (clave === 'revisores') {
+                window.pintarPersonasEval('destinatarios');
+                window.avisarSiFaltaColumnaAsignador();
+            }
         };
 
         window.buscarPersonaEval = (clave, term) => {
@@ -3826,7 +3951,12 @@ window.guardarNuevaEvaluacion = async () => {
             const cfg = window.SELECTORES_PERSONAS[clave];
             if (!cfg.elegidos.some(e => String(e.id) === String(id))) {
                 cfg.elegidos.push({ id: String(id), name: nombre });
+                // Se apunta aquí y no al guardar: al guardar no se sabría cuál
+                // de los destinatarios acaba de agregar quien está mirando y se
+                // quedarían todos a su nombre, incluidos los que puso otro.
+                if (clave === 'destinatarios') window.apuntarQuienAsigno(id);
                 window.pintarPersonasEval(clave);
+                if (clave === 'revisores') window.pintarPersonasEval('destinatarios');
                 const inp = document.getElementById(cfg.buscador);
                 if (inp) window.buscarPersonaEval(clave, inp.value);
             }
@@ -3835,7 +3965,9 @@ window.guardarNuevaEvaluacion = async () => {
         window.quitarPersonaEval = (clave, id) => {
             const cfg = window.SELECTORES_PERSONAS[clave];
             cfg.elegidos = cfg.elegidos.filter(e => String(e.id) !== String(id));
+            if (clave === 'destinatarios') delete window.asignacionesEnEdicion[String(id)];
             window.pintarPersonasEval(clave);
+            if (clave === 'revisores') window.pintarPersonasEval('destinatarios');
             const inp = document.getElementById(cfg.buscador);
             if (inp) window.buscarPersonaEval(clave, inp.value);
         };
@@ -3852,7 +3984,7 @@ window.guardarNuevaEvaluacion = async () => {
 
             container.innerHTML = cfg.elegidos.map(e => `
                 <div style="display:flex; align-items:center; background:#f3e8ff; border:1px solid #d8b4fe; color:#6b21a8; padding:4px 10px; border-radius:20px; font-size:0.85rem; font-weight:500; box-shadow:0 1px 2px rgba(0,0,0,0.05);">
-                    ${window.sanitizeForHTML(e.name)}
+                    ${window.sanitizeForHTML(e.name)}${clave === 'destinatarios' ? window.selloDeAsignacion(e.id) : ''}
                     <button onclick="window.quitarPersonaEval('${clave}', '${e.id}')" style="background:none; border:none; color:#d946ef; font-weight:bold; margin-left:6px; cursor:pointer; font-size:1rem; line-height:1;">✕</button>
                 </div>
             `).join('');
