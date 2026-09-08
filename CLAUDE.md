@@ -956,6 +956,63 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   enseña el enunciado con nada debajo. Por eso la versión se sube en el mismo
   cambio.
 
+  **Y la hoja de la encuesta dice cuántos de cuántos fueron.** «Asistí» se
+  guarda una vez por persona, así que la lista de asistencia no está en ninguna
+  tabla: hay que armarla cruzando quién registró contra a quién iba dirigida la
+  encuesta. Sin eso, saber cómo salió la junta era abrir la lista de respuestas
+  y contarlas a mano contra un padrón que no se enseñaba en ningún sitio.
+
+  ```js
+  window.padronDeLaEncuesta(ev)                 // a quién le toca, sólo activos
+  window.pasoDeLista(ev, pregunta, respuestas)  // { presentes, ausentes, ajenos, cuantos, total, proporcion }
+  window.bloqueDePaseDeLista(ev, preguntas, respuestas, verNombres)
+  window.listaDePaseDeLista(rotulo, gente, clase)
+  ```
+
+  El denominador sale de **`leTocaEstaEncuesta`**, la misma regla que decide a
+  quién le toca, y no de otra copia: así el «de 25» no puede discrepar de lo que
+  cada quien ve en su panel. `padronDeLaEncuesta` saca de una pasada quiénes
+  tienen equipo en vez de preguntárselo a `tieneEquipoDirecto` por cada persona,
+  que recorre la plantilla entera y dejaría el padrón en un recorrido al
+  cuadrado.
+
+  Cuatro reglas que lo sostienen:
+
+  - **Cuenta sólo la vuelta en curso** (`respuestasTrasRelanzar`). Una encuesta
+    relanzada nombra otro evento —la hoja de relanzar obliga a volver a
+    fecharla—, así que los registros de la vuelta anterior son de otra junta.
+  - **Cuenta gente, no respuestas**: quien contestó dos veces asistió una.
+  - **Quien registró y hoy ya no está en el padrón sigue contando como
+    presente** —se dio de baja, o le quitaron la encuesta después del evento—:
+    fue, y borrarlo del acta sería falsearla. Por eso el total puede superar al
+    padrón de hoy, y esa gente va aparte en `ajenos`.
+  - **Antes del evento no se dice «0 de 25»**, que se leería como que no fue
+    nadie: se dice que todavía no hay registros. El resto de estados los nombra
+    `estadoDeAsistencia`, pero el texto se escribe aquí y no con
+    `avisoDeAsistencia`, que está en segunda persona —«Tienes hasta las…»— y
+    aquí se habla del evento, no de lo que le toca a nadie.
+
+  **La cifra la ve cualquiera; los nombres, sólo quien la imparte.** Cuánta
+  gente fue a la junta no es de nadie en particular, pero la lista de quién
+  faltó es el acta: va para el administrador y para quien revisa la encuesta,
+  los mismos que pueden corregir a quién va dirigida
+  (`puedeEditarDestinatarios`). Y se cuenta sobre **todas** las respuestas y no
+  sobre las filtradas por a quién le toca calificar cada una: un pase de lista a
+  medias no es un pase de lista.
+
+  El padrón necesita `todosLosEmpleadosData`, y a esta hoja se llega también
+  desde el inicio con la plantilla sin cargar: se pide **sólo si la encuesta
+  tiene alguna pregunta de asistencia**, para no cobrarle la consulta a quien
+  abre una que no pasa lista. Si aun así no hay plantilla, el recuadro no se
+  dibuja: un «0 de 0» diría que no fue nadie.
+
+  La barra va **de un solo color**: la aplicación no fija ningún mínimo de
+  asistencia, así que pintar de rojo un 60% sería inventarse un umbral que nadie
+  definió. Las clases (`.pase-tarjeta`, `.pase-cifra`, `.pase-plegable`…) están
+  en `estilos.css`, y el `<summary>` de cada lista es un flex con `gap`: el
+  rótulo y su contador van envueltos en un solo `<span>` o el «(10)» se separa
+  del texto, que es la trampa de `.hoja-plegable-resumen` de siempre.
+
 - **Una evaluación por área lleva foto, y la foto se encoge antes de subir.**
   Las encuestas con `evaluates_area` piden una fotografía del área que se está
   evaluando: sin ella la evaluación es la palabra de quien la llenó contra

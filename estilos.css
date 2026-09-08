@@ -2641,6 +2641,169 @@ textarea:focus {
     color: #64748b;
 }
 
+/* =========================================
+   EL PASE DE LISTA DE UNA ENCUESTA DE ASISTENCIA
+   =========================================
+   Una encuesta de asistencia se contesta con un toque, así que lo que se viene
+   a saber de ella es cuántos de cuántos fueron. Un recuadro por pregunta de
+   asistencia, en la hoja de detalle de la encuesta. */
+.pase-tarjeta {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.pase-rotulo {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 6px;
+}
+
+.pase-evento {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.3;
+}
+
+.pase-nota {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 3px;
+}
+
+/* La cifra manda: es lo que se viene a leer y se ve sin acercarse. */
+.pase-cifra {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 14px;
+}
+
+.pase-cifra-numero {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #1e293b;
+    line-height: 1;
+}
+
+.pase-cifra-total {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #64748b;
+}
+
+/* El porcentaje va a la derecha del todo, que es lo secundario: con veinte de
+   treinta, lo que se mira son las dos cifras. */
+.pase-cifra-pct {
+    margin-left: auto;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+.pase-cifra-nadie {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+/* De un solo color: la aplicación no fija ningún mínimo de asistencia, así que
+   pintar de rojo un 60% sería inventarse un umbral que nadie definió. */
+.pase-barra {
+    height: 8px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.pase-barra-relleno {
+    height: 100%;
+    border-radius: 999px;
+    background: #2563eb;
+}
+
+.pase-plegable {
+    border-top: 1px solid #f1f5f9;
+    margin-top: 12px;
+}
+
+.pase-plegable-resumen {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 11px 2px 0;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+    -webkit-tap-highlight-color: transparent;
+    /* El triángulo del navegador se quita por los dos caminos: `list-style`
+       vale en casi todos y el pseudoelemento es lo que entiende Safari. */
+    list-style: none;
+}
+
+.pase-plegable-resumen::-webkit-details-marker { display: none; }
+
+.pase-plegable--falto .pase-plegable-resumen { color: #b45309; }
+
+.pase-chevron {
+    color: #cbd5e1;
+    font-size: 1.2rem;
+    line-height: 1;
+    transition: transform 0.2s;
+}
+
+.pase-plegable[open] .pase-chevron { transform: rotate(90deg); }
+
+/* Con la plantilla entera dentro, la lista se desplaza en su tarjeta en vez de
+   estirar la hoja. `contain` para que al llegar al tope el gesto no siga de
+   largo arrastrando la hoja hacia abajo. */
+.pase-plegable-cuerpo {
+    max-height: 240px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 6px 0 2px;
+}
+
+.pase-persona {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 2px;
+}
+
+.pase-persona-texto {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+/* De una línea y recortado: un nombre largo partido en tres renglones hace la
+   lista el doble de alta sin decir nada más. */
+.pase-persona-nombre {
+    font-size: 0.85rem;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pase-persona-puesto {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Fila de casilla con su explicación debajo, al estilo de una lista de
    ajustes. Sustituye a las tarjetas de colores que se apilaban de una en una:
    con `min-width:150px` y 309px de ancho útil no entraban dos por renglón, y

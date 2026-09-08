@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-08-33';
+window.VERSION_APP = '2026-09-08-34';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -260,6 +260,25 @@ window.leTocaEstaEncuesta = (ev, empleado, tieneEquipo) => {
 window.tieneEquipoDirecto = (empleadoId) =>
     (window.todosLosEmpleadosData || []).some(e => String(e.supId) === String(empleadoId));
 
+// A cuánta gente le toca una encuesta: el padrón contra el que se mide un pase
+// de lista, y el denominador de cualquier «N de M» que hable de ella. Sale de
+// la misma regla que decide a quién le toca —no de otra copia—, así que no
+// puede discrepar de lo que cada quien ve en su panel.
+//
+// Sólo la gente activa: un dado de baja no cuenta en ningún lado, y dejarlo en
+// el denominador clavaría el avance por debajo del 100% para siempre.
+window.padronDeLaEncuesta = (ev) => {
+    const gente = window.todosLosEmpleadosData || [];
+    if (!ev || gente.length === 0) return [];
+
+    // `tieneEquipoDirecto` recorre la plantilla entera, así que preguntarlo por
+    // cada persona sería recorrerla al cuadrado: los que tienen equipo se sacan
+    // de una sola pasada.
+    const conEquipo = new Set(gente.map(e => e.supId).filter(Boolean).map(String));
+    return gente.filter(emp => window.empleadoActivo(emp) &&
+        window.leTocaEstaEncuesta(ev, emp, conEquipo.has(String(emp.id))));
+};
+
 // Quién es jefe inmediato de quién. `esSupervisorDirecto` de
 // `4-evaluaciones-admin.js` es esto mismo dando por hecho que el revisor es el
 // usuario de la sesión; el panel principal recorre a mucha gente y necesita
@@ -456,6 +475,51 @@ window.avisoDeAsistencia = (pregunta, ahora) => {
         return `El plazo cerr\u00f3 el ${window.fechaYHoraLegible(est.fin)} y ya no se puede registrar`;
     }
     return `Tienes hasta las ${window.horaLegible(est.fin)} para registrarla`;
+};
+
+// ==========================================
+// EL PASE DE LISTA DE UNA PREGUNTA DE ASISTENCIA
+// ==========================================
+// «Asistí» se guarda una vez por persona, así que la lista de asistencia no
+// está en ningún sitio: hay que armarla cruzando quién registró contra a quién
+// iba dirigida la encuesta. Eso es lo que convierte un montón de respuestas
+// sueltas en lo que se venía a saber —cuántos de cuántos fueron—.
+//
+// Cuenta **sólo la vuelta en curso**: una encuesta relanzada nombra otro evento
+// —la hoja de relanzar obliga a volver a fecharla—, así que los registros de la
+// vuelta anterior son de otra junta y no de ésta.
+//
+// Quien registró y hoy ya no está en el padrón —se dio de baja, o le quitaron
+// la encuesta después del evento— **sigue contando como presente**: fue, y
+// borrarlo de la lista sería falsear el acta. Por eso el total puede ser mayor
+// que el padrón de hoy, y esa gente va aparte en `ajenos`.
+window.pasoDeLista = (ev, pregunta, respuestas) => {
+    const vacio = { presentes: [], ausentes: [], ajenos: [], cuantos: 0, total: 0, proporcion: 0 };
+    if (!window.esPreguntaDeAsistencia(pregunta)) return vacio;
+
+    const padron = window.padronDeLaEncuesta(ev);
+    const enPadron = new Map(padron.map(emp => [String(emp.id), emp]));
+
+    // Una persona puede haber contestado más de una vez: lo que se cuenta es
+    // gente, no respuestas.
+    const registraron = new Set();
+    window.respuestasTrasRelanzar(ev, respuestas).forEach(r => {
+        const marcado = (r && r.answers_json) ? r.answers_json[pregunta.id] : null;
+        if (String(marcado || '').trim() === window.TEXTO_ASISTENCIA) {
+            registraron.add(String(r.employee_id));
+        }
+    });
+
+    const fichaDe = (id) => (window.todosLosEmpleadosData || [])
+        .find(e => String(e.id) === String(id)) || { id: String(id), name: `ID ${id}` };
+
+    const presentes = padron.filter(emp => registraron.has(String(emp.id)));
+    const ausentes = padron.filter(emp => !registraron.has(String(emp.id)));
+    const ajenos = [...registraron].filter(id => !enPadron.has(id)).map(fichaDe);
+
+    const cuantos = presentes.length + ajenos.length;
+    const total = padron.length + ajenos.length;
+    return { presentes, ausentes, ajenos, cuantos, total, proporcion: total > 0 ? cuantos / total : 0 };
 };
 
 // ------------------------------------------------------------------

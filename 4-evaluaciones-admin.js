@@ -80,6 +80,15 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     const { data: qs } = await sb.from('evaluation_questions').select('*').eq('evaluation_id', evalId).order('order_index');
     window.preguntasCacheActual = qs || [];
 
+    // El pase de lista necesita el padrón, y a esta hoja se llega también desde
+    // el inicio con la plantilla todavía sin cargar. Sólo si hay alguna
+    // pregunta de asistencia: no se le cobra la consulta a quien abre una
+    // encuesta que no pasa lista.
+    if ((qs || []).some(q => window.esPreguntaDeAsistencia(q)) &&
+        (window.todosLosEmpleadosData || []).length === 0 && window.cargarDatosEmpleados) {
+        await window.cargarDatosEmpleados();
+    }
+
     const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
     
     // Hace falta antes de filtrar: es lo que dice si a esta persona le toca
@@ -262,11 +271,21 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         ? `<span style="background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; border-radius:20px; padding:2px 8px; font-size:0.72rem; font-weight:700;">${cuantasMeTocan} por revisar</span>`
         : '';
 
+    // Cuántos de cuántos fueron. Se cuenta sobre **todas** las respuestas y no
+    // sobre `responses`, que va filtrada por a quién le toca calificar cada
+    // una: un pase de lista a medias no es un pase de lista. Los nombres, en
+    // cambio, sólo para quien la imparte.
+    const paseDeListaHtml = window.bloqueDePaseDeLista(
+        evalData, qs, todasLasRespuestas || [],
+        window.modoAdminActivo || (evalData && window.puedeEditarDestinatarios(evalData, user.id)));
+
     // --- CONSTRUCCIÓN DEL CONTENEDOR FINAL ---
         container.innerHTML = `
             ${infoHtml}
         
-        ${bannerHtml} <div id="stats-dashboard" style="display:none; margin-top:20px;"></div>
+        ${bannerHtml}
+        ${paseDeListaHtml}
+        <div id="stats-dashboard" style="display:none; margin-top:20px;"></div>
         <details id="lista-wrapper" class="hoja-plegable" ${cuantasMeTocan > 0 ? 'open' : ''}>
             <summary class="hoja-plegable-resumen">
                 <span>Respuestas (<span id="contador-respuestas">${window.respuestasCacheActual.length}</span>)</span>
@@ -284,6 +303,104 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     if(maintainScroll && window.lastScrollPosition) window.scrollTo(0, window.lastScrollPosition);
 };
 
+
+// ==========================================
+// EL PASE DE LISTA, EN LA HOJA DE LA ENCUESTA
+// ==========================================
+// Una encuesta de asistencia se contesta con un solo toque, así que lo que se
+// viene a saber de ella no es qué contestó nadie sino **cuántos de cuántos
+// fueron**, y eso no estaba en ninguna pantalla: había que abrir la lista de
+// respuestas y contarlas a mano contra un padrón que tampoco se enseñaba.
+//
+// El «N de M» sale de `window.pasoDeLista`, que cruza quién registró contra
+// `padronDeLaEncuesta` —la misma regla que decide a quién le toca—, así que no
+// puede discrepar de lo que cada quien ve en su panel.
+//
+// Va un recuadro por pregunta de asistencia: pedir dos pases de lista es
+// agregar dos preguntas, y cada una es de su evento.
+//
+// **La cifra la ve cualquiera; los nombres, sólo quien la imparte.** Saber
+// cuánta gente fue a la junta no es de nadie en particular, pero la lista de
+// quién faltó es el acta, y ésa es del administrador y de quien revisa la
+// encuesta —los mismos que pueden corregir a quién va dirigida—.
+window.bloqueDePaseDeLista = (ev, preguntas, respuestas, verNombres) => {
+    const deAsistencia = (preguntas || []).filter(q => window.esPreguntaDeAsistencia(q));
+    if (deAsistencia.length === 0) return '';
+    // Sin la plantilla cargada no hay padrón, y un «0 de 0» diría que no fue
+    // nadie: es preferible no dibujar nada.
+    if ((window.todosLosEmpleadosData || []).length === 0) return '';
+
+    return deAsistencia.map(q => {
+        const lista = window.pasoDeLista(ev, q, respuestas);
+        if (lista.total === 0) return '';
+
+        const pct = window.pctTexto(lista.cuantos, lista.total);
+        const est = window.estadoDeAsistencia(q);
+        const cuando = window.fechaDelEvento(q);
+
+        // El aviso de `1-config.js` está escrito para quien la contesta —«Tienes
+        // hasta las…»—; aquí se habla del evento y no de lo que le toca a nadie.
+        let nota = 'Sin hora fijada: se puede registrar en cualquier momento';
+        if (est.estado === 'antes') nota = `Todavía no empieza · ${window.fechaYHoraLegible(cuando)}`;
+        else if (est.estado === 'abierta') nota = `Pasando lista ahora · hasta las ${window.horaLegible(est.fin)}`;
+        else if (est.estado === 'cerrada') nota = `${window.fechaYHoraLegible(cuando)} · el plazo ya cerró`;
+
+        // Antes del evento el «0 de 30» no dice que faltara nadie: no ha pasado
+        // todavía nada que confirmar.
+        const cifraHtml = est.estado === 'antes'
+            ? `<div class="pase-cifra"><span class="pase-cifra-nadie">Sin registros todavía</span></div>`
+            : `<div class="pase-cifra">
+                   <span class="pase-cifra-numero">${lista.cuantos}</span>
+                   <span class="pase-cifra-total">de ${lista.total}</span>
+                   <span class="pase-cifra-pct">${pct}%</span>
+               </div>
+               <div class="pase-barra"><div class="pase-barra-relleno" style="width:${Math.round(lista.proporcion * 100)}%;"></div></div>`;
+
+        // Quien registró y ya no está en el padrón fue igual: va con los
+        // presentes, que es donde le toca.
+        const presentes = lista.presentes.concat(lista.ajenos);
+        const nombresHtml = verNombres
+            ? window.listaDePaseDeLista('Asistieron', presentes, 'asistio') +
+              window.listaDePaseDeLista('Faltaron', lista.ausentes, 'falto')
+            : '';
+
+        return `
+            <div class="pase-tarjeta">
+                <div class="pase-rotulo">Pase de lista</div>
+                <div class="pase-evento">${window.sanitizeForHTML(q.question_text || 'Registro de asistencia')}</div>
+                <div class="pase-nota">${window.sanitizeForHTML(nota)}</div>
+                ${cifraHtml}
+                ${nombresHtml}
+            </div>`;
+    }).join('');
+};
+
+// Cada mitad del pase de lista, plegada: lo que se mira primero es la cifra, y
+// los nombres son para cuando hay que ir a buscar a alguien. Vacía no se
+// dibuja —«Faltaron (0)» sin nadie dentro es un plegable que no abre nada—.
+window.listaDePaseDeLista = (rotulo, gente, clase) => {
+    if (!gente || gente.length === 0) return '';
+
+    const filas = gente.map(emp => `
+        <div class="pase-persona">
+            ${window.miniaturaDeEmpleado(emp, 26)}
+            <div class="pase-persona-texto">
+                <div class="pase-persona-nombre">${window.sanitizeForHTML(emp.name || `ID ${emp.id}`)}</div>
+                ${emp.puesto ? `<div class="pase-persona-puesto">${window.sanitizeForHTML(emp.puesto)}</div>` : ''}
+            </div>
+        </div>`).join('');
+
+    // El `<summary>` es un flex con `gap`, así que el rótulo y su contador van
+    // envueltos en un solo `<span>` o el «(12)» se separa del texto.
+    return `
+        <details class="pase-plegable pase-plegable--${clase}">
+            <summary class="pase-plegable-resumen">
+                <span>${rotulo} (${gente.length})</span>
+                <span class="pase-chevron" aria-hidden="true">›</span>
+            </summary>
+            <div class="pase-plegable-cuerpo">${filas}</div>
+        </details>`;
+};
 
 window.abrirHistorialGlobal = async () => {
     const container = document.getElementById('contenido-modal-evaluaciones');
