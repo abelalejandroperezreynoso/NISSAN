@@ -2505,14 +2505,46 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   **En modo administrador lleva un «+»** a la izquierda de la cruz, agrupado con
   ella en `.hoja-acciones`: crea una encuesta **de esa clasificación**. La hoja
-  de crear nace ya con ella puesta —`abrirNuevaEvaluacion(categoria)` se la pasa
-  a `abrirModalCrearEval`, que es quien llama a `prepararInputCategorias`; sin
-  argumento sigue siendo «General», que es lo de siempre—, y ésta se cierra
+  de crear nace ya con ella puesta —`abrirNuevaEvaluacion(categoria)` la lleva
+  hasta `abrirModalCrearEval`, que es quien llama a `prepararInputCategorias`;
+  sin argumento sigue siendo «General», que es lo de siempre—, y ésta se cierra
   antes, como hace todo el que abre otra hoja. El `onclick` se engancha desde
   JavaScript porque el nombre cambia con cada clasificación, y lo mismo su
   `title` y su `aria-label`, que dicen en cuál se va a crear. Se esconde con
   `hidden`, así que depende de la regla `.ios-boton-icono[hidden]` de
   `estilos.css`.
+
+  **Una encuesta nueva sale de dos sitios: de cero o de otra que ya existe.**
+  Antes de la hoja de crear se pregunta cuál, en `#modal-origen-encuesta`
+  (`window.abrirOrigenDeEncuesta`), y la lista que ofrece es la de la
+  clasificación con la que se entró —todas si se entró sin ninguna, que es el
+  caso del botón del panel de administración—. Copiar es lo normal en cuanto una
+  clasificación ya tiene su forma —la misma escala, las mismas preguntas, la
+  misma gente—: volver a escribirla entera es donde se cuelan las diferencias
+  que después no cuadran al comparar periodos.
+
+  **Sin ninguna que copiar la hoja se salta ella sola** y se entra derecho a
+  crear: dos caminos con uno solo transitable son un toque de más. Las apagadas
+  sí entran en la lista —copiar una encuesta retirada es de las razones para
+  tenerla guardada— y el filtro por clasificación se hace **aquí y no en la
+  consulta**, con `normalizarClasificacion`, que es quien decide si dos nombres
+  son el mismo. La clasificación viaja en `window.categoriaParaNuevaEncuesta` y
+  no escapada en un atributo: es texto libre y puede traer comillas.
+
+  Copiar es **el tercer argumento de `editarEvaluacion(id, soloDestinatarios,
+  comoCopia)`**: llena la hoja con todo lo de la encuesta base pero la deja sin
+  estar editando ninguna. Dos cosas lo sostienen y **las dos tienen que ir
+  juntas**:
+
+  - `idEditandoEval` se queda en **null**, que es lo que hace que
+    `guardarNuevaEvaluacion` inserte en vez de actualizar.
+  - **Las preguntas se montan sin su `data-id`**, que es lo que decide lo mismo
+    para cada una. Y no es sólo eso: una tarjeta con id lleva el botón «🗑️
+    Eliminar», que borra esa pregunta **de la base** —o sea, de la encuesta
+    original—. En una copia eso sería destruir lo que se está copiando.
+
+  El título nace como «… (copia)»: dos encuestas con el mismo nombre en la misma
+  clasificación no hay quien las distinga en ninguna lista.
 
   **Lo que enseña es cómo va, no cuánto falta**: el resultado del último periodo
   que dejó alguno y la línea de los anteriores. Cuántas hay pendientes y cuántas

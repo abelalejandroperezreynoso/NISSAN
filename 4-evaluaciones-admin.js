@@ -3042,7 +3042,19 @@ window.abrirModalCrearEval = async (categoria) => {
 // El segundo argumento la abre restringida: sólo el bloque de destinatarios,
 // que es lo que puede tocar un revisor. Entra por ahí
 // `window.editarDestinatariosEncuesta`, que además comprueba el permiso.
-window.editarEvaluacion = async (id, soloDestinatarios = false) => {
+//
+// El tercero la abre **como copia**: se llena con todo lo de la encuesta base
+// pero la hoja no está editando ninguna, así que al guardar se inserta una
+// nueva. Dos cosas lo sostienen, y las dos tienen que ir juntas:
+//
+//   - `idEditandoEval` se queda en null, que es lo que decide `insert` en vez
+//     de `update` en `guardarNuevaEvaluacion`.
+//   - **Las preguntas se montan sin su `data-id`**, que es lo que decide lo
+//     mismo para cada una. Y no es sólo eso: una tarjeta con id lleva el botón
+//     «🗑️ Eliminar», que borra esa pregunta **de la base**, o sea de la
+//     encuesta original. En una copia eso sería destruir lo que se está
+//     copiando.
+window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = false) => {
     let evaluacion = null;
     if (window.evalCache && window.evalCache.evals) {
         evaluacion = window.evalCache.evals.find(e => e.id === id);
@@ -3053,13 +3065,17 @@ window.editarEvaluacion = async (id, soloDestinatarios = false) => {
     }
     if (!evaluacion) { alert("Error: No se encontró la evaluación."); return; }
 
-    window.idEditandoEval = id;
+    window.idEditandoEval = comoCopia ? null : id;
     window.editandoSoloDestinatarios = soloDestinatarios;
     window.aplicarModoSoloDestinatarios(soloDestinatarios);
     // Antes de tocar la escala: prepararEncabezadoEval la deja plegada y el
     // bloque de range_labels de más abajo la vuelve a abrir si hay etiquetas.
-    window.prepararEncabezadoEval(true, soloDestinatarios);
-    document.getElementById('eval-title-input').value = evaluacion.title;
+    window.prepararEncabezadoEval(!comoCopia, soloDestinatarios);
+    // Una copia nace con el nombre marcado: dos encuestas con el mismo título
+    // en la misma clasificación no hay quien las distinga en ninguna lista.
+    document.getElementById('eval-title-input').value = comoCopia
+        ? `${evaluacion.title} (copia)`
+        : evaluacion.title;
 
     const descInput = document.getElementById('eval-desc-input');
     if(descInput) descInput.value = evaluacion.description || '';
@@ -3200,7 +3216,8 @@ window.editarEvaluacion = async (id, soloDestinatarios = false) => {
             if (q.question_type === 'list_match') {
                 try { const parsed = JSON.parse(q.correct_answer_text); if (Array.isArray(parsed)) opts = parsed; } catch(e) { if (q.correct_answer_text) { opts = q.correct_answer_text.split(/\n|,/).map(s=>s.trim()).filter(s=>s!==""); } }
             }
-            window.agregarCampoPregunta(q.question_text, q.correct_answer_text, q.id, q.question_type, opts);
+            window.agregarCampoPregunta(q.question_text, q.correct_answer_text,
+                comoCopia ? null : q.id, q.question_type, opts);
         });
     } else { window.agregarCampoPregunta(); }
     setTimeout(window.verificarRestriccionesModo, 50);
@@ -3231,6 +3248,96 @@ window.editarDestinatariosEncuesta = async (id) => {
     if (window.cerrarModalEvaluaciones) window.cerrarModalEvaluaciones();
 
     await window.editarEvaluacion(id, true);
+};
+
+// ==========================================
+// DE DÓNDE SALE UNA ENCUESTA NUEVA
+// ==========================================
+// Dos caminos: desde cero o copiando una que ya existe. Copiar es lo normal
+// cuando una clasificación ya tiene su forma —la misma escala, las mismas
+// preguntas, la misma gente— y volver a escribirla entera es donde se cuelan
+// las diferencias que después no cuadran al comparar periodos.
+//
+// La clasificación con la que se entró se guarda aquí y no se escapa en ningún
+// atributo: es texto libre y puede traer comillas.
+window.categoriaParaNuevaEncuesta = '';
+
+window.cerrarOrigenDeEncuesta = () => {
+    const overlay = document.getElementById('modal-origen-encuesta');
+    if (!overlay) return;
+    overlay.style.display = 'none';
+    const cuerpo = document.getElementById('cuerpo-origen-encuesta');
+    if (cuerpo) cuerpo.innerHTML = '';
+};
+
+window.crearEncuestaDesdeCero = () => {
+    const categoria = window.categoriaParaNuevaEncuesta;
+    window.cerrarOrigenDeEncuesta();
+    if (window.abrirModalCrearEval) window.abrirModalCrearEval(categoria);
+};
+
+window.crearEncuestaComoCopia = async (id) => {
+    window.cerrarOrigenDeEncuesta();
+    if (window.editarEvaluacion) await window.editarEvaluacion(id, false, true);
+};
+
+window.abrirOrigenDeEncuesta = async (categoria) => {
+    const overlay = document.getElementById('modal-origen-encuesta');
+    const cuerpo = document.getElementById('cuerpo-origen-encuesta');
+    const alaHoja = () => { if (window.abrirModalCrearEval) window.abrirModalCrearEval(categoria); };
+    if (!overlay || !cuerpo) return alaHoja();
+
+    window.categoriaParaNuevaEncuesta = categoria || '';
+    const clave = window.normalizarClasificacion(categoria || '');
+
+    // Se traen todas y se filtra aquí: la clasificación es texto libre y quien
+    // decide si dos nombres son el mismo es `normalizarClasificacion`, no la
+    // base. Las apagadas entran —copiar una encuesta retirada es de las razones
+    // para tenerla guardada—.
+    let candidatas = [];
+    try {
+        const { data } = await sb.from('evaluations')
+            .select('id, title, category, frequency, active')
+            .order('title');
+        candidatas = (data || []).filter(ev =>
+            !clave || window.normalizarClasificacion(ev.category) === clave);
+    } catch (e) {
+        console.warn('No se pudieron traer las encuestas para copiar:', e.message);
+    }
+
+    // Sin ninguna que copiar no hay dos caminos que ofrecer: se entra derecho a
+    // la hoja, que es lo que hacía el botón antes de que existiera esta.
+    if (candidatas.length === 0) return alaHoja();
+
+    const sub = document.getElementById('subtitulo-origen-encuesta');
+    if (sub) sub.innerText = categoria ? `En ${categoria}` : 'De cualquier clasificación';
+
+    const filas = candidatas.map(ev => {
+        const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
+        const apagada = !window.encuestaActiva(ev)
+            ? ' · <span style="color:#94a3b8; font-weight:700;">Inactiva</span>' : '';
+        const clasif = clave ? '' : ` · ${window.sanitizeForHTML(ev.category || 'General')}`;
+        return `
+            <div onclick="window.crearEncuestaComoCopia('${String(ev.id).replace(/'/g, "&apos;")}')"
+                 style="display:flex; align-items:center; gap:12px; padding:12px 4px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:600; color:#1e293b; font-size:0.95rem; line-height:1.25;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
+                    <div style="font-size:0.72rem; color:#94a3b8; margin-top:2px;">${window.sanitizeForHTML(ritmo)}${clasif}${apagada}</div>
+                </div>
+                <span style="color:#cbd5e1; font-size:1.3rem; line-height:1; flex-shrink:0;">&rsaquo;</span>
+            </div>`;
+    }).join('');
+
+    cuerpo.innerHTML = `
+        <button onclick="window.crearEncuestaDesdeCero()"
+                style="width:100%; padding:14px 20px; background:#2563eb; color:white; border:none; border-radius:12px; cursor:pointer; font-weight:bold; font-size:1rem;">
+            Empezar desde cero
+        </button>
+        <div style="margin:22px 0 2px; font-size:0.8rem; color:#334155; font-weight:700;">O usar una como base</div>
+        <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:6px;">Se copian sus preguntas, su escala y a quién va dirigida. La original no se toca.</div>
+        ${filas}`;
+
+    overlay.style.display = 'flex';
 };
 
 window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {

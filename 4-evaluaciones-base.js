@@ -1508,6 +1508,10 @@ window.enviarRespuestasEval = async () => {
 // de otra. Sin argumento, «General», que es lo de siempre.
 window.abrirNuevaEvaluacion = (categoria) => {
     if (window.cerrarPanelAdmin) window.cerrarPanelAdmin();
+    // Antes de la hoja de crear se pregunta de dónde sale la encuesta: desde
+    // cero o copiando una que ya existe. Esa hoja se salta ella sola cuando no
+    // hay ninguna que copiar.
+    if (window.abrirOrigenDeEncuesta) return window.abrirOrigenDeEncuesta(categoria);
     if (window.abrirModalCrearEval) window.abrirModalCrearEval(categoria);
 };
 
