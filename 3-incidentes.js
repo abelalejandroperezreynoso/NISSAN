@@ -61,10 +61,6 @@ window.cargarIncidentes = async function() {
     container.style.gap = '15px';
     container.style.padding = '10px 5px';
 
-    if(window.modoAdminActivo && document.getElementById('admin-toolbar')) {
-        document.getElementById('admin-toolbar').style.display = 'flex';
-    }
-    
     if (window.paginaActual === 0) container.innerHTML = '';
 
     const loading = document.getElementById('loading-indicator');

@@ -130,10 +130,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     pide a un botón de recargar—. No lleva el freno de `versionIntentada`, que
     existe para que un salto automático no se repita solo; sí el de la hoja
     abierta, sólo que aquí pregunta en vez de negarse: quien pulsó fue quien lo
-    pidió. Va sin texto —`.ios-boton-icono.ios-boton-actualizar`, con el `<svg>`
-    dentro—, así que lo que hace lo cuentan su `title` y su `aria-label`, y
-    mientras busca gira con la clase `esta-actualizando`: escribirle el estado
-    con `innerText` borraría el `<svg>`.
+    pidió. Va sin texto —con el `<svg>` dentro—, así que lo que hace lo cuentan
+    su `title` y su `aria-label`, y mientras busca gira con la clase
+    `esta-actualizando`: escribirle el estado con `innerText` borraría el
+    `<svg>`. Vive en `.encabezado-acciones`, la fila de botones que va pegada a
+    la derecha del título, y comparte con el «+» del panel de administración el
+    tamaño y el negro de `.ios-boton-encabezado`; lo suyo es sólo el giro.
 
   - **`window.responderDirecto` no abre una encuesta con la versión vieja.** Es
     el único sitio de la aplicación donde el aviso no admite un «Ahora no»:
@@ -358,16 +360,32 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   a `#simple-form-container`, o la hoja pierde tirador, esquinas y tope de
   altura.
 
-  El panel de administración es otro caso. La barra `#admin-toolbar`, que
-  aparece al encender el modo administrador, ya no guarda las acciones: sólo
-  trae el botón que abre la hoja `#modal-admin` (`window.abrirPanelAdmin` y
-  `window.cerrarPanelAdmin`, en `2a-core-nav.js`). Un botón nuevo se le añade
-  al marcado de `index.html` y **no necesita nada más**: llama a su función de
-  `window` desde el `onclick`, como el resto de la aplicación, y si abre otra
-  hoja el observador de `1-config.js` aparta ésta al ver dos abiertas a la vez
-  —los botones actuales llaman además a `cerrarPanelAdmin()` ellos mismos, que
-  es lo que evita el fotograma con las dos a la vista, pero olvidarlo ya no
-  rompe nada—.
+  El panel de administración es otro caso. Se entra por el **«+» del
+  encabezado**, a la izquierda del botón de recargar, que abre la hoja
+  `#modal-admin` (`window.abrirPanelAdmin` y `window.cerrarPanelAdmin`, en
+  `2a-core-nav.js`). Un botón nuevo se le añade al marcado de `index.html` y
+  **no necesita nada más**: llama a su función de `window` desde el `onclick`,
+  como el resto de la aplicación, y si abre otra hoja el observador de
+  `1-config.js` aparta ésta al ver dos abiertas a la vez —los botones actuales
+  llaman además a `cerrarPanelAdmin()` ellos mismos, que es lo que evita el
+  fotograma con las dos a la vista, pero olvidarlo ya no rompe nada—.
+
+  Ese «+» lo enseña y lo esconde **`window.pintarBotonAdmin()`**, y no hay
+  ningún otro sitio que lo toque: lo llaman `mostrarDashboard` y el conmutador
+  del título. Antes la entrada era una barra punteada (`#admin-toolbar`) metida
+  entre las tarjetas del panel, que se llevaba una franja de pantalla para
+  decir una palabra y que **cada vista tenía que acordarse de esconder y de
+  volver a enseñar** —`3-incidentes.js` la reponía, `5-objetivos.js` y
+  `6-calendario.js` la escondían—; el botón del encabezado está siempre donde
+  se le dejó y sólo depende del modo. Con la barra se fueron sus reglas
+  `.admin-toolbar`, `.admin-label` y `.admin-actions-group`; `.admin-btn` se
+  queda, que es la de los botones de dentro de la hoja.
+
+  Se esconde con el atributo `hidden` y por eso `estilos.css` lleva
+  `.ios-boton-encabezado[hidden] { display: none }`: `.ios-boton-icono` es un
+  flex y un `display` de autor le gana al `[hidden]` de la hoja del navegador,
+  así que sin esa regla el «+» se vería también sin el modo encendido. Es la
+  misma trampa de `.tipos-pregunta`.
 
   Esto no siempre fue así, y las tres reglas que sostenían el panel se
   quitaron de raíz:

@@ -213,10 +213,22 @@ window.abrirNuevoRegistro = () => {
 
 // --- PANEL DE ADMINISTRACIÓN ---
 //
-// Se presenta como hoja inferior, igual que el resto de los paneles. La barra
-// `#admin-toolbar` que aparece en modo administrador ya sólo sirve de entrada;
-// las acciones viven en `#modal-admin`, en el marcado de index.html, porque
-// varias pantallas se enganchan a sus botones por id al cargarse.
+// Se presenta como hoja inferior, igual que el resto de los paneles. Se entra
+// por el «+» del encabezado, junto al botón de recargar, que sólo se ve con el
+// modo administrador encendido; las acciones viven en `#modal-admin`, en el
+// marcado de index.html, porque varias pantallas se enganchan a sus botones
+// por id al cargarse.
+//
+// Antes esa entrada era una barra punteada (`#admin-toolbar`) metida entre las
+// tarjetas del panel, que se llevaba una franja de pantalla para decir una
+// palabra y que cada vista tenía que acordarse de esconder y de volver a
+// enseñar. El botón del encabezado está siempre donde se le dejó y no depende
+// de qué pantalla se esté mirando: sólo del modo.
+window.pintarBotonAdmin = () => {
+    const btn = document.getElementById('btn-admin-encabezado');
+    if (btn) btn.hidden = !window.modoAdminActivo;
+};
+
 window.abrirPanelAdmin = () => {
     if(!window.checkAdmin()) return;
     const hoja = document.getElementById('modal-admin');
@@ -248,11 +260,10 @@ window.volverAlDashboard = () => window.mostrarDashboard(JSON.parse(localStorage
 // como un aviso del navegador encima de la aplicación instalada.
 document.getElementById('app-title').onclick = () => {
     const titleElem = document.getElementById('app-title');
-    const adminToolbar = document.getElementById('admin-toolbar');
 
     if(window.modoAdminActivo) {
         window.sostenerModoAdmin(false);
-        if(adminToolbar) adminToolbar.style.display = 'none';
+        window.pintarBotonAdmin();
         window.cerrarPanelAdmin();
         titleElem.style.color = '';
         window.volverAlDashboard();
@@ -261,7 +272,7 @@ document.getElementById('app-title').onclick = () => {
 
     window.abrirClaveAdmin(() => {
         window.sostenerModoAdmin(true);
-        if(adminToolbar) adminToolbar.style.display = 'flex';
+        window.pintarBotonAdmin();
         titleElem.style.color = '#d32f2f';
         const btnAhorro = document.getElementById('btn-toggle-ahorro');
         if(btnAhorro && window.actualizarBotonAhorroVisual) {

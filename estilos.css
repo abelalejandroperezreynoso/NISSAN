@@ -1173,37 +1173,11 @@ textarea:focus {
 }
 
 /* =========================================
-   BARRA DE HERRAMIENTAS DE ADMINISTRADOR
-   ========================================= */
-.admin-toolbar {
-    display: none;
-    background: #eff6ff;
-    border: 1px dashed #3b82f6;
-    border-radius: 12px;
-    padding: 15px;
-    margin-bottom: 20px;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 15px;
-    animation: fadeIn 0.3s ease;
-}
-
-.admin-label {
-    font-weight: 700;
-    color: #1e40af;
-    font-size: 0.9rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.admin-actions-group {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
+   BOTONES DEL PANEL DE ADMINISTRACIÓN
+   =========================================
+   Los de dentro de la hoja `#modal-admin`. La barra punteada que antes los
+   anunciaba en el panel principal se quitó: hoy se entra por el «+» del
+   encabezado, junto al botón de recargar. */
 .admin-btn {
     background: white;
     border: 1px solid #bfdbfe;
@@ -2093,19 +2067,33 @@ textarea:focus {
    que es grande, así que crece un poco sobre el icono de una hoja. Mientras
    busca la versión gira: es lo único que puede decir que está haciendo algo
    un botón sin texto, y con `innerText` se borraría el <svg> de dentro. */
-.ios-boton-actualizar {
-    /* El símbolo va del negro del título y con el trazo grueso, no del azul
-       de acción de las hojas: aquí acompaña al título, no a un formulario. */
-    color: #0f172a;
+/* Los botones del encabezado van juntos a la derecha del título. */
+.encabezado-acciones {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ios-boton-encabezado {
+    /* El símbolo va del negro del título y con el trazo grueso, no del azul
+       de acción de las hojas: aquí acompañan al título, no a un formulario.
+       Y crecen sobre el icono de una hoja, que al lado de un título de 2rem
+       se quedaba pequeño. */
+    color: #0f172a;
     width: 38px;
     height: 38px;
 }
 
-.ios-boton-actualizar svg {
+.ios-boton-encabezado svg {
     width: 20px;
     height: 20px;
 }
+
+/* `.ios-boton-icono` es un flex, y un `display` de autor le gana al
+   `[hidden]` de la hoja del navegador: sin esta regla el «+» del panel de
+   administración se vería siempre. Es la misma trampa de `.tipos-pregunta`. */
+.ios-boton-encabezado[hidden] { display: none; }
 
 .ios-boton-actualizar:disabled {
     cursor: default;

@@ -972,15 +972,9 @@ window.mostrarDashboard = async (user) => {
         document.getElementById('search-input-date').value = '';
     }
 
-    const toolbar = document.getElementById('admin-toolbar');
     const title = document.getElementById('app-title');
-    if (window.modoAdminActivo) {
-        if(toolbar) toolbar.style.display = 'flex';
-        if(title) title.style.color = '#d32f2f';
-    } else {
-        if(toolbar) toolbar.style.display = 'none';
-        if(title) title.style.color = '';
-    }
+    window.pintarBotonAdmin();
+    if(title) title.style.color = window.modoAdminActivo ? '#d32f2f' : '';
 
 if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
         // Cambiamos "area" por "areas(nombre)" y filtramos inactivos

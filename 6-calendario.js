@@ -649,7 +649,7 @@ window.toggleCalendarView = (mode) => {
 };
 
 window.cargarVistaCalendario = async () => {
-    ['init-load-container','global-stats','container-incidentes','container-evaluaciones','container-evaluaciones-historial','search-bar-container','admin-toolbar','quick-team-view','container-estructura','container-ultimos-incidentes','main-user-header','btn-logout'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+    ['init-load-container','global-stats','container-incidentes','container-evaluaciones','container-evaluaciones-historial','search-bar-container','quick-team-view','container-estructura','container-ultimos-incidentes','main-user-header','btn-logout'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
     let container = document.getElementById('container-calendario');
     if (!container) { container = document.createElement('div'); container.id = 'container-calendario'; document.body.appendChild(container); }
     Object.assign(container.style, { display: 'block', position: 'fixed', top: '0', left: '0', width: '100%', height: '100%', backgroundColor: '#f8fafc', zIndex: '1500', overflowY: 'auto' });

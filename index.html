@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-08-4">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-08-5">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -94,19 +94,34 @@
                 <button id="btn-volver" class="btn-back-floating" onclick="volverAlDashboard()">‹ Atrás</button>
                 <h1 id="app-title" class="super-title" title="Toca aquí para activar modo Admin" style="margin:0;">Seguridad</h1>
             </div>
-            <!-- Pregunta si hay una versión más nueva y recarga. No lleva
-                 texto, así que lo que hace lo cuentan su `title` y su
-                 `aria-label`; el giro mientras busca lo pone la clase. -->
-            <button id="btn-actualizar-app" class="ios-boton-icono ios-boton-actualizar"
-                    onclick="window.actualizarYRecargar()"
-                    title="Buscar actualizaciones y recargar"
-                    aria-label="Buscar actualizaciones y recargar">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="23 4 23 10 17 10"></polyline>
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-                </svg>
-            </button>
+            <!-- Los botones del encabezado. Ninguno lleva texto, así que lo
+                 que hace cada uno lo cuentan su `title` y su `aria-label`. -->
+            <div class="encabezado-acciones">
+
+                <!-- La entrada al panel de administración. Sólo se ve con el
+                     modo encendido, y de eso se encarga window.pintarBotonAdmin. -->
+                <button id="btn-admin-encabezado" class="ios-boton-icono ios-boton-encabezado"
+                        onclick="window.abrirPanelAdmin()" hidden
+                        title="Panel de administración" aria-label="Panel de administración">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </button>
+
+                <!-- Pregunta si hay una versión más nueva y recarga; el giro
+                     mientras busca lo pone la clase. -->
+                <button id="btn-actualizar-app" class="ios-boton-icono ios-boton-encabezado ios-boton-actualizar"
+                        onclick="window.actualizarYRecargar()"
+                        title="Buscar actualizaciones y recargar"
+                        aria-label="Buscar actualizaciones y recargar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                </button>
+            </div>
         </div>
 
         <header id="main-user-header" class="main-header ios-header">
@@ -133,17 +148,6 @@
         <div id="container-encuestas-reviso" style="display:none; margin-bottom: 15px; padding: 0 5px;"></div>
 
         <div id="container-accesos-directos" style="margin-bottom: 20px;"></div>
-
-        <!-- La barra sólo abre la hoja. Las acciones viven en #modal-admin, más
-             abajo: son botones que otras pantallas buscan por id al cargarse,
-             así que tienen que estar en el marcado desde el principio, no
-             inyectados al abrir. -->
-        <div id="admin-toolbar" class="admin-toolbar">
-            <div class="admin-label">Panel de Administración</div>
-            <div class="admin-actions-group">
-                <button class="admin-btn" onclick="window.abrirPanelAdmin()">Abrir panel</button>
-            </div>
-        </div>
 
         <!-- Modal Flotante para Stats Difusión -->
                 <div id="modal-stats-difusion" class="hoja-overlay" style="z-index:4000;">
@@ -813,20 +817,20 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-08-4"></script>
-    <script src="2a-core-nav.js?v=2026-09-08-4"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-08-4"></script>
-    <script src="3-incidentes.js?v=2026-09-08-4"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-08-4"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-08-4"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-08-4"></script>
-    <script src="5-objetivos.js?v=2026-09-08-4"></script>
-    <script src="6-calendario.js?v=2026-09-08-4"></script>
-    <script src="7-pendientes.js?v=2026-09-08-4"></script>
-    <script src="8-hallazgos.js?v=2026-09-08-4"></script>
-    <script src="9-estadisticas.js?v=2026-09-08-4"></script>
+    <script src="1-config.js?v=2026-09-08-5"></script>
+    <script src="2a-core-nav.js?v=2026-09-08-5"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-08-5"></script>
+    <script src="3-incidentes.js?v=2026-09-08-5"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-08-5"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-08-5"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-08-5"></script>
+    <script src="5-objetivos.js?v=2026-09-08-5"></script>
+    <script src="6-calendario.js?v=2026-09-08-5"></script>
+    <script src="7-pendientes.js?v=2026-09-08-5"></script>
+    <script src="8-hallazgos.js?v=2026-09-08-5"></script>
+    <script src="9-estadisticas.js?v=2026-09-08-5"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="10-refacciones.js?v=2026-09-08-4"></script> 
+    <script src="10-refacciones.js?v=2026-09-08-5"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

@@ -41,7 +41,7 @@ window.cargarVistaObjetivos = async () => {
     const elementsToHide = [
         'init-load-container', 'global-stats', 'container-incidentes',
         'container-evaluaciones', 'container-evaluaciones-historial',
-        'search-bar-container', 'admin-toolbar', 'quick-team-view',
+        'search-bar-container', 'quick-team-view',
         'container-estructura', 'container-ultimos-incidentes', 'main-user-header'
     ];
     elementsToHide.forEach(id => {
