@@ -2120,6 +2120,52 @@ textarea:focus {
     to { transform: rotate(360deg); }
 }
 
+/* =========================================
+   EL PANEL DEL USUARIO SE PLIEGA
+   =========================================
+   Contraído se ve sólo quién es —la foto, sus estrellas y el nombre—; el
+   radar y las insignias salen al tocar la tarjeta. En un teléfono ocupaban
+   media pantalla del panel para algo que se consulta de vez en cuando, y
+   empujaban abajo los pendientes y los accesos directos. */
+.panel-usuario-resumen {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    flex-wrap: nowrap;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Contraída, la tarjeta no deja hueco por debajo del nombre. */
+#main-user-header.esta-contraido .panel-usuario-resumen { margin-bottom: 0; }
+#main-user-header.esta-contraido .panel-usuario-detalle { display: none; }
+
+.panel-usuario-detalle { animation: aparecer-detalle 0.25s ease; }
+
+@keyframes aparecer-detalle {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: none; }
+}
+
+/* La flecha gira al abrirse, y va del gris de los metadatos: dice en qué
+   estado está la tarjeta, no es la acción principal de nadie. El `:active`
+   se reescribe entero porque el de `.ios-boton-icono` es otro `transform` y
+   el segundo gana: sin esto, pulsarla abierta la enderezaría de golpe. */
+.panel-usuario-chevron {
+    color: #64748b;
+    background: rgba(120, 120, 128, 0.10);
+    transition: transform 0.25s ease, background 0.15s;
+}
+
+#main-user-header:not(.esta-contraido) .panel-usuario-chevron {
+    transform: rotate(180deg);
+}
+
+#main-user-header:not(.esta-contraido) .panel-usuario-chevron:active {
+    transform: rotate(180deg) scale(0.92);
+}
+
 .ios-boton-icono:active {
     background: rgba(120, 120, 128, 0.2);
     transform: scale(0.92);

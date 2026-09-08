@@ -863,6 +863,58 @@ window.cargarRadarGeneralDashboard = async (userId) => {
     }
 };
 
+// ==========================================
+// EL PANEL DEL USUARIO SE PLIEGA
+// ==========================================
+// Contraído se ve sólo quién es —la foto, sus estrellas y el nombre—, que es
+// lo que se mira de pasada; el radar y las insignias salen al tocarlo. En un
+// teléfono se llevaban media pantalla del panel todos los días para algo que
+// se consulta de vez en cuando, y empujaban abajo los pendientes y los
+// accesos, que es a lo que se entra.
+//
+// Lo elegido se recuerda: a quien le guste ver su radar no tiene que abrirlo
+// en cada recarga —y con el botón de actualizar del encabezado, recargar es
+// cosa de todos los días—. Un navegador que no deje escribir en
+// `localStorage` se comporta como si estuviera contraído, que es el estado
+// de entrada.
+window.LLAVE_PANEL_USUARIO = 'panelUsuarioAbierto';
+
+window.panelUsuarioAbierto = () => {
+    try { return localStorage.getItem(window.LLAVE_PANEL_USUARIO) === '1'; }
+    catch (e) { return false; }
+};
+
+window.aplicarPanelUsuario = (abierto) => {
+    const panel = document.getElementById('main-user-header');
+    if (!panel) return;
+    panel.classList.toggle('esta-contraido', !abierto);
+
+    // La flecha no tiene texto, así que lo que hace lo dicen su `title` y su
+    // `aria-label`; nunca con `innerText`, que borraría el <svg> de dentro.
+    const btn = document.getElementById('btn-panel-usuario');
+    if (btn) {
+        const texto = abierto ? 'Ocultar mi resumen' : 'Ver mi resumen';
+        btn.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+        btn.title = texto;
+        btn.setAttribute('aria-label', texto);
+    }
+
+    // Chart mide el lienzo al dibujarlo y contraído mide cero, así que al
+    // abrirse hay que pedirle que vuelva a medir o el radar sale en blanco.
+    if (abierto && window.dashboardRadarInstance) {
+        requestAnimationFrame(() => {
+            try { window.dashboardRadarInstance.resize(); } catch (e) {}
+        });
+    }
+};
+
+window.alternarPanelUsuario = () => {
+    const abierto = !window.panelUsuarioAbierto();
+    try { localStorage.setItem(window.LLAVE_PANEL_USUARIO, abierto ? '1' : '0'); }
+    catch (e) {}
+    window.aplicarPanelUsuario(abierto);
+};
+
 window.mostrarDashboard = async (user) => {
     document.getElementById('vista-login').classList.add('hidden');
     document.getElementById('vista-dashboard').classList.remove('hidden');
@@ -876,20 +928,21 @@ window.mostrarDashboard = async (user) => {
         userHeader.style.display = 'block';
         userHeader.style.padding = '15px';
         userHeader.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: nowrap;">
+            <div class="panel-usuario-resumen">
                 <div class="skeleton" style="width:60px; height:60px; border-radius:50%; flex-shrink:0;"></div>
                 <div style="flex:1;">
                     <div class="skeleton" style="width: 50%; height: 20px; margin-bottom: 8px;"></div>
                     <div class="skeleton" style="width: 30%; height: 14px;"></div>
                 </div>
             </div>
-            <div style="width: 100%; padding-top: 10px;">
+            <div class="panel-usuario-detalle" style="width: 100%; padding-top: 10px;">
                  <div id="header-radar-container" style="display:block; width: 100%; max-width: 400px; height: 210px; margin: 0 auto; position: relative;">
                     <div id="radar-loading-skeleton" class="skeleton" style="width: 190px; height: 190px; border-radius: 50%; opacity: 0.5; position: absolute; top:10px; left: 50%; transform: translateX(-50%); z-index:10;"></div>
                     <canvas id="dashboard-main-radar"></canvas>
                  </div>
             </div>
         `;
+        window.aplicarPanelUsuario(window.panelUsuarioAbierto());
     }
 
     if (quickTeam) {
@@ -974,7 +1027,10 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
             userHeader.style.display = 'block';
             
             userHeader.innerHTML = `
-                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: nowrap;">
+                <!-- Contraído, esto es todo lo que se ve. Toda la fila abre y
+                     cierra; la foto se queda con lo suyo y por eso corta la
+                     propagación. -->
+                <div class="panel-usuario-resumen" onclick="window.alternarPanelUsuario()">
                     
                     <div id="header-user-info" style="min-width: 0; flex: 1;">
                         <!-- La foto y, debajo, una estrella por insignia. El
@@ -982,7 +1038,7 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
                              estrellas caen debajo de ella y el nombre las
                              rodea igual que rodeaba a la foto sola. -->
                         <div style="float: left; margin-right: 15px;">
-                            <div id="header-user-icon" onclick="window.abrirStatsEmpleado('${user.id}', '${user.name}', '${user.puesto || 'Colaborador'}')"
+                            <div id="header-user-icon" onclick="event.stopPropagation(); window.abrirStatsEmpleado('${user.id}', '${user.name}', '${user.puesto || 'Colaborador'}')"
                                     style="width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); cursor:pointer; position:relative; flex-shrink:0; ${headerBgStyle}">
                                 ${headerAvatarHtml}
                                 <div id="badge-count-${user.id}" class="notification-badge" style="display:none;">0</div>
@@ -1003,20 +1059,31 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
                             </div>
                         </div>
                     </div>
+
+                    <button id="btn-panel-usuario" class="ios-boton-icono panel-usuario-chevron"
+                            onclick="event.stopPropagation(); window.alternarPanelUsuario();"
+                            aria-expanded="false" title="Ver mi resumen" aria-label="Ver mi resumen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                    </button>
                 </div>
 
-                <div style="width: 100%; padding-top: 10px;">
+                <div class="panel-usuario-detalle" style="width: 100%; padding-top: 10px;">
                      <div id="header-radar-container" style="display:block; width: 100%; max-width: 450px; height: 260px; margin: 0 auto; position: relative;">
                         <div id="radar-loading-skeleton" class="skeleton" style="width: 190px; height: 190px; border-radius: 50%; opacity: 0.5; position: absolute; top:20px; left: 50%; transform: translateX(-50%); z-index:10;"></div>
                         <canvas id="dashboard-main-radar"></canvas>
                      </div>
                 </div>
 
-                <!-- Las insignias de clasificación las llena
-                     dibujarInsigniasClasificacion, y si no hay ninguna se
-                     queda vacío. -->
-                <div id="insignias-clasificacion"></div>
+                    <!-- Las insignias de clasificación las llena
+                         dibujarInsigniasClasificacion, y si no hay ninguna se
+                         queda vacío. -->
+                    <div id="insignias-clasificacion"></div>
+                </div>
             `;
+            window.aplicarPanelUsuario(window.panelUsuarioAbierto());
             
             window.renderizarVistaRapidaEquipo(false);
             window.cargarRadarGeneralDashboard(user.id);

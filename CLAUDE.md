@@ -2258,6 +2258,45 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   pueda llegar a ellas arrastrando. Los márgenes automáticos se van a cero
   cuando no sobra sitio, de modo que con pocas quedan centradas y con muchas se
   empieza por la primera.
+- **El panel del usuario se pliega, y de entrada está contraído.** Contraído
+  se ve sólo quién es —la foto, sus estrellas y el nombre—, que es lo que se
+  mira de pasada; el radar y las insignias salen al tocar la tarjeta. En un
+  iPhone 12 mini esa tarjeta medía 413px abiertos contra 128 cerrados, media
+  pantalla del panel todos los días para algo que se consulta de vez en cuando
+  y que empujaba abajo los pendientes y los accesos directos, que es a lo que
+  se entra.
+
+  ```js
+  window.panelUsuarioAbierto()        // lo que dejó elegido quien lo usa
+  window.aplicarPanelUsuario(abierto) // pone la clase y el rótulo de la flecha
+  window.alternarPanelUsuario()       // lo que llaman la tarjeta y la flecha
+  ```
+
+  Lo contrae la clase `esta-contraido` en `#main-user-header`, que esconde
+  `.panel-usuario-detalle` —el radar y las insignias— y quita el hueco de
+  debajo del nombre; la flecha de `.panel-usuario-chevron` gira al abrirse. El
+  estado se recuerda en `localStorage.panelUsuarioAbierto`: a quien le guste
+  ver su radar no tiene que abrirlo en cada recarga, y con el botón de
+  actualizar del encabezado recargar es cosa de todos los días. Un navegador
+  que no deje escribir ahí se comporta como contraído, que es el estado de
+  entrada.
+
+  **Chart mide el lienzo al dibujarlo, y contraído mide cero.** El radar se
+  crea al cargar el panel —da igual que esté plegado, porque de esa misma
+  consulta salen las insignias y las estrellas de debajo de la foto, que sí se
+  ven contraídas—, así que nace con 0×0 y al abrirse habría salido en blanco.
+  Por eso `aplicarPanelUsuario` le pide un `resize()` a
+  `window.dashboardRadarInstance` cuando abre. Cualquier gráfica nueva que se
+  meta ahí dentro necesita lo mismo.
+
+  **La fila entera abre y cierra, así que lo que tenga acción propia corta la
+  propagación**: la foto (`event.stopPropagation()` antes de
+  `abrirStatsEmpleado`) y la propia flecha, que si no alternaría dos veces y se
+  quedaría como estaba. Y **el esqueleto se pliega igual** que el panel de
+  verdad —los dos llaman a `aplicarPanelUsuario` después de escribir su
+  `innerHTML`—, o la tarjeta se abriría sola durante la carga para cerrarse de
+  golpe al llegar los datos.
+
 - **Un selector por atributo `style` se rompe en cuanto se toca ese estilo.**
   `setGrade` buscaba la tarjeta de la pregunta con
   `closest('div[style*="border-radius:16px"]')` y le pintaba el borde. Al
