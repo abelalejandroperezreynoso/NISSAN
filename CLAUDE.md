@@ -98,6 +98,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     window.hayVersionNueva()                            // lo que ya se sabe
     window.versionEnServidor()                          // la última que dijo
     window.avisarVersionNueva({ bloqueante: true })     // la hoja, sin «Ahora no»
+    window.actualizarYRecargar()                        // el botón del encabezado
     ```
 
   - **El salto se da solo, y nadie tiene que tocar el botón.** Abrir la
@@ -121,6 +122,18 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     arranque; al comprobar que ya se está al día se borra sola. Un navegador
     que no deje escribir ahí no salta nunca: sin red de seguridad, mejor el
     botón.
+
+    **Y hay un botón, a la derecha del título del panel**, para cuando alguien
+    quiere quedarse al día sin esperar a nada: `window.actualizarYRecargar()`
+    pregunta al servidor sin esperar al intervalo y recarga —a la URL con el
+    `?v=` nuevo si lo hay, y a secas si ya se está al día, que es lo que se le
+    pide a un botón de recargar—. No lleva el freno de `versionIntentada`, que
+    existe para que un salto automático no se repita solo; sí el de la hoja
+    abierta, sólo que aquí pregunta en vez de negarse: quien pulsó fue quien lo
+    pidió. Va sin texto —`.ios-boton-icono.ios-boton-actualizar`, con el `<svg>`
+    dentro—, así que lo que hace lo cuentan su `title` y su `aria-label`, y
+    mientras busca gira con la clase `esta-actualizando`: escribirle el estado
+    con `innerText` borraría el `<svg>`.
 
   - **`window.responderDirecto` no abre una encuesta con la versión vieja.** Es
     el único sitio de la aplicación donde el aviso no admite un «Ahora no»:

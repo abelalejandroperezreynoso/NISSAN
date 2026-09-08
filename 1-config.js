@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-08-1';
+window.VERSION_APP = '2026-09-08-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -2184,6 +2184,7 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
 //     await window.comprobarVersionApp({forzar:true})// sin esperar al intervalo
 //     window.avisarVersionNueva({ bloqueante: true })// la hoja que lo dice
 //     window.urlDePantalla('index.html')             // navegar sin caché vieja
+//     window.actualizarYRecargar()                   // el botón del encabezado
 //
 // Sin `version.json` en el servidor, o sin red, todo se comporta como antes:
 // no se avisa de nada y no se bloquea nada.
@@ -2254,6 +2255,29 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
 
     window.irAPantalla = (archivo) => {
         window.location.href = window.urlDePantalla(archivo);
+    };
+
+    // El botón de actualizar del encabezado. Pregunta al servidor sin
+    // esperar al intervalo y recarga: si hay una versión nueva salta a su
+    // URL —que el navegador no ha visto y tiene que pedir a la red—, y si
+    // ya se está al día recarga a secas, que es lo que se le pide a un
+    // botón de recargar.
+    //
+    // No lleva el freno de `versionIntentada`: ése existe para que un salto
+    // automático no se repita solo en bucle, y aquí cada recarga la pide una
+    // persona. El de la hoja abierta sí, y por lo de siempre: ahí puede
+    // haber media encuesta llena o una foto ya tomada, y nada de eso
+    // sobrevive a una recarga. Se pregunta en vez de negarse, que quien
+    // pulsó fue quien lo pidió.
+    window.actualizarYRecargar = async () => {
+        const btn = document.getElementById('btn-actualizar-app');
+        if (btn && btn.disabled) return;
+        if (document.documentElement.classList.contains('modal-abierto') &&
+            !confirm('Hay algo abierto sin enviar y recargar lo perderá. ¿Recargar de todos modos?')) return;
+        if (btn) { btn.disabled = true; btn.classList.add('esta-actualizando'); }
+        await window.comprobarVersionApp({ forzar: true });
+        if (window.hayVersionNueva()) window.recargarAVersionNueva();
+        else window.location.reload();
     };
 
     window.recargarAVersionNueva = () => {
