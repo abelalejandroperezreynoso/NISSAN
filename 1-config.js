@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-08-34';
+window.VERSION_APP = '2026-09-08-35';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -270,6 +270,15 @@ window.tieneEquipoDirecto = (empleadoId) =>
 window.padronDeLaEncuesta = (ev) => {
     const gente = window.todosLosEmpleadosData || [];
     if (!ev || gente.length === 0) return [];
+
+    // Si la consulta no se trajo a quién va dirigida, aquí no hay padrón que
+    // dar. `leTocaEstaEncuesta` lee una columna `undefined` como «no acota
+    // nada» —que es lo correcto para decidir un pendiente de más antes que uno
+    // de menos—, pero un denominador es otra cosa: diría «4 de 455» de una
+    // encuesta dirigida a doce personas, y eso se lee y se cree. Sin las
+    // columnas, ningún número.
+    if (ev.target_employees === undefined || ev.target_positions === undefined ||
+        ev.target_departments === undefined) return [];
 
     // `tieneEquipoDirecto` recorre la plantilla entera, así que preguntarlo por
     // cada persona sería recorrerla al cuadrado: los que tienen equipo se sacan

@@ -44,11 +44,21 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     const yaEsta = window.encuestaEnCache(evaluationId);
     if (yaEsta) return yaEsta;
 
-    // Sólo lo que hace falta para saber quién la revisa, más el instante del
-    // último relanzamiento: a este panel se llega también desde el inicio, sin
-    // haber pasado por la lista, y es donde se dice cuándo se relanzó. La
-    // clasificación va porque de ella se heredan los revisores.
-    const campos = await window.camposConRelanzamiento(await window.camposConRevisores('id, title, mode, category'));
+    // Lo que hace falta para saber quién la revisa —la clasificación va porque
+    // de ella se heredan los revisores—, el instante del último relanzamiento
+    // —a este panel se llega también desde el inicio, sin haber pasado por la
+    // lista, y es donde se dice cuándo se relanzó— y **a quién va dirigida**.
+    //
+    // Esos cuatro últimos campos no estaban, y es la trampa de siempre: una
+    // columna que no se pidió llega `undefined`, y `leTocaEstaEncuesta` lee eso
+    // como «no acota nada». Con la encuesta traída por aquí, una dirigida a
+    // doce personas le tocaba a la plantilla entera: el pase de lista decía «4
+    // de 455» y el botón de «Responder Encuesta» le salía a todo el que la
+    // abriera desde el inicio. Por la lista no se notaba —`evalCache` se trae
+    // la fila entera con `select('*')`—, así que dependía de por dónde se
+    // hubiera entrado.
+    const campos = await window.camposConRelanzamiento(await window.camposConRevisores(
+        'id, title, mode, category, is_obligatory, target_employees, target_positions, target_departments'));
     const { data } = await sb.from('evaluations').select(campos).eq('id', evaluationId).single();
     if (data) window.cacheEncuestasRevision[String(evaluationId)] = data;
     return data || null;

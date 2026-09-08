@@ -1006,6 +1006,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   abre una que no pasa lista. Si aun así no hay plantilla, el recuadro no se
   dibuja: un «0 de 0» diría que no fue nadie.
 
+  **Y sin las columnas de destinatarios, `padronDeLaEncuesta` no da padrón.**
+  `leTocaEstaEncuesta` lee una columna `undefined` como «no acota nada», que es
+  lo correcto para decidir un pendiente —de más antes que de menos—, pero un
+  denominador es otra cosa: diría «4 de 455» de una encuesta dirigida a doce
+  personas, y eso se lee y se cree. La consulta ya las trae; la guarda está para
+  que ningún número salga mal si mañana llega por otra puerta.
+
   La barra va **de un solo color**: la aplicación no fija ningún mínimo de
   asistencia, así que pintar de rojo un 60% sería inventarse un umbral que nadie
   definió. Las clases (`.pase-tarjeta`, `.pase-cifra`, `.pase-plegable`…) están
@@ -1890,6 +1897,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   una sin contestar que esa persona nunca tuvo asignada. Toda consulta que
   vaya a usar esta regla necesita traerse `mode`, `is_obligatory`,
   `target_employees`, `target_positions` y `target_departments`.
+
+  **`encuestaDeLaRespuesta` se traía cuatro columnas y ninguna de ésas**, y es
+  la trampa de siempre: una columna que no se pidió llega `undefined`, y
+  `leTocaEstaEncuesta` lo lee como «no acota nada». Con la encuesta traída por
+  ahí, una dirigida a doce personas le tocaba a la plantilla entera: el pase de
+  lista de su hoja decía «4 de 455» y el botón de «Responder Encuesta» le salía
+  a cualquiera que la abriera. **Por la lista no se notaba** —`evalCache` se
+  trae la fila entera con `select('*')`—, así que fallaba o no según por dónde
+  se hubiera entrado, que es lo que lo hacía parecer cosa de la pantalla.
 
   **Las estadísticas usan esta misma regla, en los cinco sitios donde deciden
   qué está asignado**: el conteo de asignadas, el filtro de respuestas, el
