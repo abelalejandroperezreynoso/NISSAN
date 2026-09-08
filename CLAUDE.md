@@ -1143,9 +1143,62 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   ```js
   window.leTocaRevisar(ev, empleadoQueContesto, revisorId)
-  window.revisoresDeEncuesta(ev)        // vacío = el jefe inmediato
+  window.revisoresDeEncuesta(ev)        // los efectivos: propios, o los de su clasificación
+  window.revisoresPropiosDeEncuesta(ev) // sólo lo que dice `reviewer_employees`
   window.encuestasQueRevisa(encuestas, revisorId)
   ```
+
+  **Y los revisores se pueden nombrar de una clasificación entera.** Hacerlo
+  encuesta por encuesta obliga a repetir la misma lista en todas las de
+  «Seguridad» y a acordarse de ponerla en la siguiente que se cree; quien
+  imparte una clasificación la imparte entera. La precedencia va de lo
+  particular a lo general y es la que ya suponía el resto del código: **los
+  revisores propios de la encuesta mandan**, después los de su clasificación, y
+  sin unos ni otros el jefe inmediato.
+
+  ```js
+  await window.cargarRevisoresDeClasificaciones()   // llena la caché; `true` la rehace
+  window.revisoresDeClasificacion(nombre)           // sin esperar a nadie
+  await window.guardarRevisoresDeClasificacion(nombre, ids)
+  ```
+
+  Viven en la tabla `clasificaciones_revisores`, con el nombre normalizado por
+  llave, y el script es `sql/clasificaciones-revisores.sql`, que se corre a
+  mano. Es el mismo molde que `clasificaciones_certificacion`, y por lo mismo:
+  `revisoresDeEncuesta` se llama **sin poder esperar** desde el badge del panel
+  y desde los pendientes, así que la caché se llena una vez por sesión —se
+  guarda la promesa, no el resultado— antes de que nadie pregunte.
+  **Mientras no esté cargada no hay revisores heredados y todo se comporta como
+  antes**: equivocarse hacia el jefe inmediato es preferible a esconderle el
+  pendiente a quien sí le toca. La piden `cargarVistaEvaluaciones`,
+  `encuestaDeLaRespuesta`, `cargarVistaPendientes`, `calcularPendientesBatch` y
+  `cargarEncuestasQueReviso`.
+
+  **Y hay que traerse `category` en la consulta**, que es de donde sale la
+  herencia: una columna que no se pidió llega `undefined` y la encuesta vuelve
+  al jefe inmediato sin decir nada. Es la trampa de `requires_min_score`, otra
+  vez. La piden las tres consultas que deciden un pendiente de revisión.
+
+  Se configuran desde **«Revisores por clasificación»** del panel de
+  administración, una hoja con dos pantallas —la lista de clasificaciones y el
+  editor de una— que comparten cuerpo, como la de evaluaciones. La lista sale
+  de las clasificaciones que hay en `evaluations`, más las que tienen revisores
+  guardados y ya no tienen encuestas: si no, esa fila se quedaría sin manera de
+  verla ni de vaciarla. El selector de personas es el mismo de la hoja de crear
+  encuesta —un tercer juego de ids en `window.SELECTORES_PERSONAS`,
+  `revisoresClasif`—, y sus ids viven en el cuerpo que se arma con `innerHTML`,
+  así que existen sólo mientras la hoja está a la vista.
+
+  **Ojo con la hoja de crear y editar una encuesta: ahí van los revisores
+  propios, no los efectivos.** `editarEvaluacion` llena el selector con
+  `revisoresPropiosDeEncuesta`, y tiene que seguir haciéndolo: con los
+  efectivos, abrir una encuesta que heredaba y guardarla le escribiría en su
+  columna los de la clasificación, congelándolos —dejaría de seguirla sin que
+  nadie lo pidiera—. Lo que sí se le dice a quien mira es de quién hereda, en
+  el `#nota-revisores-clasificacion` del bloque de revisores
+  (`window.pintarNotaRevisoresClasificacion`, que se repinta con la casilla y
+  con cada letra de la clasificación): sin eso, la hoja diría «la revisa el
+  jefe inmediato» mientras la califica otro.
 
   **Y entre varios revisores, la respuesta es de quien asignó a esa persona.**
   Con dos o tres revisores nombrados, la respuesta de cualquier destinatario le

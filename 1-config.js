@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-08-23';
+window.VERSION_APP = '2026-09-08-24';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1076,7 +1076,7 @@ window.motivoDePregunta = (respuesta, preguntaId) => {
 // La lista llega como `jsonb` o como texto, según cómo se creara la columna, y
 // puede traer el 'ALL' que el resto de los selectores usa para «sin acotar»;
 // aquí eso es lo mismo que no haber nombrado a nadie.
-window.revisoresDeEncuesta = (ev) => {
+window.revisoresPropiosDeEncuesta = (ev) => {
     if (!ev) return [];
     let v = ev.reviewer_employees;
     if (typeof v === 'string') {
@@ -1086,7 +1086,105 @@ window.revisoresDeEncuesta = (ev) => {
     return v.map(x => String(x).trim()).filter(x => x !== '' && x.toUpperCase() !== 'ALL');
 };
 
-window.tieneRevisoresPropios = (ev) => window.revisoresDeEncuesta(ev).length > 0;
+window.tieneRevisoresPropios = (ev) => window.revisoresPropiosDeEncuesta(ev).length > 0;
+
+// Y si la encuesta no nombra a nadie, los de su clasificación. Quien imparte
+// «Seguridad» la imparte entera, así que la lista se dice una sola vez y todas
+// sus encuestas la heredan —también las que se creen después—, en vez de
+// repetirla encuesta por encuesta y acordarse de ponerla en la siguiente.
+//
+// La precedencia va de lo particular a lo general y es la que ya suponía el
+// resto del código: los revisores propios mandan, después los de la
+// clasificación, y sin unos ni otros el jefe inmediato. Ésta es la única
+// función que las junta, así que las seis cosas que cuelgan de ella —quién
+// califica, quién corrige a quién va dirigida, quién relanza, la tarjeta de
+// «encuestas que reviso», el badge del panel y la lista de encuestas— lo
+// heredan sin enterarse.
+window.revisoresDeEncuesta = (ev) => {
+    const propios = window.revisoresPropiosDeEncuesta(ev);
+    if (propios.length > 0) return propios;
+    return window.revisoresDeClasificacion(ev && ev.category);
+};
+
+// Los revisores que se nombraron para una clasificación entera. Viven en la
+// tabla `clasificaciones_revisores`, con el nombre normalizado por llave, y se
+// configuran desde «Revisores por clasificación» del panel de administración.
+//
+// La caché se llena una sola vez por sesión —se guarda la promesa, no el
+// resultado, para que dos pantallas a la vez no la pidan dos veces—, porque
+// `revisoresDeEncuesta` se llama sin poder esperar desde el badge del panel y
+// desde los pendientes. Mientras no esté cargada no hay revisores heredados y
+// todo se comporta como antes: es lo que deja a la aplicación en pie sin la
+// tabla, y equivocarse hacia el jefe inmediato es preferible a esconderle el
+// pendiente a quien sí le toca.
+window.REVISORES_POR_CLASIFICACION = null;   // { claveNormalizada: [ids] }
+let promesaRevisoresClasif = null;
+
+window.cargarRevisoresDeClasificaciones = (recargar) => {
+    if (recargar) promesaRevisoresClasif = null;
+    if (!promesaRevisoresClasif) {
+        promesaRevisoresClasif = sb.from('clasificaciones_revisores')
+            .select('clave, revisores')
+            .then(({ data, error }) => {
+                if (error) {
+                    console.warn('No se pudo leer los revisores por clasificación:', error.message);
+                    window.REVISORES_POR_CLASIFICACION = null;
+                    return false;
+                }
+                const mapa = {};
+                (data || []).forEach(f => {
+                    let v = f.revisores;
+                    if (typeof v === 'string') {
+                        try { v = JSON.parse(v); } catch (e) { v = []; }
+                    }
+                    if (!Array.isArray(v)) return;
+                    const ids = v.map(x => String(x).trim())
+                        .filter(x => x !== '' && x.toUpperCase() !== 'ALL');
+                    if (ids.length > 0) mapa[String(f.clave)] = ids;
+                });
+                window.REVISORES_POR_CLASIFICACION = mapa;
+                return true;
+            })
+            .catch(() => { window.REVISORES_POR_CLASIFICACION = null; return false; });
+    }
+    return promesaRevisoresClasif;
+};
+
+// La pregunta que hacen las pantallas, y que tiene que poder contestarse sin
+// esperar a nadie: se resuelve con lo que haya en la caché.
+window.revisoresDeClasificacion = (clasificacion) => {
+    if (!window.REVISORES_POR_CLASIFICACION) return [];
+    return window.REVISORES_POR_CLASIFICACION[window.normalizarClasificacion(clasificacion)] || [];
+};
+
+window.guardarRevisoresDeClasificacion = async (clasificacion, ids) => {
+    const clave = window.normalizarClasificacion(clasificacion);
+    const limpios = (ids || []).map(x => String(x).trim())
+        .filter(x => x !== '' && x.toUpperCase() !== 'ALL');
+
+    const { error } = await sb.from('clasificaciones_revisores')
+        .upsert({ clave: clave, nombre: String(clasificacion || '').trim(), revisores: limpios,
+                  actualizado_en: new Date().toISOString() }, { onConflict: 'clave' });
+    if (error) throw error;
+
+    // La caché se corrige en el acto para que la pantalla no tenga que recargar.
+    if (window.REVISORES_POR_CLASIFICACION) {
+        if (limpios.length > 0) window.REVISORES_POR_CLASIFICACION[clave] = limpios;
+        else delete window.REVISORES_POR_CLASIFICACION[clave];
+    }
+};
+
+// La tabla es nueva y su script se corre a mano, así que puede no estar
+// todavía. Se pregunta una sola vez por sesión, como con las columnas.
+let promesaTablaRevisoresClasif = null;
+window.hayTablaRevisoresClasificacion = () => {
+    if (!promesaTablaRevisoresClasif) {
+        promesaTablaRevisoresClasif = sb.from('clasificaciones_revisores').select('clave').limit(1)
+            .then(({ error }) => !error)
+            .catch(() => false);
+    }
+    return promesaTablaRevisoresClasif;
+};
 
 // Quién dirigió la encuesta a cada persona. Un revisor puede corregir a quién
 // va dirigida —es el instructor que la imparte—, y al hacerlo queda apuntado

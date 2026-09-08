@@ -507,8 +507,13 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             // las pregunta sin poder esperar, así que la caché se llena antes.
             await window.cargarVentanasDeAsistencia();
 
+            // Quién revisa puede venir de la clasificación de la encuesta, y
+            // `leTocaRevisar` lo pregunta sin poder esperar: sin la caché
+            // llena, el pendiente de revisión volvería al jefe inmediato.
+            await window.cargarRevisoresDeClasificaciones();
+
             const camposEvals = await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-                'id, title, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))));
+                'id, title, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))));
             const { data: activeEvalsDb } = await sb.from('evaluations')
                         .select(camposEvals)
                         .eq('active', true);

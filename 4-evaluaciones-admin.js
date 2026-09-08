@@ -35,13 +35,20 @@ window.encuestaEnCache = (evaluationId) => {
 
 window.encuestaDeLaRespuesta = async (evaluationId) => {
     if (!evaluationId) return null;
+
+    // Quién revisa puede venir de la clasificación, y esa pregunta se contesta
+    // sin poder esperar: la caché se llena antes de que nadie la haga. Va antes
+    // del atajo de la caché de encuestas, que si no se saltaría con la primera.
+    await window.cargarRevisoresDeClasificaciones();
+
     const yaEsta = window.encuestaEnCache(evaluationId);
     if (yaEsta) return yaEsta;
 
     // Sólo lo que hace falta para saber quién la revisa, más el instante del
     // último relanzamiento: a este panel se llega también desde el inicio, sin
-    // haber pasado por la lista, y es donde se dice cuándo se relanzó.
-    const campos = await window.camposConRelanzamiento(await window.camposConRevisores('id, title, mode'));
+    // haber pasado por la lista, y es donde se dice cuándo se relanzó. La
+    // clasificación va porque de ella se heredan los revisores.
+    const campos = await window.camposConRelanzamiento(await window.camposConRevisores('id, title, mode, category'));
     const { data } = await sb.from('evaluations').select(campos).eq('id', evaluationId).single();
     if (data) window.cacheEncuestasRevision[String(evaluationId)] = data;
     return data || null;
@@ -2648,6 +2655,245 @@ window.certificarSeleccionClasificacion = async () => {
 // tiene que decirlo el encabezado: el título, el subtítulo y la etiqueta del
 // botón de guardar, que al ser un botón de icono la lleva en el aria-label y
 // en el title. Antes decía «Nueva evaluación» también al editar una existente.
+// ==========================================
+// REVISORES POR CLASIFICACIÓN
+// ==========================================
+// Nombrar revisores encuesta por encuesta obliga a repetir la misma lista en
+// todas las de «Seguridad» y a acordarse de ponerla en la siguiente que se
+// cree. Quien imparte una clasificación la imparte entera, así que aquí se dice
+// una vez y todas sus encuestas la heredan.
+//
+// La precedencia la resuelve `window.revisoresDeEncuesta` en `1-config.js`: los
+// revisores propios de la encuesta mandan, después los de su clasificación, y
+// sin unos ni otros el jefe inmediato. Esta pantalla sólo escribe la tabla.
+//
+// Vive en la misma hoja con dos pantallas —la lista de clasificaciones y el
+// editor de una—, como la de evaluaciones: el cuerpo se rearma con `innerHTML`,
+// así que los ids del editor existen sólo mientras está a la vista.
+window.clasificacionesParaRevisores = [];
+window.clasificacionEditandoRevisores = null;
+
+// El encabezado de la hoja. Es el mismo patrón que
+// `encabezadoHojaEvaluaciones`: el botón de la derecha es la cruz en la lista y
+// la flecha de volver en el editor, y el de guardar sólo sale donde hay algo
+// que guardar. La cruz la dibujan los pseudoelementos de `.ios-boton-cerrar`,
+// así que cambiar de icono es quitarle la clase y meter el `<svg>`.
+window.encabezadoRevisoresClasif = (titulo, subtitulo, alVolver, alGuardar) => {
+    const h = document.getElementById('titulo-revisores-clasif');
+    if (h) h.innerText = titulo || 'Revisores por clasificación';
+
+    const sub = document.getElementById('subtitulo-revisores-clasif');
+    if (sub) sub.innerText = subtitulo || '';
+
+    const guardar = document.getElementById('btn-guardar-revisores-clasif');
+    if (guardar) {
+        guardar.hidden = typeof alGuardar !== 'function';
+        guardar.disabled = false;
+        guardar.onclick = typeof alGuardar === 'function' ? alGuardar : null;
+    }
+
+    const btn = document.getElementById('btn-cerrar-revisores-clasif');
+    if (!btn) return;
+
+    if (typeof alVolver === 'function') {
+        btn.classList.remove('ios-boton-cerrar');
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 19l-7-7 7-7"/></svg>';
+        btn.title = 'Volver';
+        btn.setAttribute('aria-label', 'Volver a la lista de clasificaciones');
+        btn.onclick = alVolver;
+    } else {
+        btn.classList.add('ios-boton-cerrar');
+        btn.innerHTML = '';
+        btn.title = 'Cerrar';
+        btn.setAttribute('aria-label', 'Cerrar');
+        btn.onclick = window.cerrarRevisoresClasificacion;
+    }
+};
+
+window.cerrarRevisoresClasificacion = () => {
+    const modal = document.getElementById('modal-revisores-clasif');
+    if (modal) modal.style.display = 'none';
+    const cuerpo = document.getElementById('cuerpo-revisores-clasif');
+    if (cuerpo) cuerpo.innerHTML = '';
+    window.clasificacionEditandoRevisores = null;
+};
+
+window.abrirRevisoresPorClasificacion = async () => {
+    const modal = document.getElementById('modal-revisores-clasif');
+    const cuerpo = document.getElementById('cuerpo-revisores-clasif');
+    if (!modal || !cuerpo) return;
+
+    // Cómo se cierra la hoja al deslizarla hacia abajo: su botón del encabezado
+    // no siempre es la cruz, y ese gesto cierra, no retrocede.
+    modal.__cerrarHoja = () => window.cerrarRevisoresClasificacion();
+
+    window.encabezadoRevisoresClasif('Revisores por clasificación', 'Modo administrador');
+    cuerpo.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">Cargando clasificaciones...</div>';
+    modal.style.display = 'flex';
+
+    // La tabla es la que se está a punto de editar, así que se relee: la caché
+    // pudo llenarse al arrancar la aplicación y quedarse vieja.
+    const hayTabla = await window.cargarRevisoresDeClasificaciones(true);
+
+    const { data, error } = await sb.from('evaluations').select('category');
+    if (error) {
+        cuerpo.innerHTML = `<div style="text-align:center; padding:20px; color:#b91c1c;">No se pudieron leer las encuestas: ${window.sanitizeForHTML(error.message)}</div>`;
+        return;
+    }
+
+    // Una clasificación por nombre normalizado, quedándose con cómo se escribió
+    // la primera vez que aparece —la clasificación es texto libre y «Seguridad»
+    // y «seguridad » son la misma—.
+    const porClave = {};
+    (data || []).forEach(ev => {
+        const nombre = String(ev.category || '').trim();
+        if (!nombre) return;
+        const clave = window.normalizarClasificacion(nombre);
+        if (!porClave[clave]) porClave[clave] = { clave: clave, nombre: nombre, encuestas: 0 };
+        porClave[clave].encuestas++;
+    });
+
+    // Y las que tienen revisores nombrados pero ya no tienen encuestas: si no,
+    // su fila se quedaría guardada sin manera de verla ni de vaciarla.
+    Object.keys(window.REVISORES_POR_CLASIFICACION || {}).forEach(clave => {
+        if (!porClave[clave]) porClave[clave] = { clave: clave, nombre: clave, encuestas: 0 };
+    });
+
+    window.clasificacionesParaRevisores = Object.values(porClave)
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+
+    window.pintarListaRevisoresClasif(hayTabla);
+};
+
+window.pintarListaRevisoresClasif = (hayTabla) => {
+    const cuerpo = document.getElementById('cuerpo-revisores-clasif');
+    if (!cuerpo) return;
+
+    window.clasificacionEditandoRevisores = null;
+    window.encabezadoRevisoresClasif('Revisores por clasificación', 'Modo administrador');
+
+    const aviso = hayTabla === false
+        ? `<div style="background:#fffbeb; border:1px solid #fde68a; color:#b45309; border-radius:12px; padding:12px; font-size:0.85rem; margin-bottom:12px;">
+               Falta correr <code>sql/clasificaciones-revisores.sql</code> en Supabase. Mientras tanto los revisores se siguen nombrando encuesta por encuesta.
+           </div>`
+        : `<p style="font-size:0.82rem; color:#64748b; margin:0 0 12px; line-height:1.5;">
+               Quien revisa una clasificación califica las respuestas de todas sus encuestas. Una encuesta que nombre a sus propios revisores se queda con ellos.
+           </p>`;
+
+    if (window.clasificacionesParaRevisores.length === 0) {
+        cuerpo.innerHTML = aviso + '<div style="text-align:center; padding:20px; color:#64748b;">Todavía no hay ninguna clasificación.</div>';
+        return;
+    }
+
+    const filas = window.clasificacionesParaRevisores.map((c, i) => {
+        const ids = window.revisoresDeClasificacion(c.nombre);
+        const quien = ids.length > 0
+            ? `<span style="color:#6b21a8; font-weight:600;">${window.sanitizeForHTML(window.nombresDeEmpleados(ids))}</span>`
+            : '<span style="color:#94a3b8;">La revisan los jefes inmediatos</span>';
+        const cuantas = c.encuestas === 1 ? '1 encuesta' : `${c.encuestas} encuestas`;
+
+        return `<div onclick="window.editarRevisoresDeClasificacion(${i})" style="background:white; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; margin-bottom:8px; cursor:pointer; display:flex; align-items:center; gap:10px;">
+            <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; color:#1e293b; font-size:0.95rem;">${window.sanitizeForHTML(c.nombre)}</div>
+                <div style="font-size:0.8rem; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${quien}</div>
+                <div style="font-size:0.75rem; color:#94a3b8; margin-top:2px;">${cuantas}</div>
+            </div>
+            <span style="color:#cbd5e1; font-size:1.3rem; line-height:1;">&rsaquo;</span>
+        </div>`;
+    }).join('');
+
+    cuerpo.innerHTML = aviso + filas;
+};
+
+window.editarRevisoresDeClasificacion = (indice) => {
+    const cuerpo = document.getElementById('cuerpo-revisores-clasif');
+    const c = window.clasificacionesParaRevisores[indice];
+    if (!cuerpo || !c) return;
+
+    window.clasificacionEditandoRevisores = c;
+
+    cuerpo.innerHTML = `
+        <label class="eval-opcion" style="background:white; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; margin-bottom:12px;">
+            <input type="checkbox" id="chk-revisa-jefe-clasif" onchange="window.toggleSelectorPersonas('revisoresClasif')" checked>
+            <span class="eval-opcion-texto">
+                <span class="eval-opcion-titulo">👔 Las revisan los jefes inmediatos</span>
+                <span class="eval-opcion-ayuda">Desmárcalo para nombrar a quién le toca calificar las encuestas de esta clasificación.</span>
+            </span>
+        </label>
+        <div id="container-selector-revisores-clasif" class="eval-lista eval-lista--alta" style="display:none;">
+            <div style="position:relative; margin-bottom:10px;">
+                <span style="position:absolute; left:10px; top:9px; font-size:0.9rem;">🔍</span>
+                <input type="text" id="inp-buscar-revisor-clasif" placeholder="Buscar por nombre o ID..." oninput="window.buscarPersonaEval('revisoresClasif', this.value)" autocomplete="off" style="padding-left:32px;">
+            </div>
+            <div id="lista-resultados-revisores-clasif" style="max-height:140px; overflow-y:auto; margin-bottom:12px; border-radius:6px;"></div>
+            <div style="font-size:0.8rem; font-weight:bold; color:#475569; margin-bottom:8px; border-top:1px solid #e2e8f0; padding-top:10px;">Revisores:</div>
+            <div id="lista-revisores-clasif-elegidos" style="display:flex; flex-wrap:wrap; gap:8px; min-height:30px;">
+                <span style="font-size:0.8rem; color:#94a3b8; font-style:italic;">Ninguno seleccionado.</span>
+            </div>
+        </div>
+        <p class="form-ayuda" style="margin-top:12px;">Lo que se nombre aquí lo heredan las ${c.encuestas === 1 ? 'encuesta' : `${c.encuestas} encuestas`} de esta clasificación, también las que se creen después. Una encuesta que nombre a sus propios revisores se queda con ellos.</p>
+    `;
+
+    window.prepararSelectorPersonas('revisoresClasif', window.revisoresDeClasificacion(c.nombre));
+
+    window.encabezadoRevisoresClasif(c.nombre, 'Quién revisa esta clasificación',
+        () => window.pintarListaRevisoresClasif(),
+        () => window.guardarRevisoresClasificacionActual());
+};
+
+window.guardarRevisoresClasificacionActual = async () => {
+    const c = window.clasificacionEditandoRevisores;
+    if (!c) return;
+
+    // El selector devuelve ['ALL'] con la casilla marcada y null si se desmarcó
+    // sin elegir a nadie, que es un descuido. Las dos cosas significan aquí lo
+    // mismo que no haber nombrado a nadie, pero el descuido se avisa.
+    const ids = window.idsDelSelector('revisoresClasif');
+    if (ids === null) {
+        alert('⚠️ Elige al menos un revisor, o vuelve a marcar la casilla para dejarlo en los jefes inmediatos.');
+        return;
+    }
+    const limpios = ids.filter(x => String(x).toUpperCase() !== 'ALL');
+
+    const btn = document.getElementById('btn-guardar-revisores-clasif');
+    if (btn) btn.disabled = true;
+
+    try {
+        await window.guardarRevisoresDeClasificacion(c.nombre, limpios);
+        // La caché ya quedó corregida, así que la lista se repinta con lo nuevo
+        // sin volver a preguntarle a la base.
+        window.pintarListaRevisoresClasif();
+    } catch (e) {
+        console.error(e);
+        alert('❌ No se pudo guardar: ' + e.message);
+        if (btn) btn.disabled = false;
+    }
+};
+
+// Lo que hereda esta encuesta si no se nombra a nadie. Sin decirlo, un revisor
+// heredado no se ve por ningún lado: la hoja enseñaría «la revisa el jefe
+// inmediato» mientras la califica otro.
+window.pintarNotaRevisoresClasificacion = () => {
+    const nota = document.getElementById('nota-revisores-clasificacion');
+    if (!nota) return;
+
+    const chk = document.getElementById('chk-revisa-jefe');
+    const inp = document.getElementById('eval-category-input');
+    const clasificacion = inp ? String(inp.value || '').trim() : '';
+    const ids = window.revisoresDeClasificacion(clasificacion);
+
+    // Con revisores propios nombrados no se hereda nada, así que no hay nada
+    // que contar: la nota acompaña a la casilla marcada.
+    if (!clasificacion || ids.length === 0 || (chk && !chk.checked)) {
+        nota.style.display = 'none';
+        nota.innerText = '';
+        return;
+    }
+
+    nota.style.display = 'block';
+    nota.innerText = `Sin nombrar a nadie aquí, la revisan los revisores de «${clasificacion}»: ${window.nombresDeEmpleados(ids)}.`;
+};
+
 window.prepararEncabezadoEval = (editando, soloDestinatarios = false) => {
     const titulo = document.getElementById('titulo-crear-eval');
     const subtitulo = document.getElementById('subtitulo-crear-eval');
@@ -2857,6 +3103,10 @@ window.prepararInputCategorias = async (currentValue = '') => {
     }
     if (input) {
         input.value = currentValue;
+        // De qué clasificación se heredan los revisores lo dice este campo, así
+        // que la nota del bloque de revisores se rehace con cada letra.
+        input.oninput = () => window.pintarNotaRevisoresClasificacion();
+        window.pintarNotaRevisoresClasificacion();
         const { data } = await sb.from('evaluations').select('category');
         if (data) {
             const categories = [...new Set(data.map(i => i.category).filter(c => c))];
@@ -2987,6 +3237,9 @@ window.toggleSelectorDeptos = () => {
 };
 
 window.abrirModalCrearEval = async (categoria) => {
+    // De la clasificación se heredan los revisores, y el bloque de revisores lo
+    // dice; la nota se pinta sin poder esperar, así que la caché va antes.
+    window.cargarRevisoresDeClasificaciones();
     window.idEditandoEval = null;
     window.editandoSoloDestinatarios = false;
     window.aplicarModoSoloDestinatarios(false);
@@ -3055,6 +3308,10 @@ window.abrirModalCrearEval = async (categoria) => {
 //     encuesta original. En una copia eso sería destruir lo que se está
 //     copiando.
 window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = false) => {
+    // Los revisores que hereda de su clasificación se dicen en el bloque de
+    // revisores, y esa nota se pinta sin poder esperar.
+    window.cargarRevisoresDeClasificaciones();
+
     let evaluacion = null;
     if (window.evalCache && window.evalCache.evals) {
         evaluacion = window.evalCache.evals.find(e => e.id === id);
@@ -3128,9 +3385,11 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
             return;
         }
 
-        // Los revisores propios se leen con el mismo helper que usan las demás
-        // pantallas, que es el que aguanta que la columna venga como texto.
-        window.prepararSelectorPersonas('revisores', window.revisoresDeEncuesta(evaluacion));
+        // Aquí van los revisores **propios**, no los efectivos: los de la
+        // clasificación se heredan, y meterlos en el selector los escribiría en
+        // la columna de esta encuesta al guardar, congelándolos —dejaría de
+        // seguir a su clasificación con sólo abrir la hoja y guardar—.
+        window.prepararSelectorPersonas('revisores', window.revisoresPropiosDeEncuesta(evaluacion));
         // Un sello sólo se enseña si quien asignó sigue siendo revisor, y eso
         // no se sabía hasta tener el selector de revisores puesto.
         window.pintarPersonasEval('destinatarios');
@@ -4455,6 +4714,18 @@ window.guardarNuevaEvaluacion = async () => {
                 resultados: 'lista-resultados-revisores-eval',
                 fichas: 'lista-revisores-seleccionados-eval',
                 elegidos: []
+            },
+            // El mismo control, en la hoja de «Revisores por clasificación» del
+            // panel de administración. Sus ids viven en el cuerpo que esa hoja
+            // arma con `innerHTML`, así que existen sólo mientras está abierta;
+            // todas estas funciones buscan por id con guarda.
+            revisoresClasif: {
+                casilla: 'chk-revisa-jefe-clasif',
+                caja: 'container-selector-revisores-clasif',
+                buscador: 'inp-buscar-revisor-clasif',
+                resultados: 'lista-resultados-revisores-clasif',
+                fichas: 'lista-revisores-clasif-elegidos',
+                elegidos: []
             }
         };
 
@@ -4488,6 +4759,9 @@ window.guardarNuevaEvaluacion = async () => {
             if (clave === 'revisores') {
                 window.pintarPersonasEval('destinatarios');
                 window.avisarSiFaltaColumnaAsignador();
+                // Con la casilla marcada la encuesta hereda los de su
+                // clasificación, y eso hay que decirlo donde se decide.
+                window.pintarNotaRevisoresClasificacion();
             }
         };
 

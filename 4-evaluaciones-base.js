@@ -344,6 +344,10 @@ window.cargarVistaEvaluaciones = async () => {
     // sin poder esperar, así que la caché se llena antes de dibujar nada.
     await window.cargarCertificacionDeClasificaciones();
 
+    // Y quién revisa cada clasificación, por lo mismo: de eso depende que a un
+    // revisor nombrado por clasificación le salga la encuesta en su lista.
+    await window.cargarRevisoresDeClasificaciones();
+
     const misDirectos = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id));
     const tengoEquipo = misDirectos.length > 0;
 

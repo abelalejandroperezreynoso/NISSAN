@@ -1715,6 +1715,10 @@ window.cargarEncuestasQueReviso = async (userId) => {
         // administrador, y tampoco genera respuestas que calificar. Sin la
         // columna de revisores —su script se corre a mano—,
         // `camposConRevisores` la deja fuera y la lista sale vacía.
+        // Ser revisor puede venir de la clasificación, y `encuestasQueRevisa` lo
+        // pregunta sin poder esperar.
+        await window.cargarRevisoresDeClasificaciones();
+
         const campos = await window.camposConRevisores('id, title, category');
         const { data: encuestas, error } = await sb.from('evaluations')
             .select(campos)
@@ -2181,8 +2185,13 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
         // por la ventana de las encuestas que pasan lista sin poder esperar.
         await window.cargarVentanasDeAsistencia();
 
+        // Igual que en el panel de pendientes: `leTocaRevisar` pregunta por los
+        // revisores de la clasificación sin poder esperar, así que la caché se
+        // llena antes de contar nada.
+        await window.cargarRevisoresDeClasificaciones();
+
         const camposEvals = await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-            'id, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))));
+            'id, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))));
         const { data: activeEvalsDb } = await sb.from('evaluations')
             .select(camposEvals)
             .eq('active', true);

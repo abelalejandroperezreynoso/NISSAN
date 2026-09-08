@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-08-23">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-08-24">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -485,6 +485,10 @@
                         </div>
                         <p class="form-ayuda" style="margin-top:10px;">Nombrados los revisores, el jefe inmediato deja de verla entre sus pendientes. Nadie califica su propia respuesta: la de un revisor la revisan los demás, y si no hay más vuelve a su jefe.</p>
                     </div>
+                    <!-- Lo escribe window.pintarNotaRevisoresClasificacion() al abrir
+                         la hoja y cada vez que se cambia la clasificación: sin
+                         ella, un revisor heredado no se ve por ningún lado. -->
+                    <p id="nota-revisores-clasificacion" class="form-ayuda" style="display:none; color:#6b21a8;"></p>
                     <p id="aviso-revisores-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/revisores-por-encuesta.sql</code> en Supabase para poder nombrar revisores.</p>
                 </div>
 
@@ -727,6 +731,16 @@
                 </div>
 
                 <div class="admin-hoja-grupo">
+                    <div class="hoja-grupo-titulo">Encuestas</div>
+                    <div class="admin-hoja-lista">
+                        <!-- Quién revisa las encuestas de cada clasificación. La
+                             encuesta que nombra revisores propios manda sobre
+                             esto; la que no, los hereda de aquí. -->
+                        <button class="admin-btn" onclick="window.cerrarPanelAdmin(); window.abrirRevisoresPorClasificacion();" style="border-color: #7e22ce; color: #7e22ce;"><span aria-hidden="true">👁️</span><span data-texto>Revisores por clasificación</span></button>
+                    </div>
+                </div>
+
+                <div class="admin-hoja-grupo">
                     <div class="hoja-grupo-titulo">Datos</div>
                     <div class="admin-hoja-lista">
                         <!-- El estado lo escribe window.actualizarBotonAhorroVisual
@@ -749,6 +763,36 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- REVISORES POR CLASIFICACIÓN
+         Quien imparte «Seguridad» la imparte entera, así que sus revisores se
+         dicen una vez y todas sus encuestas los heredan. Se entra desde el
+         panel de administración, así que va por encima de él (z-index 1700).
+
+         La hoja tiene dos pantallas —la lista de clasificaciones y el editor de
+         una— y las dos se arman con `innerHTML` en el mismo cuerpo, así que los
+         ids de dentro existen sólo mientras la que los usa está a la vista. El
+         botón de guardar va en el encabezado por la razón de siempre: al pie
+         del formulario queda en el camino del dedo. -->
+    <div id="modal-revisores-clasif" class="hoja-overlay" style="z-index:2100;">
+        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 0;">
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h2 id="titulo-revisores-clasif" class="hoja-titulo">Revisores por clasificación</h2>
+                    <div id="subtitulo-revisores-clasif" class="hoja-subtitulo"></div>
+                </div>
+                <div class="hoja-acciones">
+                    <button id="btn-guardar-revisores-clasif" class="ios-boton-icono" hidden
+                            title="Guardar revisores" aria-label="Guardar revisores">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                    </button>
+                    <button id="btn-cerrar-revisores-clasif" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                </div>
+            </div>
+
+            <div id="cuerpo-revisores-clasif" style="flex:1; overflow-y: auto; padding: 15px 15px calc(15px + env(safe-area-inset-bottom)); background: #f8fafc;"></div>
         </div>
     </div>
 
@@ -866,20 +910,20 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-08-23"></script>
-    <script src="2a-core-nav.js?v=2026-09-08-23"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-08-23"></script>
-    <script src="3-incidentes.js?v=2026-09-08-23"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-08-23"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-08-23"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-08-23"></script>
-    <script src="5-objetivos.js?v=2026-09-08-23"></script>
-    <script src="6-calendario.js?v=2026-09-08-23"></script>
-    <script src="7-pendientes.js?v=2026-09-08-23"></script>
-    <script src="8-hallazgos.js?v=2026-09-08-23"></script>
-    <script src="9-estadisticas.js?v=2026-09-08-23"></script>
+    <script src="1-config.js?v=2026-09-08-24"></script>
+    <script src="2a-core-nav.js?v=2026-09-08-24"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-08-24"></script>
+    <script src="3-incidentes.js?v=2026-09-08-24"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-08-24"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-08-24"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-08-24"></script>
+    <script src="5-objetivos.js?v=2026-09-08-24"></script>
+    <script src="6-calendario.js?v=2026-09-08-24"></script>
+    <script src="7-pendientes.js?v=2026-09-08-24"></script>
+    <script src="8-hallazgos.js?v=2026-09-08-24"></script>
+    <script src="9-estadisticas.js?v=2026-09-08-24"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="10-refacciones.js?v=2026-09-08-23"></script> 
+    <script src="10-refacciones.js?v=2026-09-08-24"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {
