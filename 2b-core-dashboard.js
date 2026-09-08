@@ -1235,8 +1235,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // El puntaje de la respuesta del periodo, cuando ya está calificada.
         // Se saca aquí y no al dibujar porque lo suman también el resumen de la
         // tarjeta y el de cada clasificación.
-        const puntajeDe = (ev) => {
-            const resp = window.respuestaDelPeriodo(ev, respuestas, ahora);
+        const puntajeDe = (resp) => {
             const calificada = resp
                 && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada')
                 && window.tieneCalificaciones(resp)
@@ -1248,10 +1247,13 @@ window.cargarEncuestasAsignadas = async (userId) => {
             const contestaQuienMira = (ev.mode || 'self') !== 'boss';
             const vencimiento = window.esEvaluacionPendiente(
                 respuestas, ev.id, ev.frequency, ev.created_at, ev, contestaQuienMira);
+            // La respuesta del periodo se guarda: de ella salen el puntaje del
+            // renglón y la fecha que enseña la hoja de detalle.
+            const resp = window.respuestaDelPeriodo(ev, respuestas, ahora);
             return {
-                ev, vencimiento,
+                ev, vencimiento, resp,
                 estado: window.estadoDeAsignada(vencimiento),
-                puntaje: puntajeDe(ev)
+                puntaje: puntajeDe(resp)
             };
         });
 
@@ -1287,7 +1289,12 @@ window.cargarEncuestasAsignadas = async (userId) => {
 
         const pendientes = filas.filter(f => f.vencimiento.mostrar).length;
 
-        const bloques = grupos.map(g => {
+        // Lo que la hoja de detalle vuelve a leer al abrirse, sin recalcular
+        // nada ni volver a preguntarle a la base. Se pasa por índice y no por
+        // nombre: así no hay que escapar la clasificación en un atributo.
+        window.clasificacionesAsignadas = grupos;
+
+        const bloques = grupos.map((g, indice) => {
             const renglones = g.filas.map(({ ev, estado, puntaje }) => {
                 const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
                 const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
@@ -1316,9 +1323,12 @@ window.cargarEncuestasAsignadas = async (userId) => {
             // icono es el de la encuesta que peor está —basta una para que la
             // clasificación no esté al día—, y su pie, cuántas faltan y el
             // promedio de lo ya calificado.
-            const pendientesGrupo = g.filas.filter(f => f.vencimiento.mostrar).length;
+            // Se quedan en el grupo porque la hoja de detalle dice lo mismo.
+            g.pendientes = g.filas.filter(f => f.vencimiento.mostrar).length;
+            g.promedio = promedioDe(g.filas);
+            const pendientesGrupo = g.pendientes;
             const estadoGrupo = g.filas[0].estado;   // ya vienen ordenadas por lo que urge
-            const promedioGrupo = promedioDe(g.filas);
+            const promedioGrupo = g.promedio;
             const colorGrupo = (promedioGrupo !== null && typeof window.getColorScore === 'function')
                 ? window.getColorScore(promedioGrupo) : '#64748b';
 
@@ -1336,17 +1346,26 @@ window.cargarEncuestasAsignadas = async (userId) => {
             // de estadísticas. Nace cerrado, que es de lo que se trata —lo que
             // se ve son las clasificaciones—, y quien quiera ver las encuestas
             // de una toca su renglón.
+            // El renglón abre la hoja de detalle de la clasificación —de ahí el
+            // `preventDefault`, que es lo que evita que el <details> se
+            // despliegue— y la flecha de la derecha, que sí lo despliega, es un
+            // botón suyo. Son dos acciones distintas sobre la misma fila.
             return `
                 <details class="grupo-asignadas">
-                    <summary>
+                    <summary onclick="event.preventDefault(); window.abrirDetalleClasificacion(${indice})">
                         ${window.iconoDeAsignada(estadoGrupo)}
                         <div style="flex:1; min-width:0;">
                             <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
                             <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
                         </div>
-                        <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
-                             fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
-                             stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                        <span style="color:#cbd5e1; font-size:1.3rem; line-height:1; flex-shrink:0;">&rsaquo;</span>
+                        <button type="button" class="grupo-asignadas-boton" aria-expanded="false"
+                                onclick="window.alternarGrupoAsignadas(this, event)"
+                                title="Ver sus encuestas" aria-label="Ver sus encuestas">
+                            <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
+                                 fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                                 stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                        </button>
                     </summary>
                     ${renglones}
                 </details>`;
@@ -1373,6 +1392,112 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // no depende de esto.
         console.warn('No se pudieron cargar las encuestas asignadas:', e.message);
     }
+};
+
+// ==========================================
+// EL DETALLE DE UNA CLASIFICACIÓN
+// ==========================================
+// El renglón de una clasificación hace dos cosas, y por eso la flecha es un
+// botón y no parte de la fila: la flecha despliega ahí mismo la lista de sus
+// encuestas —lo de siempre, para echar un vistazo sin salir del panel— y el
+// resto del renglón abre esta hoja, donde hay sitio para decir cómo va.
+//
+// No consulta nada: lee `window.clasificacionesAsignadas`, que dejó puesto
+// `cargarEncuestasAsignadas` con todo ya calculado.
+window.alternarGrupoAsignadas = (btn, ev) => {
+    // Los dos hacen falta: `stopPropagation` para que no salte el `onclick` del
+    // renglón —que abriría la hoja— y `preventDefault` para que el navegador no
+    // despliegue por su cuenta el <details>, que aquí se abre a mano.
+    if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+    const grupo = btn.closest('details.grupo-asignadas');
+    if (!grupo) return;
+    grupo.open = !grupo.open;
+    // Un botón de icono no tiene texto, así que lo que hace lo cuentan su
+    // `title` y su `aria-label`.
+    const etiqueta = grupo.open ? 'Ocultar sus encuestas' : 'Ver sus encuestas';
+    btn.setAttribute('aria-expanded', grupo.open ? 'true' : 'false');
+    btn.title = etiqueta;
+    btn.setAttribute('aria-label', etiqueta);
+};
+
+window.cerrarDetalleClasificacion = () => {
+    const overlay = document.getElementById('modal-detalle-clasificacion');
+    if (!overlay) return;
+    overlay.style.display = 'none';
+    // El cuerpo se arma al abrir y se vacía al cerrar: cada clasificación tiene
+    // sus encuestas y las de la anterior no pintan nada aquí.
+    const cuerpo = document.getElementById('cuerpo-detalle-clasif');
+    if (cuerpo) cuerpo.innerHTML = '';
+};
+
+window.abrirDetalleClasificacion = (indice) => {
+    const grupo = (window.clasificacionesAsignadas || [])[indice];
+    const overlay = document.getElementById('modal-detalle-clasificacion');
+    const cuerpo = document.getElementById('cuerpo-detalle-clasif');
+    if (!grupo || !overlay || !cuerpo) return;
+
+    const total = grupo.filas.length;
+    const pendientes = grupo.pendientes;
+    const alDia = total - pendientes;
+    const promedio = grupo.promedio;
+    const colorPromedio = (promedio !== null && typeof window.getColorScore === 'function')
+        ? window.getColorScore(promedio) : '#64748b';
+
+    document.getElementById('titulo-detalle-clasif').innerText = grupo.nombre;
+    document.getElementById('subtitulo-detalle-clasif').innerText =
+        `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
+
+    // Las tres cifras de arriba. Sin nada calificado no hay promedio: un 0% se
+    // leería como haberlo hecho mal en vez de no haber empezado.
+    const cifra = (valor, rotulo, color) => `
+        <div style="flex:1; min-width:0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 6px; text-align:center;">
+            <div style="font-size:1.35rem; font-weight:800; color:${color}; line-height:1.1;">${valor}</div>
+            <div style="font-size:0.7rem; color:#64748b; font-weight:600; margin-top:2px;">${rotulo}</div>
+        </div>`;
+
+    const resumen = `
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+            ${cifra(pendientes, pendientes === 1 ? 'pendiente' : 'pendientes', pendientes > 0 ? '#dc2626' : '#94a3b8')}
+            ${cifra(alDia, 'al día', alDia > 0 ? '#166534' : '#94a3b8')}
+            ${cifra(promedio === null ? '—' : promedio + '%', 'promedio', colorPromedio)}
+        </div>`;
+
+    const renglones = grupo.filas.map(({ ev, estado, puntaje, resp, vencimiento }) => {
+        const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+        const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
+        const color = (puntaje !== null && typeof window.getColorScore === 'function')
+            ? window.getColorScore(puntaje) : '#64748b';
+
+        // La fecha de la que cuenta en este periodo; si no hay, la de la última
+        // vez que se contestó, que es lo que la deja en contexto.
+        const cuando = resp ? resp.submitted_at : (vencimiento.ultimaFecha || null);
+        const fecha = cuando
+            ? new Date(cuando).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : '';
+        const pie = [
+            window.sanitizeForHTML(ritmo),
+            `<span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`,
+            fecha ? `${resp ? 'contestada' : 'última vez'} ${fecha}` : null
+        ].filter(Boolean).join(' · ');
+
+        // La hoja se cierra ella misma antes de abrir la de la encuesta: el
+        // observador de `1-config.js` apartaría ésta al ver dos abiertas, pero
+        // así no hay ni el fotograma con las dos a la vista.
+        return `
+            <div onclick="window.cerrarDetalleClasificacion(); window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
+                 style="display:flex; align-items:center; gap:12px; padding:12px 4px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                ${window.iconoDeAsignada(estado)}
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:600; color:#1e293b; font-size:0.95rem; line-height:1.25;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
+                    <div style="font-size:0.72rem; color:#94a3b8; margin-top:2px;">${pie}</div>
+                </div>
+                ${puntaje !== null ? `<div style="font-weight:800; color:${color}; font-size:1rem; flex-shrink:0;">${puntaje}%</div>` : ''}
+                <span style="color:#cbd5e1; font-size:1.3rem; line-height:1; flex-shrink:0;">&rsaquo;</span>
+            </div>`;
+    }).join('');
+
+    cuerpo.innerHTML = resumen + renglones;
+    overlay.style.display = 'flex';
 };
 
 // ==========================================

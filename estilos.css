@@ -2144,6 +2144,25 @@ textarea:focus {
 
 .grupo-asignadas > summary::-webkit-details-marker { display: none; }
 
+/* La flecha va dentro de un botón suyo, porque el renglón entero hace otra
+   cosa: abre la hoja de detalle de la clasificación. Sin botón, tocar el
+   renglón era la única acción posible y no cabían las dos. */
+.grupo-asignadas-boton {
+    border: none;
+    background: rgba(120, 120, 128, 0.12);
+    color: #64748b;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
 .grupo-asignadas-flecha {
     color: #94a3b8;
     flex-shrink: 0;

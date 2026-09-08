@@ -2478,7 +2478,34 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   las encuestas que pasan lista sin poder esperar. Una columna que no se pida
   llega `undefined`, y eso no es `false`.
 
-  El toque lleva al **detalle de la encuesta** (`window.abrirEncuestaDesdeInicio`,
+  **El renglón de una clasificación hace dos cosas, y por eso la flecha es un
+  botón.** Tocar el renglón abre la **hoja de detalle** de esa clasificación
+  (`#modal-detalle-clasificacion`, en `index.html`); la flecha de la derecha
+  —`.grupo-asignadas-boton`, con `window.alternarGrupoAsignadas`— despliega ahí
+  mismo la lista de sus encuestas, que es lo que hacía el renglón entero. Las
+  dos acciones no cabían en el mismo toque.
+
+  El `<details>` se queda —de él salen el `[open]` que gira la flecha y el
+  esconder y enseñar la lista—, pero **ya no lo abre el navegador**: el
+  `onclick` del `<summary>` hace `preventDefault()` y el botón lo abre a mano.
+  El botón necesita **las dos cosas**: `stopPropagation` para que no salte
+  además el `onclick` del renglón, y `preventDefault` para que el navegador no
+  lo despliegue por su cuenta encima de lo que ya hizo el botón.
+
+  **La hoja no consulta nada.** `cargarEncuestasAsignadas` deja en
+  `window.clasificacionesAsignadas` los grupos ya calculados —con sus filas, sus
+  pendientes y su promedio— y la hoja los lee al abrirse; se le pasa **el índice
+  del grupo** y no su nombre, que así no hay que escapar la clasificación en un
+  atributo. Enseña las tres cifras de arriba —pendientes, al día y promedio—, y
+  debajo una fila por encuesta con su estado, su ritmo, la fecha de la que
+  cuenta en el periodo —o la de la última vez que se contestó— y su puntaje.
+  Cada fila lleva a la encuesta, cerrando antes esta hoja: el observador de
+  `1-config.js` apartaría ésta al ver dos abiertas, pero así no hay ni el
+  fotograma con las dos a la vista. El cuerpo se arma con `innerHTML` al abrirla
+  y se vacía al cerrarla, así que los ids de dentro existen sólo mientras está a
+  la vista.
+
+  El toque de una encuesta lleva al **detalle de la encuesta** (`window.abrirEncuestaDesdeInicio`,
   que es la función que la tarjeta de revisión ya usaba con el nombre
   `abrirEncuestaQueReviso`, hoy un alias suyo) y no a contestar directamente:
   así es la propia pantalla la que decide qué botón toca —responder, elegir a
