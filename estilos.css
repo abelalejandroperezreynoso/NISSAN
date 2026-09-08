@@ -2025,6 +2025,10 @@ textarea:focus {
     line-height: 1.25;
 }
 
+/* Sin subtítulo no hay renglón: su hueco de 2px separaría el título de la
+   línea del encabezado sin decir nada. */
+#subtitulo-hoja-evaluaciones:empty { display: none; }
+
 .hoja-subtitulo {
     margin: 2px 0 0;
     font-size: 0.78rem;

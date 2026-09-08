@@ -237,10 +237,16 @@ window.vengoDeLaListaDeEncuestas = false;
 window.volverALaListaDeEncuestas = () =>
     window.vengoDeLaListaDeEncuestas ? () => window.cargarVistaEvaluaciones() : null;
 
-window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta) => {
+window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta, subtitulo) => {
     const h = document.getElementById('titulo-hoja-evaluaciones');
     const btn = document.getElementById('btn-hoja-evaluaciones');
     if (h) h.innerText = titulo || 'Evaluaciones y encuestas';
+
+    // El subtítulo se escribe siempre, aunque sea para vaciarlo: es del título
+    // que hay debajo, y dejar el de la pantalla anterior sería peor que no
+    // tener ninguno. Vacío no se dibuja —lo esconde `:empty` en `estilos.css`—.
+    const sub = document.getElementById('subtitulo-hoja-evaluaciones');
+    if (sub) sub.innerText = subtitulo || '';
 
     // El lápiz sale sólo en la pantalla de una encuesta —la única que sabe cuál
     // editar— y sólo en modo administrador. Las demás llaman sin ese argumento
@@ -286,7 +292,10 @@ window.montarHojaEvaluaciones = () => {
         <div id="modal-evaluaciones-flotante" class="hoja-overlay" style="z-index:2000;">
             <div class="form-content hoja-contenido" style="max-width: 800px; background: #f8fafc; overflow: hidden; padding: 12px 0 0;">
                 <div class="hoja-encabezado-lista">
-                    <h2 id="titulo-hoja-evaluaciones" class="hoja-titulo">Evaluaciones y encuestas</h2>
+                    <div style="min-width:0;">
+                        <h2 id="titulo-hoja-evaluaciones" class="hoja-titulo">Evaluaciones y encuestas</h2>
+                        <div id="subtitulo-hoja-evaluaciones" class="hoja-subtitulo"></div>
+                    </div>
                     <div class="hoja-acciones">
                         <button id="btn-editar-hoja-evaluaciones" class="ios-boton-icono" hidden
                                 title="Editar encuesta" aria-label="Editar encuesta">

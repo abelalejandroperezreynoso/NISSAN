@@ -101,13 +101,16 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     
     
     let infoHtml = '';
+    let subtituloHoja = '';
     let evalData = encuestaDeLaLista;
 
     if (evalData) {
         const desc = evalData.description ? `<div style="margin-bottom:5px;"><b>Descripción:</b> ${evalData.description}</div>` : '';
         
-        const freq = window.textoDeFrecuencia(evalData.frequency);
-        const freqHtml = `<div style="font-size:0.8rem; color:#64748b;"><b>Frecuencia:</b> ${freq}</div>`;
+        // La frecuencia se va al subtítulo del encabezado, debajo del nombre de
+        // la encuesta: es de la encuesta entera y ahí se lee sin gastar un
+        // recuadro —ni la palabra «Frecuencia», que al lado del título sobra—.
+        subtituloHoja = window.textoDeFrecuencia(evalData.frequency);
         const obligHtml = (evalData.is_obligatory === false) ? `<div style="font-size:0.8rem; color:#22c55e; font-weight:bold; margin-top:4px;">✨ Encuesta Opcional</div>` : '';
         const areaHtml = (evalData.evaluates_area === true) ? `<div style="font-size:0.8rem; color:#be185d; font-weight:bold; margin-top:4px;">📍 Mide resultados por Área</div>` : '';
 
@@ -125,8 +128,10 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             ? `<div style="font-size:0.8rem; color:#7e22ce; font-weight:bold; margin-top:4px;">👁️ La revisa ${window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))}${notaAsignados}</div>`
             : '';
 
-        if(desc || freq) {
-            infoHtml = `<div style="font-size:0.9rem; color:#475569; margin-top:5px; margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0;">${desc}${freqHtml}${obligHtml}${areaHtml}${revisoresHtml}</div>`;
+        // Sin la frecuencia dentro, el recuadro puede quedarse sin nada que
+        // decir: entonces no se dibuja, o sería una caja gris vacía.
+        if (desc || obligHtml || areaHtml || revisoresHtml) {
+            infoHtml = `<div style="font-size:0.9rem; color:#475569; margin-top:5px; margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0;">${desc}${obligHtml}${areaHtml}${revisoresHtml}</div>`;
         }
     }
 
@@ -246,7 +251,8 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // Y en modo administrador, el lápiz para editarla: es la pantalla que sabe
     // de qué encuesta se trata.
     window.encabezadoHojaEvaluaciones(title, window.volverALaListaDeEncuestas
-        ? window.volverALaListaDeEncuestas() : () => window.cargarVistaEvaluaciones(), evalId);
+        ? window.volverALaListaDeEncuestas() : () => window.cargarVistaEvaluaciones(),
+        evalId, subtituloHoja);
 
     // La lista arranca plegada: quien abre su encuesta viene a ver lo suyo y a
     // responder, no las respuestas de los demás. Se despliega sola cuando hay

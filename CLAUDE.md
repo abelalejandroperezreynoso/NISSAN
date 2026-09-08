@@ -541,9 +541,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   —la lista, la encuesta abierta, el historial global, la revisión por
   empleado, el expediente y la certificación por clasificación—, así que el
   título de la hoja no puede ser fijo: se pone con
-  `window.encabezadoHojaEvaluaciones(titulo, alVolver)`, en
-  `4-evaluaciones-base.js`. Sin argumentos vuelve a «Evaluaciones y encuestas»
-  con la cruz. **Toda pantalla que repinte ese contenedor tiene que llamarlo**,
+  `window.encabezadoHojaEvaluaciones(titulo, alVolver, idEncuesta, subtitulo)`,
+  en `4-evaluaciones-base.js`. Sin argumentos vuelve a «Evaluaciones y
+  encuestas» con la cruz, sin subtítulo y sin lápiz. **Toda pantalla que repinte ese contenedor tiene que llamarlo**,
   o se queda con el título de la anterior.
 
   Al abrir una encuesta el botón del encabezado deja de ser la cruz y pasa a
@@ -588,6 +588,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   none }` de `estilos.css` —la misma que ya tapaba el «+» del encabezado del
   panel, generalizada— o el lápiz se vería siempre. Es la trampa de
   `.tipos-pregunta`.
+
+  **Y debajo del título va la frecuencia**, en el `.hoja-subtitulo` del
+  encabezado —**cuarto** argumento, `subtitulo`—: es de la encuesta entera y de
+  las que se leen de un vistazo, así que ahí se dice sin gastar un recuadro. Va
+  **sin la palabra «Frecuencia»**, que al lado del nombre de la encuesta no
+  añade nada: «Semanal» ya es una frecuencia. Antes encabezaba el recuadro gris
+  de información del cuerpo, y **ese recuadro ya no se dibuja si se queda
+  vacío** —la frecuencia era lo único que siempre traía, así que sin ella la
+  condición pasó a mirar lo que de verdad le queda dentro: descripción, «✨
+  Opcional», «📍 Mide por Área» y quién la revisa—.
+
+  El subtítulo **se escribe siempre, aunque sea para vaciarlo**, igual que el
+  título y por lo mismo: es del título que tiene encima, y heredar el de la
+  pantalla anterior sería peor que no tener ninguno. Vacío no se dibuja
+  (`#subtitulo-hoja-evaluaciones:empty`), que si no su margen separaría el
+  título de la línea del encabezado sin decir nada.
 
   La lista de respuestas de una encuesta va plegada en un
   `<details class="hoja-plegable">`, y se abre sola sólo si hay algo esperando
