@@ -1627,6 +1627,26 @@ window.abrirDetalleClasificacion = (indice) => {
             : null;
     }
 
+    // Y quién revisa las encuestas de esta clasificación, a su izquierda y con
+    // las mismas reglas: sólo en modo administrador, cerrando ésta antes de
+    // abrir la suya y con la etiqueta enganchada desde aquí, que el nombre
+    // cambia con cada clasificación. Entra derecho a esta clasificación, sin
+    // pasar por la lista de «Revisores por clasificación».
+    const ojo = document.getElementById('btn-revisores-clasif');
+    if (ojo) {
+        const puedeRev = !!window.modoAdminActivo && !!window.abrirRevisoresDeClasificacion;
+        ojo.hidden = !puedeRev;
+        const etiquetaRev = `Revisores de ${grupo.nombre}`;
+        ojo.title = etiquetaRev;
+        ojo.setAttribute('aria-label', etiquetaRev);
+        ojo.onclick = puedeRev
+            ? () => {
+                window.cerrarDetalleClasificacion();
+                window.abrirRevisoresDeClasificacion(grupo.nombre, total);
+            }
+            : null;
+    }
+
     // Lo que se viene a ver es cómo va: el resultado del último periodo que
     // dejó alguno —con su nombre, que puede no ser el que corre— y la línea de
     // los anteriores. Cuántas faltan y cuántas están al día ya lo dice el

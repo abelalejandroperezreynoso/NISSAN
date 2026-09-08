@@ -1189,6 +1189,27 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `revisoresClasif`—, y sus ids viven en el cuerpo que se arma con `innerHTML`,
   así que existen sólo mientras la hoja está a la vista.
 
+  **Al editor se entra por dos caminos**, y como en la hoja de evaluaciones lo
+  que decide el botón del encabezado es el camino y no la pantalla que se
+  dibuja: por la lista de esta misma hoja, y entonces va la flecha de volver; o
+  derecho a una clasificación desde el **ojo del detalle de la clasificación**
+  del panel de inicio, y entonces se queda la cruz, que por ahí no se pasó por
+  ninguna lista.
+
+  ```js
+  window.vengoDeLaListaDeClasificaciones   // la pone la lista al dibujarse; la entrada directa la quita
+  window.volverAListaDeRevisores()         // el «volver», o null si no hay a dónde
+  window.abrirRevisoresDeClasificacion(nombre, encuestas)   // la entrada directa
+  window.pintarEditorRevisoresClasif(c)    // la pantalla, común a los dos
+  ```
+
+  Por eso **guardar hace dos cosas distintas**: con lista detrás vuelve a ella
+  con lo nuevo ya puesto —la caché se corrigió sola, no se vuelve a preguntar—,
+  y sin ella cierra la hoja, que lo que se venía a hacer ya está hecho. La
+  entrada directa **no monta la lista**, así que ni la consulta: se le pasa el
+  nombre de la clasificación y cuántas encuestas tiene, que es todo lo que el
+  editor enseña.
+
   **Ojo con la hoja de crear y editar una encuesta: ahí van los revisores
   propios, no los efectivos.** `editarEvaluacion` llena el selector con
   `revisoresPropiosDeEncuesta`, y tiene que seguir haciéndolo: con los
@@ -2556,8 +2577,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   hoja: el observador de `1-config.js` apartaría ésta al ver dos abiertas, pero
   así no hay ni el fotograma con las dos a la vista.
 
-  **En modo administrador lleva un «+»** a la izquierda de la cruz, agrupado con
-  ella en `.hoja-acciones`: crea una encuesta **de esa clasificación**. La hoja
+  **En modo administrador lleva dos botones** a la izquierda de la cruz,
+  agrupados con ella en `.hoja-acciones`: el **ojo**, que abre quién revisa las
+  encuestas de esta clasificación —la misma hoja de «Revisores por
+  clasificación» del panel de administración, entrando derecho a ésta y sin
+  pasar por su lista—, y el **«+»**, que crea una encuesta **de esa
+  clasificación**. Los dos se enganchan igual: `hidden` si no hay modo
+  administrador, el `onclick` y la etiqueta desde JavaScript —el nombre cambia
+  con cada clasificación— y cerrando ésta antes de abrir la suya. La hoja
   de crear nace ya con ella puesta —`abrirNuevaEvaluacion(categoria)` la lleva
   hasta `abrirModalCrearEval`, que es quien llama a `prepararInputCategorias`;
   sin argumento sigue siendo «General», que es lo de siempre—, y ésta se cierra

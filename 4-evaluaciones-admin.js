@@ -2673,6 +2673,16 @@ window.certificarSeleccionClasificacion = async () => {
 window.clasificacionesParaRevisores = [];
 window.clasificacionEditandoRevisores = null;
 
+// Al editor de una clasificación se entra por dos caminos —la lista de esta
+// misma hoja y el botón del detalle de una clasificación, en el panel de
+// inicio—, así que el botón del encabezado lo decide el camino y no la pantalla
+// que se dibuja: la flecha de volver sólo tiene sentido si hay lista detrás. Es
+// la misma marca que `vengoDeLaListaDeEncuestas` y por lo mismo.
+window.vengoDeLaListaDeClasificaciones = false;
+
+window.volverAListaDeRevisores = () =>
+    window.vengoDeLaListaDeClasificaciones ? (() => window.pintarListaRevisoresClasif()) : null;
+
 // El encabezado de la hoja. Es el mismo patrón que
 // `encabezadoHojaEvaluaciones`: el botón de la derecha es la cruz en la lista y
 // la flecha de volver en el editor, y el de guardar sólo sale donde hay algo
@@ -2770,6 +2780,7 @@ window.pintarListaRevisoresClasif = (hayTabla) => {
     if (!cuerpo) return;
 
     window.clasificacionEditandoRevisores = null;
+    window.vengoDeLaListaDeClasificaciones = true;
     window.encabezadoRevisoresClasif('Revisores por clasificación', 'Modo administrador');
 
     const aviso = hayTabla === false
@@ -2805,9 +2816,15 @@ window.pintarListaRevisoresClasif = (hayTabla) => {
     cuerpo.innerHTML = aviso + filas;
 };
 
+// La entrada desde la lista de esta hoja: la clasificación se dice por su
+// posición y no por su nombre, que es texto libre y puede traer comillas.
 window.editarRevisoresDeClasificacion = (indice) => {
-    const cuerpo = document.getElementById('cuerpo-revisores-clasif');
     const c = window.clasificacionesParaRevisores[indice];
+    if (c) window.pintarEditorRevisoresClasif(c);
+};
+
+window.pintarEditorRevisoresClasif = (c) => {
+    const cuerpo = document.getElementById('cuerpo-revisores-clasif');
     if (!cuerpo || !c) return;
 
     window.clasificacionEditandoRevisores = c;
@@ -2837,8 +2854,42 @@ window.editarRevisoresDeClasificacion = (indice) => {
     window.prepararSelectorPersonas('revisoresClasif', window.revisoresDeClasificacion(c.nombre));
 
     window.encabezadoRevisoresClasif(c.nombre, 'Quién revisa esta clasificación',
-        () => window.pintarListaRevisoresClasif(),
+        window.volverAListaDeRevisores(),
         () => window.guardarRevisoresClasificacionActual());
+};
+
+// La entrada directa, desde el detalle de una clasificación del panel de
+// inicio. No monta la lista: lo que se viene a hacer es lo de esta
+// clasificación, así que el botón del encabezado se queda en la cruz.
+window.abrirRevisoresDeClasificacion = async (nombre, encuestas) => {
+    const modal = document.getElementById('modal-revisores-clasif');
+    const cuerpo = document.getElementById('cuerpo-revisores-clasif');
+    if (!modal || !cuerpo) return;
+
+    modal.__cerrarHoja = () => window.cerrarRevisoresClasificacion();
+    window.vengoDeLaListaDeClasificaciones = false;
+
+    // El encabezado se pone antes de la consulta, así que el primer fotograma
+    // ya dice a dónde se entró.
+    window.encabezadoRevisoresClasif(nombre, 'Quién revisa esta clasificación');
+    cuerpo.innerHTML = '<div style="text-align:center; padding:20px; color:#64748b;">Cargando revisores...</div>';
+    modal.style.display = 'flex';
+
+    // Se relee: es la tabla que se está a punto de editar, y la caché pudo
+    // llenarse al arrancar la aplicación y quedarse vieja.
+    const hayTabla = await window.cargarRevisoresDeClasificaciones(true);
+    if (!hayTabla) {
+        cuerpo.innerHTML = `<div style="background:#fffbeb; border:1px solid #fde68a; color:#b45309; border-radius:12px; padding:12px; font-size:0.85rem;">
+            Falta correr <code>sql/clasificaciones-revisores.sql</code> en Supabase para poder nombrar revisores de una clasificación entera.
+        </div>`;
+        return;
+    }
+
+    window.pintarEditorRevisoresClasif({
+        clave: window.normalizarClasificacion(nombre),
+        nombre: String(nombre || '').trim(),
+        encuestas: Number(encuestas) || 0
+    });
 };
 
 window.guardarRevisoresClasificacionActual = async () => {
@@ -2861,8 +2912,12 @@ window.guardarRevisoresClasificacionActual = async () => {
     try {
         await window.guardarRevisoresDeClasificacion(c.nombre, limpios);
         // La caché ya quedó corregida, así que la lista se repinta con lo nuevo
-        // sin volver a preguntarle a la base.
-        window.pintarListaRevisoresClasif();
+        // sin volver a preguntarle a la base. Y si no hay lista detrás —se entró
+        // derecho desde el detalle de una clasificación— la hoja se cierra: lo
+        // que se venía a hacer ya está hecho.
+        const volver = window.volverAListaDeRevisores();
+        if (volver) volver();
+        else window.cerrarRevisoresClasificacion();
     } catch (e) {
         console.error(e);
         alert('❌ No se pudo guardar: ' + e.message);
