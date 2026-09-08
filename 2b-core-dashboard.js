@@ -1653,6 +1653,16 @@ window.revisoresDelGrupo = (grupo) => {
 // La fila de miniaturas de la hoja de detalle. Sin revisores nombrados no se
 // dibuja nada: ahí califica el jefe inmediato de cada quien, que es lo de
 // siempre y no hace falta decirlo en todas las clasificaciones.
+//
+// Va la cara con **una sola palabra debajo** —el primer nombre, como bajo los
+// avatares del equipo del panel— y todas en **una fila**, que se arrastra si no
+// caben. Con el nombre completo al lado, cada revisor se llevaba un renglón
+// entero y cuatro empujaban la lista de encuestas fuera de la pantalla; así el
+// bloque mide lo mismo haya dos o haya seis.
+//
+// Lo que no cabe se dice en el `title`: el nombre completo y de cuántas
+// encuestas del grupo es revisor, que es lo que distingue al de la
+// clasificación entera del que lleva una encuesta suelta.
 window.filaDeRevisores = (grupo) => {
     const revisores = window.revisoresDelGrupo(grupo);
     if (revisores.length === 0) return '';
@@ -1660,28 +1670,39 @@ window.filaDeRevisores = (grupo) => {
     const total = (grupo.filas || []).length;
     const fichas = revisores.map(r => {
         const nombre = (r.emp && r.emp.name) ? r.emp.name : `ID ${r.id}`;
-        // El conteo sale sólo cuando no las revisa todas: es lo que distingue
-        // al revisor de la clasificación entera del que lleva una encuesta.
+        const corto = (r.emp && r.emp.name) ? r.emp.name.split(' ')[0] : `ID ${r.id}`;
         const alcance = r.cuantas < total
-            ? `<div style="font-size:0.68rem; color:#a78bfa; line-height:1.2;">${r.cuantas} de ${total}</div>`
+            ? `revisa ${r.cuantas} de las ${total} encuestas`
+            : (total === 1 ? 'revisa esta encuesta' : `revisa las ${total} encuestas`);
+
+        // Quien no las revisa todas lleva un punto: la fila no puede decirlo
+        // con palabras sin gastar el renglón que se acaba de ahorrar, pero
+        // tampoco puede callarlo del todo.
+        const marca = r.cuantas < total
+            ? `<div style="position:absolute; right:6px; top:28px; width:10px; height:10px; border-radius:50%;
+                           background:#a78bfa; border:2px solid #faf5ff;"></div>`
             : '';
-        return `<div style="display:flex; align-items:center; gap:7px; min-width:0;">
-                    ${window.miniaturaDeEmpleado(r.emp, 30)}
-                    <div style="min-width:0;">
-                        <div style="font-size:0.78rem; color:#4c1d95; font-weight:600; line-height:1.2;
-                                    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${window.sanitizeForHTML(nombre)}</div>
-                        ${alcance}
-                    </div>
+
+        return `<div title="${window.sanitizeForHTML(nombre)} · ${alcance}"
+                     style="position:relative; width:58px; flex-shrink:0; display:flex; flex-direction:column;
+                            align-items:center; gap:3px;">
+                    ${window.miniaturaDeEmpleado(r.emp, 40)}
+                    ${marca}
+                    <div style="font-size:0.7rem; color:#4c1d95; font-weight:600; line-height:1.2; max-width:100%;
+                                white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${window.sanitizeForHTML(corto)}</div>
                 </div>`;
     }).join('');
 
+    // La fila se alinea a la izquierda y se desplaza: centrada, en cuanto
+    // desborda el navegador recorta por la izquierda y a los primeros no se
+    // llega arrastrando. Es lo mismo que les pasa a las insignias del panel.
     return `
-        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px;
-                    background:#faf5ff; border:1px solid #ede9fe; border-radius:12px;
+        <div style="background:#faf5ff; border:1px solid #ede9fe; border-radius:12px;
                     padding:10px 12px; margin-bottom:14px;">
-            <div style="font-size:0.7rem; color:#7e22ce; font-weight:700; text-transform:uppercase;
-                        letter-spacing:0.04em; flex-basis:100%;">${revisores.length === 1 ? 'Revisa' : 'Revisan'}</div>
-            ${fichas}
+            <div style="font-size:0.68rem; color:#7e22ce; font-weight:700; text-transform:uppercase;
+                        letter-spacing:0.04em; margin-bottom:6px;">${revisores.length === 1 ? 'Revisa' : 'Revisan'}</div>
+            <div style="display:flex; gap:10px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+                        scrollbar-width:none;">${fichas}</div>
         </div>`;
 };
 

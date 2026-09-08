@@ -2638,10 +2638,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Son la **unión de los efectivos** de sus encuestas —lo que devuelve
   `revisoresDeEncuesta`, que ya resuelve la precedencia— y no sólo los de la
   clasificación: una encuesta que nombra a los suyos también los tiene, y
-  esconderlos sería enseñar a quien no califica. De ahí sale el «1 de 2» que
-  lleva quien no las revisa todas, que es lo único que separa al revisor de la
-  clasificación entera del que lleva una encuesta suelta
-  (`window.revisoresDelGrupo`).
+  esconderlos sería enseñar a quien no califica (`window.revisoresDelGrupo`).
+
+  **Van en una sola fila, la cara con una palabra debajo** —el primer nombre,
+  con `split(' ')[0]`, como bajo los avatares del equipo del panel— y la fila se
+  arrastra si no caben. Con el nombre completo al lado, cada revisor se llevaba
+  un renglón entero y cuatro empujaban la lista de encuestas fuera de la
+  pantalla; así el bloque mide lo mismo haya dos o haya seis. Se alinea a la
+  izquierda y **nunca centrada**: en cuanto desborda, el navegador recorta por
+  la izquierda y a los primeros no se llega arrastrando —es la trampa de la fila
+  de insignias—.
+
+  Lo que no cabe se dice en el **`title`**: el nombre completo y de cuántas
+  encuestas del grupo es revisor. Quien no las revisa todas lleva además un
+  **punto** en su miniatura, que es lo único que separa al revisor de la
+  clasificación entera del que lleva una encuesta suelta sin gastar el renglón
+  que se acaba de ahorrar.
 
   Por eso `cargarEncuestasAsignadas` **encadena `camposConRevisores`** y pide
   antes `cargarRevisoresDeClasificaciones()`: sin la columna, una encuesta con
