@@ -2282,23 +2282,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   debajo del botón de pendientes. El botón dice cuántas faltan pero no cuáles,
   y la lista de encuestas está dos toques más adentro.
 
-  **Van agrupadas por clasificación, y esa es la mitad del asunto**: se
-  certifica de una clasificación entera y no de una encuesta suelta, así que
-  una lista plana obliga a rearmar el grupo de cabeza para saber si «Seguridad»
-  está cerrada. Cada grupo lleva su estado —el mismo `estadoCertificacion` con
-  la misma `insigniaCertificacion` que enseñan el expediente y el panel de
-  certificación, así que las tres pantallas dicen lo mismo—, cada encuesta
-  contestada lleva **su puntaje del periodo** con el color de `getColorScore`, y
-  el encabezado lleva el promedio de lo ya calificado. Sin nada calificado no se
-  enseña promedio: un 0% ahí se leería como haberlo hecho mal en vez de no haber
-  empezado. Una clasificación que no se certifica no da insignia
-  —`estadoCertificacion` la deja vacía— y el grupo se queda con sus encuestas y
-  nada más.
+  **Van agrupadas por clasificación**: se certifica de una clasificación entera
+  y no de una encuesta suelta, así que una lista plana obliga a rearmar el grupo
+  de cabeza para saber cómo va «Seguridad». Cada encuesta contestada lleva **su
+  puntaje del periodo** con el color de `getColorScore`, y el encabezado de la
+  tarjeta, el promedio de lo ya calificado. Sin nada calificado no se enseña
+  promedio: un 0% ahí se leería como haberlo hecho mal en vez de no haber
+  empezado.
 
-  Como `estadoCertificacion` pregunta por la caché de las clasificaciones que se
-  certifican **sin poder esperar**, la tarjeta la pide antes con
-  `cargarCertificacionDeClasificaciones()`, igual que hacen
-  `cargarVistaEvaluaciones` y el expediente.
+  El encabezado de cada grupo es **el nombre de la clasificación y nada más**.
+  Llevó un tiempo la insignia de `insigniaCertificacion` —«✅ Lista para
+  certificar», «📉 1 por debajo de 80%»—, la que enseñan el expediente y el
+  panel de certificación, y aquí sobraba: son dos filas de chapas de colores por
+  encima de unos renglones que ya dicen, uno a uno, lo que a esa clasificación
+  le falta. La insignia sigue en su sitio, donde se decide certificar; esta
+  tarjeta ya no consulta `estadoCertificacion` ni necesita la caché de
+  `cargarCertificacionDeClasificaciones()`.
 
   Salen **todas las suyas, también las que ya contestó**: una lista donde todo
   dice «Al día» es lo que deja tranquilo, y una lista vacía no distinguiría

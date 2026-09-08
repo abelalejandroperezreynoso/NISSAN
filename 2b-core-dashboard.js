@@ -1126,10 +1126,9 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
 //
 // Van **agrupadas por clasificación**, que es como se mira el resultado: se
 // certifica de una clasificación entera y no de una encuesta suelta, así que
-// una lista plana obliga a rearmar el grupo de cabeza para saber si «Seguridad»
-// está cerrada. Cada grupo lleva su estado —el mismo `estadoCertificacion` y la
-// misma `insigniaCertificacion` del expediente y del panel del administrador—,
-// y cada encuesta contestada, su puntaje del periodo.
+// una lista plana obliga a rearmar el grupo de cabeza para saber cómo va
+// «Seguridad». Cada encuesta contestada lleva su puntaje del periodo, y el
+// encabezado de la tarjeta, el promedio de lo ya calificado.
 //
 // No decide nada por su cuenta. A quién le toca cada encuesta lo dice
 // `leTocaEstaEncuesta` y en qué estado está, `esEvaluacionPendiente` —las
@@ -1239,10 +1238,6 @@ window.cargarEncuestasAsignadas = async (userId) => {
             return { ev, vencimiento, estado: window.estadoDeAsignada(vencimiento) };
         });
 
-        // El estado de cada clasificación sale de la caché de las que se
-        // certifican, y `estadoCertificacion` la consulta sin poder esperar.
-        await window.cargarCertificacionDeClasificaciones();
-
         // Lo que falta, arriba; y lo vencido antes que lo que aún tiene plazo.
         const peso = (f) => (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1));
 
@@ -1309,23 +1304,16 @@ window.cargarEncuestasAsignadas = async (userId) => {
                     </div>`;
             }).join('');
 
-            // El mismo resumen que enseñan el expediente y el panel de
-            // certificación. Una clasificación que no se certifica no da
-            // insignia —`estadoCertificacion` la deja vacía— y el grupo se
-            // queda con sus encuestas y nada más, que es lo correcto: ahí no
-            // hay nada que certificar.
-            const cert = window.estadoCertificacion(g.filas.map(f => f.ev), respuestas, ahora);
-            const insignia = window.insigniaCertificacion(cert);
-            const chapa = insignia
-                ? `<div style="background:${insignia.fondo}; color:${insignia.color}; border:1px solid ${insignia.borde}; border-radius:20px; padding:2px 10px; font-size:0.68rem; font-weight:bold;">${window.sanitizeForHTML(insignia.texto)}</div>`
-                : '';
-
+            // El encabezado del grupo es el nombre de la clasificación y nada
+            // más. Llevó un tiempo la insignia de certificación —«✅ Lista para
+            // certificar», «📉 1 por debajo de 80%»—, que es la que enseñan el
+            // expediente y el panel de certificación, pero aquí sobraba: son
+            // dos filas de chapas de colores por encima de unos renglones que
+            // ya dicen, uno a uno, lo que a esa clasificación le falta. La
+            // insignia sigue en su sitio, donde se decide certificar.
             return `
                 <div style="margin-top:12px;">
-                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:0 2px 2px;">
-                        <div style="font-size:0.75rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
-                        ${chapa}
-                    </div>
+                    <div style="font-size:0.75rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px; padding:0 2px 2px;">${window.sanitizeForHTML(g.nombre)}</div>
                     ${renglones}
                 </div>`;
         }).join('');
