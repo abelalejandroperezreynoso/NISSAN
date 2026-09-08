@@ -1118,11 +1118,18 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
 // ==========================================
 // LAS ENCUESTAS ASIGNADAS A ESTA PERSONA
 // ==========================================
-// Debajo del botón de pendientes: cuáles le tocan y cómo va con cada una. El
-// botón dice cuántas faltan pero no cuáles, y la lista de encuestas está dos
-// toques más adentro. Aquí salen todas las suyas, **también las que ya
-// contestó**: una lista donde todo dice «al día» es lo que deja tranquilo, y
-// una lista vacía no distingue entre no deber nada y no tener nada asignado.
+// Debajo del botón de pendientes: cuáles le tocan, cómo va con cada una y qué
+// sacó. El botón dice cuántas faltan pero no cuáles, y la lista de encuestas
+// está dos toques más adentro. Aquí salen todas las suyas, **también las que
+// ya contestó**: una lista donde todo dice «al día» es lo que deja tranquilo,
+// y una lista vacía no distingue entre no deber nada y no tener nada asignado.
+//
+// Van **agrupadas por clasificación**, que es como se mira el resultado: se
+// certifica de una clasificación entera y no de una encuesta suelta, así que
+// una lista plana obliga a rearmar el grupo de cabeza para saber si «Seguridad»
+// está cerrada. Cada grupo lleva su estado —el mismo `estadoCertificacion` y la
+// misma `insigniaCertificacion` del expediente y del panel del administrador—,
+// y cada encuesta contestada, su puntaje del periodo.
 //
 // No decide nada por su cuenta. A quién le toca cada encuesta lo dice
 // `leTocaEstaEncuesta` y en qué estado está, `esEvaluacionPendiente` —las
@@ -1194,10 +1201,11 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // `review_status` y `grades_json` son para el plazo de reintento: sin
         // el puntaje no se sabe si hay que reponer la encuesta.
         const { data: respuestas } = await sb.from('evaluation_responses')
-            .select('evaluation_id, submitted_at, review_status, grades_json')
+            .select('id, evaluation_id, submitted_at, review_status, grades_json')
             .eq('employee_id', empStrId)
             .in('evaluation_id', mias.map(e => e.id));
 
+        const ahora = new Date();
         const filas = mias.map(ev => {
             const contestaQuienMira = (ev.mode || 'self') !== 'boss';
             const vencimiento = window.esEvaluacionPendiente(
@@ -1205,38 +1213,106 @@ window.cargarEncuestasAsignadas = async (userId) => {
             return { ev, vencimiento, estado: window.estadoDeAsignada(vencimiento) };
         });
 
+        // El estado de cada clasificación sale de la caché de las que se
+        // certifican, y `estadoCertificacion` la consulta sin poder esperar.
+        await window.cargarCertificacionDeClasificaciones();
+
         // Lo que falta, arriba; y lo vencido antes que lo que aún tiene plazo.
         const peso = (f) => (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1));
-        filas.sort((a, b) => peso(a) - peso(b));
+
+        const grupos = [];
+        const porClave = {};
+        filas.forEach(f => {
+            const clave = window.normalizarClasificacion(f.ev.category);
+            if (!porClave[clave]) {
+                porClave[clave] = { nombre: String(f.ev.category || 'General').trim() || 'General', filas: [] };
+                grupos.push(porClave[clave]);
+            }
+            porClave[clave].filas.push(f);
+        });
+
+        // Dentro del grupo manda lo que urge; entre grupos, el que peor está.
+        // Con el mismo estado, por nombre, para que la tarjeta no baile de una
+        // carga a otra.
+        grupos.forEach(g => g.filas.sort((a, b) => peso(a) - peso(b)));
+        grupos.sort((a, b) => (peso(a.filas[0]) - peso(b.filas[0]))
+            || a.nombre.localeCompare(b.nombre, 'es'));
 
         const pendientes = filas.filter(f => f.vencimiento.mostrar).length;
-        const resumen = pendientes === 0
-            ? `Ninguna pendiente de ${filas.length}`
-            : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${filas.length}`;
 
-        const renglones = filas.map(({ ev, estado }) => {
-            const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
-            const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
-            const clasificacion = window.sanitizeForHTML(ev.category || 'General');
-            const pie = ritmo ? `${clasificacion} · ${ritmo}` : clasificacion;
+        // El promedio de lo que ya está calificado en el periodo de cada
+        // encuesta, que es lo que resume «cómo voy» en una cifra. Sin nada
+        // calificado no se enseña: un 0% ahí se leería como haberlo hecho mal
+        // en vez de no haber empezado.
+        const puntajes = [];
+        const puntajeDe = (ev) => {
+            const resp = window.respuestaDelPeriodo(ev, respuestas, ahora);
+            const calificada = resp
+                && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada')
+                && window.tieneCalificaciones(resp)
+                && typeof window.calcularScoreRespuesta === 'function';
+            if (!calificada) return null;
+            const puntaje = window.calcularScoreRespuesta(resp);
+            puntajes.push(puntaje);
+            return puntaje;
+        };
+
+        const bloques = grupos.map(g => {
+            const renglones = g.filas.map(({ ev, estado }) => {
+                const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+                const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
+                const puntaje = puntajeDe(ev);
+                const color = (puntaje !== null && typeof window.getColorScore === 'function')
+                    ? window.getColorScore(puntaje) : '#64748b';
+                const resultado = puntaje === null ? ''
+                    : ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`;
+
+                return `
+                    <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
+                         style="display:flex; align-items:center; gap:10px; padding:9px 8px 9px 2px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
+                            <div style="font-size:0.72rem; color:#94a3b8;">${window.sanitizeForHTML(ritmo)}${resultado}</div>
+                        </div>
+                        <div style="background:${estado.fondo}; color:${estado.color}; border:1px solid ${estado.borde}; border-radius:20px; padding:3px 10px; font-size:0.7rem; font-weight:bold; white-space:nowrap;">${estado.texto}</div>
+                    </div>`;
+            }).join('');
+
+            // El mismo resumen que enseñan el expediente y el panel de
+            // certificación. Una clasificación que no se certifica no da
+            // insignia —`estadoCertificacion` la deja vacía— y el grupo se
+            // queda con sus encuestas y nada más, que es lo correcto: ahí no
+            // hay nada que certificar.
+            const cert = window.estadoCertificacion(g.filas.map(f => f.ev), respuestas, ahora);
+            const insignia = window.insigniaCertificacion(cert);
+            const chapa = insignia
+                ? `<div style="background:${insignia.fondo}; color:${insignia.color}; border:1px solid ${insignia.borde}; border-radius:20px; padding:2px 10px; font-size:0.68rem; font-weight:bold;">${window.sanitizeForHTML(insignia.texto)}</div>`
+                : '';
 
             return `
-                <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
-                     style="display:flex; align-items:center; gap:10px; padding:10px 8px; border-top:1px solid #f1f5f9; cursor:pointer;">
-                    <div style="font-size:1.3rem; line-height:1;">📝</div>
-                    <div style="flex:1; min-width:0;">
-                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
-                        <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
+                <div style="margin-top:12px;">
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:0 2px 2px;">
+                        <div style="font-size:0.75rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
+                        ${chapa}
                     </div>
-                    <div style="background:${estado.fondo}; color:${estado.color}; border:1px solid ${estado.borde}; border-radius:20px; padding:3px 10px; font-size:0.7rem; font-weight:bold; white-space:nowrap;">${estado.texto}</div>
+                    ${renglones}
                 </div>`;
         }).join('');
+
+        const promedio = puntajes.length > 0
+            ? Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length) : null;
+        const resumen = [
+            pendientes === 0
+                ? `Ninguna pendiente de ${filas.length}`
+                : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${filas.length}`,
+            promedio === null ? null : `promedio ${promedio}%`
+        ].filter(Boolean).join(' · ');
 
         cont.innerHTML = `
             <div style="background:white; border-radius:16px; padding:15px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
                 <h3 style="margin:0 0 2px 0; color:#0369a1; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">📝 Encuestas asignadas</h3>
-                <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:6px;">${resumen}</div>
-                ${renglones}
+                <div style="font-size:0.75rem; color:#94a3b8;">${resumen}</div>
+                ${bloques}
             </div>`;
         cont.style.display = 'block';
     } catch (e) {

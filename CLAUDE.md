@@ -2276,11 +2276,29 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   pueda llegar a ellas arrastrando. Los márgenes automáticos se van a cero
   cuando no sobra sitio, de modo que con pocas quedan centradas y con muchas se
   empieza por la primera.
-- **La pantalla de inicio dice qué encuestas le tocan a esta persona**, en la
-  tarjeta que llena `window.cargarEncuestasAsignadas(userId)`
+- **La pantalla de inicio dice qué encuestas le tocan a esta persona y cómo va
+  con ellas**, en la tarjeta que llena `window.cargarEncuestasAsignadas(userId)`
   (`2b-core-dashboard.js`) dentro de `#container-encuestas-asignadas`, justo
   debajo del botón de pendientes. El botón dice cuántas faltan pero no cuáles,
   y la lista de encuestas está dos toques más adentro.
+
+  **Van agrupadas por clasificación, y esa es la mitad del asunto**: se
+  certifica de una clasificación entera y no de una encuesta suelta, así que
+  una lista plana obliga a rearmar el grupo de cabeza para saber si «Seguridad»
+  está cerrada. Cada grupo lleva su estado —el mismo `estadoCertificacion` con
+  la misma `insigniaCertificacion` que enseñan el expediente y el panel de
+  certificación, así que las tres pantallas dicen lo mismo—, cada encuesta
+  contestada lleva **su puntaje del periodo** con el color de `getColorScore`, y
+  el encabezado lleva el promedio de lo ya calificado. Sin nada calificado no se
+  enseña promedio: un 0% ahí se leería como haberlo hecho mal en vez de no haber
+  empezado. Una clasificación que no se certifica no da insignia
+  —`estadoCertificacion` la deja vacía— y el grupo se queda con sus encuestas y
+  nada más.
+
+  Como `estadoCertificacion` pregunta por la caché de las clasificaciones que se
+  certifican **sin poder esperar**, la tarjeta la pide antes con
+  `cargarCertificacionDeClasificaciones()`, igual que hacen
+  `cargarVistaEvaluaciones` y el expediente.
 
   Salen **todas las suyas, también las que ya contestó**: una lista donde todo
   dice «Al día» es lo que deja tranquilo, y una lista vacía no distinguiría
@@ -2293,8 +2311,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   del panel de pendientes—, así que no puede discrepar de lo que ellos digan.
   Lo suyo es sólo cómo se llama cada estado (`window.estadoDeAsignada`, que
   traduce el `tipoAviso` a «Sin contestar», «Vencida», «Mal revisada»,
-  «Repetir», «Vence en N días» o «Al día») y el orden: lo vencido primero, lo
-  que aún tiene plazo después y lo que está al día al final.
+  «Repetir», «Vence en N días» o «Al día») y el orden: dentro del grupo, lo
+  vencido primero, lo que aún tiene plazo después y lo que está al día al final;
+  entre grupos, el que peor está, y con el mismo estado por nombre —o la tarjeta
+  bailaría de una carga a otra—.
 
   Por lo mismo **arma sus columnas como el badge** —`camposConRelanzamiento`
   sobre `camposConMinimo` sobre `camposConReintento`, más `mode`,
