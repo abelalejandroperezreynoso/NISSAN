@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-08-20';
+window.VERSION_APP = '2026-09-08-21';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1450,9 +1450,14 @@ window.periodosDeClasificacion = (encuestas, cuantos, hasta) => {
 // Cómo se llama un periodo cerrado. `periodoVigente` los nombra en presente
 // («este mes»), que sólo vale para el que corre; los de atrás se nombran por su
 // fecha para que no digan todos lo mismo.
+// Los meses en corto. Viven aquí porque los escriben dos sitios —el nombre de
+// un periodo cerrado y el eje de la gráfica de una clasificación— y dos copias
+// acabarían discrepando.
+window.MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
 window.etiquetaDePeriodo = (periodo, frecuencia) => {
     if (!periodo || !periodo.inicio) return '';
-    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const meses = window.MESES_CORTOS;
     const d = periodo.inicio;
 
     switch (frecuencia) {

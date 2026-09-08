@@ -2531,10 +2531,38 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   del panel plegado. Un SVG con `viewBox` no mide nada —se estira con su
   contenedor—, así que tampoco hay que redibujarlo al girar el teléfono. Lleva
   la referencia del 0, el 50 y el 100 y, aparte y a trazos, el mínimo de
-  `UMBRAL_CERTIFICACION`, que es contra lo que se lee cada punto. **Sólo se
-  rotulan los extremos**: con seis periodos, seis etiquetas se pisan en un
-  teléfono, y cada punto dice la suya en su globo. Con menos de dos periodos con
-  resultado no se dibuja nada —una línea de un punto no es una tendencia—.
+  `UMBRAL_CERTIFICACION`, que es contra lo que se lee cada punto. Con menos de
+  dos periodos con resultado no se dibuja nada —una línea de un punto no es una
+  tendencia—.
+
+  **El eje rotula todos los periodos, y en una sola talla.**
+  `window.etiquetasDeEje(inicio, frecuencia)` da dos: la `corta` («ago», «T3»,
+  «2ª ago», «23 ago») y la `minima` para cuando no cabe —la inicial del mes, o
+  **el día** en las semanales, que si no las doce semanas de un mes se rotularían
+  todas «A»—. Se elige **una para el eje entero** midiendo la más larga contra
+  el hueco entre puntos: mezclarlas dejaría un eje que dice «ago» en un sitio y
+  «S» en el de al lado. El nombre largo con su año sigue en el titular y en el
+  globo. Un periodo **sin resultado se rotula igual y más apagado**: el eje es
+  la línea del tiempo, y ahí se ve que ese periodo pasó sin nada.
+
+  Los meses en corto salen de `window.MESES_CORTOS`, en `1-config.js`, que es de
+  donde los toma también `etiquetaDePeriodo`: dos copias de ese arreglo
+  acabarían discrepando.
+
+  **Al tocar un punto sale su globo** (`window.marcarPuntoGrafica`), con el
+  periodo y el resultado; volver a tocarlo lo quita y tocar otro cambia, que
+  **sólo hay uno abierto a la vez** —en un teléfono dos globos se tapan—. Tres
+  cosas que hacen falta ahí:
+
+  - **El blanco del dedo no es el punto.** Un círculo de radio 4 no se acierta,
+    así que quien escucha el toque es otro transparente y mucho más ancho,
+    debajo.
+  - **Los globos van los últimos del SVG y fuera de sus puntos**, emparejados
+    por índice con `data-punto` / `data-globo`: dentro del grupo de su punto, el
+    globo de uno quedaba por debajo del punto siguiente.
+  - **Se esconden con `style.display` y no con el atributo `hidden`**: ese
+    atributo lo entiende la hoja de estilos del navegador para el marcado HTML,
+    y esto es un SVG. Es la otra cara de la trampa de `.ios-boton-icono[hidden]`.
 
   El toque de una encuesta lleva al **detalle de la encuesta** (`window.abrirEncuestaDesdeInicio`,
   que es la función que la tarjeta de revisión ya usaba con el nombre

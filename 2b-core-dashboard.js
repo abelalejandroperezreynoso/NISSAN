@@ -1402,6 +1402,28 @@ window.puntajeDeRespuesta = (resp) => {
 // en el ancho de un teléfono sin que los puntos se toquen.
 window.PERIODOS_EN_LA_GRAFICA = 6;
 
+// Cómo se rotula un periodo en el eje de la gráfica, en dos tallas: la corta,
+// que es la que se pone si cabe, y la mínima para cuando no —la inicial del mes,
+// que es lo único que sobrevive con doce puntos en un teléfono—. El nombre largo
+// («ago 2026») sigue saliendo en el globo del punto y en el titular.
+window.etiquetasDeEje = (inicio, frecuencia) => {
+    if (!(inicio instanceof Date) || isNaN(inicio)) return { corta: '', minima: '' };
+    const mes = (window.MESES_CORTOS || [])[inicio.getMonth()] || '';
+    const inicial = mes ? mes[0].toUpperCase() : '';
+    const anio = `'${String(inicio.getFullYear()).slice(2)}`;
+
+    switch (frecuencia) {
+        case 'weekly':     return { corta: `${inicio.getDate()} ${mes}`, minima: String(inicio.getDate()) };
+        case 'biweekly':   return { corta: `${inicio.getDate() <= 15 ? '1ª' : '2ª'} ${mes}`, minima: inicial };
+        case 'monthly':    return { corta: mes, minima: inicial };
+        case 'quarterly':  return { corta: `T${Math.floor(inicio.getMonth() / 3) + 1}`, minima: `T${Math.floor(inicio.getMonth() / 3) + 1}` };
+        case 'semiannual': return { corta: `S${Math.floor(inicio.getMonth() / 6) + 1}`, minima: `S${Math.floor(inicio.getMonth() / 6) + 1}` };
+        case 'yearly':
+        case 'biennial':   return { corta: anio, minima: anio };
+        default:           return { corta: '', minima: '' };
+    }
+};
+
 // El resultado de una clasificación periodo a periodo, del más antiguo al más
 // reciente. Una clasificación puede mezclar frecuencias, así que **no hay un
 // periodo de la clasificación**: los periodos los marca su encuesta más
@@ -1414,6 +1436,9 @@ window.PERIODOS_EN_LA_GRAFICA = 6;
 window.historialDeClasificacion = (grupo, cuantos) => {
     const encuestas = (grupo.filas || []).map(f => f.ev);
     const periodos = window.periodosDeClasificacion(encuestas, cuantos || window.PERIODOS_EN_LA_GRAFICA);
+    // El ritmo del grupo, que es el que decide cómo se rotula el eje.
+    const ritmo = window.encuestaQueMarcaElRitmo(encuestas);
+    const frecuencia = (ritmo && ritmo.frequency) || 'once';
 
     return periodos.slice().reverse().map(p => {
         const puntajes = encuestas
@@ -1421,9 +1446,13 @@ window.historialDeClasificacion = (grupo, cuantos) => {
                 window.respuestaDelPeriodo(ev, window.respuestasAsignadas || [], p.referencia)))
             .filter(n => n !== null);
 
+        const rotulos = window.etiquetasDeEje(p.inicio, frecuencia);
+
         return {
             etiqueta: p.etiqueta || p.nombre || '',
             nombre: p.nombre || p.etiqueta || '',
+            corta: rotulos.corta,
+            minima: rotulos.minima,
             actual: !!p.actual,
             calificadas: puntajes.length,
             total: encuestas.length,
@@ -1465,29 +1494,72 @@ window.graficaDeLinea = (puntos) => {
     const linea = `<polyline fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
                              points="${puntos.map((p, i) => p.promedio === null ? null : `${x(i).toFixed(1)},${y(p.promedio).toFixed(1)}`).filter(Boolean).join(' ')}"/>`;
 
+    // El punto y, encima, su blanco para el dedo: un círculo de 4 no se acierta,
+    // así que el que escucha el toque es uno transparente y mucho más ancho.
     const dots = puntos.map((p, i) => {
         if (p.promedio === null) return '';
         const color = typeof window.getColorScore === 'function' ? window.getColorScore(p.promedio) : '#2563eb';
-        return `<circle cx="${x(i).toFixed(1)}" cy="${y(p.promedio).toFixed(1)}" r="4" fill="${color}" stroke="white" stroke-width="1.5">
+        return `<g data-punto="${i}" style="cursor:pointer;" onclick="window.marcarPuntoGrafica(this)">
                     <title>${window.sanitizeForHTML(p.etiqueta)} · ${p.promedio}%</title>
-                </circle>`;
+                    <circle cx="${x(i).toFixed(1)}" cy="${y(p.promedio).toFixed(1)}" r="14" fill="transparent"/>
+                    <circle cx="${x(i).toFixed(1)}" cy="${y(p.promedio).toFixed(1)}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/>
+                </g>`;
     }).join('');
 
-    // Sólo se rotulan los extremos: con seis periodos, seis etiquetas se
-    // pisarían unas a otras en un teléfono. Cada punto dice la suya en su globo.
-    const primero = puntos.findIndex(p => p.promedio !== null);
-    const ultimo = puntos.length - 1 - puntos.slice().reverse().findIndex(p => p.promedio !== null);
-    const rotulos = `
-        <text x="${IZQ}" y="${ALTO - 8}" text-anchor="start" font-size="8.5" fill="#94a3b8">${window.sanitizeForHTML(puntos[primero].etiqueta)}</text>
-        ${ultimo !== primero ? `<text x="${A - DER}" y="${ALTO - 8}" text-anchor="end" font-size="8.5" fill="#94a3b8">${window.sanitizeForHTML(puntos[ultimo].etiqueta)}</text>` : ''}`;
+    // Un rótulo por punto. Se elige **una sola talla para todo el eje** —la
+    // corta si le cabe a la más larga, y si no la inicial del mes—: mezclarlas
+    // dejaría un eje que dice «ago» en un sitio y «S» en el de al lado.
+    const hueco = ancho / Math.max(n - 1, 1);
+    const masLarga = Math.max(...puntos.map(p => (p.corta || '').length), 0);
+    const cabeCorta = masLarga * 4.4 <= hueco - 4;
+    const rotulos = puntos.map((p, i) => {
+        const texto = cabeCorta ? p.corta : p.minima;
+        if (!texto) return '';
+        // El periodo sin resultado se rotula igual y más apagado: el eje es la
+        // línea del tiempo, y ahí se ve que ese periodo pasó sin nada.
+        return `<text x="${x(i).toFixed(1)}" y="${ALTO - 8}" text-anchor="middle" font-size="8"
+                      fill="${p.promedio === null ? '#e2e8f0' : '#94a3b8'}">${window.sanitizeForHTML(texto)}</text>`;
+    }).join('');
+
+    // Los globos van los últimos y fuera de los puntos, para que ninguno quede
+    // por debajo del punto siguiente. Se emparejan por índice.
+    const globos = puntos.map((p, i) => {
+        if (p.promedio === null) return '';
+        const texto = `${p.etiqueta} · ${p.promedio}%`;
+        const anchoGlobo = texto.length * 4.5 + 14;
+        const cx = Math.max(anchoGlobo / 2 + 2, Math.min(A - anchoGlobo / 2 - 2, x(i)));
+        // Encima del punto, salvo que ahí arriba ya no quepa.
+        const encima = y(p.promedio) > ARRIBA + 24;
+        const cy = encima ? y(p.promedio) - 24 : y(p.promedio) + 8;
+        return `<g data-globo="${i}" style="display:none; pointer-events:none;">
+                    <rect x="${(cx - anchoGlobo / 2).toFixed(1)}" y="${cy.toFixed(1)}" width="${anchoGlobo.toFixed(1)}" height="16" rx="5" fill="#1e293b" opacity="0.92"/>
+                    <text x="${cx.toFixed(1)}" y="${(cy + 11).toFixed(1)}" text-anchor="middle" font-size="8.5" font-weight="700" fill="white">${window.sanitizeForHTML(texto)}</text>
+                </g>`;
+    }).join('');
 
     return `
         <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 8px 4px; margin-bottom:16px;">
             <svg viewBox="0 0 ${A} ${ALTO}" style="width:100%; height:auto; display:block;" role="img"
                  aria-label="Resultados por periodo">
-                ${rejilla}${umbral}${linea}${dots}${rotulos}
+                ${rejilla}${umbral}${linea}${dots}${rotulos}${globos}
             </svg>
         </div>`;
+};
+
+// El globo de un punto de la gráfica: se enseña al tocarlo y se quita al volver
+// a tocarlo o al tocar otro. Sólo uno a la vez, que en un teléfono dos globos
+// abiertos se tapan entre sí.
+//
+// Se esconde con `style.display` y no con el atributo `hidden`: ese atributo lo
+// entiende la hoja de estilos del navegador para el marcado HTML, y esto es un
+// SVG.
+window.marcarPuntoGrafica = (nodo) => {
+    const svg = nodo.ownerSVGElement;
+    if (!svg) return;
+    const globo = svg.querySelector(`[data-globo="${nodo.getAttribute('data-punto')}"]`);
+    const abierto = !!globo && globo.style.display !== 'none';
+    svg.querySelectorAll('[data-globo]').forEach(g => { g.style.display = 'none'; });
+    if (globo && !abierto) globo.style.display = '';
 };
 
 // ==========================================
