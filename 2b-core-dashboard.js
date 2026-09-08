@@ -1231,12 +1231,38 @@ window.cargarEncuestasAsignadas = async (userId) => {
             .in('evaluation_id', mias.map(e => e.id));
 
         const ahora = new Date();
+
+        // El puntaje de la respuesta del periodo, cuando ya está calificada.
+        // Se saca aquí y no al dibujar porque lo suman también el resumen de la
+        // tarjeta y el de cada clasificación.
+        const puntajeDe = (ev) => {
+            const resp = window.respuestaDelPeriodo(ev, respuestas, ahora);
+            const calificada = resp
+                && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada')
+                && window.tieneCalificaciones(resp)
+                && typeof window.calcularScoreRespuesta === 'function';
+            return calificada ? window.calcularScoreRespuesta(resp) : null;
+        };
+
         const filas = mias.map(ev => {
             const contestaQuienMira = (ev.mode || 'self') !== 'boss';
             const vencimiento = window.esEvaluacionPendiente(
                 respuestas, ev.id, ev.frequency, ev.created_at, ev, contestaQuienMira);
-            return { ev, vencimiento, estado: window.estadoDeAsignada(vencimiento) };
+            return {
+                ev, vencimiento,
+                estado: window.estadoDeAsignada(vencimiento),
+                puntaje: puntajeDe(ev)
+            };
         });
+
+        // El promedio de un puñado de filas. Sin nada calificado no hay
+        // promedio: un 0% ahí se leería como haberlo hecho mal en vez de no
+        // haber empezado.
+        const promedioDe = (unasFilas) => {
+            const puntajes = unasFilas.map(f => f.puntaje).filter(p => p !== null);
+            if (puntajes.length === 0) return null;
+            return Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length);
+        };
 
         // Lo que falta, arriba; y lo vencido antes que lo que aún tiene plazo.
         const peso = (f) => (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1));
@@ -1261,28 +1287,10 @@ window.cargarEncuestasAsignadas = async (userId) => {
 
         const pendientes = filas.filter(f => f.vencimiento.mostrar).length;
 
-        // El promedio de lo que ya está calificado en el periodo de cada
-        // encuesta, que es lo que resume «cómo voy» en una cifra. Sin nada
-        // calificado no se enseña: un 0% ahí se leería como haberlo hecho mal
-        // en vez de no haber empezado.
-        const puntajes = [];
-        const puntajeDe = (ev) => {
-            const resp = window.respuestaDelPeriodo(ev, respuestas, ahora);
-            const calificada = resp
-                && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada')
-                && window.tieneCalificaciones(resp)
-                && typeof window.calcularScoreRespuesta === 'function';
-            if (!calificada) return null;
-            const puntaje = window.calcularScoreRespuesta(resp);
-            puntajes.push(puntaje);
-            return puntaje;
-        };
-
         const bloques = grupos.map(g => {
-            const renglones = g.filas.map(({ ev, estado }) => {
+            const renglones = g.filas.map(({ ev, estado, puntaje }) => {
                 const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
                 const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
-                const puntaje = puntajeDe(ev);
                 const color = (puntaje !== null && typeof window.getColorScore === 'function')
                     ? window.getColorScore(puntaje) : '#64748b';
                 // El puntaje en las contestadas; en las que faltan, lo que
@@ -1295,7 +1303,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
                 return `
                     <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
                          title="${estado.texto}"
-                         style="display:flex; align-items:center; gap:10px; padding:9px 8px 9px 2px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                         style="display:flex; align-items:center; gap:10px; padding:9px 8px 9px 30px; border-top:1px solid #f1f5f9; cursor:pointer;">
                         ${window.iconoDeAsignada(estado)}
                         <div style="flex:1; min-width:0;">
                             <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
@@ -1304,22 +1312,47 @@ window.cargarEncuestasAsignadas = async (userId) => {
                     </div>`;
             }).join('');
 
-            // El encabezado del grupo es el nombre de la clasificación y nada
-            // más. Llevó un tiempo la insignia de certificación —«✅ Lista para
-            // certificar», «📉 1 por debajo de 80%»—, que es la que enseñan el
-            // expediente y el panel de certificación, pero aquí sobraba: son
-            // dos filas de chapas de colores por encima de unos renglones que
-            // ya dicen, uno a uno, lo que a esa clasificación le falta. La
-            // insignia sigue en su sitio, donde se decide certificar.
+            // El renglón de la clasificación dice lo suyo sin abrirla: su
+            // icono es el de la encuesta que peor está —basta una para que la
+            // clasificación no esté al día—, y su pie, cuántas faltan y el
+            // promedio de lo ya calificado.
+            const pendientesGrupo = g.filas.filter(f => f.vencimiento.mostrar).length;
+            const estadoGrupo = g.filas[0].estado;   // ya vienen ordenadas por lo que urge
+            const promedioGrupo = promedioDe(g.filas);
+            const colorGrupo = (promedioGrupo !== null && typeof window.getColorScore === 'function')
+                ? window.getColorScore(promedioGrupo) : '#64748b';
+
+            const cuantas = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
+            const pie = [
+                pendientesGrupo > 0
+                    ? `${pendientesGrupo} pendiente${pendientesGrupo === 1 ? '' : 's'} de ${g.filas.length}`
+                    : `${cuantas} al día`,
+                promedioGrupo === null ? null
+                    : `<span style="color:${colorGrupo}; font-weight:700;">${promedioGrupo}%</span>`
+            ].filter(Boolean).join(' · ');
+
+            // Un <details> y no una función colgada de `window`: abrir y cerrar
+            // lo hace el navegador solo, como en los plegables de las hojas y
+            // de estadísticas. Nace cerrado, que es de lo que se trata —lo que
+            // se ve son las clasificaciones—, y quien quiera ver las encuestas
+            // de una toca su renglón.
             return `
-                <div style="margin-top:12px;">
-                    <div style="font-size:0.75rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px; padding:0 2px 2px;">${window.sanitizeForHTML(g.nombre)}</div>
+                <details class="grupo-asignadas">
+                    <summary>
+                        ${window.iconoDeAsignada(estadoGrupo)}
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
+                            <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
+                        </div>
+                        <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                             stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    </summary>
                     ${renglones}
-                </div>`;
+                </details>`;
         }).join('');
 
-        const promedio = puntajes.length > 0
-            ? Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length) : null;
+        const promedio = promedioDe(filas);
         const resumen = [
             pendientes === 0
                 ? `Ninguna pendiente de ${filas.length}`
@@ -1327,11 +1360,11 @@ window.cargarEncuestasAsignadas = async (userId) => {
             promedio === null ? null : `promedio ${promedio}%`
         ].filter(Boolean).join(' · ');
 
-        // Sin título: lo que la tarjeta es se ve —clasificaciones con sus
-        // encuestas— y el renglón del resumen dice más en el mismo sitio.
+        // Sin título: lo que la tarjeta es se ve —las clasificaciones— y el
+        // renglón del resumen dice más en el mismo sitio.
         cont.innerHTML = `
-            <div style="background:white; border-radius:16px; padding:15px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
-                <div style="font-size:0.8rem; color:#475569; font-weight:600;">${resumen}</div>
+            <div style="background:white; border-radius:16px; padding:15px 15px 5px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
+                <div style="font-size:0.8rem; color:#475569; font-weight:600; margin-bottom:4px;">${resumen}</div>
                 ${bloques}
             </div>`;
         cont.style.display = 'block';

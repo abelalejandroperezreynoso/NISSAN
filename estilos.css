@@ -2109,6 +2109,40 @@ textarea:focus {
 }
 
 /* =========================================
+   LAS CLASIFICACIONES DE «ENCUESTAS ASIGNADAS» SE PLIEGAN
+   =========================================
+   Lo que se ve son las clasificaciones —cuántas faltan y qué promedio llevan—;
+   quien quiera las encuestas de una toca su renglón. Con siete encuestas la
+   tarjeta se llevaba media pantalla para decir siete veces lo mismo.
+
+   Es un <details>, así que abrir y cerrar lo hace el navegador solo: ninguna
+   función colgada de `window`, como en los plegables de las hojas y de
+   estadísticas. */
+.grupo-asignadas { border-top: 1px solid #f1f5f9; }
+
+.grupo-asignadas > summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 2px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    /* El triángulo del navegador se quita por los dos caminos: `list-style`
+       vale en casi todos y el pseudoelemento es lo que entiende Safari. */
+    list-style: none;
+}
+
+.grupo-asignadas > summary::-webkit-details-marker { display: none; }
+
+.grupo-asignadas-flecha {
+    color: #94a3b8;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+.grupo-asignadas[open] .grupo-asignadas-flecha { transform: rotate(180deg); }
+
+/* =========================================
    EL PANEL DEL USUARIO SE PLIEGA
    =========================================
    Contraído se ve sólo quién es —la foto, sus estrellas y el nombre—; el
