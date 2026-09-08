@@ -2493,17 +2493,48 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   lo despliegue por su cuenta encima de lo que ya hizo el botón.
 
   **La hoja no consulta nada.** `cargarEncuestasAsignadas` deja en
-  `window.clasificacionesAsignadas` los grupos ya calculados —con sus filas, sus
-  pendientes y su promedio— y la hoja los lee al abrirse; se le pasa **el índice
-  del grupo** y no su nombre, que así no hay que escapar la clasificación en un
-  atributo. Enseña las tres cifras de arriba —pendientes, al día y promedio—, y
-  debajo una fila por encuesta con su estado, su ritmo, la fecha de la que
-  cuenta en el periodo —o la de la última vez que se contestó— y su puntaje.
-  Cada fila lleva a la encuesta, cerrando antes esta hoja: el observador de
-  `1-config.js` apartaría ésta al ver dos abiertas, pero así no hay ni el
-  fotograma con las dos a la vista. El cuerpo se arma con `innerHTML` al abrirla
-  y se vacía al cerrarla, así que los ids de dentro existen sólo mientras está a
-  la vista.
+  `window.clasificacionesAsignadas` los grupos ya calculados y en
+  `window.respuestasAsignadas` las respuestas **enteras** —no sólo las del
+  periodo que corre, que es de donde sale la gráfica—; la hoja las lee al
+  abrirse. Se le pasa **el índice del grupo** y no su nombre, que así no hay que
+  escapar la clasificación en un atributo. El cuerpo se arma con `innerHTML` al
+  abrirla y se vacía al cerrarla, así que los ids de dentro existen sólo
+  mientras está a la vista, y cada fila lleva a su encuesta cerrando antes esta
+  hoja: el observador de `1-config.js` apartaría ésta al ver dos abiertas, pero
+  así no hay ni el fotograma con las dos a la vista.
+
+  **Lo que enseña es cómo va, no cuánto falta**: el resultado del último periodo
+  que dejó alguno y la línea de los anteriores. Cuántas hay pendientes y cuántas
+  al día ya lo dice el renglón de la tarjeta del panel, y ahí abajo lo dice cada
+  encuesta con su estado, su ritmo, la fecha de la respuesta que cuenta en el
+  periodo —o la de la última vez— y su puntaje; los tres contadores que hubo
+  arriba lo decían por tercera vez.
+
+  ```js
+  window.puntajeDeRespuesta(resp)             // el puntaje, o null si no está calificada
+  window.historialDeClasificacion(grupo)      // un punto por periodo, del más viejo al más nuevo
+  window.graficaDeLinea(puntos)               // el SVG, o '' con menos de dos puntos
+  ```
+
+  El historial se apoya en `periodosDeClasificacion` —los periodos los marca la
+  encuesta **más frecuente** del grupo, que una clasificación puede mezclar
+  frecuencias— y dentro de cada uno mira cada encuesta en el suyo con
+  `respuestaDelPeriodo` y la fecha de referencia del periodo. Un periodo sin
+  nada calificado devuelve `promedio: null` —no un cero, que se leería como
+  haberlo hecho mal— y la gráfica se lo salta: por eso hay periodos sin punto.
+  El titular es **el último periodo con resultado y lleva su nombre**, que puede
+  no ser el que corre; sin ninguno dice «Todavía sin resultados».
+
+  **La gráfica se dibuja a mano en SVG y no con Chart**, aunque el panel ya lo
+  cargue: Chart mide el lienzo al dibujarlo y aquí la hoja está en
+  `display:none` hasta el instante anterior, que es la misma trampa del radar
+  del panel plegado. Un SVG con `viewBox` no mide nada —se estira con su
+  contenedor—, así que tampoco hay que redibujarlo al girar el teléfono. Lleva
+  la referencia del 0, el 50 y el 100 y, aparte y a trazos, el mínimo de
+  `UMBRAL_CERTIFICACION`, que es contra lo que se lee cada punto. **Sólo se
+  rotulan los extremos**: con seis periodos, seis etiquetas se pisan en un
+  teléfono, y cada punto dice la suya en su globo. Con menos de dos periodos con
+  resultado no se dibuja nada —una línea de un punto no es una tendencia—.
 
   El toque de una encuesta lleva al **detalle de la encuesta** (`window.abrirEncuestaDesdeInicio`,
   que es la función que la tarjeta de revisión ya usaba con el nombre

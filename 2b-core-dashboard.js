@@ -1232,16 +1232,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
 
         const ahora = new Date();
 
-        // El puntaje de la respuesta del periodo, cuando ya está calificada.
-        // Se saca aquí y no al dibujar porque lo suman también el resumen de la
-        // tarjeta y el de cada clasificación.
-        const puntajeDe = (resp) => {
-            const calificada = resp
-                && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada')
-                && window.tieneCalificaciones(resp)
-                && typeof window.calcularScoreRespuesta === 'function';
-            return calificada ? window.calcularScoreRespuesta(resp) : null;
-        };
+        const puntajeDe = window.puntajeDeRespuesta;
 
         const filas = mias.map(ev => {
             const contestaQuienMira = (ev.mode || 'self') !== 'boss';
@@ -1292,7 +1283,11 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // Lo que la hoja de detalle vuelve a leer al abrirse, sin recalcular
         // nada ni volver a preguntarle a la base. Se pasa por índice y no por
         // nombre: así no hay que escapar la clasificación en un atributo.
+        //
+        // Las respuestas van enteras y no sólo las del periodo que corre: la
+        // gráfica de la hoja recorre los periodos de atrás.
         window.clasificacionesAsignadas = grupos;
+        window.respuestasAsignadas = respuestas || [];
 
         const bloques = grupos.map((g, indice) => {
             const renglones = g.filas.map(({ ev, estado, puntaje }) => {
@@ -1323,12 +1318,9 @@ window.cargarEncuestasAsignadas = async (userId) => {
             // icono es el de la encuesta que peor está —basta una para que la
             // clasificación no esté al día—, y su pie, cuántas faltan y el
             // promedio de lo ya calificado.
-            // Se quedan en el grupo porque la hoja de detalle dice lo mismo.
-            g.pendientes = g.filas.filter(f => f.vencimiento.mostrar).length;
-            g.promedio = promedioDe(g.filas);
-            const pendientesGrupo = g.pendientes;
+            const pendientesGrupo = g.filas.filter(f => f.vencimiento.mostrar).length;
             const estadoGrupo = g.filas[0].estado;   // ya vienen ordenadas por lo que urge
-            const promedioGrupo = g.promedio;
+            const promedioGrupo = promedioDe(g.filas);
             const colorGrupo = (promedioGrupo !== null && typeof window.getColorScore === 'function')
                 ? window.getColorScore(promedioGrupo) : '#64748b';
 
@@ -1394,6 +1386,110 @@ window.cargarEncuestasAsignadas = async (userId) => {
     }
 };
 
+// El puntaje de una respuesta, o null si todavía no está calificada. Sin
+// calificar no hay cifra que enseñar: un 0% se leería como haberlo hecho mal en
+// vez de no haberse revisado. Lo usan la tarjeta del panel y el historial de la
+// hoja de detalle, que es lo que lo saca de dentro de `cargarEncuestasAsignadas`.
+window.puntajeDeRespuesta = (resp) => {
+    const calificada = resp
+        && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada')
+        && window.tieneCalificaciones(resp)
+        && typeof window.calcularScoreRespuesta === 'function';
+    return calificada ? window.calcularScoreRespuesta(resp) : null;
+};
+
+// Cuántos periodos hacia atrás mira la gráfica de una clasificación. Seis caben
+// en el ancho de un teléfono sin que los puntos se toquen.
+window.PERIODOS_EN_LA_GRAFICA = 6;
+
+// El resultado de una clasificación periodo a periodo, del más antiguo al más
+// reciente. Una clasificación puede mezclar frecuencias, así que **no hay un
+// periodo de la clasificación**: los periodos los marca su encuesta más
+// frecuente (`periodosDeClasificacion`) y dentro de cada uno se mira cada
+// encuesta en el suyo, que es lo que hace `respuestaDelPeriodo` con la fecha de
+// referencia.
+//
+// Un periodo sin nada calificado devuelve `promedio: null` —no un cero, que se
+// leería como haberlo hecho mal— y la gráfica se lo salta.
+window.historialDeClasificacion = (grupo, cuantos) => {
+    const encuestas = (grupo.filas || []).map(f => f.ev);
+    const periodos = window.periodosDeClasificacion(encuestas, cuantos || window.PERIODOS_EN_LA_GRAFICA);
+
+    return periodos.slice().reverse().map(p => {
+        const puntajes = encuestas
+            .map(ev => window.puntajeDeRespuesta(
+                window.respuestaDelPeriodo(ev, window.respuestasAsignadas || [], p.referencia)))
+            .filter(n => n !== null);
+
+        return {
+            etiqueta: p.etiqueta || p.nombre || '',
+            nombre: p.nombre || p.etiqueta || '',
+            actual: !!p.actual,
+            calificadas: puntajes.length,
+            total: encuestas.length,
+            promedio: puntajes.length === 0 ? null
+                : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length)
+        };
+    });
+};
+
+// La gráfica de línea del historial, dibujada a mano en SVG.
+//
+// No usa Chart aunque el panel ya lo cargue: Chart mide el lienzo al dibujarlo
+// y aquí la hoja está en `display:none` hasta el instante anterior, que es la
+// misma trampa del radar del panel plegado. Un SVG con `viewBox` no mide nada
+// —se estira con su contenedor— así que tampoco hay que redibujarlo al girar el
+// teléfono.
+window.graficaDeLinea = (puntos) => {
+    const conDato = puntos.filter(p => p.promedio !== null);
+    if (conDato.length < 2) return '';
+
+    const A = 320, ALTO = 150, IZQ = 26, DER = 10, ARRIBA = 16, ABAJO = 26;
+    const ancho = A - IZQ - DER, alto = ALTO - ARRIBA - ABAJO;
+    const n = puntos.length;
+    const x = (i) => IZQ + (n === 1 ? ancho / 2 : ancho * i / (n - 1));
+    const y = (v) => ARRIBA + alto * (1 - v / 100);
+
+    // Las tres referencias de la izquierda y, aparte, el mínimo que se pide
+    // para certificar: es contra lo que se lee cada punto.
+    const rejilla = [0, 50, 100].map(v => `
+        <line x1="${IZQ}" y1="${y(v).toFixed(1)}" x2="${A - DER}" y2="${y(v).toFixed(1)}" stroke="#f1f5f9" stroke-width="1"/>
+        <text x="${IZQ - 5}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end" font-size="8" fill="#cbd5e1">${v}</text>`).join('');
+
+    const umbral = `
+        <line x1="${IZQ}" y1="${y(window.UMBRAL_CERTIFICACION).toFixed(1)}" x2="${A - DER}" y2="${y(window.UMBRAL_CERTIFICACION).toFixed(1)}"
+              stroke="#86efac" stroke-width="1" stroke-dasharray="3 3"/>`;
+
+    // La línea une los periodos que tienen resultado; los que no lo tienen se
+    // saltan, y por eso no hay punto donde no se contestó nada.
+    const linea = `<polyline fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+                             points="${puntos.map((p, i) => p.promedio === null ? null : `${x(i).toFixed(1)},${y(p.promedio).toFixed(1)}`).filter(Boolean).join(' ')}"/>`;
+
+    const dots = puntos.map((p, i) => {
+        if (p.promedio === null) return '';
+        const color = typeof window.getColorScore === 'function' ? window.getColorScore(p.promedio) : '#2563eb';
+        return `<circle cx="${x(i).toFixed(1)}" cy="${y(p.promedio).toFixed(1)}" r="4" fill="${color}" stroke="white" stroke-width="1.5">
+                    <title>${window.sanitizeForHTML(p.etiqueta)} · ${p.promedio}%</title>
+                </circle>`;
+    }).join('');
+
+    // Sólo se rotulan los extremos: con seis periodos, seis etiquetas se
+    // pisarían unas a otras en un teléfono. Cada punto dice la suya en su globo.
+    const primero = puntos.findIndex(p => p.promedio !== null);
+    const ultimo = puntos.length - 1 - puntos.slice().reverse().findIndex(p => p.promedio !== null);
+    const rotulos = `
+        <text x="${IZQ}" y="${ALTO - 8}" text-anchor="start" font-size="8.5" fill="#94a3b8">${window.sanitizeForHTML(puntos[primero].etiqueta)}</text>
+        ${ultimo !== primero ? `<text x="${A - DER}" y="${ALTO - 8}" text-anchor="end" font-size="8.5" fill="#94a3b8">${window.sanitizeForHTML(puntos[ultimo].etiqueta)}</text>` : ''}`;
+
+    return `
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 8px 4px; margin-bottom:16px;">
+            <svg viewBox="0 0 ${A} ${ALTO}" style="width:100%; height:auto; display:block;" role="img"
+                 aria-label="Resultados por periodo">
+                ${rejilla}${umbral}${linea}${dots}${rotulos}
+            </svg>
+        </div>`;
+};
+
 // ==========================================
 // EL DETALLE DE UNA CLASIFICACIÓN
 // ==========================================
@@ -1437,30 +1533,33 @@ window.abrirDetalleClasificacion = (indice) => {
     if (!grupo || !overlay || !cuerpo) return;
 
     const total = grupo.filas.length;
-    const pendientes = grupo.pendientes;
-    const alDia = total - pendientes;
-    const promedio = grupo.promedio;
-    const colorPromedio = (promedio !== null && typeof window.getColorScore === 'function')
-        ? window.getColorScore(promedio) : '#64748b';
 
     document.getElementById('titulo-detalle-clasif').innerText = grupo.nombre;
     document.getElementById('subtitulo-detalle-clasif').innerText =
         `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
 
-    // Las tres cifras de arriba. Sin nada calificado no hay promedio: un 0% se
-    // leería como haberlo hecho mal en vez de no haber empezado.
-    const cifra = (valor, rotulo, color) => `
-        <div style="flex:1; min-width:0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 6px; text-align:center;">
-            <div style="font-size:1.35rem; font-weight:800; color:${color}; line-height:1.1;">${valor}</div>
-            <div style="font-size:0.7rem; color:#64748b; font-weight:600; margin-top:2px;">${rotulo}</div>
-        </div>`;
+    // Lo que se viene a ver es cómo va: el resultado del último periodo que
+    // dejó alguno —con su nombre, que puede no ser el que corre— y la línea de
+    // los anteriores. Cuántas faltan y cuántas están al día ya lo dice el
+    // renglón de la tarjeta del panel, y aquí lo dice cada encuesta de abajo.
+    const historial = window.historialDeClasificacion(grupo);
+    const conDato = historial.filter(p => p.promedio !== null);
+    const ultimo = conDato.length > 0 ? conDato[conDato.length - 1] : null;
+
+    const colorUltimo = (ultimo && typeof window.getColorScore === 'function')
+        ? window.getColorScore(ultimo.promedio) : '#94a3b8';
 
     const resumen = `
-        <div style="display:flex; gap:8px; margin-bottom:16px;">
-            ${cifra(pendientes, pendientes === 1 ? 'pendiente' : 'pendientes', pendientes > 0 ? '#dc2626' : '#94a3b8')}
-            ${cifra(alDia, 'al día', alDia > 0 ? '#166534' : '#94a3b8')}
-            ${cifra(promedio === null ? '—' : promedio + '%', 'promedio', colorPromedio)}
-        </div>`;
+        <div style="display:flex; align-items:center; gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:14px; margin-bottom:14px;">
+            <div style="font-size:2rem; font-weight:800; color:${colorUltimo}; line-height:1; flex-shrink:0;">${ultimo ? ultimo.promedio + '%' : '—'}</div>
+            <div style="min-width:0;">
+                <div style="font-size:0.8rem; color:#334155; font-weight:700;">${ultimo ? 'Resultado del último periodo' : 'Todavía sin resultados'}</div>
+                <div style="font-size:0.75rem; color:#94a3b8;">${ultimo
+                    ? `${window.sanitizeForHTML(ultimo.etiqueta)} · ${ultimo.calificadas} de ${ultimo.total} calificada${ultimo.calificadas === 1 ? '' : 's'}`
+                    : 'Ninguna de sus encuestas se ha calificado'}</div>
+            </div>
+        </div>
+        ${window.graficaDeLinea(historial)}`;
 
     const renglones = grupo.filas.map(({ ev, estado, puntaje, resp, vencimiento }) => {
         const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
