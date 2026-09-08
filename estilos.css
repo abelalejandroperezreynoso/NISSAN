@@ -2094,6 +2094,9 @@ textarea:focus {
    busca la versión gira: es lo único que puede decir que está haciendo algo
    un botón sin texto, y con `innerText` se borraría el <svg> de dentro. */
 .ios-boton-actualizar {
+    /* El símbolo va del negro del título y con el trazo grueso, no del azul
+       de acción de las hojas: aquí acompaña al título, no a un formulario. */
+    color: #0f172a;
     margin-left: auto;
     width: 38px;
     height: 38px;
