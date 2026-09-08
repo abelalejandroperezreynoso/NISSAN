@@ -551,6 +551,23 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   pseudoelementos, cambiar de icono es quitar esa clase y meter el `<svg>`
   dentro —y al revés, vaciarlo y devolvérsela—.
 
+  **Pero sólo si se llegó por la lista.** A la hoja de una encuesta se entra por
+  dos caminos, y desde el panel de inicio se entra derecho
+  (`abrirEncuestaDesdeInicio`, que ya no monta la lista): ahí la flecha llevaba a
+  una pantalla por la que nadie había pasado, así que se queda la cruz. Lo decide
+  el camino y no la pantalla que se dibuja, de modo que la marca la pone cada
+  puerta de entrada y la leen las demás:
+
+  ```js
+  window.vengoDeLaListaDeEncuestas        // la pone la lista al dibujarse; el inicio la quita
+  window.volverALaListaDeEncuestas()      // el «volver», o null si no hay a dónde
+  ```
+
+  `abrirHistorialEvaluacion` —la de `4-evaluaciones-admin.js`, que es la que
+  manda— pasa lo que devuelva ese ayudante, así que hereda el camino sin saber
+  cuál fue: es lo que hace que relanzar una encuesta, que la vuelve a abrir desde
+  dentro de la hoja, conserve el botón que ya tenía.
+
   La lista de respuestas de una encuesta va plegada en un
   `<details class="hoja-plegable">`, y se abre sola sólo si hay algo esperando
   la calificación de quien mira. Arriba, en cambio, sale siempre el último
@@ -2419,9 +2436,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   único que hacía falta de la lista era la hoja donde dibujar, y eso es
   **`window.montarHojaEvaluaciones()`**, que la monta —su marcado vive ahí, en un
   solo sitio— y la enseña sin traer nada. El encabezado se pone antes de la
-  consulta, con el título de la encuesta y con la flecha que lleva a la lista:
-  el primer fotograma ya dice a dónde se entró, y volver hace lo mismo que si se
-  hubiera llegado por la lista.
+  consulta, con el título de la encuesta, así que el primer fotograma ya dice a
+  dónde se entró. Y con la cruz, no con la flecha de volver: por aquí no se pasó
+  por la lista, y esa flecha llevaba a una pantalla que nadie había pedido —de
+  eso va `window.vengoDeLaListaDeEncuestas`, más arriba—.
 
   La ficha del empleado sale de `window.todosLosEmpleadosData` y no de
   `usuarioLogueado`: la sesión dura treinta días y un cambio de puesto o de

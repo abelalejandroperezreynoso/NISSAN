@@ -1485,9 +1485,10 @@ window.cargarEncuestasQueReviso = async (userId) => {
 // Lo único que hacía falta de la lista era la hoja donde dibujar, y eso es hoy
 // `montarHojaEvaluaciones()`, que la monta y la enseña sin traer nada.
 //
-// El encabezado se pone antes de la consulta, con el título de la encuesta y
-// con la flecha que lleva a la lista: así el primer fotograma ya dice a dónde
-// se entró, y la flecha hace lo mismo que si se hubiera llegado por la lista.
+// El encabezado se pone antes de la consulta, con el título de la encuesta: así
+// el primer fotograma ya dice a dónde se entró. Y con la cruz, no con la flecha
+// de volver: aquí no se pasó por la lista, así que esa flecha llevaba a una
+// pantalla por la que nadie había pasado. Lo dice `vengoDeLaListaDeEncuestas`.
 //
 // Lleva al detalle y no a contestar directamente, que es lo que deja que la
 // pantalla decida qué botón toca: responder, elegir a qué colaborador se
@@ -1498,8 +1499,9 @@ window.abrirEncuestaDesdeInicio = async (evalId, titulo) => {
         return;
     }
 
+    window.vengoDeLaListaDeEncuestas = false;
     const container = window.montarHojaEvaluaciones();
-    window.encabezadoHojaEvaluaciones(titulo, () => window.cargarVistaEvaluaciones());
+    window.encabezadoHojaEvaluaciones(titulo);
     if (container) {
         container.innerHTML = '<div style="text-align:center; padding:40px; color:#64748b;">' +
             '<div class="spinner" style="margin: 0 auto 15px auto;"></div><p>Abriendo encuesta…</p></div>';

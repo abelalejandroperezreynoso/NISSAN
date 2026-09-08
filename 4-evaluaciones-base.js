@@ -222,6 +222,21 @@ window.cerrarModalEvaluaciones = () => {
 // Sin argumentos vuelve a lo de la lista: «Evaluaciones y encuestas» y la cruz.
 // Toda pantalla que repinte `#contenido-modal-evaluaciones` tiene que llamarlo,
 // o heredará el título de la anterior.
+// ¿Se llegó a la encuesta pasando por la lista? De eso depende el botón del
+// encabezado, y no de la pantalla que se esté dibujando: la flecha de volver sólo
+// tiene a dónde llevar si la lista fue el camino. Desde el panel de inicio se
+// entra derecho a la hoja de una encuesta (`abrirEncuestaDesdeInicio`), y ahí esa
+// flecha llevaba a una pantalla por la que nadie había pasado: lo que quiere el
+// dedo es cerrar. La marca la pone cada puerta de entrada —la lista al dibujarse,
+// el panel de inicio al saltársela— y la leen las pantallas que repintan el
+// contenedor con el nombre de una encuesta.
+window.vengoDeLaListaDeEncuestas = false;
+
+// El «volver» de la hoja de una encuesta, o null si no hay a dónde volver, que es
+// lo que `encabezadoHojaEvaluaciones` entiende como «deja la cruz».
+window.volverALaListaDeEncuestas = () =>
+    window.vengoDeLaListaDeEncuestas ? () => window.cargarVistaEvaluaciones() : null;
+
 window.encabezadoHojaEvaluaciones = (titulo, alVolver) => {
     const h = document.getElementById('titulo-hoja-evaluaciones');
     const btn = document.getElementById('btn-hoja-evaluaciones');
@@ -280,6 +295,9 @@ window.montarHojaEvaluaciones = () => {
 
 // --- 1. CARGAR LISTA PRINCIPAL ---
 window.cargarVistaEvaluaciones = async () => {
+    // Se entró por la lista, así que las encuestas que se abran desde aquí sí
+    // tienen a dónde volver.
+    window.vengoDeLaListaDeEncuestas = true;
     const container = window.montarHojaEvaluaciones();
     window.encabezadoHojaEvaluaciones();
 

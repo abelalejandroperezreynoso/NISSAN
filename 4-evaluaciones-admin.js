@@ -239,10 +239,12 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         </div>
     `;
 
-    // El nombre de la encuesta manda en el encabezado de la hoja, y la cruz se
-    // vuelve la flecha de volver: dentro de una encuesta lo que quiere el dedo
-    // es retroceder, no cerrarlo todo.
-    window.encabezadoHojaEvaluaciones(title, () => window.cargarVistaEvaluaciones());
+    // El nombre de la encuesta manda en el encabezado de la hoja. La cruz se
+    // vuelve la flecha de volver sólo si se llegó por la lista: dentro de una
+    // encuesta a la que se entró desde ahí, lo que quiere el dedo es retroceder;
+    // si se entró derecho desde el inicio, no hay lista a la que volver.
+    window.encabezadoHojaEvaluaciones(title, window.volverALaListaDeEncuestas
+        ? window.volverALaListaDeEncuestas() : () => window.cargarVistaEvaluaciones());
 
     // La lista arranca plegada: quien abre su encuesta viene a ver lo suyo y a
     // responder, no las respuestas de los demás. Se despliega sola cuando hay
