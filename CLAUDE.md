@@ -2694,8 +2694,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     Eliminar», que borra esa pregunta **de la base** —o sea, de la encuesta
     original—. En una copia eso sería destruir lo que se está copiando.
 
-  El título nace como «… (copia)»: dos encuestas con el mismo nombre en la misma
-  clasificación no hay quien las distinga en ninguna lista.
+  **El título nace con la fecha de hoy entre paréntesis** —«Junta de seguridad
+  (08/09/26)», con `window.tituloDeCopia(titulo, fecha)`—: dos encuestas con el
+  mismo nombre en la misma clasificación no hay quien las distinga en ninguna
+  lista. Decía «(copia)» y no servía para eso: la auditoría se repite cada mes y
+  todas se llamarían igual, y al año siguiente la lista tiene cuatro «(copia)»
+  sin decir de cuándo es cada una.
+
+  Si el título ya traía una fecha suya —copiar una copia es lo normal aquí— se
+  **sustituye** en vez de encadenarse, o acabaría en «Junta (08/09/26)
+  (09/10/26)»; el mismo recorte se lleva el «(copia)» de las que ya se crearon
+  así. Otros paréntesis no se tocan: «Encuesta (parte 2)» conserva el suyo.
 
   **Y entre el resultado y la lista va quién las revisa**, con la miniatura de
   la foto de cada uno (`window.filaDeRevisores`). No es cosa del administrador:

@@ -3377,6 +3377,26 @@ window.abrirModalCrearEval = async (categoria) => {
 //     «🗑️ Eliminar», que borra esa pregunta **de la base**, o sea de la
 //     encuesta original. En una copia eso sería destruir lo que se está
 //     copiando.
+// El nombre con el que nace una copia: el de la encuesta base y **la fecha de
+// hoy** entre paréntesis. Antes decía «(copia)», que no distingue una de otra
+// —la auditoría se repite cada mes y todas se llamarían igual— y encima envejece
+// mal: al año siguiente la lista tiene cuatro «(copia)» sin decir de cuándo.
+//
+// Si el título ya traía una fecha suya —copiar una copia es lo normal aquí—, se
+// **sustituye** en vez de encadenarse, o acabaría en «Junta (08/09/26)
+// (09/10/26)». También se recoge el «(copia)» de las que ya se crearon así.
+window.tituloDeCopia = (titulo, fecha) => {
+    const d = (fecha instanceof Date && !isNaN(fecha)) ? fecha : new Date();
+    const sello = d.toLocaleDateString('es-ES',
+        { day: '2-digit', month: '2-digit', year: '2-digit' });
+
+    const base = String(titulo || '').trim()
+        .replace(/\s*\((?:copia|\d{2}\/\d{2}\/\d{2})\)\s*$/i, '')
+        .trim();
+
+    return `${base} (${sello})`;
+};
+
 window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = false) => {
     // Los revisores que hereda de su clasificación se dicen en el bloque de
     // revisores, y esa nota se pinta sin poder esperar.
@@ -3406,7 +3426,7 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     // Una copia nace con el nombre marcado: dos encuestas con el mismo título
     // en la misma clasificación no hay quien las distinga en ninguna lista.
     document.getElementById('eval-title-input').value = comoCopia
-        ? `${evaluacion.title} (copia)`
+        ? window.tituloDeCopia(evaluacion.title)
         : evaluacion.title;
 
     const descInput = document.getElementById('eval-desc-input');
