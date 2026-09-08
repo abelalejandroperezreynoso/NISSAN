@@ -1899,6 +1899,7 @@ textarea:focus {
 .bg-objetivos { background: linear-gradient(135deg, #5eead4, #0f766e); }
 .bg-stats-dif { background: linear-gradient(135deg, #c4b5fd, #8b5cf6); }
 .bg-stats-enc { background: linear-gradient(135deg, #7dd3fc, #0ea5e9); }
+.bg-calendario { background: linear-gradient(135deg, #a5b4fc, #4f46e5); }
 
 /* =========================================
    PANELES COMO HOJA INFERIOR (estilo iOS)

@@ -872,9 +872,6 @@ window.mostrarDashboard = async (user) => {
     const quickTeam = document.getElementById('quick-team-view');
     const btnLogout = document.getElementById('btn-logout');
 
-    const calendarWidget = document.getElementById('dashboard-calendar-widget');
-    if(calendarWidget) calendarWidget.style.display = 'block';
-
     if(userHeader) {
         userHeader.style.display = 'block';
         userHeader.style.padding = '15px';

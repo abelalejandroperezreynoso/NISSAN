@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-04-11">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-08-1">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -168,12 +168,14 @@
                     </div>
                 </div>
 
-        <div id="dashboard-calendar-widget" style="display:none; background:white; margin-bottom:15px; border-radius:16px; padding:15px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #e2e8f0;">
-            </div>
-        
        <div id="init-load-container" style="margin-top: 15px;">
     <div class="ios-grid-container">
         
+        <div class="ios-app-btn" onclick="window.cargarVistaCalendario()">
+            <div class="ios-app-icon bg-calendario">📅</div>
+            <div class="ios-app-label">Calendario</div>
+        </div>
+
         <div class="ios-app-btn" id="btn-ver-pendientes-equipo" style="display:none;">
             <div class="ios-app-icon bg-equipo">👥</div>
             <div class="ios-app-label">Mi Equipo</div>
@@ -798,20 +800,20 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-04-11"></script>
-    <script src="2a-core-nav.js?v=2026-09-04-11"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-04-11"></script>
-    <script src="3-incidentes.js?v=2026-09-04-11"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-04-11"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-04-11"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-04-11"></script>
-    <script src="5-objetivos.js?v=2026-09-04-11"></script>
-    <script src="6-calendario.js?v=2026-09-04-11"></script>
-    <script src="7-pendientes.js?v=2026-09-04-11"></script>
-    <script src="8-hallazgos.js?v=2026-09-04-11"></script>
-    <script src="9-estadisticas.js?v=2026-09-04-11"></script>
+    <script src="1-config.js?v=2026-09-08-1"></script>
+    <script src="2a-core-nav.js?v=2026-09-08-1"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-08-1"></script>
+    <script src="3-incidentes.js?v=2026-09-08-1"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-08-1"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-08-1"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-08-1"></script>
+    <script src="5-objetivos.js?v=2026-09-08-1"></script>
+    <script src="6-calendario.js?v=2026-09-08-1"></script>
+    <script src="7-pendientes.js?v=2026-09-08-1"></script>
+    <script src="8-hallazgos.js?v=2026-09-08-1"></script>
+    <script src="9-estadisticas.js?v=2026-09-08-1"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="10-refacciones.js?v=2026-09-04-11"></script> 
+    <script src="10-refacciones.js?v=2026-09-08-1"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

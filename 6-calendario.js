@@ -305,12 +305,12 @@ window.renderizarStatsAnuales = (events, year) => {
     `;
 };
 
-window.renderCalendarGrid = (containerId, year, month, events, isWidget = false) => {
+window.renderCalendarGrid = (containerId, year, month, events) => {
     const grid = document.getElementById(containerId);
     if (!grid) return;
     grid.innerHTML = '';
     
-    const headerStyle = `text-align:center; font-size:${isWidget ? '0.65rem' : '0.75rem'}; font-weight:bold; color:#94a3b8; margin-bottom:2px;`;
+    const headerStyle = `text-align:center; font-size:0.75rem; font-weight:bold; color:#94a3b8; margin-bottom:2px;`;
     CAL_WEEKDAYS.forEach(day => { grid.insertAdjacentHTML('beforeend', `<div style="${headerStyle}">${day}</div>`); });
 
     const firstDayIndex = new Date(year, month, 1).getDay();
@@ -342,12 +342,11 @@ window.renderCalendarGrid = (containerId, year, month, events, isWidget = false)
             dotsHtml += `</div>`;
         }
 
-        const cellSize = isWidget ? '38px' : '42px';
         let bg = isToday ? '#eff6ff' : (hasEvents ? '#ffffff' : 'transparent');
         let border = isToday ? '1px solid #3b82f6' : (hasEvents ? '1px solid #cbd5e1' : '1px solid transparent');
         
         const html = `
-        <div onclick='window.abrirDetalleDia("${dateStr}")' style="height: ${cellSize}; display: flex; flex-direction: column; align-items: center; justify-content: center; background: ${bg}; border: ${border}; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='${isToday ? '#dbeafe' : '#f1f5f9'}'" onmouseout="this.style.background='${bg}'">
+        <div onclick='window.abrirDetalleDia("${dateStr}")' style="height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: ${bg}; border: ${border}; border-radius: 8px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='${isToday ? '#dbeafe' : '#f1f5f9'}'" onmouseout="this.style.background='${bg}'">
             <span style="font-size:0.8rem; color:${isToday ? '#1e40af' : '#334155'}; font-weight:${(isToday || hasEvents) ? 'bold' : 'normal'};">${day}</span>
             ${dotsHtml}
         </div>`;
@@ -639,27 +638,7 @@ window.guardarProgramacionCompleta = async () => {
     } catch (e) { alert("Error: " + e.message); btn.disabled=false; btn.innerText="Guardar"; }
 };
 
-// --- 8. WIDGET Y DASHBOARD ---
-window.cargarWidgetCalendario = async () => {
-    const container = document.getElementById('dashboard-calendar-widget');
-    if (!container) return;
-    container.style.display = 'block';
-    const now = new Date();
-    container.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <div style="background:#eff6ff; color:#3b82f6; width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1.1rem;">${now.getDate()}</div>
-                <div><div style="font-weight:bold; color:#1e293b; font-size:0.95rem;">${CAL_MONTH_NAMES[now.getMonth()]}</div><div style="font-size:0.75rem; color:#64748b;">Agenda</div></div>
-            </div>
-            <button onclick="window.cargarVistaCalendario()" style="border:none; background:#f0f9ff; color:#0284c7; padding:6px 12px; border-radius:20px; font-size:0.75rem; font-weight:bold; cursor:pointer;">Ver Año ➝</button>
-        </div>
-        <div id="widget-cal-grid" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;"><div class="spinner" style="grid-column:1/-1; margin:15px auto;"></div></div>
-    `;
-    const events = await window.fetchAnnualEvents(now.getFullYear());
-    const monthEvents = window.getEventsForMonth(events, now.getFullYear(), now.getMonth());
-    window.renderCalendarGrid('widget-cal-grid', now.getFullYear(), now.getMonth(), monthEvents, true);
-};
-
+// --- 8. DASHBOARD ---
 window.toggleCalendarView = (mode) => {
     window.calViewMode = mode;
     const btnGrid = document.getElementById('btn-view-grid');
@@ -670,7 +649,7 @@ window.toggleCalendarView = (mode) => {
 };
 
 window.cargarVistaCalendario = async () => {
-    ['init-load-container','global-stats','container-incidentes','container-evaluaciones','container-evaluaciones-historial','search-bar-container','admin-toolbar','quick-team-view','container-estructura','container-ultimos-incidentes','main-user-header','dashboard-calendar-widget','btn-logout'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
+    ['init-load-container','global-stats','container-incidentes','container-evaluaciones','container-evaluaciones-historial','search-bar-container','admin-toolbar','quick-team-view','container-estructura','container-ultimos-incidentes','main-user-header','btn-logout'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
     let container = document.getElementById('container-calendario');
     if (!container) { container = document.createElement('div'); container.id = 'container-calendario'; document.body.appendChild(container); }
     Object.assign(container.style, { display: 'block', position: 'fixed', top: '0', left: '0', width: '100%', height: '100%', backgroundColor: '#f8fafc', zIndex: '1500', overflowY: 'auto' });
@@ -719,7 +698,7 @@ window.renderizarAnioFull = async () => {
         container.style.cssText = "display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; padding-bottom:40px;";
         for(let m=0; m<12; m++) {
             container.insertAdjacentHTML('beforeend', `<div style="background:white; border-radius:16px; border:1px solid #e2e8f0; padding:15px;"><h3 style="margin:0 0 10px 0; text-align:center;">${CAL_MONTH_NAMES[m]}</h3><div id="month-grid-${m}" style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;"></div></div>`);
-            window.renderCalendarGrid(`month-grid-${m}`, year, m, window.getEventsForMonth(allEvents, year, m), false);
+            window.renderCalendarGrid(`month-grid-${m}`, year, m, window.getEventsForMonth(allEvents, year, m));
         }
     } else {
         container.style.display = 'block';
@@ -735,5 +714,4 @@ window.mostrarDashboard = async (user) => {
     if (calContainer) calContainer.style.display = 'none';
     const btnLogout = document.getElementById('btn-logout'); if (btnLogout) btnLogout.style.display = '';
     if (window.originalMostrarDashboardCal) await window.originalMostrarDashboardCal(user);
-    setTimeout(() => { window.cargarWidgetCalendario(); }, 150);
 };
