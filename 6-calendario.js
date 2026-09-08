@@ -238,6 +238,15 @@ window.navegarAEvento = async (evId, type, evalId, empId, title, mode = 'self') 
 
 // --- 3. OVERRIDES ---
 
+// **Este envoltorio devuelve la promesa del original, y eso no es un detalle.**
+// La lista de encuestas se dibuja después de dos consultas, así que quien la
+// abre para enseñar algo dentro —`abrirEncuestaDesdeInicio`, que monta la lista
+// y encima pinta el detalle de una encuesta— tiene que poder esperarla. Cuando
+// esto devolvía `undefined`, su `await` seguía de largo: el detalle se pintaba
+// primero y la lista aterrizaba encima, así que tocar una encuesta desde el
+// panel abría la lista con el título de la encuesta en el encabezado. No se veía
+// siempre —es una carrera, y con la caché caliente la lista llega antes—, que es
+// lo que lo hacía parecer cosa de la pantalla y no de aquí.
 if (!window.originalCargarVistaEvaluaciones) window.originalCargarVistaEvaluaciones = window.cargarVistaEvaluaciones;
 window.cargarVistaEvaluaciones = () => {
     if (window.returnToCalendar) {
@@ -248,9 +257,11 @@ window.cargarVistaEvaluaciones = () => {
         if(cal) cal.style.display = 'block';
         window.returnToCalendar = false;
         document.body.style.overflow = '';
-    } else {
-        if(window.originalCargarVistaEvaluaciones) window.originalCargarVistaEvaluaciones();
+        return Promise.resolve();
     }
+    return window.originalCargarVistaEvaluaciones
+        ? window.originalCargarVistaEvaluaciones()
+        : Promise.resolve();
 };
 
 if (!window.originalCancelarRespuesta) window.originalCancelarRespuesta = window.cancelarRespuesta;

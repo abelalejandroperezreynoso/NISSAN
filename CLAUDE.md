@@ -2404,6 +2404,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `closest` devolvía null y el `TypeError` abortaba el resto de la función sin
   aviso, dejando la insignia de la pregunta sin actualizar. Se busca por clase
   (`.pregunta-detalle`), y con guarda.
+- **Un envoltorio que no devuelve la promesa del original rompe a quien la
+  espera, y sólo a veces.** `6-calendario.js` envuelve tres funciones
+  (`cargarVistaEvaluaciones`, `cancelarRespuesta`, `mostrarDashboard`) para
+  desviarlas cuando se viene del calendario. El de `cargarVistaEvaluaciones`
+  llamaba al original **sin devolver lo que devuelve**, así que quien hacía
+  `await window.cargarVistaEvaluaciones()` seguía de largo con la lista aún sin
+  dibujar.
+
+  Se notaba en `window.abrirEncuestaDesdeInicio`, que monta la lista y **encima**
+  pinta el detalle de una encuesta: el detalle se pintaba primero y la lista
+  aterrizaba después, encima, de modo que tocar una encuesta desde el panel
+  abría **la lista con el título de la encuesta en el encabezado**. Es una
+  carrera, así que no fallaba siempre —con `evalCache` caliente la lista llega
+  antes y gana el detalle—, y eso es lo que lo hacía parecer cosa de la pantalla
+  y no del envoltorio. Se reprodujo poniéndole 250 ms de retraso a las consultas
+  del cliente simulado.
+
+  Todo envoltorio de una función `async` **devuelve lo que devuelve la
+  original**, también en sus ramas propias —ahí, `Promise.resolve()`—. El de
+  `mostrarDashboard` ya lo hacía (es `async` y hace `await`); el de
+  `cancelarRespuesta` envuelve una función síncrona y nadie la espera.
+
 - **IDs duplicados o huérfanos.** Al ser archivos grandes con JS inline, es
   fácil dejar una función definida dos veces (la segunda gana en silencio) o
   un `getElementById` apuntando a un elemento ya eliminado, que revienta con
