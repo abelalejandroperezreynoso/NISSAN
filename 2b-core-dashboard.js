@@ -1111,7 +1111,139 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
         window.calcularPendientesBatch([user.id]);
     }, 500);
 
+    window.cargarEncuestasAsignadas(user.id);
     window.cargarEncuestasQueReviso(user.id);
+};
+
+// ==========================================
+// LAS ENCUESTAS ASIGNADAS A ESTA PERSONA
+// ==========================================
+// Debajo del botón de pendientes: cuáles le tocan y cómo va con cada una. El
+// botón dice cuántas faltan pero no cuáles, y la lista de encuestas está dos
+// toques más adentro. Aquí salen todas las suyas, **también las que ya
+// contestó**: una lista donde todo dice «al día» es lo que deja tranquilo, y
+// una lista vacía no distingue entre no deber nada y no tener nada asignado.
+//
+// No decide nada por su cuenta. A quién le toca cada encuesta lo dice
+// `leTocaEstaEncuesta` y en qué estado está, `esEvaluacionPendiente` —las
+// mismas dos reglas del badge del panel y del panel de pendientes—, así que
+// esta tarjeta no puede discrepar de lo que digan ellos. Lo único suyo es cómo
+// se llama cada estado.
+window.estadoDeAsignada = (v) => {
+    const verde = { fondo: '#f0fdf4', color: '#15803d', borde: '#bbf7d0' };
+    const rojo  = { fondo: '#fee2e2', color: '#b91c1c', borde: '#fecaca' };
+    const ambar = { fondo: '#fef3c7', color: '#b45309', borde: '#fde68a' };
+
+    if (!v || !v.mostrar) return Object.assign({ texto: 'Al día' }, verde);
+
+    switch (v.tipoAviso) {
+        case 'nunca':        return Object.assign({ texto: 'Sin contestar' }, rojo);
+        case 'vencida':      return Object.assign({ texto: 'Vencida' }, rojo);
+        case 'mal_revisada': return Object.assign({ texto: 'Mal revisada' }, rojo);
+        case 'reintento':    return Object.assign({ texto: 'Repetir' }, v.vencida ? rojo : ambar);
+        case 'por_vencer': {
+            const d = v.diasFaltantes;
+            const texto = d <= 0 ? 'Vence hoy' : (d === 1 ? 'Vence mañana' : `Vence en ${d} días`);
+            return Object.assign({ texto }, ambar);
+        }
+        default:             return Object.assign({ texto: 'Pendiente' }, v.vencida ? rojo : ambar);
+    }
+};
+
+window.cargarEncuestasAsignadas = async (userId) => {
+    const cont = document.getElementById('container-encuestas-asignadas');
+    if (!cont) return;
+
+    cont.style.display = 'none';
+    cont.innerHTML = '';
+
+    const empStrId = String(userId).trim();
+
+    try {
+        // La ficha manda sobre `usuarioLogueado`: la sesión dura treinta días y
+        // un cambio de puesto o de departamento posterior no aparecería ahí, y
+        // de esos dos campos depende qué encuestas le tocan.
+        if (!window.todosLosEmpleadosData || window.todosLosEmpleadosData.length === 0) {
+            await window.cargarDatosEmpleados();
+        }
+        const empleado = (window.todosLosEmpleadosData || []).find(e => String(e.id) === empStrId)
+            || JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+        if (!empleado) return;
+
+        // Las mismas columnas que pide el badge, y por lo mismo: sin ellas
+        // `esEvaluacionPendiente` decide con lo que no se le dio —una encuesta
+        // sin `requires_min_score` pediría repetirse aunque tenga el mínimo
+        // apagado— y `leTocaEstaEncuesta` se la contaría a quien no le toca.
+        const campos = await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(
+            'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments')));
+
+        // Igual que en el panel de pendientes: las ventanas de las encuestas
+        // que pasan lista se piden antes, porque `esEvaluacionPendiente` las
+        // consulta sin poder esperar.
+        await window.cargarVentanasDeAsistencia();
+
+        const { data: encuestas, error } = await sb.from('evaluations')
+            .select(campos)
+            .eq('active', true);
+        if (error || !encuestas) return;
+
+        const tieneEquipo = window.tieneEquipoDirecto(empStrId);
+        const mias = encuestas.filter(ev => window.leTocaEstaEncuesta(ev, empleado, tieneEquipo));
+        if (mias.length === 0) return;
+
+        // `review_status` y `grades_json` son para el plazo de reintento: sin
+        // el puntaje no se sabe si hay que reponer la encuesta.
+        const { data: respuestas } = await sb.from('evaluation_responses')
+            .select('evaluation_id, submitted_at, review_status, grades_json')
+            .eq('employee_id', empStrId)
+            .in('evaluation_id', mias.map(e => e.id));
+
+        const filas = mias.map(ev => {
+            const contestaQuienMira = (ev.mode || 'self') !== 'boss';
+            const vencimiento = window.esEvaluacionPendiente(
+                respuestas, ev.id, ev.frequency, ev.created_at, ev, contestaQuienMira);
+            return { ev, vencimiento, estado: window.estadoDeAsignada(vencimiento) };
+        });
+
+        // Lo que falta, arriba; y lo vencido antes que lo que aún tiene plazo.
+        const peso = (f) => (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1));
+        filas.sort((a, b) => peso(a) - peso(b));
+
+        const pendientes = filas.filter(f => f.vencimiento.mostrar).length;
+        const resumen = pendientes === 0
+            ? `Ninguna pendiente de ${filas.length}`
+            : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${filas.length}`;
+
+        const renglones = filas.map(({ ev, estado }) => {
+            const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+            const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
+            const clasificacion = window.sanitizeForHTML(ev.category || 'General');
+            const pie = ritmo ? `${clasificacion} · ${ritmo}` : clasificacion;
+
+            return `
+                <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
+                     style="display:flex; align-items:center; gap:10px; padding:10px 8px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                    <div style="font-size:1.3rem; line-height:1;">📝</div>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
+                        <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
+                    </div>
+                    <div style="background:${estado.fondo}; color:${estado.color}; border:1px solid ${estado.borde}; border-radius:20px; padding:3px 10px; font-size:0.7rem; font-weight:bold; white-space:nowrap;">${estado.texto}</div>
+                </div>`;
+        }).join('');
+
+        cont.innerHTML = `
+            <div style="background:white; border-radius:16px; padding:15px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
+                <h3 style="margin:0 0 2px 0; color:#0369a1; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">📝 Encuestas asignadas</h3>
+                <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:6px;">${resumen}</div>
+                ${renglones}
+            </div>`;
+        cont.style.display = 'block';
+    } catch (e) {
+        // Nada que enseñar es mejor que una tarjeta rota: el resto del inicio
+        // no depende de esto.
+        console.warn('No se pudieron cargar las encuestas asignadas:', e.message);
+    }
 };
 
 // ==========================================
@@ -1216,11 +1348,18 @@ window.cargarEncuestasQueReviso = async (userId) => {
 // Se abre la lista de encuestas primero: el detalle se dibuja dentro de su
 // hoja —`#contenido-modal-evaluaciones`, que no existe hasta que la lista se
 // ha montado— y así la flecha de volver lleva a donde tiene que llevar.
-window.abrirEncuestaQueReviso = async (evalId, titulo) => {
+//
+// Lleva al detalle y no a contestar directamente, que es lo que deja que la
+// pantalla decida qué botón toca: responder, elegir a qué colaborador se
+// evalúa en una encuesta de modo jefe, o corregir a quién va dirigida.
+window.abrirEncuestaDesdeInicio = async (evalId, titulo) => {
     if (!window.cargarVistaEvaluaciones) { alert('Módulo de encuestas en actualización'); return; }
     await window.cargarVistaEvaluaciones();
     if (window.abrirHistorialEvaluacion) await window.abrirHistorialEvaluacion(evalId, titulo);
 };
+
+// El nombre con el que la tarjeta de revisión la llamaba desde el principio.
+window.abrirEncuestaQueReviso = window.abrirEncuestaDesdeInicio;
 
 window.cargarDatosEmpleados = async () => {
     // 1. Agregamos is_active al select (quitamos el filtro .not)

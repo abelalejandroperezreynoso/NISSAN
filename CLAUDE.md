@@ -2276,6 +2276,45 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   pueda llegar a ellas arrastrando. Los márgenes automáticos se van a cero
   cuando no sobra sitio, de modo que con pocas quedan centradas y con muchas se
   empieza por la primera.
+- **La pantalla de inicio dice qué encuestas le tocan a esta persona**, en la
+  tarjeta que llena `window.cargarEncuestasAsignadas(userId)`
+  (`2b-core-dashboard.js`) dentro de `#container-encuestas-asignadas`, justo
+  debajo del botón de pendientes. El botón dice cuántas faltan pero no cuáles,
+  y la lista de encuestas está dos toques más adentro.
+
+  Salen **todas las suyas, también las que ya contestó**: una lista donde todo
+  dice «Al día» es lo que deja tranquilo, y una lista vacía no distinguiría
+  entre no deber nada y no tener nada asignado. Sin ninguna asignada la tarjeta
+  no se dibuja.
+
+  **No decide nada por su cuenta**, que es lo único importante de esta sección:
+  a quién le toca cada encuesta lo dice `leTocaEstaEncuesta` y en qué estado
+  está, `esEvaluacionPendiente` —las mismas dos reglas del badge del panel y
+  del panel de pendientes—, así que no puede discrepar de lo que ellos digan.
+  Lo suyo es sólo cómo se llama cada estado (`window.estadoDeAsignada`, que
+  traduce el `tipoAviso` a «Sin contestar», «Vencida», «Mal revisada»,
+  «Repetir», «Vence en N días» o «Al día») y el orden: lo vencido primero, lo
+  que aún tiene plazo después y lo que está al día al final.
+
+  Por lo mismo **arma sus columnas como el badge** —`camposConRelanzamiento`
+  sobre `camposConMinimo` sobre `camposConReintento`, más `mode`,
+  `is_obligatory` y los tres destinatarios— y pide antes
+  `cargarVentanasDeAsistencia()`: `esEvaluacionPendiente` consulta la ventana de
+  las encuestas que pasan lista sin poder esperar. Una columna que no se pida
+  llega `undefined`, y eso no es `false`.
+
+  El toque lleva al **detalle de la encuesta** (`window.abrirEncuestaDesdeInicio`,
+  que es la función que la tarjeta de revisión ya usaba con el nombre
+  `abrirEncuestaQueReviso`, hoy un alias suyo) y no a contestar directamente:
+  así es la propia pantalla la que decide qué botón toca —responder, elegir a
+  qué colaborador se evalúa en una encuesta de modo jefe, o corregir a quién va
+  dirigida—.
+
+  La ficha del empleado sale de `window.todosLosEmpleadosData` y no de
+  `usuarioLogueado`: la sesión dura treinta días y un cambio de puesto o de
+  departamento posterior no aparecería ahí, y de esos dos campos depende qué
+  encuestas le tocan.
+
 - **El panel del usuario se pliega, y de entrada está contraído.** Contraído
   se ve sólo quién es —la foto, sus estrellas y el nombre—, que es lo que se
   mira de pasada; el radar y las insignias salen al tocar la tarjeta. En un
