@@ -605,6 +605,27 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   (`#subtitulo-hoja-evaluaciones:empty`), que si no su margen separaría el
   título de la línea del encabezado sin decir nada.
 
+  **La pantalla de una encuesta va sin emoji y sin adornos**, y eso se fue
+  quitando a propósito:
+
+  - **No pregunta «¿Deseas registrar una nueva respuesta para esta
+    evaluación?»**. Debajo estaba el botón que lo dice —«Volver a Responder»,
+    «Responder Encuesta», «Evaluar a un Colaborador…»—, así que era el rótulo
+    del botón contado dos veces y en forma de pregunta.
+  - **«Tu último resultado» no lleva la etiqueta del estado** («⭐ Certificada»,
+    «✓ Revisada», «⚠️ Mal revisada»…), que era una chapa de color por encima de
+    una cifra que ya va coloreada con `getColorScore`. Con ella se fue el mapa
+    `estados`. Lo que se pierde es la explicación del «—» de una respuesta
+    todavía sin calificar; el estado se sigue diciendo en su renglón de la
+    lista de respuestas y al abrirla.
+  - **Ningún emoji**: ni en los tres botones, ni en el aviso de «Te toca
+    revisar esta encuesta», ni en el recuadro de información («Encuesta
+    Opcional», «Mide resultados por Área», «La revisa …»), ni en el rótulo
+    «Respuestas (N)» ni en su buscador. La flecha de «entra aquí» que llevaban
+    las filas es hoy un «›» gris claro, que es lo que hace ese trabajo en iOS.
+    El texto de cada estado se queda —«Certificada», «Mal Revisada»—: lo que se
+    quitó fue el dibujo de delante.
+
   La lista de respuestas de una encuesta va plegada en un
   `<details class="hoja-plegable">`, y se abre sola sólo si hay algo esperando
   la calificación de quien mira. Arriba, en cambio, sale siempre el último
@@ -1196,8 +1217,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **Quien revisa una encuesta puede además corregir a quién va dirigida**, sin
   ser administrador y sin tocar nada más: es el instructor que la imparte y es
   quien sabe a quién le falta tomarla. Se entra por dos sitios: el lápiz de la
-  tarjeta en la lista —el mismo que tiene el administrador— y el botón «👥
-  Editar a quién va dirigida» de la pantalla de la encuesta, debajo del de
+  tarjeta en la lista —el mismo que tiene el administrador— y el botón
+  «Editar a quién va dirigida» de la pantalla de la encuesta, debajo del de
   responder. Los dos llaman a `window.editarDestinatariosEncuesta(id)`, que
   comprueba el permiso con `window.puedeEditarDestinatarios(ev, empleadoId)`
   (en `1-config.js`, junto a las demás reglas de revisión).
@@ -1253,7 +1274,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 - **Relanzar una encuesta es un instante, no un interruptor.** Volver a pedir
   una encuesta que la gente ya contestó —la auditoría se repite, la
   capacitación se vuelve a dar, el evento se celebra otra vez— lo hace **quien
-  la revisa**, con el botón «🔄 Relanzar encuesta» del panel de detalles, junto
+  la revisa**, con el botón «Relanzar encuesta» del panel de detalles, junto
   al de editar a quién va dirigida y por lo mismo: es el instructor que la
   imparte y quien sabe cuándo toca repetirla. El modo administrador también
   puede, como en todo lo demás.

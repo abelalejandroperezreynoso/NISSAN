@@ -111,8 +111,8 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // la encuesta: es de la encuesta entera y ahí se lee sin gastar un
         // recuadro —ni la palabra «Frecuencia», que al lado del título sobra—.
         subtituloHoja = window.textoDeFrecuencia(evalData.frequency);
-        const obligHtml = (evalData.is_obligatory === false) ? `<div style="font-size:0.8rem; color:#22c55e; font-weight:bold; margin-top:4px;">✨ Encuesta Opcional</div>` : '';
-        const areaHtml = (evalData.evaluates_area === true) ? `<div style="font-size:0.8rem; color:#be185d; font-weight:bold; margin-top:4px;">📍 Mide resultados por Área</div>` : '';
+        const obligHtml = (evalData.is_obligatory === false) ? `<div style="font-size:0.8rem; color:#22c55e; font-weight:bold; margin-top:4px;">Encuesta Opcional</div>` : '';
+        const areaHtml = (evalData.evaluates_area === true) ? `<div style="font-size:0.8rem; color:#be185d; font-weight:bold; margin-top:4px;">Mide resultados por Área</div>` : '';
 
         // Quién la califica sólo se dice cuando no es lo de siempre: con el
         // jefe inmediato no hay nada que aclarar.
@@ -125,7 +125,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             ? `<div style="font-size:0.75rem; color:#7e22ce; font-weight:normal; margin-top:2px;">Cada quien califica a los colaboradores que dirigió a esta encuesta.</div>`
             : '';
         const revisoresHtml = nombrados.length > 0
-            ? `<div style="font-size:0.8rem; color:#7e22ce; font-weight:bold; margin-top:4px;">👁️ La revisa ${window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))}${notaAsignados}</div>`
+            ? `<div style="font-size:0.8rem; color:#7e22ce; font-weight:bold; margin-top:4px;">La revisa ${window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))}${notaAsignados}</div>`
             : '';
 
         // Sin la frecuencia dentro, el recuadro puede quedarse sin nada que
@@ -141,15 +141,15 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     
     let actionButtonHtml = '';
     if (mode === 'boss') {
-        actionButtonHtml = `<button onclick="window.abrirSeleccionSubordinado('${evalId}', '${safeTitle}', 'boss')" style="width: 100%; padding:12px 20px; background:#be185d; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(190, 24, 93, 0.25); transition: transform 0.1s;">👥 Evaluar a un Colaborador...</button>`;
+        actionButtonHtml = `<button onclick="window.abrirSeleccionSubordinado('${evalId}', '${safeTitle}', 'boss')" style="width: 100%; padding:12px 20px; background:#be185d; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(190, 24, 93, 0.25); transition: transform 0.1s;">Evaluar a un Colaborador...</button>`;
     } else if (window.modoAdminActivo || window.leTocaEstaEncuesta(evalData, user, window.tieneEquipoDirecto(user.id))) {
         const misRespuestas = responses.filter(r => String(r.employee_id) === String(user.id));
         const btnText = misRespuestas.length > 0 ? "Volver a Responder" : "Responder Encuesta";
-        actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" style="width: 100%; padding:12px 20px; background:#2563eb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(37,99,235,0.25); transition: transform 0.1s;">📝 ${btnText}</button>`;
+        actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" style="width: 100%; padding:12px 20px; background:#2563eb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(37,99,235,0.25); transition: transform 0.1s;">${btnText}</button>`;
     } else if (window.revisoresDeEncuesta(evalData).includes(String(user.id))) {
         // Se está aquí para calificarla, no para contestarla: la encuesta no va
         // dirigida a esta persona y el botón de responder sobra.
-        actionButtonHtml = `<div style="text-align:center; color:#7e22ce; font-size:0.9rem; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px;">👁️ Te toca revisar esta encuesta.</div>`;
+        actionButtonHtml = `<div style="text-align:center; color:#7e22ce; font-size:0.9rem; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px;">Te toca revisar esta encuesta.</div>`;
     }
 
     // Corregir a quién va dirigida no depende de cuál de los botones de arriba
@@ -165,7 +165,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         destinatariosBtnHtml = `
             <button onclick="window.cerrarModalEvaluaciones(); window.editarDestinatariosEncuesta('${evalId}')"
                     style="width:100%; margin-top:10px; padding:10px 16px; background:white; color:#7e22ce; border:1px solid #d8b4fe; border-radius:10px; cursor:pointer; font-weight:600; font-size:0.9rem; display:flex; align-items:center; justify-content:center; gap:8px;">
-                👥 Editar a quién va dirigida
+                Editar a quién va dirigida
             </button>`;
     }
 
@@ -183,7 +183,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         relanzarBtnHtml = `
             <button onclick="window.abrirRelanzarEncuesta('${evalId}')"
                     style="width:100%; margin-top:10px; padding:10px 16px; background:white; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:10px; cursor:pointer; font-weight:600; font-size:0.9rem; display:flex; align-items:center; justify-content:center; gap:8px;">
-                🔄 Relanzar encuesta
+                Relanzar encuesta
             </button>${notaRelanzada}`;
     }
 
@@ -199,14 +199,6 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         const score = window.calcularScoreRespuesta(miUltima);
         const colorScore = calificada ? window.getColorScore(score) : '#94a3b8';
         const fecha = new Date(miUltima.submitted_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
-
-        const estados = {
-            'Certificada': { texto: '⭐ Certificada', color: '#1d4ed8' },
-            'Revisado':    { texto: '✓ Revisada',    color: '#166534' },
-            'Falsa':       { texto: 'Anulada',       color: '#991b1b' },
-            'Mal Revisada':{ texto: '⚠️ Mal revisada', color: '#7e22ce' }
-        };
-        const estado = estados[miUltima.review_status] || { texto: 'En espera de revisión', color: '#ea580c' };
 
         // Sin calificar todavía no hay cifra que enseñar: un 0% se leería como
         // que la falló entera.
@@ -225,19 +217,15 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
                 </div>
                 <div style="min-width:0; flex:1;">
                     <div style="font-size:0.8rem; color:#64748b; font-weight:600;">Tu último resultado</div>
-                    <div style="font-size:0.85rem; color:${estado.color}; font-weight:700;">${estado.texto}</div>
                     <div style="font-size:0.75rem; color:#94a3b8;">${fecha}</div>
                 </div>
-                <div style="color:#64748b; font-size:1.1rem;">👉</div>
+                <div style="color:#cbd5e1; font-size:1.4rem; line-height:1;">&rsaquo;</div>
             </div>`;
     }
 
     const bannerHtml = `
         <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
             ${ultimoResultadoHtml}
-            <div style="color: #334155; font-size: 0.95rem; margin-bottom: 15px; font-weight: 500; text-align: center;">
-                ¿Deseas registrar una nueva respuesta para esta evaluación?
-            </div>
             ${actionButtonHtml}
             ${destinatariosBtnHtml}
             ${relanzarBtnHtml}
@@ -274,11 +262,11 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         ${bannerHtml} <div id="stats-dashboard" style="display:none; margin-top:20px;"></div>
         <details id="lista-wrapper" class="hoja-plegable" ${cuantasMeTocan > 0 ? 'open' : ''}>
             <summary class="hoja-plegable-resumen">
-                <span>📋 Respuestas (<span id="contador-respuestas">${window.respuestasCacheActual.length}</span>)</span>
+                <span>Respuestas (<span id="contador-respuestas">${window.respuestasCacheActual.length}</span>)</span>
                 ${avisoRevision}
             </summary>
             <div class="hoja-plegable-cuerpo">
-                <input type="text" id="buscador-historial" placeholder="🔍 Buscar usuario..." oninput="window.renderizarListaRespuestas()" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:16px; outline:none; background:#f8fafc; margin:12px 0;">
+                <input type="text" id="buscador-historial" placeholder="Buscar usuario..." oninput="window.renderizarListaRespuestas()" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:16px; outline:none; background:#f8fafc; margin:12px 0;">
                 <div id="lista-respuestas-historial">Cargando...</div>
             </div>
         </details>
@@ -415,13 +403,13 @@ window.renderizarListaRespuestas = () => {
         
         let colorBorde = isCertificada ? '#3b82f6' : (isRevisado ? '#22c55e' : (isFalsa ? '#ef4444' : (isMalRevisada ? '#a855f7' : '#f97316')));
         
-        let textoEstado = isCertificada ? '<span style="color:#1d4ed8; font-weight:bold; font-size:0.75rem;">⭐ Certificada</span>' :
+        let textoEstado = isCertificada ? '<span style="color:#1d4ed8; font-weight:bold; font-size:0.75rem;">Certificada</span>' :
                          (isRevisado ? '<span style="color:#166534; font-weight:bold; font-size:0.75rem;">Revisado</span>' : 
                          (isFalsa ? '<span style="color:#991b1b; font-weight:bold; font-size:0.75rem;">Falsa / Anulada</span>' : 
-                         (isMalRevisada ? '<span style="color:#7e22ce; font-weight:bold; font-size:0.75rem;">⚠️ Mal Revisada</span>' : 
+                         (isMalRevisada ? '<span style="color:#7e22ce; font-weight:bold; font-size:0.75rem;">Mal Revisada</span>' : 
                          '<span style="color:#ea580c; font-weight:bold; font-size:0.75rem;">En espera</span>')));
         
-        return `<div class="incident-card" style="border-left: 5px solid ${colorBorde}; padding: 15px; cursor:pointer;" onclick='verDetalleRespuesta(${safeJson})'><div style="display:flex; justify-content:space-between; align-items:center;"><div><div style="color:#334155; font-size:1rem; margin-bottom:4px;">${tituloCard} ${scoreBadge}</div><div class="card-meta">${fecha} • ${textoEstado}</div></div><div style="color:#64748b; font-size:1.2rem;">👉</div></div></div>`;
+        return `<div class="incident-card" style="border-left: 5px solid ${colorBorde}; padding: 15px; cursor:pointer;" onclick='verDetalleRespuesta(${safeJson})'><div style="display:flex; justify-content:space-between; align-items:center;"><div><div style="color:#334155; font-size:1rem; margin-bottom:4px;">${tituloCard} ${scoreBadge}</div><div class="card-meta">${fecha} • ${textoEstado}</div></div><div style="color:#cbd5e1; font-size:1.4rem; line-height:1;">&rsaquo;</div></div></div>`;
     };
 
     const pendientesDeRevisar = responses.filter(r =>
