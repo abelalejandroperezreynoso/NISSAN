@@ -2626,6 +2626,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   El título nace como «… (copia)»: dos encuestas con el mismo nombre en la misma
   clasificación no hay quien las distinga en ninguna lista.
 
+  **Y entre el resultado y la lista va quién las revisa**, con la miniatura de
+  la foto de cada uno (`window.filaDeRevisores`). No es cosa del administrador:
+  a quien contesta le sirve saber quién va a calificarle, y una cara se
+  reconoce antes que un nombre. Sin foto va el 👤 sobre el mismo azul de las
+  listas de gente —`window.miniaturaDeEmpleado(emp, lado)`, que también apaga
+  al que esté dado de baja—, y **sin revisores nombrados no se dibuja nada**:
+  ahí califica el jefe inmediato de cada quien, que es lo de siempre y no hace
+  falta repetirlo en cada clasificación.
+
+  Son la **unión de los efectivos** de sus encuestas —lo que devuelve
+  `revisoresDeEncuesta`, que ya resuelve la precedencia— y no sólo los de la
+  clasificación: una encuesta que nombra a los suyos también los tiene, y
+  esconderlos sería enseñar a quien no califica. De ahí sale el «1 de 2» que
+  lleva quien no las revisa todas, que es lo único que separa al revisor de la
+  clasificación entera del que lleva una encuesta suelta
+  (`window.revisoresDelGrupo`).
+
+  Por eso `cargarEncuestasAsignadas` **encadena `camposConRevisores`** y pide
+  antes `cargarRevisoresDeClasificaciones()`: sin la columna, una encuesta con
+  revisores propios enseñaría los heredados de su clasificación —la trampa de
+  `requires_min_score`—, y sin la caché no habría herencia que enseñar.
+
   **Lo que enseña es cómo va, no cuánto falta**: el resultado del último periodo
   que dejó alguno y la línea de los anteriores. Cuántas hay pendientes y cuántas
   al día ya lo dice el renglón de la tarjeta del panel, y ahí abajo lo dice cada

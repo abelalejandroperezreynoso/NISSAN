@@ -1206,13 +1206,22 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // `esEvaluacionPendiente` decide con lo que no se le dio —una encuesta
         // sin `requires_min_score` pediría repetirse aunque tenga el mínimo
         // apagado— y `leTocaEstaEncuesta` se la contaría a quien no le toca.
-        const campos = await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(
-            'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments')));
+        // Y `reviewer_employees`, que es de donde salen las miniaturas de quién
+        // revisa en la hoja de detalle: sin la columna, `revisoresDeEncuesta`
+        // sólo vería los de la clasificación y enseñaría los heredados en una
+        // encuesta que nombra a los suyos. Es la trampa de `requires_min_score`.
+        const campos = await window.camposConRevisores(
+            await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(
+                'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments'))));
 
         // Igual que en el panel de pendientes: las ventanas de las encuestas
         // que pasan lista se piden antes, porque `esEvaluacionPendiente` las
         // consulta sin poder esperar.
         await window.cargarVentanasDeAsistencia();
+
+        // Quién revisa puede venir de la clasificación, y `revisoresDeEncuesta`
+        // lo pregunta sin poder esperar cuando se abre la hoja de detalle.
+        await window.cargarRevisoresDeClasificaciones();
 
         const { data: encuestas, error } = await sb.from('evaluations')
             .select(campos)
@@ -1598,6 +1607,84 @@ window.cerrarDetalleClasificacion = () => {
     if (cuerpo) cuerpo.innerHTML = '';
 };
 
+// La miniatura de la foto de alguien, redonda y del tamaño que se pida. Sin
+// foto va el 👤 sobre el mismo azul que en las listas de gente, que es lo que
+// deja la fila pareja en lugar de un hueco. Una ficha que ya no está en la
+// plantilla se dibuja igual, con su hueco y su «ID N» al lado.
+window.miniaturaDeEmpleado = (emp, lado) => {
+    const tam = lado || 30;
+    const foto = emp && emp.avatar
+        ? `<img src="${window.procesarUrlImagen(emp.avatar)}" loading="lazy" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`
+        : '👤';
+    const fondo = (emp && emp.avatar)
+        ? 'background:white; border:1.5px solid #ddd6fe;'
+        : 'background:#f5f3ff; border:1.5px solid #ddd6fe;';
+    // Un empleado dado de baja se dibuja apagado, como en las demás listas.
+    const apagado = (emp && emp.isActive === false) ? 'opacity:0.5; filter:grayscale(100%);' : '';
+    return `<div style="width:${tam}px; height:${tam}px; border-radius:50%; flex-shrink:0; display:flex;
+                        align-items:center; justify-content:center; font-size:${Math.round(tam * 0.5)}px;
+                        overflow:hidden; ${fondo} ${apagado}">${foto}</div>`;
+};
+
+// Quién revisa las encuestas de una clasificación. Es la **unión de los
+// efectivos** de sus encuestas —lo que devuelve `revisoresDeEncuesta`, que ya
+// resuelve la precedencia: los propios de la encuesta mandan sobre los de la
+// clasificación—, y no sólo los de la clasificación: una encuesta que nombra a
+// los suyos también los tiene, y esconderlos sería enseñar a quien no califica.
+//
+// Se cuenta de cuántas encuestas del grupo revisa cada quien, que es lo único
+// que separa al revisor de la clasificación entera del que sólo lleva una.
+window.revisoresDelGrupo = (grupo) => {
+    const cuenta = {};
+    (grupo.filas || []).forEach(({ ev }) => {
+        window.revisoresDeEncuesta(ev).forEach(id => {
+            cuenta[String(id)] = (cuenta[String(id)] || 0) + 1;
+        });
+    });
+
+    return Object.keys(cuenta).map(id => ({
+        id: id,
+        emp: (window.todosLosEmpleadosData || []).find(e => String(e.id) === id) || null,
+        cuantas: cuenta[id]
+    })).sort((a, b) => b.cuantas - a.cuantas
+        || String((a.emp && a.emp.name) || a.id).localeCompare(String((b.emp && b.emp.name) || b.id), 'es'));
+};
+
+// La fila de miniaturas de la hoja de detalle. Sin revisores nombrados no se
+// dibuja nada: ahí califica el jefe inmediato de cada quien, que es lo de
+// siempre y no hace falta decirlo en todas las clasificaciones.
+window.filaDeRevisores = (grupo) => {
+    const revisores = window.revisoresDelGrupo(grupo);
+    if (revisores.length === 0) return '';
+
+    const total = (grupo.filas || []).length;
+    const fichas = revisores.map(r => {
+        const nombre = (r.emp && r.emp.name) ? r.emp.name : `ID ${r.id}`;
+        // El conteo sale sólo cuando no las revisa todas: es lo que distingue
+        // al revisor de la clasificación entera del que lleva una encuesta.
+        const alcance = r.cuantas < total
+            ? `<div style="font-size:0.68rem; color:#a78bfa; line-height:1.2;">${r.cuantas} de ${total}</div>`
+            : '';
+        return `<div style="display:flex; align-items:center; gap:7px; min-width:0;">
+                    ${window.miniaturaDeEmpleado(r.emp, 30)}
+                    <div style="min-width:0;">
+                        <div style="font-size:0.78rem; color:#4c1d95; font-weight:600; line-height:1.2;
+                                    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${window.sanitizeForHTML(nombre)}</div>
+                        ${alcance}
+                    </div>
+                </div>`;
+    }).join('');
+
+    return `
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px;
+                    background:#faf5ff; border:1px solid #ede9fe; border-radius:12px;
+                    padding:10px 12px; margin-bottom:14px;">
+            <div style="font-size:0.7rem; color:#7e22ce; font-weight:700; text-transform:uppercase;
+                        letter-spacing:0.04em; flex-basis:100%;">${revisores.length === 1 ? 'Revisa' : 'Revisan'}</div>
+            ${fichas}
+        </div>`;
+};
+
 window.abrirDetalleClasificacion = (indice) => {
     const grupo = (window.clasificacionesAsignadas || [])[indice];
     const overlay = document.getElementById('modal-detalle-clasificacion');
@@ -1704,7 +1791,9 @@ window.abrirDetalleClasificacion = (indice) => {
             </div>`;
     }).join('');
 
-    cuerpo.innerHTML = resumen + renglones;
+    // Quién las revisa va entre el resultado y la lista: lo que se viene a ver
+    // es cómo va, así que el resultado se queda arriba del todo.
+    cuerpo.innerHTML = resumen + window.filaDeRevisores(grupo) + renglones;
     overlay.style.display = 'flex';
 };
 
