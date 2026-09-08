@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-08-35">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-08-36">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -881,6 +881,36 @@
         </div>
     </div>
 
+    <!-- Pasar lista a mano. Lo abre quien revisa la encuesta desde el recuadro
+         del pase de lista, y sirve para lo que la casilla de quien contesta ya
+         no puede: corregir el registro cuando el plazo cerró, o apuntar a quien
+         fue sin tener la encuesta asignada.
+
+         Va como hoja aparte y no dentro del recuadro porque el padrón puede ser
+         la plantilla entera y hace falta buscador. El cuerpo se arma con
+         `innerHTML` al abrirla y se vacía al cerrarla, así que los ids de dentro
+         existen sólo mientras está a la vista. El buscador vive FUERA del cuerpo
+         que se repinta: dentro, cada letra se llevaría el foco por delante. -->
+    <div id="modal-pase-lista" class="hoja-overlay" style="z-index:2600;">
+        <div class="hoja-contenido" style="max-width: 520px; overflow: hidden; padding: 12px 0 0;">
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h2 class="hoja-titulo">Pase de lista</h2>
+                    <div class="hoja-subtitulo" id="subtitulo-pase-lista"></div>
+                </div>
+                <button onclick="window.cerrarPaseDeLista()" class="ios-boton-icono ios-boton-cerrar"
+                        title="Cerrar" aria-label="Cerrar"></button>
+            </div>
+
+            <div class="pase-buscador">
+                <input type="text" id="buscador-pase-lista" placeholder="Buscar a alguien…"
+                       oninput="window.pintarHojaPaseDeLista()">
+            </div>
+
+            <div id="cuerpo-pase-lista" class="pase-hoja-cuerpo"></div>
+        </div>
+    </div>
+
     <!-- El detalle de una clasificación del panel de inicio. Se abre al tocar su
          renglón en «encuestas asignadas»; el botón de la flecha, a la derecha,
          es otra cosa: despliega ahí mismo la lista de sus encuestas.
@@ -958,20 +988,20 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-08-35"></script>
-    <script src="2a-core-nav.js?v=2026-09-08-35"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-08-35"></script>
-    <script src="3-incidentes.js?v=2026-09-08-35"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-08-35"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-08-35"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-08-35"></script>
-    <script src="5-objetivos.js?v=2026-09-08-35"></script>
-    <script src="6-calendario.js?v=2026-09-08-35"></script>
-    <script src="7-pendientes.js?v=2026-09-08-35"></script>
-    <script src="8-hallazgos.js?v=2026-09-08-35"></script>
-    <script src="9-estadisticas.js?v=2026-09-08-35"></script>
+    <script src="1-config.js?v=2026-09-08-36"></script>
+    <script src="2a-core-nav.js?v=2026-09-08-36"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-08-36"></script>
+    <script src="3-incidentes.js?v=2026-09-08-36"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-08-36"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-08-36"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-08-36"></script>
+    <script src="5-objetivos.js?v=2026-09-08-36"></script>
+    <script src="6-calendario.js?v=2026-09-08-36"></script>
+    <script src="7-pendientes.js?v=2026-09-08-36"></script>
+    <script src="8-hallazgos.js?v=2026-09-08-36"></script>
+    <script src="9-estadisticas.js?v=2026-09-08-36"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="10-refacciones.js?v=2026-09-08-35"></script> 
+    <script src="10-refacciones.js?v=2026-09-08-36"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

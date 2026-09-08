@@ -283,11 +283,22 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
 
     // Cuántos de cuántos fueron. Se cuenta sobre **todas** las respuestas y no
     // sobre `responses`, que va filtrada por a quién le toca calificar cada
-    // una: un pase de lista a medias no es un pase de lista. Los nombres, en
-    // cambio, sólo para quien la imparte.
+    // una: un pase de lista a medias no es un pase de lista. Los nombres —y
+    // poder pasar lista a mano—, en cambio, sólo para quien la imparte.
+    //
+    // El estado se deja puesto para la hoja de pasar lista, que dibuja lo mismo
+    // desde los mismos datos: así marcar a alguien no obliga a volver a
+    // consultar nada.
+    window.paseDeLista = {
+        ev: evalData,
+        preguntas: qs || [],
+        respuestas: todasLasRespuestas || [],
+        verNombres: window.modoAdminActivo || (evalData && window.puedeEditarDestinatarios(evalData, user.id)),
+        pregunta: null,
+        huboCambios: false
+    };
     const paseDeListaHtml = window.bloqueDePaseDeLista(
-        evalData, qs, todasLasRespuestas || [],
-        window.modoAdminActivo || (evalData && window.puedeEditarDestinatarios(evalData, user.id)));
+        evalData, qs, todasLasRespuestas || [], window.paseDeLista.verNombres);
 
     // --- CONSTRUCCIÓN DEL CONTENEDOR FINAL ---
         container.innerHTML = `
@@ -333,6 +344,13 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
 // cuánta gente fue a la junta no es de nadie en particular, pero la lista de
 // quién faltó es el acta, y ésa es del administrador y de quien revisa la
 // encuesta —los mismos que pueden corregir a quién va dirigida—.
+// Lo que están mirando la tarjeta y la hoja de pasar lista, que son la misma
+// cosa dibujada dos veces: la encuesta, sus preguntas, **todas** sus respuestas
+// y si quien mira puede tocarlas. Lo deja puesto `abrirHistorialEvaluacion` y
+// lo van corrigiendo los toques, para que no haya que volver a consultar tras
+// cada marca.
+window.paseDeLista = null;
+
 window.bloqueDePaseDeLista = (ev, preguntas, respuestas, verNombres) => {
     const deAsistencia = (preguntas || []).filter(q => window.esPreguntaDeAsistencia(q));
     if (deAsistencia.length === 0) return '';
@@ -374,12 +392,21 @@ window.bloqueDePaseDeLista = (ev, preguntas, respuestas, verNombres) => {
               window.listaDePaseDeLista('Faltaron', lista.ausentes, 'falto')
             : '';
 
+        // Pasar lista a mano es de quien la imparte, como los nombres: la
+        // casilla de quien contesta ya no puede —el plazo cerró—, y alguien
+        // tiene que poder corregir el registro y apuntar a quien fue sin tener
+        // la encuesta asignada.
+        const editarHtml = verNombres
+            ? `<button type="button" class="pase-editar" onclick="window.abrirPaseDeLista('${q.id}')">Pasar lista</button>`
+            : '';
+
         return `
             <div class="pase-tarjeta">
                 <div class="pase-rotulo">Pase de lista</div>
                 <div class="pase-evento">${window.sanitizeForHTML(q.question_text || 'Registro de asistencia')}</div>
                 <div class="pase-nota">${window.sanitizeForHTML(nota)}</div>
                 ${cifraHtml}
+                ${editarHtml}
                 ${nombresHtml}
             </div>`;
     }).join('');
@@ -410,6 +437,247 @@ window.listaDePaseDeLista = (rotulo, gente, clase) => {
             </summary>
             <div class="pase-plegable-cuerpo">${filas}</div>
         </details>`;
+};
+
+// ==========================================
+// PASAR LISTA A MANO
+// ==========================================
+// La casilla que enseña la encuesta es de quien asiste y sólo vale dentro de su
+// hora: pasado el plazo, un registro que faltó ya no lo puede arreglar nadie, y
+// quien fue sin tener la encuesta asignada nunca tuvo dónde apuntarse. Eso lo
+// resuelve quien la imparte desde aquí —el administrador y quien la revisa, los
+// mismos que ven los nombres—.
+//
+// **El plazo no se comprueba, y es a propósito**: existe para que nadie se
+// registre solo al día siguiente, no para atarle las manos a quien pasa lista.
+// Justo después de cerrarse es cuando hay que corregir la lista.
+//
+// Va en su propia hoja y no dentro del recuadro porque el padrón puede ser la
+// plantilla entera: hace falta buscador, y ahí es además donde se agrega a
+// quien no estaba.
+window.abrirPaseDeLista = (idPregunta) => {
+    const estado = window.paseDeLista;
+    if (!estado || !estado.verNombres) return;
+
+    const pregunta = (estado.preguntas || []).find(q => String(q.id) === String(idPregunta));
+    if (!pregunta) return;
+
+    estado.pregunta = pregunta;
+    const hoja = document.getElementById('modal-pase-lista');
+    if (!hoja) return;
+
+    const buscador = document.getElementById('buscador-pase-lista');
+    if (buscador) buscador.value = '';
+
+    window.pintarHojaPaseDeLista();
+    hoja.style.display = 'flex';
+};
+
+window.cerrarPaseDeLista = () => {
+    const hoja = document.getElementById('modal-pase-lista');
+    if (hoja) hoja.style.display = 'none';
+    const cuerpo = document.getElementById('cuerpo-pase-lista');
+    if (cuerpo) cuerpo.innerHTML = '';
+
+    // La hoja corrigió respuestas, así que lo que hay detrás —el recuadro, la
+    // lista de «Respuestas (N)» y el último resultado— habla de otra cosa: se
+    // vuelve a dibujar entero, manteniendo el scroll.
+    const estado = window.paseDeLista;
+    if (estado && estado.huboCambios) {
+        estado.huboCambios = false;
+        window.abrirHistorialEvaluacion(estado.ev.id, estado.ev.title || '', true);
+    }
+};
+
+// Una fila por persona, con su marca. Quien está en el padrón sale siempre;
+// quien no, sólo si registró asistencia —ahí se le apuntó a mano— o si se le
+// está buscando por su nombre, que es como se agrega a alguien nuevo.
+window.pintarHojaPaseDeLista = () => {
+    const estado = window.paseDeLista;
+    const cuerpo = document.getElementById('cuerpo-pase-lista');
+    if (!estado || !estado.pregunta || !cuerpo) return;
+
+    const q = estado.pregunta;
+    const lista = window.pasoDeLista(estado.ev, q, estado.respuestas);
+    const presentes = new Set(lista.presentes.concat(lista.ajenos).map(e => String(e.id)));
+
+    const subtitulo = document.getElementById('subtitulo-pase-lista');
+    if (subtitulo) {
+        subtitulo.innerText = `${lista.cuantos} de ${lista.total} · ${q.question_text || 'Registro de asistencia'}`;
+    }
+
+    // Se busca sin acentos, que nadie los teclea, y con el mismo criterio que
+    // el resto de los buscadores de la aplicación: por nombre.
+    const clave = (t) => String(t == null ? '' : t)
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+    const buscador = document.getElementById('buscador-pase-lista');
+    const buscado = clave(buscador ? buscador.value : '');
+    const casa = (emp) => !buscado || clave(emp.name).includes(buscado) || clave(emp.puesto).includes(buscado);
+
+    // El padrón, más quien se apuntó a mano sin estar en él: son los que ya
+    // salen en el recuadro, y los que se marcan y desmarcan.
+    const enLaLista = lista.presentes.concat(lista.ajenos).concat(lista.ausentes).filter(casa);
+    const yaEstan = new Set(lista.presentes.concat(lista.ajenos).concat(lista.ausentes).map(e => String(e.id)));
+
+    // Y cualquier otra persona de la plantilla, sólo mientras se la busca: es
+    // como se agrega a quien fue sin tener la encuesta asignada. Sin buscar no
+    // se listan cuatrocientas personas que no vienen a cuento.
+    const otras = buscado
+        ? (window.todosLosEmpleadosData || [])
+            .filter(emp => !yaEstan.has(String(emp.id)) && window.empleadoActivo(emp) && casa(emp))
+            .slice(0, 30)
+        : [];
+
+    const fila = (emp, marcado) => `
+        <button type="button" class="pase-fila${marcado ? ' esta-presente' : ''}"
+                onclick="window.alternarAsistencia('${String(emp.id).replace(/'/g, "\\'")}')">
+            ${window.miniaturaDeEmpleado(emp, 30)}
+            <span class="pase-fila-texto">
+                <span class="pase-persona-nombre">${window.sanitizeForHTML(emp.name || `ID ${emp.id}`)}</span>
+                ${emp.puesto ? `<span class="pase-persona-puesto">${window.sanitizeForHTML(emp.puesto)}</span>` : ''}
+            </span>
+            <span class="pase-marca" aria-hidden="true">${marcado ? '✓' : ''}</span>
+        </button>`;
+
+    const seccion = (rotulo, gente, nota) => gente.length === 0 ? '' : `
+        <div class="pase-seccion">
+            <div class="pase-seccion-rotulo">${rotulo}</div>
+            ${nota ? `<div class="pase-seccion-nota">${nota}</div>` : ''}
+            ${gente.map(emp => fila(emp, presentes.has(String(emp.id)))).join('')}
+        </div>`;
+
+    const vacio = enLaLista.length === 0 && otras.length === 0
+        ? `<div class="pase-hoja-vacio">Nadie coincide con lo que buscas.</div>` : '';
+
+    cuerpo.innerHTML =
+        seccion('A quién va dirigida', enLaLista) +
+        seccion('Otras personas', otras, 'No tienen la encuesta asignada. Marcarlas apunta que asistieron; no se las agrega a los destinatarios.') +
+        vacio;
+};
+
+// Marcar y desmarcar es escribir y borrar la respuesta de esa persona, que es
+// donde vive «Asistí»: no hay otra tabla que diga quién fue.
+//
+// **Sólo se toca la llave de esta pregunta.** Una encuesta puede llevar más, y
+// borrar la fila entera se llevaría por delante lo que esa persona contestó; la
+// fila se borra únicamente cuando lo de asistencia era lo único que tenía.
+window.alternarAsistencia = async (idEmpleado) => {
+    const estado = window.paseDeLista;
+    if (!estado || !estado.pregunta || estado.escribiendo) return;
+
+    const q = estado.pregunta;
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(idEmpleado));
+    if (!emp) return;
+
+    // Las de la vuelta en curso: una encuesta relanzada nombra otro evento, y
+    // los registros de la vuelta anterior no son de ésta.
+    const suyas = window.respuestasTrasRelanzar(estado.ev, estado.respuestas)
+        .filter(r => String(r.employee_id) === String(idEmpleado));
+    const marcada = (r) => String(((r && r.answers_json) || {})[q.id] || '').trim() === window.TEXTO_ASISTENCIA;
+    const presente = suyas.some(marcada);
+
+    estado.escribiendo = true;
+    try {
+        const hecho = presente
+            ? await window.borrarAsistencia(q, suyas.filter(marcada))
+            : await window.apuntarAsistencia(q, emp, suyas[0] || null);
+        if (!hecho) return;
+
+        estado.huboCambios = true;
+        // Una asistencia recién apuntada cierra —o reabre— el pendiente de esa
+        // persona y mueve los conteos del panel.
+        if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+    } finally {
+        estado.escribiendo = false;
+    }
+
+    window.pintarHojaPaseDeLista();
+};
+
+// La calificación es la misma que se pone sola al enviarla: pasar lista no
+// tiene respuesta buena ni mala, haberla confirmado es todo lo que se
+// preguntaba.
+window.calificacionDeAsistencia = (q) => ({
+    type: 'standard', status: 'correct', question: q.question_text || '', auto: true
+});
+
+window.apuntarAsistencia = async (q, emp, respuestaExistente) => {
+    if (respuestaExistente) {
+        const answers = { ...(respuestaExistente.answers_json || {}), [q.id]: window.TEXTO_ASISTENCIA };
+        const grades = { ...(respuestaExistente.grades_json || {}), [q.id]: window.calificacionDeAsistencia(q) };
+        // Contar las filas del `.select()`: aquí escribe alguien que no es
+        // administrador y una política de RLS que lo rechace no da error,
+        // simplemente no afecta a ninguna fila.
+        const { data, error } = await sb.from('evaluation_responses')
+            .update({ answers_json: answers, grades_json: grades })
+            .eq('id', respuestaExistente.id).select();
+        if (error || !data || data.length === 0) {
+            alert("No se pudo guardar la asistencia. Puede que la base no te deje escribir esa respuesta.");
+            return false;
+        }
+        Object.assign(respuestaExistente, data[0]);
+        return true;
+    }
+
+    // La hora del registro es la del evento, no la de ahora: es cuando esa
+    // persona asistió, y es lo que deja la respuesta en el periodo que le toca.
+    // Sin fecha en la pregunta no hay otra que el momento en que se apunta.
+    const cuando = window.fechaDelEvento(q) || new Date();
+    const { data, error } = await sb.from('evaluation_responses').insert({
+        evaluation_id: window.paseDeLista.ev.id,
+        employee_id: emp.id,
+        employee_area: emp.area || null,
+        answers_json: { [q.id]: window.TEXTO_ASISTENCIA },
+        grades_json: { [q.id]: window.calificacionDeAsistencia(q) },
+        // Una encuesta que sólo pasa lista queda calificada al apuntarla, como
+        // cuando la contesta su destinatario: no hay nada que revisar.
+        review_status: 'Revisado',
+        submitted_at: cuando.toISOString()
+    }).select();
+
+    if (error || !data || data.length === 0) {
+        alert("No se pudo apuntar la asistencia. Puede que la base no te deje escribir esa respuesta.");
+        return false;
+    }
+    window.paseDeLista.respuestas.push(data[0]);
+    return true;
+};
+
+window.borrarAsistencia = async (q, respuestas) => {
+    // Las llaves de una respuesta son ids de pregunta, siempre numéricos; las
+    // reservadas —los motivos, la foto del área— empiezan por `__` y no cuentan
+    // como algo contestado.
+    const quedaAlgo = (answers) => Object.keys(answers || {}).some(k => /^\d+$/.test(k));
+
+    for (const r of respuestas) {
+        const answers = { ...(r.answers_json || {}) };
+        const grades = { ...(r.grades_json || {}) };
+        delete answers[q.id];
+        delete grades[q.id];
+
+        if (quedaAlgo(answers)) {
+            const { data, error } = await sb.from('evaluation_responses')
+                .update({ answers_json: answers, grades_json: grades }).eq('id', r.id).select();
+            if (error || !data || data.length === 0) {
+                alert("No se pudo quitar la asistencia. Puede que la base no te deje escribir esa respuesta.");
+                return false;
+            }
+            Object.assign(r, data[0]);
+        } else {
+            // Lo de asistencia era todo lo que tenía: la respuesta entera se va.
+            // Las políticas de RLS van por operación, así que una tabla puede
+            // dejar actualizar y no borrar; se cuentan las filas igual.
+            const { data, error } = await sb.from('evaluation_responses')
+                .delete().eq('id', r.id).select();
+            if (error || !data || data.length === 0) {
+                alert("No se pudo quitar la asistencia. Puede que la base no te deje borrar esa respuesta.");
+                return false;
+            }
+            const i = window.paseDeLista.respuestas.indexOf(r);
+            if (i >= 0) window.paseDeLista.respuestas.splice(i, 1);
+        }
+    }
+    return true;
 };
 
 window.abrirHistorialGlobal = async () => {

@@ -2804,6 +2804,131 @@ textarea:focus {
     text-overflow: ellipsis;
 }
 
+/* Pasar lista a mano, para quien la imparte. Va debajo de la barra y encima de
+   los dos plegables: es la acción del recuadro, y ahí no queda debajo de una
+   lista que puede medir cuatrocientas filas. */
+.pase-editar {
+    width: 100%;
+    margin-top: 14px;
+    padding: 10px 16px;
+    background: white;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+/* --- La hoja de pasar lista ------------------------------------------- */
+/* El buscador va fuera del cuerpo que se repinta: dentro, cada letra se
+   llevaría el foco por delante. Fuente de 16px por la trampa de siempre del
+   zoom de Safari en iOS. */
+.pase-buscador {
+    padding: 12px 20px 0;
+}
+
+.pase-buscador input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 16px;
+    outline: none;
+    background: #f8fafc;
+}
+
+.pase-hoja-cuerpo {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 20px 20px;
+    /* El hueco del indicador de inicio va aquí, en la lista que se desplaza, y
+       no en el contenedor de altura completa: ahí restaría alto útil y dejaría
+       una franja muerta antes del borde. */
+    padding-bottom: calc(20px + env(safe-area-inset-bottom));
+}
+
+.pase-seccion + .pase-seccion { margin-top: 18px; }
+
+.pase-seccion-rotulo {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    padding: 8px 2px 4px;
+}
+
+.pase-seccion-nota {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    color: #64748b;
+    padding: 0 2px 6px;
+}
+
+/* La fila entera es el blanco del dedo: una casilla de 20px no se acierta, y
+   aquí se marca gente de una en una. */
+.pase-fila {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 9px 10px;
+    margin-bottom: 4px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: #f8fafc;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pase-fila.esta-presente {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+.pase-fila-texto {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* El círculo de la marca se ve vacío o con su palomita: lo que distingue a
+   quien asistió no es sólo el color del renglón, que hay quien no lo ve. */
+.pase-marca {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #cbd5e1;
+    background: white;
+    color: white;
+    font-size: 0.8rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pase-fila.esta-presente .pase-marca {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+
+.pase-hoja-vacio {
+    padding: 20px 2px;
+    font-size: 0.85rem;
+    color: #64748b;
+    text-align: center;
+}
+
 /* Fila de casilla con su explicación debajo, al estilo de una lista de
    ajustes. Sustituye a las tarjetas de colores que se apilaban de una en una:
    con `min-width:150px` y 309px de ancho útil no entraban dos por renglón, y

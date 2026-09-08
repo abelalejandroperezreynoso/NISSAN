@@ -1020,6 +1020,71 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   rótulo y su contador van envueltos en un solo `<span>` o el «(10)» se separa
   del texto, que es la trampa de `.hoja-plegable-resumen` de siempre.
 
+  **Y quien la imparte pasa lista a mano.** La casilla que enseña la encuesta es
+  de quien asiste y sólo vale dentro de su hora: pasado el plazo, un registro
+  que faltó ya no lo arregla nadie, y quien fue sin tener la encuesta asignada
+  nunca tuvo dónde apuntarse. El botón «Pasar lista» del recuadro abre
+  `#modal-pase-lista`, donde cada persona es una fila que se marca y se
+  desmarca.
+
+  ```js
+  window.paseDeLista               // { ev, preguntas, respuestas, verNombres, pregunta, huboCambios }
+  window.abrirPaseDeLista(idPregunta)
+  window.pintarHojaPaseDeLista()
+  window.alternarAsistencia(idEmpleado)
+  window.apuntarAsistencia(q, emp, respuestaExistente)
+  window.borrarAsistencia(q, respuestas)
+  ```
+
+  **El plazo no se comprueba aquí, y es a propósito**: existe para que nadie se
+  registre solo al día siguiente, no para atarle las manos a quien pasa lista.
+  Justo después de cerrarse es cuando hay que corregir el registro.
+
+  Marcar y desmarcar es escribir y borrar la respuesta de esa persona, que es
+  donde vive «Asistí»: no hay otra tabla que diga quién fue. Cuatro cosas que
+  hay que mantener:
+
+  - **Sólo se toca la llave de esta pregunta.** Una encuesta puede llevar más, y
+    borrar la fila entera se llevaría por delante lo que esa persona contestó.
+    La fila se borra únicamente cuando lo de asistencia era lo único que tenía,
+    y eso se decide mirando si queda alguna llave numérica en `answers_json`:
+    las reservadas —`__comentarios`, `__foto_area`— no cuentan como algo
+    contestado.
+  - **La hora del registro es la del evento, no la de ahora**
+    (`fechaDelEvento`): es cuando esa persona asistió, y es lo que deja la
+    respuesta en el periodo que le toca. Sin fecha en la pregunta no hay otra
+    que el momento en que se apunta.
+  - **Las cuatro escrituras cuentan las filas del `.select()`.** Aquí escribe
+    alguien que no es administrador y una política de RLS que lo rechace no da
+    error, sólo afecta a cero filas; y las políticas van por operación, así que
+    una tabla puede dejar actualizar y no borrar.
+  - **El estado se corrige en memoria y no se vuelve a consultar**: la tarjeta y
+    la hoja dibujan lo mismo desde `window.paseDeLista`. Al cerrar la hoja, si
+    hubo cambios, se rehace la hoja de la encuesta entera —la lista de
+    «Respuestas (N)» y el último resultado hablan de otra cosa ahora— y se tira
+    la caché del panel con `invalidarCacheDashboard`, porque una asistencia
+    recién apuntada cierra el pendiente de esa persona.
+
+  **Agregar a quien no estaba se hace buscándolo.** El buscador filtra el padrón
+  y, debajo, ofrece a cualquier otra persona de la plantilla —sólo mientras se
+  busca: sin término no se listan cuatrocientas que no vienen a cuento—.
+  Marcarla la apunta como asistente y **no la agrega a los destinatarios**: eso
+  es «Editar a quién va dirigida», y son dos cosas distintas —haber ido a una
+  junta no es tener la encuesta asignada—. Aparece entonces como `ajeno` de
+  `pasoDeLista`, que ya contaba ese caso.
+
+  Por lo mismo, **desmarcar hace dos cosas según quién sea**: a un destinatario
+  lo pasa a «Faltaron» —la encuesta le sigue tocando—, y a alguien de fuera lo
+  quita de la lista del todo, que es como se elimina a un asistente apuntado por
+  error. Para sacar a un destinatario de la lista hay que quitarlo de a quién va
+  dirigida.
+
+  El buscador vive **fuera** del cuerpo que se repinta, como el de la pantalla
+  de certificación y por lo mismo: dentro, cada letra se llevaría el foco por
+  delante. Y la fila entera es el blanco del dedo —una casilla de 20px no se
+  acierta—, con el círculo de la marca a la derecha: lo que distingue a quien
+  asistió no puede ser sólo el color del renglón.
+
 - **Una evaluación por área lleva foto, y la foto se encoge antes de subir.**
   Las encuestas con `evaluates_area` piden una fotografía del área que se está
   evaluando: sin ella la evaluación es la palabra de quien la llenó contra
