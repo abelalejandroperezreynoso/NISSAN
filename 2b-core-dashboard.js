@@ -1706,6 +1706,39 @@ window.filaDeRevisores = (grupo) => {
         </div>`;
 };
 
+// Los dos botones del encabezado de la hoja de detalle, que son los mismos se
+// entre por las encuestas que le tocan a uno o por las que revisa: el ojo, que
+// abre quién revisa esta clasificación, y el «+», que crea una encuesta suya.
+// Los dos sólo en modo administrador, cerrando esta hoja antes de abrir la suya
+// —el observador de `1-config.js` apartaría ésta al ver dos abiertas, pero así
+// no hay ni el fotograma con las dos a la vista— y con la etiqueta enganchada
+// desde JavaScript, que el nombre cambia con cada clasificación.
+window.botonesDeClasificacion = (nombre, cuantas) => {
+    const ojo = document.getElementById('btn-revisores-clasif');
+    if (ojo) {
+        const puede = !!window.modoAdminActivo && !!window.abrirRevisoresDeClasificacion;
+        ojo.hidden = !puede;
+        const etiqueta = `Revisores de ${nombre}`;
+        ojo.title = etiqueta;
+        ojo.setAttribute('aria-label', etiqueta);
+        ojo.onclick = puede
+            ? () => { window.cerrarDetalleClasificacion(); window.abrirRevisoresDeClasificacion(nombre, cuantas); }
+            : null;
+    }
+
+    const mas = document.getElementById('btn-nueva-encuesta-clasif');
+    if (mas) {
+        const puede = !!window.modoAdminActivo && !!window.abrirNuevaEvaluacion;
+        mas.hidden = !puede;
+        const etiqueta = `Nueva encuesta en ${nombre}`;
+        mas.title = etiqueta;
+        mas.setAttribute('aria-label', etiqueta);
+        mas.onclick = puede
+            ? () => { window.cerrarDetalleClasificacion(); window.abrirNuevaEvaluacion(nombre); }
+            : null;
+    }
+};
+
 window.abrirDetalleClasificacion = (indice) => {
     const grupo = (window.clasificacionesAsignadas || [])[indice];
     const overlay = document.getElementById('modal-detalle-clasificacion');
@@ -1718,42 +1751,7 @@ window.abrirDetalleClasificacion = (indice) => {
     document.getElementById('subtitulo-detalle-clasif').innerText =
         `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
 
-    // El «+» de crear una encuesta en esta clasificación, sólo en modo
-    // administrador. La hoja de crear nace con la clasificación puesta —es de
-    // ésta y no de otra— y ésta se cierra antes, como hace todo el que abre
-    // otra hoja. El `onclick` se engancha aquí y no en el marcado, que el
-    // nombre cambia con cada clasificación.
-    const mas = document.getElementById('btn-nueva-encuesta-clasif');
-    if (mas) {
-        const puede = !!window.modoAdminActivo && !!window.abrirNuevaEvaluacion;
-        mas.hidden = !puede;
-        const etiqueta = `Nueva encuesta en ${grupo.nombre}`;
-        mas.title = etiqueta;
-        mas.setAttribute('aria-label', etiqueta);
-        mas.onclick = puede
-            ? () => { window.cerrarDetalleClasificacion(); window.abrirNuevaEvaluacion(grupo.nombre); }
-            : null;
-    }
-
-    // Y quién revisa las encuestas de esta clasificación, a su izquierda y con
-    // las mismas reglas: sólo en modo administrador, cerrando ésta antes de
-    // abrir la suya y con la etiqueta enganchada desde aquí, que el nombre
-    // cambia con cada clasificación. Entra derecho a esta clasificación, sin
-    // pasar por la lista de «Revisores por clasificación».
-    const ojo = document.getElementById('btn-revisores-clasif');
-    if (ojo) {
-        const puedeRev = !!window.modoAdminActivo && !!window.abrirRevisoresDeClasificacion;
-        ojo.hidden = !puedeRev;
-        const etiquetaRev = `Revisores de ${grupo.nombre}`;
-        ojo.title = etiquetaRev;
-        ojo.setAttribute('aria-label', etiquetaRev);
-        ojo.onclick = puedeRev
-            ? () => {
-                window.cerrarDetalleClasificacion();
-                window.abrirRevisoresDeClasificacion(grupo.nombre, total);
-            }
-            : null;
-    }
+    window.botonesDeClasificacion(grupo.nombre, total);
 
     // Lo que se viene a ver es cómo va: el resultado del último periodo que
     // dejó alguno —con su nombre, que puede no ser el que corre— y la línea de
@@ -1831,6 +1829,123 @@ window.abrirDetalleClasificacion = (indice) => {
 //
 // Se esconde entera si no revisa ninguna, que es el caso de casi todo el
 // mundo: quien no sea revisor no ve nada nuevo en su inicio.
+// El estado de lo que hay que calificar, con la misma forma que
+// `estadoDeAsignada` para que `iconoDeAsignada` lo dibuje sin enterarse: la
+// palomita cuando no hay nada esperando y el círculo abierto cuando sí.
+window.estadoDeRevision = (porCalificar) => porCalificar > 0
+    ? { texto: `${porCalificar} por calificar`, fondo: '#fee2e2', color: '#b91c1c', borde: '#fecaca' }
+    : { texto: 'Al día', listo: true, fondo: '#f0fdf4', color: '#15803d', borde: '#bbf7d0' };
+
+// Las respuestas de las encuestas que esta persona revisa. **Aquí sí hay
+// consulta**, al revés que en la hoja de las asignadas —que lee lo que la
+// tarjeta dejó calculado—: la tarjeta de revisión sólo se trae la cuenta de lo
+// que espera calificación, y traerse el historial entero de la clasificación en
+// cada carga del panel sería cobrárselo a todo el que revise algo por una hoja
+// que puede no abrir.
+//
+// Se pide una sola vez por sesión —se guarda la promesa, no el resultado— y
+// acotada al periodo más antiguo que la gráfica va a enseñar: sin ese `gte` se
+// traería el historial completo de toda la empresa.
+window.respuestasQueReviso = null;
+window.promesaRespuestasQueReviso = null;
+
+window.cargarRespuestasQueReviso = () => {
+    if (!window.promesaRespuestasQueReviso) {
+        window.promesaRespuestasQueReviso = (async () => {
+            const grupos = window.clasificacionesQueReviso || [];
+            const encuestas = [];
+            grupos.forEach(g => (g.filas || []).forEach(f => encuestas.push(f.ev)));
+            if (encuestas.length === 0) { window.respuestasQueReviso = []; return []; }
+
+            // El inicio del periodo más antiguo en juego. Una clasificación
+            // puede mezclar frecuencias, así que se pregunta grupo por grupo y
+            // se toma el más temprano; una encuesta de «única vez» no se puede
+            // acotar —su periodo empieza en la época— y entonces no acota nada.
+            let desde = null;
+            grupos.forEach(g => {
+                const periodos = window.periodosDeClasificacion(
+                    (g.filas || []).map(f => f.ev), window.PERIODOS_EN_LA_GRAFICA);
+                const masViejo = periodos[periodos.length - 1];
+                if (!masViejo || !(masViejo.inicio instanceof Date)) return;
+                if (!desde || masViejo.inicio < desde) desde = masViejo.inicio;
+            });
+
+            let consulta = sb.from('evaluation_responses')
+                .select('id, evaluation_id, employee_id, submitted_at, review_status, grades_json')
+                .in('evaluation_id', encuestas.map(e => e.id));
+            if (desde instanceof Date && desde.getTime() > 0) {
+                consulta = consulta.gte('submitted_at', desde.toISOString());
+            }
+
+            const { data, error } = await consulta;
+            if (error) {
+                console.warn('No se pudo leer el historial de lo que revisa:', error.message);
+                window.respuestasQueReviso = [];
+                return [];
+            }
+
+            // Sólo las que le tocan a esta persona, con la misma regla que
+            // cuenta los pendientes: con varios revisores, la respuesta es de
+            // quien asignó a esa persona, y las propias vuelven a su jefe.
+            const porId = {};
+            encuestas.forEach(ev => { porId[String(ev.id)] = ev; });
+            const mio = String(window.revisorQueMira || '');
+
+            window.respuestasQueReviso = (data || []).filter(r =>
+                window.leTocaRevisar(porId[String(r.evaluation_id)], r.employee_id, mio));
+            return window.respuestasQueReviso;
+        })();
+    }
+    return window.promesaRespuestasQueReviso;
+};
+
+// El historial de una clasificación **vista desde quien la revisa**: un punto
+// por periodo con el promedio de todo lo que se calificó en él, y no el de la
+// respuesta propia de cada encuesta, que es lo que mira `historialDeClasificacion`.
+// Aquí hay muchas personas contestando la misma encuesta y todas cuentan.
+//
+// El periodo se mira **de cada encuesta en el suyo** (`periodoDeEncuesta`), que
+// una clasificación puede mezclar frecuencias, y el eje se rotula con el ritmo
+// de la que lo marca, igual que en la otra.
+window.historialDeRevision = (grupo, respuestas) => {
+    const encuestas = (grupo.filas || []).map(f => f.ev);
+    const periodos = window.periodosDeClasificacion(encuestas, window.PERIODOS_EN_LA_GRAFICA);
+    const ritmo = window.encuestaQueMarcaElRitmo(encuestas);
+    const frecuencia = (ritmo && ritmo.frequency) || 'once';
+
+    return periodos.slice().reverse().map(p => {
+        const puntajes = [];
+        let entregadas = 0;
+
+        encuestas.forEach(ev => {
+            const periodo = window.periodoDeEncuesta(ev, p.referencia);
+            (respuestas || []).forEach(r => {
+                if (String(r.evaluation_id) !== String(ev.id)) return;
+                const enviada = new Date(r.submitted_at);
+                if (isNaN(enviada) || enviada < periodo.inicio) return;
+                if (periodo.fin && enviada >= periodo.fin) return;
+                entregadas++;
+                const n = window.puntajeDeRespuesta(r);
+                if (n !== null) puntajes.push(n);
+            });
+        });
+
+        const rotulos = window.etiquetasDeEje(p.inicio, frecuencia);
+
+        return {
+            etiqueta: p.etiqueta || p.nombre || '',
+            nombre: p.nombre || p.etiqueta || '',
+            corta: rotulos.corta,
+            minima: rotulos.minima,
+            actual: !!p.actual,
+            calificadas: puntajes.length,
+            total: entregadas,
+            promedio: puntajes.length === 0 ? null
+                : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length)
+        };
+    });
+};
+
 window.cargarEncuestasQueReviso = async (userId) => {
     const cont = document.getElementById('container-encuestas-reviso');
     if (!cont) return;
@@ -1849,7 +1964,9 @@ window.cargarEncuestasQueReviso = async (userId) => {
         // pregunta sin poder esperar.
         await window.cargarRevisoresDeClasificaciones();
 
-        const campos = await window.camposConRevisores('id, title, category');
+        // `frequency` es para el ritmo que dice cada renglón, como en la
+        // tarjeta de las asignadas.
+        const campos = await window.camposConRevisores('id, title, category, frequency');
         const { data: encuestas, error } = await sb.from('evaluations')
             .select(campos)
             .eq('active', true);
@@ -1883,35 +2000,101 @@ window.cargarEncuestasQueReviso = async (userId) => {
 
         const totalPorCalificar = Object.values(porCalificar).reduce((a, b) => a + b, 0);
 
-        const filas = mias.map(ev => {
-            const pendientes = porCalificar[String(ev.id)] || 0;
-            const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+        // Agrupadas por clasificación, como las asignadas y por lo mismo: se
+        // revisa —y se certifica— de una clasificación entera, así que ésa es
+        // la unidad que se mira. Con siete encuestas desplegadas la tarjeta se
+        // llevaba media pantalla para decir siete veces lo mismo.
+        const grupos = [];
+        const porClave = {};
+        mias.forEach(ev => {
+            const clave = window.normalizarClasificacion(ev.category);
+            if (!porClave[clave]) {
+                porClave[clave] = { nombre: String(ev.category || 'General').trim() || 'General', filas: [] };
+                grupos.push(porClave[clave]);
+            }
+            porClave[clave].filas.push({ ev: ev, porCalificar: porCalificar[String(ev.id)] || 0 });
+        });
 
-            const insignia = pendientes > 0
-                ? `<div style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; border-radius:20px; padding:3px 10px; font-size:0.7rem; font-weight:bold; white-space:nowrap;">${pendientes} por calificar</div>`
-                : `<div style="background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:20px; padding:3px 10px; font-size:0.7rem; font-weight:bold; white-space:nowrap;">Al día</div>`;
+        // Dentro del grupo manda lo que más espera; entre grupos, el que más
+        // debe. Con el mismo número, por nombre, para que la tarjeta no baile
+        // de una carga a otra.
+        grupos.forEach(g => {
+            g.filas.sort((a, b) => b.porCalificar - a.porCalificar
+                || String(a.ev.title || '').localeCompare(String(b.ev.title || ''), 'es'));
+            g.porCalificar = g.filas.reduce((n, f) => n + f.porCalificar, 0);
+        });
+        grupos.sort((a, b) => b.porCalificar - a.porCalificar
+            || a.nombre.localeCompare(b.nombre, 'es'));
 
+        // Lo que la hoja de detalle vuelve a leer al abrirse. Se pasa por
+        // índice y no por nombre: así no hay que escapar la clasificación en un
+        // atributo. `revisorQueMira` es de quién son los pendientes que se
+        // cuentan, que la hoja lo necesita para acotar el historial.
+        window.clasificacionesQueReviso = grupos;
+        window.revisorQueMira = empStrId;
+
+        const bloques = grupos.map((g, indice) => {
+            const estadoGrupo = window.estadoDeRevision(g.porCalificar);
+            const cuantas = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
+            const pie = g.porCalificar > 0
+                ? `${cuantas} · ${g.porCalificar} ${g.porCalificar === 1 ? 'respuesta' : 'respuestas'} por calificar`
+                : `${cuantas} · al día`;
+
+            const renglones = g.filas.map(({ ev, porCalificar: n }) => {
+                const estado = window.estadoDeRevision(n);
+                const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+                const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
+
+                return `
+                    <div onclick="window.abrirEncuestaQueReviso('${ev.id}', '${safeTitle}')"
+                         title="${window.sanitizeForHTML(ev.title || 'Sin título')} · ${estado.texto}"
+                         style="display:flex; align-items:center; gap:10px; padding:10px 8px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                        ${window.iconoDeAsignada(estado)}
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
+                            <div style="font-size:0.72rem; color:#94a3b8;">${[window.sanitizeForHTML(ritmo),
+                                `<span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`].filter(Boolean).join(' · ')}</div>
+                        </div>
+                        <span style="color:#cbd5e1; font-size:1.3rem; line-height:1; flex-shrink:0;">&rsaquo;</span>
+                    </div>`;
+            }).join('');
+
+            // El mismo renglón que el de las asignadas, y por eso comparte su
+            // clase y su botón: tocarlo abre la hoja de detalle y la flecha
+            // despliega aquí mismo la lista de sus encuestas.
             return `
-                <div onclick="window.abrirEncuestaQueReviso('${ev.id}', '${safeTitle}')"
-                     style="display:flex; align-items:center; gap:10px; padding:10px 8px; border-top:1px solid #f1f5f9; cursor:pointer;">
-                    <div style="font-size:1.3rem; line-height:1;">📋</div>
-                    <div style="flex:1; min-width:0;">
-                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
-                        <div style="font-size:0.72rem; color:#94a3b8;">${window.sanitizeForHTML(ev.category || 'General')}</div>
-                    </div>
-                    ${insignia}
-                </div>`;
+                <details class="grupo-asignadas">
+                    <summary onclick="event.preventDefault(); window.abrirDetalleClasificacionRevision(${indice})">
+                        ${window.iconoDeAsignada(estadoGrupo)}
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
+                            <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
+                        </div>
+                        <span style="color:#cbd5e1; font-size:1.3rem; line-height:1; flex-shrink:0;">&rsaquo;</span>
+                        <button type="button" class="grupo-asignadas-boton" aria-expanded="false"
+                                onclick="window.alternarGrupoAsignadas(this, event)"
+                                title="Ver sus encuestas" aria-label="Ver sus encuestas">
+                            <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
+                                 fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                                 stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                        </button>
+                    </summary>
+                    ${renglones}
+                </details>`;
         }).join('');
 
         const resumen = totalPorCalificar > 0
             ? `${totalPorCalificar} ${totalPorCalificar === 1 ? 'respuesta espera' : 'respuestas esperan'} tu calificación`
             : 'No hay nada esperando calificación';
 
+        // El título se queda, al revés que en la tarjeta de las asignadas: ahí
+        // lo que se ve son las encuestas de uno y no hace falta decirlo, y aquí
+        // la tarjeta se parece a aquélla y hay que separarlas.
         cont.innerHTML = `
-            <div style="background:white; border-radius:16px; padding:15px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
-                <h3 style="margin:0 0 2px 0; color:#7e22ce; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">👁️ Encuestas que revisas</h3>
-                <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:6px;">${resumen}</div>
-                ${filas}
+            <div style="background:white; border-radius:16px; padding:15px 15px 5px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
+                <h3 style="margin:0 0 2px 0; color:#7e22ce; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">Encuestas que revisas</h3>
+                <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:4px;">${resumen}</div>
+                ${bloques}
             </div>`;
         cont.style.display = 'block';
     } catch (e) {
@@ -1919,6 +2102,90 @@ window.cargarEncuestasQueReviso = async (userId) => {
         // no depende de esto.
         console.warn('No se pudieron cargar las encuestas que revisa:', e.message);
     }
+};
+
+// La hoja de detalle de una clasificación **de las que uno revisa**. Es la
+// misma hoja que la de las asignadas —`#modal-detalle-clasificacion`, con sus
+// dos botones de administrador y su fila de quién revisa—, y lo que cambia es
+// de qué habla: ahí, cómo va uno; aquí, cómo va la gente a la que uno califica
+// y qué le queda por calificar.
+//
+// A diferencia de aquélla, **ésta sí consulta**: el historial no lo dejó
+// calculado nadie (ver `cargarRespuestasQueReviso`). Por eso se dibuja en dos
+// tiempos —el encabezado, la fila de revisores y las encuestas van en el primer
+// fotograma, y el resultado y la gráfica caen cuando llegan—, que es lo que
+// evita quedarse mirando una hoja en blanco.
+window.abrirDetalleClasificacionRevision = async (indice) => {
+    const grupo = (window.clasificacionesQueReviso || [])[indice];
+    const overlay = document.getElementById('modal-detalle-clasificacion');
+    const cuerpo = document.getElementById('cuerpo-detalle-clasif');
+    if (!grupo || !overlay || !cuerpo) return;
+
+    const total = grupo.filas.length;
+
+    document.getElementById('titulo-detalle-clasif').innerText = grupo.nombre;
+    document.getElementById('subtitulo-detalle-clasif').innerText =
+        `${total} encuesta${total === 1 ? '' : 's'} que revisas`;
+
+    window.botonesDeClasificacion(grupo.nombre, total);
+
+    const renglones = grupo.filas.map(({ ev, porCalificar }) => {
+        const estado = window.estadoDeRevision(porCalificar);
+        const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+        const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
+        const pie = [
+            window.sanitizeForHTML(ritmo),
+            `<span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`
+        ].filter(Boolean).join(' · ');
+
+        return `
+            <div onclick="window.cerrarDetalleClasificacion(); window.abrirEncuestaQueReviso('${ev.id}', '${safeTitle}')"
+                 style="display:flex; align-items:center; gap:12px; padding:12px 4px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                ${window.iconoDeAsignada(estado)}
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:600; color:#1e293b; font-size:0.95rem; line-height:1.25;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
+                    <div style="font-size:0.72rem; color:#94a3b8; margin-top:2px;">${pie}</div>
+                </div>
+                <span style="color:#cbd5e1; font-size:1.3rem; line-height:1; flex-shrink:0;">&rsaquo;</span>
+            </div>`;
+    }).join('');
+
+    const cargando = `<div id="resumen-revision-clasif" style="text-align:center; padding:24px 0; color:#94a3b8; font-size:0.8rem;">Cargando resultados...</div>`;
+
+    cuerpo.innerHTML = cargando + window.filaDeRevisores(grupo) + renglones;
+    overlay.style.display = 'flex';
+
+    const respuestas = await window.cargarRespuestasQueReviso();
+
+    // La hoja pudo cerrarse —o abrirse otra clasificación— mientras se
+    // consultaba: se escribe sólo si el hueco sigue siendo el de esta hoja.
+    const hueco = document.getElementById('resumen-revision-clasif');
+    if (!hueco || overlay.style.display !== 'flex') return;
+
+    const historial = window.historialDeRevision(grupo, respuestas);
+    const conDato = historial.filter(p => p.promedio !== null);
+    const ultimo = conDato.length > 0 ? conDato[conDato.length - 1] : null;
+    const color = (ultimo && typeof window.getColorScore === 'function')
+        ? window.getColorScore(ultimo.promedio) : '#94a3b8';
+
+    // El pie dice lo que sí es suyo: cuántas esperan su calificación. El
+    // resultado de arriba es de la gente que contesta, no de quien mira.
+    const espera = grupo.porCalificar > 0
+        ? `<span style="color:#b91c1c; font-weight:700;">${grupo.porCalificar} ${grupo.porCalificar === 1 ? 'espera' : 'esperan'} tu calificación</span>`
+        : 'Nada espera tu calificación';
+
+    hueco.outerHTML = `
+        <div style="display:flex; align-items:center; gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:14px; margin-bottom:14px;">
+            <div style="font-size:2rem; font-weight:800; color:${color}; line-height:1; flex-shrink:0;">${ultimo ? ultimo.promedio + '%' : '—'}</div>
+            <div style="min-width:0;">
+                <div style="font-size:0.8rem; color:#334155; font-weight:700;">${ultimo ? 'Resultado del último periodo' : 'Todavía sin resultados'}</div>
+                <div style="font-size:0.75rem; color:#94a3b8;">${ultimo
+                    ? `${window.sanitizeForHTML(ultimo.etiqueta)} · ${ultimo.calificadas} calificada${ultimo.calificadas === 1 ? '' : 's'} de ${ultimo.total}`
+                    : 'Ninguna respuesta se ha calificado todavía'}</div>
+                <div style="font-size:0.75rem; color:#64748b; margin-top:2px;">${espera}</div>
+            </div>
+        </div>
+        ${window.graficaDeLinea(historial)}`;
 };
 
 // Se abre **la hoja de la encuesta, sin pasar por la lista**. Antes se montaba

@@ -1321,10 +1321,44 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   enciende cuando alguien ya contestó. Cada renglón lleva lo que espera su
   calificación, con el mismo filtro del badge de `calcularPendientesBatch`
   —`'Pendiente'` y `'Mal Revisada'`, sin las respuestas propias, que vuelven al
-  jefe inmediato—, y abre la encuesta con `window.abrirEncuestaQueReviso`, que
-  monta antes la lista porque el detalle se dibuja dentro de su hoja. Sin
+  jefe inmediato—, y abre la encuesta con `window.abrirEncuestaQueReviso`. Sin
   encuestas que revisar la tarjeta no se dibuja: quien no sea revisor no ve
   nada nuevo en su inicio.
+
+  **Va agrupada por clasificación y con hoja de detalle, como la de las
+  asignadas**, y comparte con ella todo lo que se puede compartir: el
+  `<details class="grupo-asignadas">` y su botón (`alternarGrupoAsignadas`), el
+  icono de estado (`iconoDeAsignada`, al que
+  `window.estadoDeRevision(porCalificar)` le da la misma forma que
+  `estadoDeAsignada`: la palomita cuando no hay nada esperando y el círculo
+  abierto cuando sí), la fila de quién revisa (`filaDeRevisores`), los dos
+  botones de administrador del encabezado (`window.botonesDeClasificacion`) y
+  la misma hoja `#modal-detalle-clasificacion`, que es la de evaluaciones otra
+  vez: **dos pantallas en un solo overlay**, `abrirDetalleClasificacion` para
+  las que le tocan a uno y `window.abrirDetalleClasificacionRevision` para las
+  que revisa.
+
+  Lo que cambia es de qué habla cada una: ahí, cómo va uno; aquí, cómo va la
+  gente a la que uno califica —el promedio de **todas** las respuestas del
+  periodo, no la de uno (`window.historialDeRevision`)— y qué le queda por
+  calificar, que va en el tercer renglón del recuadro del resultado porque es
+  lo único de ese bloque que es suyo.
+
+  **Y ésta sí consulta**, al revés que la de las asignadas. La tarjeta de
+  revisión sólo se trae la cuenta de lo que espera calificación, así que el
+  historial no lo dejó calculado nadie; traérselo en cada carga del panel sería
+  cobrárselo a todo el que revise algo por una hoja que puede no abrir. Lo pide
+  `window.cargarRespuestasQueReviso()` **una sola vez por sesión** —la promesa,
+  no el resultado—, acotado con un `gte` al inicio del periodo más antiguo que
+  la gráfica va a enseñar y filtrado con `leTocaRevisar`, que es la misma regla
+  que cuenta los pendientes. `invalidarCacheDashboard` lo tira: una respuesta
+  recién calificada mueve el promedio de su periodo.
+
+  Por eso la hoja **se dibuja en dos tiempos** —el encabezado, la fila de
+  revisores y las encuestas en el primer fotograma; el resultado y la gráfica
+  cuando llegan— y comprueba que el hueco siga siendo el suyo antes de
+  escribir: la hoja pudo cerrarse, o abrirse otra clasificación, mientras la
+  consulta iba de camino.
 
   El guardado es otro: `window.guardarNuevaEvaluacion` desvía a
   `window.guardarDestinatariosEncuesta` en cuanto ve `editandoSoloDestinatarios`,

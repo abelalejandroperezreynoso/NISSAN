@@ -19,6 +19,10 @@ window.invalidarCacheDashboard = () => {
     // Las insignias también: una encuesta recién calificada puede haber
     // ganado —o perdido— una estrella.
     window.insigniasPorEmpleado = {};
+    // Y el historial de lo que uno revisa, que se pide una vez por sesión: una
+    // respuesta recién calificada mueve el promedio de su periodo.
+    window.promesaRespuestasQueReviso = null;
+    window.respuestasQueReviso = null;
 };
 
 // Variables Globales
