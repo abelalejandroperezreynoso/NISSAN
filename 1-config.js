@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-08-13';
+window.VERSION_APP = '2026-09-08-14';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1994,6 +1994,166 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
     // devolver las medidas definitivas.
     document.addEventListener('focusin', () => setTimeout(ajustar, 0));
     document.addEventListener('focusout', () => setTimeout(ajustar, 100));
+})();
+
+// ==========================================
+// DESLIZAR LA HOJA HACIA ABAJO PARA CERRARLA
+// ==========================================
+// El gesto que ya espera el dedo en cualquier hoja de iOS. Vive aquí y no en
+// cada pantalla porque las hojas son las mismas en los tres documentos: se
+// engancha una vez, delegado, y toda hoja nueva lo trae puesta sin hacer nada.
+//
+// **Sólo arranca si no hay nada que desplazar por encima.** Ésa es la regla que
+// lo hace convivir con las listas de dentro: si el dedo cae sobre un contenedor
+// que se puede desplazar y no está en su tope, el gesto es suyo y aquí no se
+// toca nada. Sin eso, arrastrar la lista de una encuesta cerraría la hoja.
+//
+// Para arrastrar la hoja hay que **cancelar** el desplazamiento del navegador,
+// y eso sólo se puede en un `touchmove` no pasivo: con `pointermove` iOS ya ha
+// decidido que el gesto es un scroll y no deja pararlo. Por eso van los eventos
+// de toque; los de ratón son para poder probarlo en un escritorio.
+//
+// Al cerrar **se pulsa la cruz de la hoja**, no se le pone `display:none`: cada
+// hoja limpia lo suyo al cerrarse —la de evaluaciones vacía su contenedor, la
+// de refacciones olvida la foto a medio subir— y saltarse su función dejaría
+// esa basura dentro. Cuando el botón del encabezado no es la cruz sino la
+// flecha de volver, la hoja puede dejar dicho cómo se cierra en
+// `overlay.__cerrarHoja`; es lo que hace la de evaluaciones, donde el gesto
+// cierra del todo en vez de retroceder, que es lo que hace ese gesto en iOS.
+(() => {
+    const UMBRAL = 110;          // px arrastrados que cierran por sí solos
+    const UMBRAL_RAPIDO = 45;    // px que bastan si el gesto va rápido
+    const VELOCIDAD = 0.5;       // px/ms a partir de los cuales cuenta como rápido
+    const HOLGURA = 8;           // px antes de dar el gesto por empezado
+
+    let hoja = null, overlay = null, inicioY = 0, inicioT = 0, avance = 0;
+    let siguiendo = false, finDeArrastre = 0;
+
+    const CAMPOS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+
+    // ¿Hay algo desplazable entre el dedo y la hoja que no esté en su tope?
+    const nadaQueDesplazar = (nodo) => {
+        let el = nodo;
+        while (el && el !== hoja && el.nodeType === 1) {
+            if (el.scrollHeight > el.clientHeight + 1) {
+                const desbordeY = getComputedStyle(el).overflowY;
+                if (desbordeY === 'auto' || desbordeY === 'scroll') return el.scrollTop <= 0;
+            }
+            el = el.parentElement;
+        }
+        return true;
+    };
+
+    const limpiar = () => {
+        if (hoja) { hoja.style.transition = ''; hoja.style.transform = ''; }
+        hoja = null; overlay = null; siguiendo = false; avance = 0;
+    };
+
+    const cerrarLaHoja = (ov) => {
+        if (!ov) return;
+        if (typeof ov.__cerrarHoja === 'function') { ov.__cerrarHoja(); return; }
+        const cruz = ov.querySelector('.ios-boton-cerrar');
+        if (cruz) { cruz.click(); return; }
+        ov.style.display = 'none';
+    };
+
+    const empezar = (nodo, y) => {
+        if (siguiendo || hoja) return;
+        if (!nodo || !nodo.closest) return;
+        if (CAMPOS.has(nodo.tagName)) return;          // escribir no es arrastrar
+        const contenido = nodo.closest('.hoja-contenido');
+        if (!contenido) return;
+        const capa = contenido.closest('.hoja-overlay');
+        if (!capa) return;
+
+        hoja = contenido; overlay = capa;
+        inicioY = y; inicioT = Date.now(); avance = 0;
+        siguiendo = false;
+    };
+
+    const mover = (nodo, y, evento) => {
+        if (!hoja) return;
+        const dy = y - inicioY;
+
+        if (!siguiendo) {
+            // Hacia arriba, o antes de la holgura, todavía no es nuestro gesto.
+            if (dy <= HOLGURA) { if (dy < -HOLGURA) limpiar(); return; }
+            if (!nadaQueDesplazar(nodo)) { limpiar(); return; }
+            siguiendo = true;
+            hoja.style.transition = 'none';
+        }
+
+        avance = Math.max(0, dy);
+        hoja.style.transform = `translateY(${avance}px)`;
+        if (evento && evento.cancelable) evento.preventDefault();
+    };
+
+    const soltar = () => {
+        if (!hoja) return;
+        if (!siguiendo) { limpiar(); return; }
+
+        const velocidad = avance / Math.max(1, Date.now() - inicioT);
+        const cierra = avance > UMBRAL || (avance > UMBRAL_RAPIDO && velocidad > VELOCIDAD);
+        const capa = overlay;
+        finDeArrastre = Date.now();
+
+        if (cierra) {
+            hoja.style.transition = 'transform 0.18s ease-in';
+            hoja.style.transform = 'translateY(calc(100% + 16px))';
+            const laHoja = hoja;
+            setTimeout(() => {
+                laHoja.style.transition = ''; laHoja.style.transform = '';
+                // El click con el que se pulsa la cruz es nuestro, no el del
+                // dedo: se levanta el filtro antes de darlo o se lo tragaría.
+                finDeArrastre = 0;
+                cerrarLaHoja(capa);
+            }, 180);
+            hoja = null; overlay = null; siguiendo = false; avance = 0;
+            return;
+        }
+
+        // Vuelve a su sitio con la misma curva con la que sube.
+        hoja.style.transition = 'transform 0.24s cubic-bezier(0.32, 0.72, 0, 1)';
+        hoja.style.transform = '';
+        const laHoja = hoja;
+        setTimeout(() => { laHoja.style.transition = ''; }, 240);
+        hoja = null; overlay = null; siguiendo = false; avance = 0;
+    };
+
+    document.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        empezar(e.target, e.touches[0].clientY);
+    }, { passive: true });
+
+    // No pasivo a propósito: es el único sitio donde se le puede quitar el
+    // gesto al desplazamiento del navegador.
+    document.addEventListener('touchmove', (e) => {
+        if (!hoja || e.touches.length !== 1) return;
+        mover(e.target, e.touches[0].clientY, e);
+    }, { passive: false });
+
+    document.addEventListener('touchend', soltar, { passive: true });
+    document.addEventListener('touchcancel', limpiar, { passive: true });
+
+    // Con ratón, para el escritorio y para poder probarlo.
+    document.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        empezar(e.target, e.clientY);
+    });
+    document.addEventListener('mousemove', (e) => { if (hoja) mover(e.target, e.clientY, null); });
+    document.addEventListener('mouseup', soltar);
+
+    // Un arrastre no es un toque: sin esto, soltar sobre un botón lo dispara
+    // —pasa con el ratón; en un teléfono el `preventDefault` ya evita el
+    // click—. La marca **caduca**: si se dejara puesta hasta el siguiente
+    // click, un arrastre que no acabó en click se comería el toque de después,
+    // que puede llegar mucho más tarde y a otra cosa.
+    document.addEventListener('click', (e) => {
+        if (!finDeArrastre || Date.now() - finDeArrastre > 400) return;
+        finDeArrastre = 0;
+        e.stopPropagation();
+        e.preventDefault();
+    }, true);
 })();
 
 // ==========================================

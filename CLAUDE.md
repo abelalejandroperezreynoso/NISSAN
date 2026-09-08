@@ -357,6 +357,40 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   teclado se queda como red de seguridad: con el cuerpo anclado ya no llega a
   dispararse.
 
+  **Una hoja se cierra deslizándola hacia abajo**, que es el gesto que el dedo
+  ya espera en iOS. Vive en `1-config.js`, delegado en `document`, así que lo
+  comparten los tres documentos y una hoja nueva lo trae puesto sin hacer nada.
+
+  La regla que lo hace convivir con las listas de dentro: **sólo arranca si no
+  hay nada que desplazar por encima**. Si el dedo cae sobre un contenedor que se
+  puede desplazar y no está en su tope, el gesto es suyo y aquí no se toca nada;
+  desde el encabezado de la hoja, en cambio, arrastra siempre. Cierra a partir
+  de 110px, o de 45 si el gesto va rápido (más de 0.5 px/ms); por debajo, la
+  hoja vuelve a su sitio con la misma curva con la que sube.
+
+  Dos cosas que no son evidentes:
+
+  - **Van eventos de toque, no de puntero.** Para arrastrar la hoja hay que
+    cancelar el desplazamiento del navegador, y eso sólo se puede en un
+    `touchmove` no pasivo: cuando llega un `pointermove`, iOS ya decidió que el
+    gesto era un scroll y no deja pararlo. Los eventos de ratón están para poder
+    probarlo en un escritorio.
+  - **Al cerrar se pulsa la cruz de la hoja, no se le pone `display:none`.**
+    Cada hoja limpia lo suyo al cerrarse —la de evaluaciones vacía su
+    contenedor, la de refacciones olvida la foto a medio subir— y saltarse su
+    función dejaría esa basura dentro. Cuando el botón del encabezado no es la
+    cruz sino la flecha de volver, la hoja deja dicho cómo se cierra en
+    `overlay.__cerrarHoja`: es lo que hace `montarHojaEvaluaciones`, porque
+    deslizar hacia abajo cierra la hoja —lo que hace ese gesto en iOS— y no
+    retrocede.
+
+  Y la marca de «aquí hubo un arrastre», que existe para que soltar sobre un
+  botón no lo dispare, **caduca a los 400 ms**: dejándola puesta hasta el
+  siguiente click, un arrastre que no acabó en click se comía el toque de
+  después, que puede llegar mucho más tarde y a otra cosa. El click con el que
+  el propio gesto pulsa la cruz se hace con la marca ya levantada, o se lo
+  tragaría a sí mismo.
+
   Sólo cuenta el teclado de texto. La rueda de un `<select>` y la de los
   campos de fecha y hora encogen el viewport visual exactamente igual, pero
   ahí `--alto-teclado` se deja en cero a propósito: iOS ya deja el campo

@@ -268,6 +268,12 @@ window.montarHojaEvaluaciones = () => {
         modal = document.getElementById('modal-evaluaciones-flotante');
     }
 
+    // Cómo se cierra esta hoja, para el gesto de deslizarla hacia abajo. Hace
+    // falta decirlo porque su botón del encabezado no siempre es la cruz:
+    // dentro de una encuesta es la flecha de volver, y deslizar hacia abajo
+    // cierra la hoja —lo que hace ese gesto en iOS—, no retrocede.
+    modal.__cerrarHoja = () => window.cerrarModalEvaluaciones();
+
     modal.style.display = 'flex';
     return document.getElementById('contenido-modal-evaluaciones');
 };
