@@ -478,6 +478,59 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Es lo que se hizo con «Nueva evaluación», que eran doce bloques seguidos,
   cada uno de un color, dentro de una hoja que se desplazaba entera.
 
+  **Y cada sección se pliega y dice en su renglón lo que hay elegido dentro.**
+  Al editar una encuesta se entra a cambiar una cosa, y con las cinco tarjetas
+  desplegadas encontrar la frecuencia era recorrer media pantalla de casillas;
+  plegadas, la hoja entera cabe de un vistazo —478px de cuerpo en un iPhone de
+  375— y se abre sólo lo que se va a tocar. Son `<details class="hoja-plegable
+  grupo-eval">`, el mismo patrón que ya tenía «Escala de puntajes», que por eso
+  se quedó como estaba y sólo ganó su resumen.
+
+  ```js
+  window.RESUMEN_DE_GRUPO        // { datos, destinatarios, revisores, opciones, escala, preguntas }
+  window.pintarResumenGrupos()   // los rellena todos
+  window.abrirGrupoEval(id)      // abre uno y lo lleva a la vista
+  window.plegarGruposEval(editando)
+  ```
+
+  El resumen sale **de los propios campos** y no de la encuesta que se cargó:
+  tiene que decir lo que hay puesto ahora mismo, incluido lo que se acaba de
+  cambiar sin guardar. Se rehace con los tres eventos de la hoja —`input` para
+  lo que se escribe, `change` para casillas y desplegables y **`click` para los
+  selectores de personas**, que cambian su lista desde el `onclick` de un botón
+  y no disparan ninguno de los otros dos—. Y a mano en los **tres** sitios que
+  enseñan la hoja, porque `prepararEncabezadoEval` corre antes de que se escriba
+  ningún campo y las preguntas llegan de una consulta posterior: sin ese último
+  repintado el resumen diría «Ninguna todavía».
+
+  La frecuencia y el modo se dicen **sin el emoji del desplegable** —«Mensual ·
+  Autoevaluación», no «🈷️ 1 vez al mes · 👤 Autoevaluación»—, y la gente por su
+  nombre de pila (`window.nombresCortos`): tres nombres completos se comen el
+  renglón entero. Lo completo se sigue leyendo dentro de la sección.
+
+  **Al editar arrancan todas plegadas; al crear se abren «Datos» y
+  «Preguntas»**, que son las que hay que llenar sí o sí —una hoja nueva toda
+  cerrada no dice por dónde se empieza—.
+
+  Dos cosas que hay que mantener:
+
+  - **El guardado abre la sección que impide guardar.** Con todo plegado,
+    «Faltan datos» no dice dónde faltan: cada aviso llama antes a
+    `abrirGrupoEval`, y por eso «Faltan datos» se partió en dos mensajes, uno
+    para el título y otro para las preguntas.
+  - **El modo restringido del revisor esconde el `<summary>`, no la sección.**
+    `aplicarModoSoloDestinatarios` escondía `grupo-destinatarios` porque era
+    sólo el rótulo; desde que ese id es el `<details>` entero, esconderlo
+    dejaría la hoja en blanco. Se le quita el renglón —repetiría el título de
+    la hoja— y se abre a mano, que sin renglón no queda quién la despliegue.
+
+  El `<summary>` es un flex con `gap`, así que el título y su valor van
+  envueltos en un solo `<span class="grupo-eval-titulo">` o el chevron se
+  metería entre los dos: es la misma trampa de `.hoja-plegable-resumen` de
+  siempre. El valor va de una línea y recortado con «…» —lo elegido puede ser
+  largo y partirlo en tres renglones deja el encabezado más alto que la sección
+  que resume—, y vacío no se dibuja.
+
   Ojo con las rejillas de tarjetas ahí dentro: `flex-wrap` con
   `min-width:150px` **no** da dos columnas en un teléfono —dos de 150 más el
   hueco pasan de los 309px útiles—, así que las cinco tarjetas de destinatarios

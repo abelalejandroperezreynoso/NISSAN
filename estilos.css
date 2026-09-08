@@ -2657,6 +2657,52 @@ textarea:focus {
     border-top: 1px solid #f1f5f9;
 }
 
+/* Cada sección de la hoja de crear y editar una encuesta se pliega, y su
+   renglón dice lo que hay elegido dentro (`window.pintarResumenGrupos`). Al
+   editar, la hoja entera cabe de un vistazo y se abre sólo lo que se va a
+   cambiar; antes eran cinco tarjetas seguidas y encontrar la frecuencia era
+   recorrer media pantalla de casillas. */
+.grupo-eval {
+    margin-top: 14px;
+}
+
+/* El resumen del `<summary>` es un flex con `gap`, así que el título y su
+   valor van envueltos en un solo nodo o el chevron se metería entre los dos.
+   Es la misma trampa de `.hoja-plegable-resumen` de siempre. */
+.grupo-eval-titulo {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+/* De una sola línea y recortado: lo elegido puede ser largo —cinco puestos, un
+   título entero— y partirlo en tres renglones deja el encabezado más alto que
+   la sección que resume. Vacío no se dibuja, que su hueco separaría el título
+   del borde sin decir nada. */
+.grupo-eval-valor {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.grupo-eval-valor:empty { display: none; }
+
+/* Dentro del plegable, la tarjeta blanca de la sección sobra: ya la pone el
+   propio `.hoja-plegable`, y las dos juntas dibujan un borde dentro de otro.
+   Se queda con la línea de separación bajo el título, como `.hoja-plegable-cuerpo`. */
+.grupo-eval .hoja-grupo,
+.grupo-eval .grupo-eval-cuerpo {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    border-top: 1px solid #f1f5f9;
+    padding: 14px 0;
+}
+
 /* Los paneles que ya traían .form-content o .firma-content conservan de esas
    clases el ancho máximo y el scroll; lo que cambia es el relleno, porque el
    tirador ocupa la franja superior. */

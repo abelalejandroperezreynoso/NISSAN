@@ -2949,6 +2949,162 @@ window.pintarNotaRevisoresClasificacion = () => {
     nota.innerText = `Sin nombrar a nadie aquí, la revisan los revisores de «${clasificacion}»: ${window.nombresDeEmpleados(ids)}.`;
 };
 
+// ==========================================
+// EL RESUMEN DE CADA SECCIÓN DE LA HOJA
+// ==========================================
+// Las cinco secciones de la hoja de crear y editar se pliegan, y su renglón
+// dice lo que hay elegido dentro. Al editar, así la hoja entera cabe de un
+// vistazo y se abre sólo lo que se va a cambiar; antes eran cinco tarjetas
+// seguidas y encontrar la frecuencia era recorrer media pantalla de casillas.
+//
+// El resumen sale **de los propios campos**, no de la encuesta que se cargó:
+// tiene que decir lo que hay puesto ahora mismo, incluido lo que se acaba de
+// cambiar sin haber guardado todavía.
+
+// El texto de la opción elegida de un `<select>`, que es lo que se lee en
+// pantalla —«Sin repetición (Única vez)»— y no su valor.
+window.textoElegido = (id) => {
+    const sel = document.getElementById(id);
+    if (!sel || sel.selectedIndex < 0) return '';
+    return String(sel.options[sel.selectedIndex].text || '').trim();
+};
+
+// Los nombres de pila de una lista de gente, que es lo que cabe en un renglón:
+// tres nombres completos se comen el resumen entero y se recortan a la mitad
+// del primero. El completo se sigue leyendo dentro de la sección.
+window.nombresCortos = (nombres) => (nombres || [])
+    .map(n => String(n || '').trim().split(' ')[0]).filter(Boolean).join(', ');
+
+const marcada = (id) => {
+    const chk = document.getElementById(id);
+    return !!chk && chk.checked;
+};
+
+// Cuántos elementos concretos tiene marcado un selector de casillas —puestos y
+// departamentos—, o null si manda su «todos».
+const cuantosMarcados = (idTodos, selector) => {
+    if (marcada(idTodos)) return null;
+    const n = document.querySelectorAll(selector).length;
+    return n;
+};
+
+window.RESUMEN_DE_GRUPO = {
+    datos: () => {
+        const freq = document.getElementById('eval-frequency-input');
+        const modo = document.getElementById('eval-mode-input');
+        return [
+            (document.getElementById('eval-title-input') || {}).value,
+            (document.getElementById('eval-category-input') || {}).value,
+            // Sin el emoji del desplegable: aquí hace falta la palabra, y
+            // cuatro iconos en un renglón de 0.72rem son ruido. La frecuencia
+            // la nombra el ayudante de siempre, que es quien manda.
+            freq && window.textoDeFrecuencia ? window.textoDeFrecuencia(freq.value) : '',
+            modo && modo.value === 'boss' ? 'La contesta el jefe' : 'Autoevaluación'
+        ].map(x => String(x || '').trim()).filter(Boolean).join(' · ');
+    },
+
+    destinatarios: () => {
+        const partes = [];
+        const puestos = cuantosMarcados('chk-all-puestos', '.chk-puesto-item:checked');
+        const deptos = cuantosMarcados('chk-all-deptos', '.chk-depto-item:checked');
+        const personas = marcada('chk-all-empleados')
+            ? null : (window.personasElegidas ? window.personasElegidas('destinatarios').length : 0);
+
+        if (puestos !== null) partes.push(`${puestos} puesto${puestos === 1 ? '' : 's'}`);
+        if (deptos !== null) partes.push(`${deptos} departamento${deptos === 1 ? '' : 's'}`);
+        if (personas !== null) partes.push(`${personas} persona${personas === 1 ? '' : 's'}`);
+
+        return partes.length > 0 ? partes.join(' · ') : 'Toda la plantilla';
+    },
+
+    revisores: () => {
+        // Con la casilla marcada no se nombra a nadie, pero la encuesta puede
+        // heredar los de su clasificación: decir «el jefe inmediato» cuando la
+        // va a calificar otro sería justo lo que la nota de abajo desmiente.
+        if (marcada('chk-revisa-jefe')) {
+            const inp = document.getElementById('eval-category-input');
+            const heredados = window.revisoresDeClasificacion
+                ? window.revisoresDeClasificacion(inp ? inp.value : '') : [];
+            return heredados.length > 0
+                ? `Heredados: ${window.nombresCortos(heredados.map(id =>
+                    window.nombresDeEmpleados([id])))}`
+                : 'El jefe inmediato';
+        }
+        const elegidos = window.personasElegidas ? window.personasElegidas('revisores') : [];
+        if (elegidos.length === 0) return 'Sin nombrar';
+        return window.nombresCortos(elegidos.map(e => e.name));
+    },
+
+    opciones: () => {
+        const partes = [];
+        if (marcada('chk-eval-por-area')) partes.push('Por área');
+        partes.push(marcada('chk-eval-obligatoria') ? 'Obligatoria' : 'Opcional');
+        if (marcada('chk-eval-umbral')) partes.push('Exige 80%');
+        const dias = parseInt((document.getElementById('eval-retry-days') || {}).value, 10);
+        if (dias > 0) partes.push(`Repetir en ${dias} día${dias === 1 ? '' : 's'}`);
+        if (!marcada('chk-eval-activa')) partes.push('Inactiva');
+        return partes.join(' · ');
+    },
+
+    escala: () => {
+        const max = parseInt((document.getElementById('eval-max-scale') || {}).value, 10);
+        if (!max || max <= 0) return '';
+        return `0 a ${max}` + (marcada('eval-half-points') ? ' · con puntos medios' : '');
+    },
+
+    preguntas: () => {
+        const n = document.querySelectorAll('#questions-container .pregunta-wrapper').length;
+        return n === 0 ? 'Ninguna todavía' : `${n} pregunta${n === 1 ? '' : 's'}`;
+    }
+};
+
+window.pintarResumenGrupos = () => {
+    document.querySelectorAll('#modal-crear-eval [data-resumen]').forEach(nodo => {
+        const calcular = window.RESUMEN_DE_GRUPO[nodo.getAttribute('data-resumen')];
+        if (!calcular) return;
+        let texto = '';
+        try { texto = calcular() || ''; } catch (e) { texto = ''; }
+        nodo.innerText = texto;
+    });
+};
+
+// Abre una sección y la lleva a la vista. Lo llama el guardado antes de cada
+// aviso: con todo plegado, «Faltan datos» no diría dónde falta.
+window.abrirGrupoEval = (id) => {
+    const grupo = document.getElementById(id);
+    if (!grupo) return;
+    grupo.open = true;
+    if (typeof grupo.scrollIntoView === 'function') {
+        grupo.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+};
+
+// Deja las secciones como toca al abrir la hoja: al **editar** todas plegadas
+// —a eso se entra, a cambiar una cosa—, y al **crear** abiertas las dos que
+// hay que llenar sí o sí, que si no la hoja nueva sale en blanco sin decir por
+// dónde se empieza.
+window.plegarGruposEval = (editando) => {
+    ['grupo-datos', 'grupo-destinatarios', 'grupo-revisores',
+     'grupo-opciones', 'grupo-preguntas'].forEach(id => {
+        const grupo = document.getElementById(id);
+        if (!grupo) return;
+        grupo.open = !editando && (id === 'grupo-datos' || id === 'grupo-preguntas');
+    });
+};
+
+// El resumen se rehace con cualquier toque de la hoja. Van los tres eventos:
+// `input` para lo que se escribe, `change` para casillas y desplegables, y
+// `click` para los selectores de personas, que cambian su lista desde el
+// `onclick` de un botón y no disparan ninguno de los otros dos —el manejador
+// propio corre antes de que el evento burbujee hasta aquí, así que para cuando
+// se lee ya está actualizada—.
+(() => {
+    const hoja = document.getElementById('modal-crear-eval');
+    if (!hoja) return;
+    ['input', 'change', 'click'].forEach(evento =>
+        hoja.addEventListener(evento, () => window.pintarResumenGrupos()));
+})();
+
 window.prepararEncabezadoEval = (editando, soloDestinatarios = false) => {
     const titulo = document.getElementById('titulo-crear-eval');
     const subtitulo = document.getElementById('subtitulo-crear-eval');
@@ -2971,6 +3127,15 @@ window.prepararEncabezadoEval = (editando, soloDestinatarios = false) => {
     // La escala arranca plegada; quien la necesite la abre, y al editar la
     // abre window.editarEvaluacion si la encuesta ya trae etiquetas.
     if (escala) escala.open = false;
+
+    // Y las cinco secciones, que en este modo restringido no se ven: el
+    // revisor sólo tiene delante «A quién va dirigida», así que se le abre.
+    window.plegarGruposEval(editando && !soloDestinatarios);
+    if (soloDestinatarios) {
+        const dest = document.getElementById('grupo-destinatarios');
+        if (dest) dest.open = true;
+    }
+    window.pintarResumenGrupos();
 };
 
 // La misma hoja sirve para configurar la encuesta entera y para que un revisor
@@ -2996,9 +3161,16 @@ window.aplicarModoSoloDestinatarios = (activo) => {
     });
 
     // Y su propio rótulo, que repetiría el título de la hoja: en este modo la
-    // hoja entera se llama «A quién va dirigida».
-    const rotulo = document.getElementById('grupo-destinatarios');
-    if (rotulo) rotulo.style.display = activo ? 'none' : '';
+    // hoja entera se llama «A quién va dirigida». Se esconde **el renglón del
+    // plegable y no la sección**: desde que cada una es un `<details>`,
+    // esconder el `grupo-destinatarios` entero dejaría la hoja en blanco. Y se
+    // abre a mano, que sin renglón no queda quién la despliegue.
+    const grupo = document.getElementById('grupo-destinatarios');
+    if (grupo) {
+        const renglon = grupo.querySelector('summary');
+        if (renglon) renglon.style.display = activo ? 'none' : '';
+        if (activo) grupo.open = true;
+    }
 };
 
 window.renderConfiguracionEscala = () => {
@@ -3358,6 +3530,7 @@ window.abrirModalCrearEval = async (categoria) => {
     document.getElementById('questions-container').innerHTML = '';
     window.agregarCampoPregunta();
     window.prepararEncabezadoEval(false);
+    window.pintarResumenGrupos();
     document.getElementById('modal-crear-eval').style.display = 'flex';
     window.verificarRestriccionesModo();
 };
@@ -3476,6 +3649,7 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
             // vuelven a pintar ya con esa respuesta.
             window.pintarPersonasEval('destinatarios');
             await window.avisarSiFaltaColumnaAsignador();
+            window.pintarResumenGrupos();
             document.getElementById('modal-crear-eval').style.display = 'flex';
             return;
         }
@@ -3574,6 +3748,9 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
                 comoCopia ? null : q.id, q.question_type, opts);
         });
     } else { window.agregarCampoPregunta(); }
+    // Las preguntas llegan de una consulta posterior a enseñar la hoja, y su
+    // resumen las cuenta: sin este repintado diría «Ninguna todavía».
+    window.pintarResumenGrupos();
     setTimeout(window.verificarRestriccionesModo, 50);
 };
 
@@ -4299,6 +4476,7 @@ window.destinatariosDeLaHoja = () => {
 
     const targetEmployees = window.idsDelSelector('destinatarios');
     if (targetEmployees === null) {
+        if (window.abrirGrupoEval) window.abrirGrupoEval('grupo-destinatarios');
         alert("Desmarcaste 'Todos los colaboradores' pero no agregaste a nadie a la lista.");
         return null;
     }
@@ -4619,6 +4797,7 @@ window.guardarNuevaEvaluacion = async () => {
     // verdad se decide.
     const clasifFija = String(window.clasificacionFijaParaCrear || '').trim();
     if (clasifFija && window.normalizarClasificacion(cat) !== window.normalizarClasificacion(clasifFija)) {
+        window.abrirGrupoEval('grupo-datos');
         alert(`Sólo puedes crear encuestas en «${clasifFija}», que es la clasificación que revisas.`);
         return;
     }
@@ -4630,7 +4809,10 @@ window.guardarNuevaEvaluacion = async () => {
 
     const mode = document.getElementById('eval-mode-input') ? document.getElementById('eval-mode-input').value : 'self';
     const wr = document.querySelectorAll('.pregunta-wrapper');
-    if(!tit || wr.length === 0){alert("Faltan datos"); return;}
+    // Con las secciones plegadas, «Faltan datos» no dice dónde faltan: se abre
+    // la que los tiene y se lleva a la vista.
+    if (!tit) { window.abrirGrupoEval('grupo-datos'); alert("Falta el título de la encuesta."); return; }
+    if (wr.length === 0) { window.abrirGrupoEval('grupo-preguntas'); alert("Agrega al menos una pregunta."); return; }
     
     try{
         let eid = window.idEditandoEval;
@@ -4664,6 +4846,7 @@ window.guardarNuevaEvaluacion = async () => {
                 // siempre, que la revisa el jefe inmediato.
                 const revisores = window.idsDelSelector('revisores');
                 if (revisores === null) {
+                    window.abrirGrupoEval('grupo-revisores');
                     alert("Desmarcaste 'La revisa el jefe inmediato' pero no agregaste a ningún revisor.");
                     return;
                 }

@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-08-30">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-08-31">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -377,7 +377,10 @@
 
             <div class="hoja-cuerpo-formulario">
 
-                <div id="grupo-datos" class="hoja-grupo-titulo">Datos</div>
+                <details id="grupo-datos" class="hoja-plegable grupo-eval">
+                    <summary class="hoja-plegable-resumen">
+                        <span class="grupo-eval-titulo">Datos<span class="grupo-eval-valor" data-resumen="datos"></span></span>
+                    </summary>
                 <div id="grupo-datos-cuerpo" class="hoja-grupo">
                     <div class="form-group"><label>Título</label><input type="text" id="eval-title-input" placeholder="Ej. Encuesta de Clima Laboral"></div>
 
@@ -426,7 +429,12 @@
                     </div>
                 </div>
 
-                <div id="grupo-destinatarios" class="hoja-grupo-titulo">A quién va dirigida</div>
+                </details>
+
+                <details id="grupo-destinatarios" class="hoja-plegable grupo-eval">
+                    <summary class="hoja-plegable-resumen">
+                        <span class="grupo-eval-titulo">A quién va dirigida<span class="grupo-eval-valor" data-resumen="destinatarios"></span></span>
+                    </summary>
                 <div id="grupo-destinatarios-cuerpo" class="hoja-grupo">
                     <label class="eval-opcion">
                         <input type="checkbox" id="chk-all-puestos" onchange="window.toggleSelectorPuestos()" checked>
@@ -468,7 +476,12 @@
                     </div>
                 </div>
 
-                <div id="grupo-revisores" class="hoja-grupo-titulo">Quién la revisa</div>
+                </details>
+
+                <details id="grupo-revisores" class="hoja-plegable grupo-eval">
+                    <summary class="hoja-plegable-resumen">
+                        <span class="grupo-eval-titulo">Quién la revisa<span class="grupo-eval-valor" data-resumen="revisores"></span></span>
+                    </summary>
                 <div id="grupo-revisores-cuerpo" class="hoja-grupo">
                     <label class="eval-opcion">
                         <input type="checkbox" id="chk-revisa-jefe" onchange="window.toggleSelectorPersonas('revisores')" checked>
@@ -496,7 +509,12 @@
                     <p id="aviso-revisores-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/revisores-por-encuesta.sql</code> en Supabase para poder nombrar revisores.</p>
                 </div>
 
-                <div id="grupo-opciones" class="hoja-grupo-titulo">Opciones</div>
+                </details>
+
+                <details id="grupo-opciones" class="hoja-plegable grupo-eval">
+                    <summary class="hoja-plegable-resumen">
+                        <span class="grupo-eval-titulo">Opciones<span class="grupo-eval-valor" data-resumen="opciones"></span></span>
+                    </summary>
                 <div id="grupo-opciones-cuerpo" class="hoja-grupo">
                     <label class="eval-opcion">
                         <input type="checkbox" id="chk-eval-por-area">
@@ -537,8 +555,13 @@
                 <!-- Plegable y cerrada: son campos opcionales que ocupaban casi
                      media pantalla. window.editarEvaluacion la abre sola cuando
                      la encuesta ya trae etiquetas guardadas. -->
-                <details id="div-rango-labels" class="hoja-plegable">
-                    <summary class="hoja-plegable-resumen">Escala de puntajes<span class="hoja-plegable-nota">opcional</span></summary>
+                </details>
+
+                <details id="div-rango-labels" class="hoja-plegable grupo-eval">
+                    <summary class="hoja-plegable-resumen">
+                        <span class="grupo-eval-titulo">Escala de puntajes<span class="grupo-eval-valor" data-resumen="escala"></span></span>
+                        <span class="hoja-plegable-nota">opcional</span>
+                    </summary>
                     <div class="hoja-plegable-cuerpo">
                         <div class="eval-escala-fila">
                             <label for="eval-max-scale" style="margin:0;">Puntaje máximo</label>
@@ -556,12 +579,18 @@
                     </div>
                 </details>
 
-                <div id="grupo-preguntas" class="hoja-grupo-titulo">Preguntas</div>
-                <!-- Sin max-height: el contenedor crecía dentro de un scroll de
-                     300px metido en el scroll de la hoja, y en el teléfono se
-                     quedaba en una franja aplastada. Ahora se desplaza la hoja. -->
-                <div id="questions-container"></div>
-                <button id="btn-agregar-pregunta" onclick="agregarCampoPregunta()" class="eval-agregar-pregunta"><span data-texto>+ Agregar Pregunta</span></button>
+                <details id="grupo-preguntas" class="hoja-plegable grupo-eval">
+                    <summary class="hoja-plegable-resumen">
+                        <span class="grupo-eval-titulo">Preguntas<span class="grupo-eval-valor" data-resumen="preguntas"></span></span>
+                    </summary>
+                    <!-- Sin max-height: el contenedor crecía dentro de un scroll de
+                         300px metido en el scroll de la hoja, y en el teléfono se
+                         quedaba en una franja aplastada. Ahora se desplaza la hoja. -->
+                    <div class="grupo-eval-cuerpo">
+                        <div id="questions-container"></div>
+                        <button id="btn-agregar-pregunta" onclick="agregarCampoPregunta()" class="eval-agregar-pregunta"><span data-texto>+ Agregar Pregunta</span></button>
+                    </div>
+                </details>
             </div>
         </div>
     </div>
@@ -921,20 +950,20 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-08-30"></script>
-    <script src="2a-core-nav.js?v=2026-09-08-30"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-08-30"></script>
-    <script src="3-incidentes.js?v=2026-09-08-30"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-08-30"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-08-30"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-08-30"></script>
-    <script src="5-objetivos.js?v=2026-09-08-30"></script>
-    <script src="6-calendario.js?v=2026-09-08-30"></script>
-    <script src="7-pendientes.js?v=2026-09-08-30"></script>
-    <script src="8-hallazgos.js?v=2026-09-08-30"></script>
-    <script src="9-estadisticas.js?v=2026-09-08-30"></script>
+    <script src="1-config.js?v=2026-09-08-31"></script>
+    <script src="2a-core-nav.js?v=2026-09-08-31"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-08-31"></script>
+    <script src="3-incidentes.js?v=2026-09-08-31"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-08-31"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-08-31"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-08-31"></script>
+    <script src="5-objetivos.js?v=2026-09-08-31"></script>
+    <script src="6-calendario.js?v=2026-09-08-31"></script>
+    <script src="7-pendientes.js?v=2026-09-08-31"></script>
+    <script src="8-hallazgos.js?v=2026-09-08-31"></script>
+    <script src="9-estadisticas.js?v=2026-09-08-31"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="10-refacciones.js?v=2026-09-08-30"></script> 
+    <script src="10-refacciones.js?v=2026-09-08-31"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {
