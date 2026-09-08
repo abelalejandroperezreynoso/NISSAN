@@ -1510,8 +1510,18 @@ window.enviarRespuestasEval = async () => {
 // Con una clasificación nace ya con ella puesta: es lo que hace el «+» de la
 // hoja de detalle de una clasificación, donde la encuesta nueva es de ésa y no
 // de otra. Sin argumento, «General», que es lo de siempre.
-window.abrirNuevaEvaluacion = (categoria) => {
+// `fijarClasificacion` es para quien crea sin ser administrador: quien revisa
+// una clasificación puede crear encuestas **en ella y sólo en ella**, así que
+// la hoja bloquea el campo y el guardado lo vuelve a comprobar. Sin ese
+// argumento la clasificación va suelta, que es lo de siempre.
+//
+// La marca la pone aquí la única puerta que crea encuestas, y la quita
+// `editarEvaluacion` al abrir una que ya existe —una copia sí la conserva, que
+// también es crear—.
+window.abrirNuevaEvaluacion = (categoria, fijarClasificacion) => {
     if (window.cerrarPanelAdmin) window.cerrarPanelAdmin();
+    window.clasificacionFijaParaCrear = fijarClasificacion
+        ? String(categoria || '').trim() : '';
     // Antes de la hoja de crear se pregunta de dónde sale la encuesta: desde
     // cero o copiando una que ya existe. Esa hoja se salta ella sola cuando no
     // hay ninguna que copiar.

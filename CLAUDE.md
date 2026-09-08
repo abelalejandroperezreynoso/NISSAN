@@ -1288,6 +1288,41 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `4-evaluaciones-base.js` la guarda ya como `'Revisado'`, así que no hay nada
   que repartir y el bloque de revisores se esconde en la hoja.
 
+  **Quien revisa una clasificación puede además crear encuestas en ella**, que
+  es la otra mitad de lo mismo: quien imparte «Seguridad» es quien sabe qué
+  falta por medir, y tener que pedírselo al administrador cada vez es lo que
+  hace que no se cree. Sólo en las suyas.
+
+  ```js
+  window.puedeCrearEnClasificacion(clasificacion, empleadoId, encuestas)
+  ```
+
+  Cuenta ser revisor **de la clasificación entera** y también **de alguna de
+  sus encuestas**: en los dos casos le sale en «Encuestas que revisas», que es
+  desde donde se crea. Por eso el ayudante admite la lista de encuestas del
+  grupo, que es lo que la hoja tiene a mano.
+
+  Es el mismo **«+»** del encabezado de la hoja de detalle
+  (`window.botonesDeClasificacion`), y el **ojo de al lado se queda sólo para
+  el administrador**: nombrar revisores es repartir quién califica a quién —un
+  revisor podría quitarse a sí mismo o quedarse con la clasificación entera—,
+  mientras que crear una encuesta sólo se añade trabajo a sí mismo.
+
+  **Y la clasificación queda fijada**, o el permiso sería decorativo: la hoja
+  de crear llega con el campo bloqueado y diciendo por qué
+  (`#nota-clasificacion-fija`). La marca es `window.clasificacionFijaParaCrear`,
+  la pone `abrirNuevaEvaluacion(categoria, fijar)` —la única puerta que crea— y
+  la quita `editarEvaluacion` al abrir una encuesta que ya existe; **una copia
+  la conserva**, que copiar también es crear. Un `disabled` se quita desde la
+  consola, así que **quien decide de verdad es `guardarNuevaEvaluacion`**, que
+  compara la clasificación escrita con la fijada —normalizadas— antes de tocar
+  la base.
+
+  El resto de la hoja va entero: un revisor que crea puede nombrar revisores,
+  y si no se pone a sí mismo ni la clasificación se los da, la encuesta acabará
+  volviendo al jefe inmediato de cada quien. La nota de herencia del bloque de
+  revisores dice quién va a calificarla, que es donde se ve.
+
   **Quien revisa una encuesta puede además corregir a quién va dirigida**, sin
   ser administrador y sin tocar nada más: es el instructor que la imparte y es
   quien sabe a quién le falta tomarla. Se entra por dos sitios: el lápiz de la
@@ -2611,14 +2646,16 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   hoja: el observador de `1-config.js` apartaría ésta al ver dos abiertas, pero
   así no hay ni el fotograma con las dos a la vista.
 
-  **En modo administrador lleva dos botones** a la izquierda de la cruz,
-  agrupados con ella en `.hoja-acciones`: el **ojo**, que abre quién revisa las
-  encuestas de esta clasificación —la misma hoja de «Revisores por
-  clasificación» del panel de administración, entrando derecho a ésta y sin
-  pasar por su lista—, y el **«+»**, que crea una encuesta **de esa
-  clasificación**. Los dos se enganchan igual: `hidden` si no hay modo
-  administrador, el `onclick` y la etiqueta desde JavaScript —el nombre cambia
-  con cada clasificación— y cerrando ésta antes de abrir la suya. La hoja
+  **El encabezado lleva dos botones** a la izquierda de la cruz, agrupados con
+  ella en `.hoja-acciones`: el **ojo**, que abre quién revisa las encuestas de
+  esta clasificación —la misma hoja de «Revisores por clasificación» del panel
+  de administración, entrando derecho a ésta y sin pasar por su lista—, y el
+  **«+»**, que crea una encuesta **de esa clasificación**. Los dos se enganchan
+  igual, en `window.botonesDeClasificacion`: `hidden` si no hay permiso, el
+  `onclick` y la etiqueta desde JavaScript —el nombre cambia con cada
+  clasificación— y cerrando ésta antes de abrir la suya. **El ojo es sólo del
+  administrador; el «+» lo tiene además quien revisa esa clasificación**, y ahí
+  la clasificación va fijada (ver más arriba). La hoja
   de crear nace ya con ella puesta —`abrirNuevaEvaluacion(categoria)` la lleva
   hasta `abrirModalCrearEval`, que es quien llama a `prepararInputCategorias`;
   sin argumento sigue siendo «General», que es lo de siempre—, y ésta se cierra

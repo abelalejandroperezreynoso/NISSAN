@@ -1713,10 +1713,16 @@ window.filaDeRevisores = (grupo) => {
 // —el observador de `1-config.js` apartaría ésta al ver dos abiertas, pero así
 // no hay ni el fotograma con las dos a la vista— y con la etiqueta enganchada
 // desde JavaScript, que el nombre cambia con cada clasificación.
-window.botonesDeClasificacion = (nombre, cuantas) => {
+window.botonesDeClasificacion = (nombre, cuantas, encuestas) => {
+    const esAdmin = !!window.modoAdminActivo;
+
+    // **El ojo se queda sólo para el administrador.** Nombrar revisores es
+    // repartir quién califica a quién, y un revisor podría quitarse a sí mismo
+    // o quedarse con la clasificación entera; crear una encuesta, en cambio,
+    // sólo se añade trabajo a sí mismo.
     const ojo = document.getElementById('btn-revisores-clasif');
     if (ojo) {
-        const puede = !!window.modoAdminActivo && !!window.abrirRevisoresDeClasificacion;
+        const puede = esAdmin && !!window.abrirRevisoresDeClasificacion;
         ojo.hidden = !puede;
         const etiqueta = `Revisores de ${nombre}`;
         ojo.title = etiqueta;
@@ -1726,15 +1732,23 @@ window.botonesDeClasificacion = (nombre, cuantas) => {
             : null;
     }
 
+    // El «+» lo tiene además **quien revisa esta clasificación**, y sólo ésta:
+    // es el instructor que la imparte y quien sabe qué falta por medir. Se le
+    // pasa la clasificación **fijada**, que es lo que bloquea el campo de la
+    // hoja y lo que se vuelve a comprobar al guardar; para el administrador va
+    // suelta, como siempre.
     const mas = document.getElementById('btn-nueva-encuesta-clasif');
     if (mas) {
-        const puede = !!window.modoAdminActivo && !!window.abrirNuevaEvaluacion;
+        const user = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+        const revisa = !esAdmin && !!user
+            && window.puedeCrearEnClasificacion(nombre, user.id, encuestas);
+        const puede = (esAdmin || revisa) && !!window.abrirNuevaEvaluacion;
         mas.hidden = !puede;
         const etiqueta = `Nueva encuesta en ${nombre}`;
         mas.title = etiqueta;
         mas.setAttribute('aria-label', etiqueta);
         mas.onclick = puede
-            ? () => { window.cerrarDetalleClasificacion(); window.abrirNuevaEvaluacion(nombre); }
+            ? () => { window.cerrarDetalleClasificacion(); window.abrirNuevaEvaluacion(nombre, !esAdmin); }
             : null;
     }
 };
@@ -1751,7 +1765,7 @@ window.abrirDetalleClasificacion = (indice) => {
     document.getElementById('subtitulo-detalle-clasif').innerText =
         `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
 
-    window.botonesDeClasificacion(grupo.nombre, total);
+    window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev));
 
     // Lo que se viene a ver es cómo va: el resultado del último periodo que
     // dejó alguno —con su nombre, que puede no ser el que corre— y la línea de
@@ -2127,7 +2141,7 @@ window.abrirDetalleClasificacionRevision = async (indice) => {
     document.getElementById('subtitulo-detalle-clasif').innerText =
         `${total} encuesta${total === 1 ? '' : 's'} que revisas`;
 
-    window.botonesDeClasificacion(grupo.nombre, total);
+    window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev));
 
     const renglones = grupo.filas.map(({ ev, porCalificar }) => {
         const estado = window.estadoDeRevision(porCalificar);

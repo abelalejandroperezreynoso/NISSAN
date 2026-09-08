@@ -3162,6 +3162,21 @@ window.prepararInputCategorias = async (currentValue = '') => {
         // que la nota del bloque de revisores se rehace con cada letra.
         input.oninput = () => window.pintarNotaRevisoresClasificacion();
         window.pintarNotaRevisoresClasificacion();
+
+        // Quien crea sin ser administrador sólo puede hacerlo en la
+        // clasificación que revisa, así que ahí el campo no se toca: si se
+        // pudiera cambiar, el permiso sería decorativo. La comprobación de
+        // verdad la hace `guardarNuevaEvaluacion`; esto es sólo la pantalla.
+        const fija = String(window.clasificacionFijaParaCrear || '').trim();
+        input.disabled = !!fija;
+        input.style.opacity = fija ? '0.6' : '';
+        const nota = document.getElementById('nota-clasificacion-fija');
+        if (nota) {
+            nota.style.display = fija ? 'block' : 'none';
+            nota.innerText = fija
+                ? `Puedes crear encuestas en «${fija}» porque la revisas. Para otra clasificación, pídeselo al administrador.`
+                : '';
+        }
         const { data } = await sb.from('evaluations').select('category');
         if (data) {
             const categories = [...new Set(data.map(i => i.category).filter(c => c))];
@@ -3366,6 +3381,11 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     // Los revisores que hereda de su clasificación se dicen en el bloque de
     // revisores, y esa nota se pinta sin poder esperar.
     window.cargarRevisoresDeClasificaciones();
+
+    // Abrir una encuesta que ya existe suelta la clasificación: la marca es de
+    // quien está creando. Una copia sí la conserva —copiar también es crear— y
+    // por eso la puso `abrirNuevaEvaluacion` antes de llegar aquí.
+    if (!comoCopia) window.clasificacionFijaParaCrear = '';
 
     let evaluacion = null;
     if (window.evalCache && window.evalCache.evals) {
@@ -4572,6 +4592,16 @@ window.guardarNuevaEvaluacion = async () => {
 
     const tit = document.getElementById('eval-title-input').value.trim();
     const cat = document.getElementById('eval-category-input').value.trim() || "General";
+
+    // Quien crea siendo revisor y no administrador sólo puede hacerlo en la
+    // clasificación desde la que entró. El campo va bloqueado, pero eso es la
+    // pantalla: un `disabled` se quita desde la consola y aquí es donde de
+    // verdad se decide.
+    const clasifFija = String(window.clasificacionFijaParaCrear || '').trim();
+    if (clasifFija && window.normalizarClasificacion(cat) !== window.normalizarClasificacion(clasifFija)) {
+        alert(`Sólo puedes crear encuestas en «${clasifFija}», que es la clasificación que revisas.`);
+        return;
+    }
     
     const descInput = document.getElementById('eval-desc-input');
     const desc = descInput ? descInput.value.trim() : null;

@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-08-28';
+window.VERSION_APP = '2026-09-08-29';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1287,6 +1287,24 @@ window.encuestasQueRevisa = (encuestas, revisorId) =>
 // de edición (al abrirla y al guardar), que son dos módulos distintos.
 window.puedeEditarDestinatarios = (ev, empleadoId) =>
     window.revisoresDeEncuesta(ev).includes(String(empleadoId));
+
+// Y puede además **crear encuestas nuevas en la clasificación que revisa**, que
+// es la otra mitad de lo mismo: quien imparte «Seguridad» es quien sabe qué
+// falta por medir, y tener que pedírselo al administrador cada vez es lo que
+// hace que no se cree. Sólo en las suyas; el administrador sigue pudiendo en
+// todas.
+//
+// Cuenta ser revisor **de la clasificación entera** y también **de alguna de
+// sus encuestas**: en los dos casos la clasificación le sale en «Encuestas que
+// revisas», que es desde donde se crea. Por eso admite la lista de encuestas
+// del grupo, que es lo que la pantalla tiene a mano; sin ella decide sólo con
+// los revisores de la clasificación.
+window.puedeCrearEnClasificacion = (clasificacion, empleadoId, encuestas) => {
+    if (!empleadoId) return false;
+    const yo = String(empleadoId);
+    if (window.revisoresDeClasificacion(clasificacion).includes(yo)) return true;
+    return (encuestas || []).some(ev => window.revisoresDeEncuesta(ev).includes(yo));
+};
 
 // La columna es nueva y el script de `sql/` se corre a mano, así que puede no
 // estar todavía. Se pregunta una sola vez por sesión —y se guarda la promesa,
