@@ -441,10 +441,11 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   queda, que es la de los botones de dentro de la hoja.
 
   Se esconde con el atributo `hidden` y por eso `estilos.css` lleva
-  `.ios-boton-encabezado[hidden] { display: none }`: `.ios-boton-icono` es un
-  flex y un `display` de autor le gana al `[hidden]` de la hoja del navegador,
-  así que sin esa regla el «+» se vería también sin el modo encendido. Es la
-  misma trampa de `.tipos-pregunta`.
+  `.ios-boton-icono[hidden] { display: none }`: `.ios-boton-icono` es un flex y
+  un `display` de autor le gana al `[hidden]` de la hoja del navegador, así que
+  sin esa regla el «+» se vería también sin el modo encendido. Es la misma
+  trampa de `.tipos-pregunta`, y la regla vale para todo botón de icono que se
+  esconda —también el lápiz de la hoja de una encuesta—.
 
   Esto no siempre fue así, y las tres reglas que sostenían el panel se
   quitaron de raíz:
@@ -567,6 +568,26 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   manda— pasa lo que devuelva ese ayudante, así que hereda el camino sin saber
   cuál fue: es lo que hace que relanzar una encuesta, que la vuelve a abrir desde
   dentro de la hoja, conserve el botón que ya tenía.
+
+  **En modo administrador va además el lápiz de editar la encuesta**, a la
+  izquierda de ese botón y agrupado con él en `.hoja-acciones`, como cualquier
+  encabezado de hoja con más de un control. Hace lo mismo que el lápiz de la
+  tarjeta de la lista —`cerrarModalEvaluaciones()` y `editarEvaluacion(id)`—,
+  sólo que sin bajar a buscarla: se llega a la encuesta desde el inicio y desde
+  la lista, y desde el inicio la tarjeta ni siquiera existe.
+
+  Es el **tercer argumento** de `encabezadoHojaEvaluaciones(titulo, alVolver,
+  idEncuesta)`, y va así porque el lápiz necesita saber **cuál** editar: sólo la
+  pantalla de una encuesta lo sabe. Las otras cinco llaman sin él y ahí el lápiz
+  se esconde, que es lo que evita que se quede el de la encuesta anterior. El
+  `onclick` se engancha desde JavaScript y no desde el marcado, que ahí el id
+  cambia con cada encuesta.
+
+  Ojo con esconderlo: se hace con el atributo `hidden`, y `.ios-boton-icono` es
+  un flex, así que hace falta la regla `.ios-boton-icono[hidden] { display:
+  none }` de `estilos.css` —la misma que ya tapaba el «+» del encabezado del
+  panel, generalizada— o el lápiz se vería siempre. Es la trampa de
+  `.tipos-pregunta`.
 
   La lista de respuestas de una encuesta va plegada en un
   `<details class="hoja-plegable">`, y se abre sola sólo si hay algo esperando

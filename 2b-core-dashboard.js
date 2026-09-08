@@ -1501,7 +1501,7 @@ window.abrirEncuestaDesdeInicio = async (evalId, titulo) => {
 
     window.vengoDeLaListaDeEncuestas = false;
     const container = window.montarHojaEvaluaciones();
-    window.encabezadoHojaEvaluaciones(titulo);
+    window.encabezadoHojaEvaluaciones(titulo, null, evalId);
     if (container) {
         container.innerHTML = '<div style="text-align:center; padding:40px; color:#64748b;">' +
             '<div class="spinner" style="margin: 0 auto 15px auto;"></div><p>Abriendo encuesta…</p></div>';

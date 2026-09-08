@@ -243,8 +243,10 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // vuelve la flecha de volver sólo si se llegó por la lista: dentro de una
     // encuesta a la que se entró desde ahí, lo que quiere el dedo es retroceder;
     // si se entró derecho desde el inicio, no hay lista a la que volver.
+    // Y en modo administrador, el lápiz para editarla: es la pantalla que sabe
+    // de qué encuesta se trata.
     window.encabezadoHojaEvaluaciones(title, window.volverALaListaDeEncuestas
-        ? window.volverALaListaDeEncuestas() : () => window.cargarVistaEvaluaciones());
+        ? window.volverALaListaDeEncuestas() : () => window.cargarVistaEvaluaciones(), evalId);
 
     // La lista arranca plegada: quien abre su encuesta viene a ver lo suyo y a
     // responder, no las respuestas de los demás. Se despliega sola cuando hay

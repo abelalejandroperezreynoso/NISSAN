@@ -2096,9 +2096,10 @@ textarea:focus {
 }
 
 /* `.ios-boton-icono` es un flex, y un `display` de autor le gana al
-   `[hidden]` de la hoja del navegador: sin esta regla el «+» del panel de
-   administración se vería siempre. Es la misma trampa de `.tipos-pregunta`. */
-.ios-boton-encabezado[hidden] { display: none; }
+   `[hidden]` de la hoja del navegador: sin esta regla se verían siempre el «+»
+   del panel de administración y el lápiz de la hoja de una encuesta. Es la
+   misma trampa de `.tipos-pregunta`. */
+.ios-boton-icono[hidden] { display: none; }
 
 .ios-boton-actualizar:disabled {
     cursor: default;

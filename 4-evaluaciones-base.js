@@ -237,10 +237,23 @@ window.vengoDeLaListaDeEncuestas = false;
 window.volverALaListaDeEncuestas = () =>
     window.vengoDeLaListaDeEncuestas ? () => window.cargarVistaEvaluaciones() : null;
 
-window.encabezadoHojaEvaluaciones = (titulo, alVolver) => {
+window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta) => {
     const h = document.getElementById('titulo-hoja-evaluaciones');
     const btn = document.getElementById('btn-hoja-evaluaciones');
     if (h) h.innerText = titulo || 'Evaluaciones y encuestas';
+
+    // El lápiz sale sólo en la pantalla de una encuesta —la única que sabe cuál
+    // editar— y sólo en modo administrador. Las demás llaman sin ese argumento
+    // y ahí se esconde, que es lo que evita que se quede el de la anterior.
+    const lapiz = document.getElementById('btn-editar-hoja-evaluaciones');
+    if (lapiz) {
+        const editable = !!idEncuesta && window.modoAdminActivo && !!window.editarEvaluacion;
+        lapiz.hidden = !editable;
+        lapiz.onclick = editable
+            ? () => { window.cerrarModalEvaluaciones(); window.editarEvaluacion(idEncuesta); }
+            : null;
+    }
+
     if (!btn) return;
 
     if (typeof alVolver === 'function') {
@@ -274,7 +287,13 @@ window.montarHojaEvaluaciones = () => {
             <div class="form-content hoja-contenido" style="max-width: 800px; background: #f8fafc; overflow: hidden; padding: 12px 0 0;">
                 <div class="hoja-encabezado-lista">
                     <h2 id="titulo-hoja-evaluaciones" class="hoja-titulo">Evaluaciones y encuestas</h2>
-                    <button id="btn-hoja-evaluaciones" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                    <div class="hoja-acciones">
+                        <button id="btn-editar-hoja-evaluaciones" class="ios-boton-icono" hidden
+                                title="Editar encuesta" aria-label="Editar encuesta">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                        </button>
+                        <button id="btn-hoja-evaluaciones" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                    </div>
                 </div>
                 <div id="contenido-modal-evaluaciones" style="flex:1; overflow-y: auto; padding: 20px; background: #f8fafc;"></div>
             </div>
