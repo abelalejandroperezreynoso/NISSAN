@@ -247,9 +247,11 @@ window.encabezadoHojaEvaluaciones = (titulo, alVolver) => {
     }
 };
 
-// --- 1. CARGAR LISTA PRINCIPAL ---
-window.cargarVistaEvaluaciones = async () => {
-    // 1. Asegurarnos de que el modal flotante exista en el HTML (lo inyectamos si no)
+// La hoja de evaluaciones, montada y a la vista. El marcado vive aquí y en un
+// solo sitio porque se entra a ella por dos caminos: la lista y, desde el panel
+// de inicio, derecho a una encuesta —`abrirEncuestaDesdeInicio`—. Devuelve el
+// contenedor donde se dibujan las seis pantallas que comparten la hoja.
+window.montarHojaEvaluaciones = () => {
     let modal = document.getElementById('modal-evaluaciones-flotante');
     if (!modal) {
         const modalHTML = `
@@ -266,12 +268,14 @@ window.cargarVistaEvaluaciones = async () => {
         modal = document.getElementById('modal-evaluaciones-flotante');
     }
 
-    // 2. Mostrar el modal
     modal.style.display = 'flex';
+    return document.getElementById('contenido-modal-evaluaciones');
+};
+
+// --- 1. CARGAR LISTA PRINCIPAL ---
+window.cargarVistaEvaluaciones = async () => {
+    const container = window.montarHojaEvaluaciones();
     window.encabezadoHojaEvaluaciones();
-    
-    // 3. Nuestro contenedor destino ahora es el interior del modal
-    const container = document.getElementById('contenido-modal-evaluaciones');
 
     if (!window.evalCache) {
         container.innerHTML = '<div style="text-align:center; padding:40px; color:#64748b;"><div class="spinner" style="margin: 0 auto 15px auto;"></div><p>Cargando evaluaciones...</p></div>';

@@ -1474,17 +1474,38 @@ window.cargarEncuestasQueReviso = async (userId) => {
     }
 };
 
-// Se abre la lista de encuestas primero: el detalle se dibuja dentro de su
-// hoja —`#contenido-modal-evaluaciones`, que no existe hasta que la lista se
-// ha montado— y así la flecha de volver lleva a donde tiene que llevar.
+// Se abre **la hoja de la encuesta, sin pasar por la lista**. Antes se montaba
+// la lista entera y encima se pintaba el detalle: dos consultas y un fotograma
+// —a veces más de uno— de una lista que nadie había pedido. `abrirHistorialEvaluacion`
+// no la necesita, y lo dice su propio código: se trae las preguntas y las
+// respuestas de esa encuesta, y `encuestaDeLaRespuesta` consulta la ficha
+// cuando no está en caché, precisamente porque «a este panel se llega también
+// desde el inicio».
+//
+// Lo único que hacía falta de la lista era la hoja donde dibujar, y eso es hoy
+// `montarHojaEvaluaciones()`, que la monta y la enseña sin traer nada.
+//
+// El encabezado se pone antes de la consulta, con el título de la encuesta y
+// con la flecha que lleva a la lista: así el primer fotograma ya dice a dónde
+// se entró, y la flecha hace lo mismo que si se hubiera llegado por la lista.
 //
 // Lleva al detalle y no a contestar directamente, que es lo que deja que la
 // pantalla decida qué botón toca: responder, elegir a qué colaborador se
 // evalúa en una encuesta de modo jefe, o corregir a quién va dirigida.
 window.abrirEncuestaDesdeInicio = async (evalId, titulo) => {
-    if (!window.cargarVistaEvaluaciones) { alert('Módulo de encuestas en actualización'); return; }
-    await window.cargarVistaEvaluaciones();
-    if (window.abrirHistorialEvaluacion) await window.abrirHistorialEvaluacion(evalId, titulo);
+    if (!window.montarHojaEvaluaciones || !window.abrirHistorialEvaluacion) {
+        alert('Módulo de encuestas en actualización');
+        return;
+    }
+
+    const container = window.montarHojaEvaluaciones();
+    window.encabezadoHojaEvaluaciones(titulo, () => window.cargarVistaEvaluaciones());
+    if (container) {
+        container.innerHTML = '<div style="text-align:center; padding:40px; color:#64748b;">' +
+            '<div class="spinner" style="margin: 0 auto 15px auto;"></div><p>Abriendo encuesta…</p></div>';
+    }
+
+    await window.abrirHistorialEvaluacion(evalId, titulo);
 };
 
 // El nombre con el que la tarjeta de revisión la llamaba desde el principio.

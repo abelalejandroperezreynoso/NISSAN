@@ -2351,6 +2351,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   qué colaborador se evalúa en una encuesta de modo jefe, o corregir a quién va
   dirigida—.
 
+  **Y va derecho a esa hoja, sin pasar por la lista.** Antes montaba la lista
+  entera y encima pintaba el detalle: dos consultas y un fotograma —a veces más—
+  de una lista que nadie había pedido. `abrirHistorialEvaluacion` no la
+  necesita, y lo dice su propio código: se trae las preguntas y las respuestas
+  de esa encuesta, y `encuestaDeLaRespuesta` consulta la ficha cuando no está en
+  caché, precisamente porque «a este panel se llega también desde el inicio». Lo
+  único que hacía falta de la lista era la hoja donde dibujar, y eso es
+  **`window.montarHojaEvaluaciones()`**, que la monta —su marcado vive ahí, en un
+  solo sitio— y la enseña sin traer nada. El encabezado se pone antes de la
+  consulta, con el título de la encuesta y con la flecha que lleva a la lista:
+  el primer fotograma ya dice a dónde se entró, y volver hace lo mismo que si se
+  hubiera llegado por la lista.
+
   La ficha del empleado sale de `window.todosLosEmpleadosData` y no de
   `usuarioLogueado`: la sesión dura treinta días y un cambio de puesto o de
   departamento posterior no aparecería ahí, y de esos dos campos depende qué
