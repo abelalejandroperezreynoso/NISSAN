@@ -2503,6 +2503,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   hoja: el observador de `1-config.js` apartaría ésta al ver dos abiertas, pero
   así no hay ni el fotograma con las dos a la vista.
 
+  **En modo administrador lleva un «+»** a la izquierda de la cruz, agrupado con
+  ella en `.hoja-acciones`: crea una encuesta **de esa clasificación**. La hoja
+  de crear nace ya con ella puesta —`abrirNuevaEvaluacion(categoria)` se la pasa
+  a `abrirModalCrearEval`, que es quien llama a `prepararInputCategorias`; sin
+  argumento sigue siendo «General», que es lo de siempre—, y ésta se cierra
+  antes, como hace todo el que abre otra hoja. El `onclick` se engancha desde
+  JavaScript porque el nombre cambia con cada clasificación, y lo mismo su
+  `title` y su `aria-label`, que dicen en cuál se va a crear. Se esconde con
+  `hidden`, así que depende de la regla `.ios-boton-icono[hidden]` de
+  `estilos.css`.
+
   **Lo que enseña es cómo va, no cuánto falta**: el resultado del último periodo
   que dejó alguno y la línea de los anteriores. Cuántas hay pendientes y cuántas
   al día ya lo dice el renglón de la tarjeta del panel, y ahí abajo lo dice cada

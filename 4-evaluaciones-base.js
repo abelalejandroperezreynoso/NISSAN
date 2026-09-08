@@ -1502,9 +1502,13 @@ window.enviarRespuestasEval = async () => {
 
 // Igual que «Nuevo Registro»: cuelga de window y la llama el onclick del
 // botón, en vez de engancharse por id al cargarse el archivo.
-window.abrirNuevaEvaluacion = () => {
+//
+// Con una clasificación nace ya con ella puesta: es lo que hace el «+» de la
+// hoja de detalle de una clasificación, donde la encuesta nueva es de ésa y no
+// de otra. Sin argumento, «General», que es lo de siempre.
+window.abrirNuevaEvaluacion = (categoria) => {
     if (window.cerrarPanelAdmin) window.cerrarPanelAdmin();
-    if (window.abrirModalCrearEval) window.abrirModalCrearEval();
+    if (window.abrirModalCrearEval) window.abrirModalCrearEval(categoria);
 };
 
 // ==========================================

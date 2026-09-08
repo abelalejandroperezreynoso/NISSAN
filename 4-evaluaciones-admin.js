@@ -2986,7 +2986,7 @@ window.toggleSelectorDeptos = () => {
     }
 };
 
-window.abrirModalCrearEval = async () => {
+window.abrirModalCrearEval = async (categoria) => {
     window.idEditandoEval = null;
     window.editandoSoloDestinatarios = false;
     window.aplicarModoSoloDestinatarios(false);
@@ -3029,7 +3029,7 @@ window.abrirModalCrearEval = async () => {
         await window.avisarSiFaltaColumnaRevisores();
         await window.avisarSiFaltaColumnaAsignador();
 
-        await window.prepararInputCategorias('General');
+        await window.prepararInputCategorias(String(categoria || '').trim() || 'General');
         const modeInput = document.getElementById('eval-mode-input');
     if(modeInput) { modeInput.value = 'self'; modeInput.onchange = window.verificarRestriccionesModo; }
     document.getElementById('questions-container').innerHTML = '';

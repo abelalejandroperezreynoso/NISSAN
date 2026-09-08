@@ -1610,6 +1610,23 @@ window.abrirDetalleClasificacion = (indice) => {
     document.getElementById('subtitulo-detalle-clasif').innerText =
         `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
 
+    // El «+» de crear una encuesta en esta clasificación, sólo en modo
+    // administrador. La hoja de crear nace con la clasificación puesta —es de
+    // ésta y no de otra— y ésta se cierra antes, como hace todo el que abre
+    // otra hoja. El `onclick` se engancha aquí y no en el marcado, que el
+    // nombre cambia con cada clasificación.
+    const mas = document.getElementById('btn-nueva-encuesta-clasif');
+    if (mas) {
+        const puede = !!window.modoAdminActivo && !!window.abrirNuevaEvaluacion;
+        mas.hidden = !puede;
+        const etiqueta = `Nueva encuesta en ${grupo.nombre}`;
+        mas.title = etiqueta;
+        mas.setAttribute('aria-label', etiqueta);
+        mas.onclick = puede
+            ? () => { window.cerrarDetalleClasificacion(); window.abrirNuevaEvaluacion(grupo.nombre); }
+            : null;
+    }
+
     // Lo que se viene a ver es cómo va: el resultado del último periodo que
     // dejó alguno —con su nombre, que puede no ser el que corre— y la línea de
     // los anteriores. Cuántas faltan y cuántas están al día ya lo dice el
