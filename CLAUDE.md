@@ -2011,6 +2011,58 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   que tocar aparte es qué campos enseña (`toggleTipoPregunta`) y cómo se
   contesta y se califica.
 
+- **La clasificación se escribe, pero se ven las que ya existen.** No hay
+  catálogo —es texto libre, y de ahí que todo lo que la compare pase por
+  `normalizarClasificacion`—, así que el campo sigue siendo un `input`. Lo que
+  hacía falta es poder mirar las que ya hay antes de escribir: poner «Juntas»
+  donde el resto de la empresa puso «Junta» parte el grupo en dos, y ni las
+  actas de certificación, ni los revisores heredados, ni el historial de la
+  clasificación se enteran.
+
+  Lo enseñaba un `datalist`, que es justo lo que no se ve en el teléfono con el
+  que se usa esto: Safari en iOS lo despacha con una tira minúscula sobre el
+  teclado, cuando la enseña. Hoy es un botón al lado del campo que despliega la
+  lista **dentro del propio formulario**, como la de tipos de pregunta y por lo
+  mismo: apilar una hoja sobre `#modal-crear-eval` deja dos tiradores a la
+  vista.
+
+  ```js
+  window.clasificacionesExistentes   // [{ nombre, cuantas }], por nombre
+  window.listaDeClasificacionesHTML()
+  window.alternarClasificaciones(abrir)   // sin argumento, la que no esté
+  window.pintarListaClasificaciones()     // la rehace si está abierta
+  window.elegirClasificacion(boton)
+  ```
+
+  Cada una dice **cuántas encuestas lleva**, que es lo que separa la
+  clasificación de la casa del error de dedo que alguien dejó una vez. Se
+  cuentan por el nombre normalizado —quien decide si dos son la misma— y se
+  enseña el de la primera que aparece.
+
+  Tres cosas que hay que mantener:
+
+  - **Se filtra por lo que se teclea, no por lo que hay en el campo.** Al crear
+    una encuesta el campo llega con «General» puesto, y eso es una elección y
+    no una búsqueda: filtrando por ella, abrir la lista enseñaba una fila o
+    ninguna. La marca es `window.filtroClasificaciones`, que se pone en `null`
+    al abrir y se llena con la primera letra que se escriba. La búsqueda sí
+    ignora acentos —nadie los teclea en un buscador—, y por eso tiene su propia
+    `claveDeBusqueda` en vez de `normalizarClasificacion`, que es la que compara
+    y no debe quitarlos.
+  - **Sin coincidencias no se deja el hueco en blanco**: se dice que ninguna de
+    las que hay se llama así y que al guardar se creará como nueva. Es
+    exactamente el caso que hay que ver antes de crear un duplicado.
+  - **Con la clasificación fijada el botón se esconde.** Quien crea sin ser
+    administrador sólo puede hacerlo en la que revisa, y elegir otra de la lista
+    sería el mismo permiso decorativo por otra puerta. Se esconde con `hidden`,
+    así que depende de la regla `.clasificacion-boton[hidden] { display: none }`
+    de `estilos.css`: es un flex y la trampa de `.tipos-pregunta` otra vez.
+
+  Poner el `.value` a mano no dispara ningún evento, así que `elegirClasificacion`
+  llama a `pintarNotaRevisoresClasificacion` —de este campo cuelga de quién se
+  heredan los revisores—; el renglón del grupo «Datos» sí se rehace solo,
+  porque el `click` del botón burbuja hasta el oyente de la hoja.
+
 - **Editar una encuesta parte su historial en dos.** `answers_json` y
   `grades_json` guardan cada respuesta bajo el **id de la pregunta**
   (`evaluation_questions.id`). Editar el enunciado conserva el id, así que la

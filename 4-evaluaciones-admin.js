@@ -3310,29 +3310,137 @@ window.verificarRestriccionesModo = () => {
     });
 };
 
-window.prepararInputCategorias = async (currentValue = '') => {
-    let input = document.getElementById('eval-category-input');
-    if (input && input.tagName === 'SELECT') {
-        const newInput = document.createElement('input');
-        newInput.type = 'text';
-        newInput.id = 'eval-category-input';
-        newInput.setAttribute('list', 'eval-category-list');
-        newInput.placeholder = "Escribe o selecciona categoría...";
-        // Sin estilos en línea: los pone `.form-group input` y, dentro de una
-        // hoja, la regla de `.hoja-contenido input[type="text"]`. Con el
-        // padding de 12px que traía aquí, este campo quedaba más alto que
-        // todos los demás de la hoja.
-        const dl = document.createElement('datalist');
-        dl.id = 'eval-category-list';
-        input.parentNode.replaceChild(newInput, input);
-        newInput.parentNode.appendChild(dl);
-        input = newInput;
+// ==========================================
+// LAS CLASIFICACIONES QUE YA EXISTEN
+// ==========================================
+// La clasificación es texto libre —no hay catálogo—, así que el campo se
+// escribe. Lo que hacía falta es poder ver las que ya hay: escribir «Juntas»
+// donde el resto de la empresa puso «Junta» parte el grupo en dos, y ni las
+// actas, ni los revisores heredados, ni la certificación se enteran.
+//
+// Lo enseñaba un `datalist`, que es justo lo que no se ve en el teléfono con
+// el que se usa esto: Safari en iOS lo despacha con una tira minúscula sobre
+// el teclado, cuando la enseña. Va como la lista de tipos de pregunta y por
+// lo mismo —desplegada dentro del formulario que ya está abierto, no en otra
+// hoja, que apilar una sobre `#modal-crear-eval` deja dos tiradores a la
+// vista—.
+//
+// Cada una dice cuántas encuestas lleva: es lo que separa la clasificación de
+// la casa del error de dedo que alguien dejó una vez.
+window.clasificacionesExistentes = [];
+
+// Para buscar, no para comparar: `normalizarClasificacion` es quien decide si
+// dos nombres son el mismo, y ésa no quita acentos —tampoco debe—. Aquí sí,
+// que nadie escribe «capacitación» con acento en un buscador.
+const claveDeBusqueda = (texto) => String(texto == null ? '' : texto)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim().toUpperCase().replace(/\s+/g, ' ');
+
+// Lo tecleado desde que se abrió la lista, que no es lo mismo que lo que hay
+// en el campo: al crear una encuesta el campo llega con «General» puesto, y
+// eso es una elección y no una búsqueda —filtrando por ella, abrir la lista
+// enseñaba una fila o ninguna—. En `null` no se filtra nada.
+window.filtroClasificaciones = null;
+
+window.listaDeClasificacionesHTML = () => {
+    const input = document.getElementById('eval-category-input');
+    const escrito = input ? String(input.value || '').trim() : '';
+    const todas = window.clasificacionesExistentes || [];
+
+    if (todas.length === 0) {
+        return `<div class="clasificaciones-vacio">Todavía no hay ninguna clasificación. La que escribas será la primera.</div>`;
     }
+
+    // Se filtra por lo tecleado: con veinte clasificaciones, recorrer la lista
+    // entera es lo que el campo de texto ya ahorraba.
+    const filtro = window.filtroClasificaciones;
+    const buscado = filtro === null ? '' : claveDeBusqueda(filtro);
+    const vistas = buscado
+        ? todas.filter(c => claveDeBusqueda(c.nombre).includes(buscado))
+        : todas;
+
+    if (vistas.length === 0) {
+        return `<div class="clasificaciones-vacio">Ninguna de las ${todas.length} que existen se llama «${window.sanitizeForHTML(String(filtro).trim())}»: al guardar se creará como clasificación nueva.</div>`;
+    }
+
+    // Con el campo vacío la encuesta se guarda como «General», así que ésa es
+    // la que está elegida —es lo que hace `guardarNuevaEvaluacion`—.
+    const clave = window.normalizarClasificacion(escrito);
+    return vistas.map(c => {
+        const elegida = window.normalizarClasificacion(c.nombre) === clave;
+        // El nombre viaja en un `data-` y no dentro del `onclick`: es texto
+        // libre y puede traer comillas.
+        return `<button type="button" class="clasificacion-opcion${elegida ? ' es-elegida' : ''}"
+                        ${elegida ? 'aria-current="true"' : ''}
+                        data-nombre="${window.sanitizeForHTML(c.nombre)}"
+                        onclick="window.elegirClasificacion(this)">
+            <span class="clasificacion-opcion-nombre">${window.sanitizeForHTML(c.nombre)}</span>
+            <span class="clasificacion-opcion-cuantas">${c.cuantas} encuesta${c.cuantas === 1 ? '' : 's'}</span>
+            <span class="clasificacion-opcion-marca" aria-hidden="true">${elegida ? '✓' : ''}</span>
+        </button>`;
+    }).join('');
+};
+
+// La lista se rehace cada vez que se abre y con cada letra que se escribe: lo
+// que enseña depende de lo que haya en el campo.
+window.pintarListaClasificaciones = () => {
+    const lista = document.getElementById('lista-clasificaciones');
+    if (!lista || lista.hidden) return;
+    lista.innerHTML = window.listaDeClasificacionesHTML();
+};
+
+window.alternarClasificaciones = (abrir) => {
+    const lista = document.getElementById('lista-clasificaciones');
+    const btn = document.getElementById('btn-clasificaciones');
+    if (!lista) return;
+
+    const abrirla = abrir === undefined ? lista.hidden : !!abrir;
+    lista.hidden = !abrirla;
+    // Se abre entera: lo que hubiera en el campo es lo elegido, no una
+    // búsqueda. Se filtra a partir de la primera letra que se escriba.
+    window.filtroClasificaciones = null;
+    if (abrirla) {
+        lista.innerHTML = window.listaDeClasificacionesHTML();
+        // La suya, a la vista: con veinte clasificaciones la elegida puede
+        // quedar debajo del tope de altura. Se mueve el scroll de la lista y no
+        // con `scrollIntoView`, que arrastraría también el cuerpo de la hoja.
+        const elegida = lista.querySelector('.clasificacion-opcion.es-elegida');
+        if (elegida) {
+            lista.scrollTop = Math.max(0,
+                elegida.offsetTop - (lista.clientHeight - elegida.offsetHeight) / 2);
+        }
+    } else {
+        lista.innerHTML = '';
+    }
+    if (btn) btn.setAttribute('aria-expanded', abrirla ? 'true' : 'false');
+};
+
+window.elegirClasificacion = (el) => {
+    const input = document.getElementById('eval-category-input');
+    if (!input) return;
+
+    input.value = el.dataset.nombre || '';
+    window.alternarClasificaciones(false);
+    // Poner `.value` a mano no dispara el `oninput`, y de este campo cuelga la
+    // nota de quién hereda la revisión. El renglón del grupo «Datos» sí se
+    // rehace solo: el `click` de este botón burbujea hasta el oyente de la
+    // hoja.
+    window.pintarNotaRevisoresClasificacion();
+};
+
+window.prepararInputCategorias = async (currentValue = '') => {
+    const input = document.getElementById('eval-category-input');
     if (input) {
         input.value = currentValue;
+        window.alternarClasificaciones(false);
         // De qué clasificación se heredan los revisores lo dice este campo, así
-        // que la nota del bloque de revisores se rehace con cada letra.
-        input.oninput = () => window.pintarNotaRevisoresClasificacion();
+        // que la nota del bloque de revisores se rehace con cada letra, y con
+        // ella lo que la lista deja ver.
+        input.oninput = () => {
+            window.filtroClasificaciones = input.value;
+            window.pintarNotaRevisoresClasificacion();
+            window.pintarListaClasificaciones();
+        };
         window.pintarNotaRevisoresClasificacion();
 
         // Quien crea sin ser administrador sólo puede hacerlo en la
@@ -3342,6 +3450,10 @@ window.prepararInputCategorias = async (currentValue = '') => {
         const fija = String(window.clasificacionFijaParaCrear || '').trim();
         input.disabled = !!fija;
         input.style.opacity = fija ? '0.6' : '';
+        // Sin el botón no se esconde nada: con el campo bloqueado, elegir otra
+        // de la lista sería el mismo permiso decorativo por otra puerta.
+        const btnLista = document.getElementById('btn-clasificaciones');
+        if (btnLista) btnLista.hidden = !!fija;
         const nota = document.getElementById('nota-clasificacion-fija');
         if (nota) {
             nota.style.display = fija ? 'block' : 'none';
@@ -3349,18 +3461,25 @@ window.prepararInputCategorias = async (currentValue = '') => {
                 ? `Puedes crear encuestas en «${fija}» porque la revisas. Para otra clasificación, pídeselo al administrador.`
                 : '';
         }
+        // Se cuentan las encuestas de cada una por su nombre normalizado —que
+        // es quien decide si dos son la misma— y se enseña el nombre tal como
+        // está escrito en la primera que aparece.
         const { data } = await sb.from('evaluations').select('category');
         if (data) {
-            const categories = [...new Set(data.map(i => i.category).filter(c => c))];
-            const dl = document.getElementById('eval-category-list');
-            if (dl) {
-                dl.innerHTML = '';
-                categories.sort().forEach(cat => {
-                    const opt = document.createElement('option');
-                    opt.value = cat;
-                    dl.appendChild(opt);
-                });
-            }
+            const porClave = new Map();
+            data.forEach(fila => {
+                const nombre = String(fila.category || '').trim();
+                if (!nombre) return;
+                const clave = window.normalizarClasificacion(nombre);
+                const ya = porClave.get(clave);
+                if (ya) ya.cuantas++;
+                else porClave.set(clave, { nombre, cuantas: 1 });
+            });
+            window.clasificacionesExistentes = [...porClave.values()]
+                .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+            // La consulta llega después de que la hoja esté a la vista, así que
+            // si a alguien le dio tiempo de abrir la lista hay que rehacerla.
+            window.pintarListaClasificaciones();
         }
     }
 };

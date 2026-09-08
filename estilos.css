@@ -2517,6 +2517,130 @@ textarea:focus {
     font-weight: bold;
 }
 
+/* =========================================
+   LAS CLASIFICACIONES QUE YA EXISTEN
+   =========================================
+   La clasificación de una encuesta es texto libre, así que el campo se
+   escribe; el botón de al lado despliega las que ya hay, para no inventar
+   «Juntas» donde el resto de la empresa puso «Junta». Es la lista de tipos de
+   pregunta otra vez: desplegada dentro del formulario, no en otra hoja. */
+.clasificacion-campo {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+/* `min-width: 0` o el campo se niega a encoger y empuja al botón fuera. */
+.clasificacion-campo input {
+    flex: 1 1 0%;
+    min-width: 0;
+}
+
+.clasificacion-boton {
+    flex-shrink: 0;
+    width: 46px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #f9fafb;
+    color: #475569;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+/* Es un flex, y un `display` de autor le gana al `[hidden]` de la hoja del
+   navegador: la misma trampa de `.tipos-pregunta`. */
+.clasificacion-boton[hidden] { display: none; }
+
+.clasificacion-boton[aria-expanded="true"] {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+}
+
+.clasificacion-flecha {
+    line-height: 1;
+    transition: transform 0.2s;
+}
+
+.clasificacion-boton[aria-expanded="true"] .clasificacion-flecha {
+    transform: rotate(180deg);
+}
+
+.clasificaciones-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+    padding: 6px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    /* Crece con el catálogo, así que se desplaza dentro en vez de estirar la
+       sección. `contain` para que al llegar al tope el gesto no siga de largo
+       arrastrando la hoja. */
+    max-height: 220px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.clasificaciones-lista[hidden] { display: none; }
+
+.clasificacion-opcion {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: #f8fafc;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.clasificacion-opcion.es-elegida {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+}
+
+/* De una línea y recortado: un nombre largo partiría la fila en tres
+   renglones y separaría el nombre de su conteo. */
+.clasificacion-opcion-nombre {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.clasificacion-opcion-cuantas {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    color: #64748b;
+}
+
+.clasificacion-opcion-marca {
+    flex-shrink: 0;
+    width: 14px;
+    color: #1d4ed8;
+    font-weight: bold;
+}
+
+.clasificaciones-vacio {
+    padding: 10px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    color: #64748b;
+}
+
 /* Fila de casilla con su explicación debajo, al estilo de una lista de
    ajustes. Sustituye a las tarjetas de colores que se apilaban de una en una:
    con `min-width:150px` y 309px de ancho útil no entraban dos por renglón, y
