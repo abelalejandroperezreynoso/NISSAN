@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-08-12';
+window.VERSION_APP = '2026-09-08-13';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1809,11 +1809,61 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
         return estilo.position === 'fixed' && estilo.display !== 'none';
     };
 
+    // --- EL FONDO NO SE DESPLAZA MIENTRAS HAY UNA HOJA ABIERTA ---
+    //
+    // La hoja es `position:fixed` y hace su propio scroll interno, pero eso no
+    // impide que el dedo arrastre el documento de detrás: en iOS, en cuanto la
+    // lista de la hoja llega a su tope, el gesto sigue de largo y lo que se
+    // mueve es el panel. Se sale de la encuesta a otra altura de la que se
+    // entró, y a veces con la hoja flotando sobre una pantalla que no es la
+    // suya.
+    //
+    // Sólo `overflow:hidden` no basta en iOS —el toque sigue desplazando—, así
+    // que el documento se ancla de verdad: `<body>` pasa a `position:fixed`
+    // con su desplazamiento actual en negativo, de modo que el fondo se queda
+    // exactamente donde estaba, y al cerrarse la última hoja se devuelve el
+    // scroll. Sin guardarlo, cerrar la hoja dejaría el panel arriba del todo.
+    //
+    // El anclaje lleva **su propia clase**, `fondo-anclado`, y no se cuelga de
+    // `modal-abierto`: ésa la llevan también las pantallas que no se desplazan
+    // —el panel de refacciones y el mapa viven en un contenedor de altura
+    // completa— y ahí `position:fixed` sobre el `<body>` sería tocarles la
+    // maqueta a cambio de nada. Se ancla sólo lo que se puede desplazar, y la
+    // clase la pone quien lo comprobó.
+    let desplazamientoGuardado = null;
+
+    const puedeDesplazarse = () =>
+        (document.documentElement.scrollHeight - window.innerHeight) > 1;
+
+    const anclarFondo = () => {
+        if (desplazamientoGuardado !== null || !puedeDesplazarse()) return;
+        desplazamientoGuardado = window.scrollY || window.pageYOffset || 0;
+        // La variable se publica **antes** que la clase que ancla: las dos
+        // cosas pasan en la misma tarea, así que el navegador no llega a
+        // pintar un fotograma con el fondo pegado arriba.
+        document.documentElement.style.setProperty(
+            '--desplazamiento-fondo', '-' + desplazamientoGuardado + 'px');
+        document.documentElement.classList.add('fondo-anclado');
+    };
+
+    const soltarFondo = () => {
+        if (desplazamientoGuardado === null) return;
+        const y = desplazamientoGuardado;
+        desplazamientoGuardado = null;
+        document.documentElement.classList.remove('fondo-anclado');
+        document.documentElement.style.removeProperty('--desplazamiento-fondo');
+        window.scrollTo(0, y);
+    };
+
     const revisar = () => {
         // Se excluyen los elementos internos que comparten el prefijo pero no
         // son overlays; el filtro por position:fixed ya los descarta.
         const visibles = Array.from(document.querySelectorAll('[id^="modal-"]')).filter(esOverlayVisible);
-        document.documentElement.classList.toggle('modal-abierto', visibles.length > 0);
+        const hayAlguna = visibles.length > 0;
+
+        if (hayAlguna) anclarFondo();
+        document.documentElement.classList.toggle('modal-abierto', hayAlguna);
+        if (!hayAlguna) soltarFondo();
 
         // El panel de administración se aparta solo en cuanto se abre otra
         // hoja. Sus botones la cierran ellos mismos antes de abrir la suya,

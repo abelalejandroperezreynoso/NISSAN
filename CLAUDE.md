@@ -332,6 +332,31 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   encima en vez de esconderse detrás, y ancla el documento mientras haya una
   hoja abierta.
 
+  **Y el fondo no se desplaza mientras hay una hoja abierta.** La hoja es
+  `position:fixed` y hace su propio scroll interno, pero eso no impide que el
+  dedo arrastre el documento de detrás: en iOS, en cuanto la lista de la hoja
+  llega a su tope, el gesto sigue de largo y lo que se mueve es el panel —se
+  sale de la encuesta a otra altura de la que se entró, y a veces con la hoja
+  flotando sobre una pantalla que no es la suya—. `overflow:hidden` sobre el
+  `<body>` **no basta en iOS**, así que el documento se ancla de verdad: el
+  observador de `1-config.js` guarda `scrollY`, lo publica en
+  `--desplazamiento-fondo` y marca `<html>` con **`fondo-anclado`**, que en
+  `estilos.css` pone el `<body>` en `position:fixed` con ese desplazamiento en
+  negativo. Al cerrarse la última hoja se quita la marca y se devuelve el
+  scroll: sin guardarlo, cerrar la hoja dejaría el panel arriba del todo.
+
+  La clase es **suya y no `modal-abierto`**: esa otra la llevan también las
+  pantallas cuyo documento no se desplaza —refacciones y el mapa viven en un
+  contenedor de altura completa— y ahí `position:fixed` sobre el `<body>` sería
+  tocarles la maqueta a cambio de nada. Sólo la pone quien comprobó que hay algo
+  que anclar (`scrollHeight - innerHeight > 1`).
+
+  La complementa `overscroll-behavior: contain` en `.hoja-overlay`, que es la
+  mitad moderna de lo mismo: las dos van juntas porque esa propiedad no la
+  entienden todos los Safari en uso. Y el `anclarDocumento` del bloque del
+  teclado se queda como red de seguridad: con el cuerpo anclado ya no llega a
+  dispararse.
+
   Sólo cuenta el teclado de texto. La rueda de un `<select>` y la de los
   campos de fecha y hora encogen el viewport visual exactamente igual, pero
   ahí `--alto-teclado` se deja en cero a propósito: iOS ya deja el campo

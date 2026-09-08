@@ -1899,6 +1899,11 @@ textarea:focus {
 .hoja-overlay {
     display: none;
     position: fixed;
+
+    /* El arrastre que llega al tope de la hoja no se contagia al documento de
+       detrás. Es la mitad moderna del anclaje de `html.modal-abierto body`;
+       las dos van juntas porque ésta no la entienden todos los Safari en uso. */
+    overscroll-behavior: contain;
     left: 0;
     top: 0;
     width: 100%;
@@ -2719,6 +2724,28 @@ html {
 
 html.modal-abierto {
     background-color: #f0f2f5;
+}
+
+/* Y el fondo se queda quieto. La hoja hace su propio scroll interno, pero en
+   iOS el gesto sigue de largo en cuanto la lista llega a su tope y lo que se
+   mueve es el documento de detrás: se sale de la hoja a otra altura de la que
+   se entró. `overflow:hidden` no basta ahí, así que el documento se ancla de
+   verdad —`position:fixed` con su desplazamiento en negativo—, y quien lo
+   guarda, lo publica y lo devuelve al cerrar es el observador de
+   `1-config.js`.
+
+   La clase es `fondo-anclado` y no `modal-abierto` a propósito: esta última la
+   llevan también las pantallas cuyo documento no se desplaza —refacciones y el
+   mapa, que viven en un contenedor de altura completa— y ahí esto sería
+   tocarles la maqueta a cambio de nada. Sólo la pone quien comprobó que hay
+   algo que anclar. */
+html.fondo-anclado body {
+    position: fixed;
+    top: var(--desplazamiento-fondo, 0px);
+    left: 0;
+    right: 0;
+    width: 100%;
+    overflow: hidden;
 }
 
 /* =========================================
