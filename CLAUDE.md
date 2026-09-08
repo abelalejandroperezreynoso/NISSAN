@@ -2316,6 +2316,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   entre grupos, el que peor está, y con el mismo estado por nombre —o la tarjeta
   bailaría de una carga a otra—.
 
+  **El estado va como icono a la izquierda del renglón, no como etiqueta a la
+  derecha** (`window.iconoDeAsignada`): con siete encuestas al día, siete «Al
+  día» en fila son siete veces la misma palabra ocupando la mitad del ancho, y
+  lo que se busca de un vistazo es la que **no** lo tiene. Una palomita se lee
+  sin leerla. Lo que falta se distingue además **por la forma** —un círculo
+  abierto con su admiración— y no sólo por el color, que es lo que hay que hacer
+  para no depender de distinguir el verde del rojo. Lo que decía la etiqueta no
+  se pierde: va al renglón de abajo en las que faltan —donde no hay puntaje que
+  enseñar— y al `title` de la fila siempre.
+
+  Y **la tarjeta no lleva título**: lo que es se ve —clasificaciones con sus
+  encuestas—, y en ese sitio el renglón del resumen dice más.
+
   Por lo mismo **arma sus columnas como el badge** —`camposConRelanzamiento`
   sobre `camposConMinimo` sobre `camposConReintento`, más `mode`,
   `is_obligatory` y los tres destinatarios— y pide antes

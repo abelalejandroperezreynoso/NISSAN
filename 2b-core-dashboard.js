@@ -1141,7 +1141,7 @@ window.estadoDeAsignada = (v) => {
     const rojo  = { fondo: '#fee2e2', color: '#b91c1c', borde: '#fecaca' };
     const ambar = { fondo: '#fef3c7', color: '#b45309', borde: '#fde68a' };
 
-    if (!v || !v.mostrar) return Object.assign({ texto: 'Al día' }, verde);
+    if (!v || !v.mostrar) return Object.assign({ texto: 'Al día', listo: true }, verde);
 
     switch (v.tipoAviso) {
         case 'nunca':        return Object.assign({ texto: 'Sin contestar' }, rojo);
@@ -1155,6 +1155,32 @@ window.estadoDeAsignada = (v) => {
         }
         default:             return Object.assign({ texto: 'Pendiente' }, v.vencida ? rojo : ambar);
     }
+};
+
+// El estado va como icono a la izquierda del renglón y no como etiqueta a la
+// derecha: con siete encuestas al día, siete «Al día» en fila son siete veces
+// la misma palabra ocupando la mitad del ancho, y lo que se busca de un vistazo
+// es la que **no** lo tiene. Una palomita se lee sin leerla; lo que falta se
+// distingue por la forma —un círculo abierto con su admiración— y no sólo por
+// el color, que es lo que hay que hacer para que no dependa de distinguir el
+// verde del rojo. Lo que decía la etiqueta no se pierde: va al renglón de abajo
+// en las que faltan, y al `title` de la fila siempre.
+window.iconoDeAsignada = (estado) => {
+    const comun = 'width="20" height="20" viewBox="0 0 24 24" style="flex-shrink:0; display:block;" aria-hidden="true"';
+
+    if (estado.listo) {
+        return `<svg ${comun}>
+            <circle cx="12" cy="12" r="10" fill="${estado.color}"></circle>
+            <path d="M7.5 12.4l3 3 6-6.6" fill="none" stroke="white" stroke-width="2.4"
+                  stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>`;
+    }
+
+    return `<svg ${comun}>
+        <circle cx="12" cy="12" r="9.6" fill="none" stroke="${estado.color}" stroke-width="2"></circle>
+        <path d="M12 7.2v5.6" fill="none" stroke="${estado.color}" stroke-width="2.2" stroke-linecap="round"></path>
+        <circle cx="12" cy="16.6" r="1.3" fill="${estado.color}"></circle>
+    </svg>`;
 };
 
 window.cargarEncuestasAsignadas = async (userId) => {
@@ -1264,17 +1290,22 @@ window.cargarEncuestasAsignadas = async (userId) => {
                 const puntaje = puntajeDe(ev);
                 const color = (puntaje !== null && typeof window.getColorScore === 'function')
                     ? window.getColorScore(puntaje) : '#64748b';
-                const resultado = puntaje === null ? ''
-                    : ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`;
+                // El puntaje en las contestadas; en las que faltan, lo que
+                // falta —que ahí no hay puntaje que enseñar y el renglón
+                // quedaría con la frecuencia sola—.
+                const resultado = puntaje !== null
+                    ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
+                    : (estado.listo ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
 
                 return `
                     <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
+                         title="${estado.texto}"
                          style="display:flex; align-items:center; gap:10px; padding:9px 8px 9px 2px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                        ${window.iconoDeAsignada(estado)}
                         <div style="flex:1; min-width:0;">
                             <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
                             <div style="font-size:0.72rem; color:#94a3b8;">${window.sanitizeForHTML(ritmo)}${resultado}</div>
                         </div>
-                        <div style="background:${estado.fondo}; color:${estado.color}; border:1px solid ${estado.borde}; border-radius:20px; padding:3px 10px; font-size:0.7rem; font-weight:bold; white-space:nowrap;">${estado.texto}</div>
                     </div>`;
             }).join('');
 
@@ -1308,10 +1339,11 @@ window.cargarEncuestasAsignadas = async (userId) => {
             promedio === null ? null : `promedio ${promedio}%`
         ].filter(Boolean).join(' · ');
 
+        // Sin título: lo que la tarjeta es se ve —clasificaciones con sus
+        // encuestas— y el renglón del resumen dice más en el mismo sitio.
         cont.innerHTML = `
             <div style="background:white; border-radius:16px; padding:15px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
-                <h3 style="margin:0 0 2px 0; color:#0369a1; font-size:0.85rem; text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">📝 Encuestas asignadas</h3>
-                <div style="font-size:0.75rem; color:#94a3b8;">${resumen}</div>
+                <div style="font-size:0.8rem; color:#475569; font-weight:600;">${resumen}</div>
                 ${bloques}
             </div>`;
         cont.style.display = 'block';
