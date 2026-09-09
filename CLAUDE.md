@@ -673,11 +673,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     lista de respuestas y al abrirla.
   - **Ningún emoji**: ni en los tres botones, ni en el aviso de «Te toca
     revisar esta encuesta», ni en el recuadro de información («Encuesta
-    Opcional», «Mide resultados por Área», «La revisa …»), ni en el rótulo
-    «Respuestas (N)» ni en su buscador. La flecha de «entra aquí» que llevaban
-    las filas es hoy un «›» gris claro, que es lo que hace ese trabajo en iOS.
-    El texto de cada estado se queda —«Certificada», «Mal Revisada»—: lo que se
-    quitó fue el dibujo de delante.
+    Opcional», «Mide resultados por Área»), ni en el rótulo «Respuestas (N)» ni
+    en su buscador. La flecha de «entra aquí» que llevaban las filas es hoy un
+    «›» gris claro, que es lo que hace ese trabajo en iOS. El texto de cada
+    estado se queda —«Certificada», «Mal Revisada»—: lo que se quitó fue el
+    dibujo de delante.
+
+  **Quién la revisa se enseña con `window.filaDeRevisores`**, la misma fila de
+  caras con el nombre de pila debajo que la hoja de detalle de una
+  clasificación. Era un renglón de texto dentro del recuadro gris —«La revisa
+  Pérez Reynoso Abel Alejandro»— y es el mismo dato: leerlo de dos maneras en
+  dos pantallas de la misma aplicación no lo hacía más claro, una cara se
+  reconoce antes que un nombre completo y tres revisores se comían tres
+  renglones. El ayudante habla de un grupo de encuestas, así que aquí se le pasa
+  el grupo de una sola (`{ filas: [{ ev }] }`) y su `title` dice «revisa esta
+  encuesta».
+
+  Lo que una encuesta suelta tiene que decir además —que con destinatarios
+  asignados cada revisor califica a los suyos— va en el **segundo argumento**,
+  `nota`, dentro del mismo recuadro; la hoja de una clasificación llama sin él.
+  Y con los revisores fuera del recuadro gris, ése **puede quedarse sin nada que
+  decir**: la condición que lo dibuja mira ya sólo la descripción, «Opcional» y
+  «Mide por Área».
 
   La lista de respuestas de una encuesta va plegada en un
   `<details class="hoja-plegable">`, y se abre sola sólo si hay algo esperando

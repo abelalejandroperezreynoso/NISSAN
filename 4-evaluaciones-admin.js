@@ -127,6 +127,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     
     
     let infoHtml = '';
+    let revisoresHtml = '';
     let subtituloHoja = '';
     let evalData = encuestaDeLaLista;
 
@@ -140,24 +141,31 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         const obligHtml = (evalData.is_obligatory === false) ? `<div style="font-size:0.8rem; color:#22c55e; font-weight:bold; margin-top:4px;">Encuesta Opcional</div>` : '';
         const areaHtml = (evalData.evaluates_area === true) ? `<div style="font-size:0.8rem; color:#be185d; font-weight:bold; margin-top:4px;">Mide resultados por Área</div>` : '';
 
-        // Quién la califica sólo se dice cuando no es lo de siempre: con el
-        // jefe inmediato no hay nada que aclarar.
-        const nombrados = window.revisoresDeEncuesta(evalData);
+        // Quién la califica se enseña **como en la hoja de detalle de una
+        // clasificación** —la cara con el nombre de pila debajo— y no como un
+        // renglón de texto: es el mismo dato, y leerlo de dos maneras distintas
+        // en dos pantallas de la misma aplicación no lo hace más claro. Una
+        // cara se reconoce antes que un nombre completo, y aquí además el
+        // renglón se comía tres líneas con tres revisores.
+        //
+        // `filaDeRevisores` habla de un grupo de encuestas; aquí el grupo es
+        // una sola, así que su `title` dice «revisa esta encuesta». Sin
+        // revisores nombrados no dibuja nada: ahí califica el jefe inmediato de
+        // cada quien, que es lo de siempre.
+        //
         // Con destinatarios asignados el reparto deja de ser «entre todos», y
         // conviene decirlo: es lo que explica que a un revisor le aparezcan
-        // unas respuestas y no otras.
+        // unas respuestas y no otras. Va como nota del mismo recuadro.
         const hayAsignados = Object.keys(window.asignacionesDeEncuesta(evalData)).length > 0;
-        const notaAsignados = hayAsignados
-            ? `<div style="font-size:0.75rem; color:#7e22ce; font-weight:normal; margin-top:2px;">Cada quien califica a los colaboradores que dirigió a esta encuesta.</div>`
-            : '';
-        const revisoresHtml = nombrados.length > 0
-            ? `<div style="font-size:0.8rem; color:#7e22ce; font-weight:bold; margin-top:4px;">La revisa ${window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))}${notaAsignados}</div>`
-            : '';
+        revisoresHtml = window.filaDeRevisores(
+            { filas: [{ ev: evalData }] },
+            hayAsignados ? 'Cada quien califica a los colaboradores que dirigió a esta encuesta.' : '');
 
-        // Sin la frecuencia dentro, el recuadro puede quedarse sin nada que
-        // decir: entonces no se dibuja, o sería una caja gris vacía.
-        if (desc || obligHtml || areaHtml || revisoresHtml) {
-            infoHtml = `<div style="font-size:0.9rem; color:#475569; margin-top:5px; margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0;">${desc}${obligHtml}${areaHtml}${revisoresHtml}</div>`;
+        // Con la frecuencia en el subtítulo y los revisores en su propio
+        // recuadro, éste puede quedarse sin nada que decir: entonces no se
+        // dibuja, o sería una caja gris vacía.
+        if (desc || obligHtml || areaHtml) {
+            infoHtml = `<div style="font-size:0.9rem; color:#475569; margin-top:5px; margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0;">${desc}${obligHtml}${areaHtml}</div>`;
         }
     }
 
@@ -303,7 +311,8 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // --- CONSTRUCCIÓN DEL CONTENEDOR FINAL ---
         container.innerHTML = `
             ${infoHtml}
-        
+            ${revisoresHtml}
+
         ${bannerHtml}
         ${paseDeListaHtml}
         <div id="stats-dashboard" style="display:none; margin-top:20px;"></div>

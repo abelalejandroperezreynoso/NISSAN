@@ -1663,7 +1663,12 @@ window.revisoresDelGrupo = (grupo) => {
 // Lo que no cabe se dice en el `title`: el nombre completo y de cuántas
 // encuestas del grupo es revisor, que es lo que distingue al de la
 // clasificación entera del que lleva una encuesta suelta.
-window.filaDeRevisores = (grupo) => {
+//
+// `nota` es lo que una encuesta suelta necesita decir además —que con
+// destinatarios asignados cada revisor califica a los suyos—: va dentro del
+// mismo recuadro, que es de lo que habla. La hoja de una clasificación llama
+// sin ella.
+window.filaDeRevisores = (grupo, nota) => {
     const revisores = window.revisoresDelGrupo(grupo);
     if (revisores.length === 0) return '';
 
@@ -1696,6 +1701,10 @@ window.filaDeRevisores = (grupo) => {
     // La fila se alinea a la izquierda y se desplaza: centrada, en cuanto
     // desborda el navegador recorta por la izquierda y a los primeros no se
     // llega arrastrando. Es lo mismo que les pasa a las insignias del panel.
+    const notaHtml = nota
+        ? `<div style="font-size:0.75rem; line-height:1.35; color:#7e22ce; margin-top:8px;">${window.sanitizeForHTML(nota)}</div>`
+        : '';
+
     return `
         <div style="background:#faf5ff; border:1px solid #ede9fe; border-radius:12px;
                     padding:10px 12px; margin-bottom:14px;">
@@ -1703,6 +1712,7 @@ window.filaDeRevisores = (grupo) => {
                         letter-spacing:0.04em; margin-bottom:6px;">${revisores.length === 1 ? 'Revisa' : 'Revisan'}</div>
             <div style="display:flex; gap:10px; overflow-x:auto; -webkit-overflow-scrolling:touch;
                         scrollbar-width:none;">${fichas}</div>
+            ${notaHtml}
         </div>`;
 };
 
