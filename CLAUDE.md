@@ -1800,6 +1800,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   cifra**, que no es un adorno: es la diferencia entre un total corto y un total
   corto que además se cree.
 
+  **Y contando desde el cliente el total se dibuja como un suelo: «≥ 425.1 MB ·
+  al menos 42%».** Aquí es donde pasó de verdad: la pantalla decía «425.1 MB ·
+  42% de 1.00 GB» con toda confianza mientras el bucket `signatures` —148.475
+  firmas, 343 MB— salía en cero porque su política no deja listarlo desde la
+  aplicación. La cuota real iba por el **75%**. El aviso estaba en el pie desde el
+  principio y no sirvió de nada, porque **lo que se lee es el número gordo**: la
+  duda tiene que estar en el número o no está en ningún sitio. Con la base
+  contando, la cifra vuelve a ir a secas.
+
   **Y dice el porqué, no «corre el script».** Ese consejo es correcto cuando el
   script no se ha corrido y una mentira cuando sí: pasó con `tamano_buckets`, que
   existía y fallaba por otra cosa, y la pantalla mandaba a correr un script ya
@@ -1843,10 +1852,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   verdad tiene ciento cincuenta mil filas, y por eso no cabe en el plazo. El
   aviso de hinchazón **no** salió, que es exactamente lo que su umbral promete.
 
-  Es la lección de las tres capturas: **la pantalla dice el dato y quien mira
-  saca la conclusión**. Un mensaje que aventura la causa manda a buscar un
+  Es la lección de la investigación entera: **la pantalla dice el dato y quien
+  mira saca la conclusión**. Un mensaje que aventura la causa manda a buscar un
   problema que puede no existir, así que hoy dice cuántas filas hay y dónde
   mirarlas, y nada más.
+
+  **Y de dónde salían esas 150 mil filas:** 148.475 son del bucket `signatures`
+  —una imagen de 2.4 KB por firma, 343 MB—, que es justo el bucket que la
+  aplicación no puede listar. Así que las dos mitades del problema eran la misma:
+  la consulta que podía ver ese bucket se cancelaba **por el tamaño de ese
+  bucket**. Por eso el `case` de `tamano_buckets` pasó del regex a
+  `jsonb_typeof`, que mira la etiqueta que el jsonb ya lleva en vez de convertir a
+  texto y recorrerlo: no garantiza que quepa —el recorrido es el que es— pero es
+  lo que se puede abaratar sin dejar de comprobar nada. Si aun así se cancela,
+  queda subirle el plazo al rol `anon`, que es cosa de la cuenta y no del código.
 
   **Y las tablas son todas, no sólo las de `public`.** Ahí estaba el resto del
   problema: la pantalla enseñaba 58.5 MB de tablas debajo de una base de 334.8

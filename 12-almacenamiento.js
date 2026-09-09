@@ -319,12 +319,21 @@ window.pantallaDeConsumo = (c) => {
     const subtitulo = document.getElementById('subtitulo-almacenamiento');
     if (subtitulo) subtitulo.innerText = `Medido a las ${window.horaLegible(c.medidoEn)}`;
 
-    const resumen = (rotulo, bytes, cuota, pie) => `
+    // **Un total que puede quedarse corto no se dibuja como una cifra cerrada.**
+    // Contando desde el cliente, un bucket cuya política no deje listarlo sale en
+    // cero sin dar error, así que el total es un **suelo** y no una medida: aquí
+    // decía «425.1 MB · 42% de 1.00 GB» mientras el bucket de las firmas
+    // escondía 343 MB y la cuota real iba por el 75%. El aviso estaba en el pie
+    // y no sirvió de nada — lo que se lee es el número gordo—, así que la duda
+    // tiene que estar **en el número**: «≥ 425.1 MB · al menos 42%». Se lee
+    // distinto y es lo único honesto que se puede decir de una cuenta que no se
+    // sabe completa.
+    const resumen = (rotulo, bytes, cuota, pie, incierto) => `
         <div class="consumo-tarjeta">
             <div class="consumo-rotulo">${rotulo}</div>
             <div class="consumo-cifra">
-                <span class="consumo-cifra-numero">${window.pesoLegible(bytes) || '0 KB'}</span>
-                <span class="consumo-cifra-pct">${window.pctTexto(bytes, cuota)}% de ${window.pesoLegible(cuota)}</span>
+                <span class="consumo-cifra-numero">${incierto ? '≥ ' : ''}${window.pesoLegible(bytes) || '0 KB'}</span>
+                <span class="consumo-cifra-pct">${incierto ? 'al menos ' : ''}${window.pctTexto(bytes, cuota)}% de ${window.pesoLegible(cuota)}</span>
             </div>
             ${window.barraDeCuota(bytes, cuota)}
             <div class="consumo-pie">${pie}</div>
@@ -403,12 +412,13 @@ window.pantallaDeConsumo = (c) => {
     // el total se queda corto sin decirlo.
     const origen = c.desdeLaBase
         ? `Contados por la base, que es la misma cifra que suma Supabase.`
-        : `Contados listando cada bucket desde la aplicación, así que un bucket que no se deje listar sale aquí en cero. ${window.notaDeFallo('tamano_buckets')}`;
+        : `Contados listando cada bucket desde la aplicación, y <b>eso no ve los buckets cuya política no deje listarlos</b>: salen en cero y su peso falta de este total. ${window.notaDeFallo('tamano_buckets')}`;
     const sinMedida = c.sinMedida > 0
         ? ` ${c.sinMedida} sin tamaño registrado, que cuentan como cero.` : '';
 
     return resumen('Archivos', c.archivos, window.CUOTA_ARCHIVOS,
-               `${c.cuantos} archivo${c.cuantos === 1 ? '' : 's'} en ${c.buckets.length} buckets. ${origen}${sinMedida}`) +
+               `${c.cuantos} archivo${c.cuantos === 1 ? '' : 's'} en ${c.buckets.length} buckets. ${origen}${sinMedida}`,
+               !c.desdeLaBase) +
            huerfanosHtml +
            `<div class="consumo-lista">${c.buckets.map(filaBucket).join('')}</div>` +
            baseHtml;

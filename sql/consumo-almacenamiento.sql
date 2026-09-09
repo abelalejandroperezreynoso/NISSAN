@@ -139,6 +139,13 @@ comment on function public.tamano_tablas() is
 -- lleva por delante esa fila sino **la consulta entera**: la pantalla se queda
 -- sin la cifra de todos los buckets por culpa de un archivo. Lo que no sea un
 -- entero cuenta como sin medida, que es lo que de verdad es.
+--
+-- **Se comprueba con `jsonb_typeof` y no con un regex**, que es lo que había y
+-- costaba de más: esta consulta se cancelaba por tiempo agotado, y sobre las
+-- 150 mil filas que tiene este proyecto un regex por fila pesa. `jsonb_typeof`
+-- mira la etiqueta que el jsonb ya lleva puesta en vez de convertir a texto y
+-- recorrerlo. No garantiza que quepa en el plazo —el recorrido es el que es—,
+-- pero es lo que se puede abaratar sin dejar de comprobar nada.
 drop function if exists public.tamano_buckets();
 
 create or replace function public.tamano_buckets()
@@ -150,9 +157,9 @@ set search_path = pg_catalog, public, storage
 as $$
     select o.bucket_id::text,
            count(*)::bigint,
-           coalesce(sum(case when o.metadata->>'size' ~ '^[0-9]+$'
+           coalesce(sum(case when jsonb_typeof(o.metadata->'size') = 'number'
                              then (o.metadata->>'size')::bigint end), 0)::bigint,
-           count(*) filter (where coalesce(o.metadata->>'size', '') !~ '^[0-9]+$')::bigint
+           count(*) filter (where jsonb_typeof(o.metadata->'size') is distinct from 'number')::bigint
       from storage.objects o
      where o.name <> '.emptyFolderPlaceholder'
      group by o.bucket_id
