@@ -1800,14 +1800,21 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   cifra**, que no es un adorno: es la diferencia entre un total corto y un total
   corto que además se cree.
 
-  **Y contando desde el cliente el total se dibuja como un suelo: «≥ 425.1 MB ·
-  al menos 42%».** Aquí es donde pasó de verdad: la pantalla decía «425.1 MB ·
-  42% de 1.00 GB» con toda confianza mientras el bucket `signatures` —148.475
-  firmas, 343 MB— salía en cero porque su política no deja listarlo desde la
-  aplicación. La cuota real iba por el **75%**. El aviso estaba en el pie desde el
-  principio y no sirvió de nada, porque **lo que se lee es el número gordo**: la
-  duda tiene que estar en el número o no está en ningún sitio. Con la base
-  contando, la cifra vuelve a ir a secas.
+  **Y contando desde el cliente el total se dibuja como un suelo**, con un
+  **«Al menos»** en ámbar encima de la cifra (`.consumo-incierto`). Aquí es donde
+  pasó de verdad: la pantalla decía «425.1 MB · 42% de 1.00 GB» con toda
+  confianza mientras el bucket `signatures` —148.475 firmas, 343 MB— salía en
+  cero porque su política no deja listarlo desde la aplicación. La cuota real iba
+  por el **75%**. El aviso estaba en el pie desde el principio y no sirvió de
+  nada, porque **lo que se lee es el número gordo**: la duda tiene que ir pegada a
+  la cifra o no está en ningún sitio. Con la base contando, la tarjeta vuelve a ir
+  a secas.
+
+  Va en **su propio renglón y no dentro de la cifra**: el primer intento le metía
+  un «≥» al número y un «al menos» al porcentaje, y en un iPhone de 375 partía a
+  los dos en dos renglones —la cifra va a 1.9rem y en esa fila no sobra ancho—.
+  Medido con «1000.0 MB · 100% de 1.00 GB», que es el peor caso, ninguno de los
+  dos se parte; la tarjeta crece 12px, que es lo que ocupa el renglón.
 
   **Y dice el porqué, no «corre el script».** Ese consejo es correcto cuando el
   script no se ha corrido y una mentira cuando sí: pasó con `tamano_buckets`, que

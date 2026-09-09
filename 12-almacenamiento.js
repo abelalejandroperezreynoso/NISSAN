@@ -325,15 +325,17 @@ window.pantallaDeConsumo = (c) => {
     // decía «425.1 MB · 42% de 1.00 GB» mientras el bucket de las firmas
     // escondía 343 MB y la cuota real iba por el 75%. El aviso estaba en el pie
     // y no sirvió de nada — lo que se lee es el número gordo—, así que la duda
-    // tiene que estar **en el número**: «≥ 425.1 MB · al menos 42%». Se lee
-    // distinto y es lo único honesto que se puede decir de una cuenta que no se
-    // sabe completa.
+    // tiene que ir **pegada a la cifra**: un «Al menos» encima, en su renglón.
+    // Probé antes a meterle un «≥» al número y un «al menos» al porcentaje, y en
+    // un iPhone de 375 los partía a los dos en dos renglones: en esa fila no
+    // sobra ancho. En su propio renglón no cuesta nada y además se lee antes.
     const resumen = (rotulo, bytes, cuota, pie, incierto) => `
         <div class="consumo-tarjeta">
             <div class="consumo-rotulo">${rotulo}</div>
+            ${incierto ? '<div class="consumo-incierto">Al menos</div>' : ''}
             <div class="consumo-cifra">
-                <span class="consumo-cifra-numero">${incierto ? '≥ ' : ''}${window.pesoLegible(bytes) || '0 KB'}</span>
-                <span class="consumo-cifra-pct">${incierto ? 'al menos ' : ''}${window.pctTexto(bytes, cuota)}% de ${window.pesoLegible(cuota)}</span>
+                <span class="consumo-cifra-numero">${window.pesoLegible(bytes) || '0 KB'}</span>
+                <span class="consumo-cifra-pct">${window.pctTexto(bytes, cuota)}% de ${window.pesoLegible(cuota)}</span>
             </div>
             ${window.barraDeCuota(bytes, cuota)}
             <div class="consumo-pie">${pie}</div>
