@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-09-4';
+window.VERSION_APP = '2026-09-09-5';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -830,6 +830,95 @@ window.subirFotoEvaluacion = async (blob, prefijo) => {
 
     const { data } = sb.storage.from(window.BUCKET_FOTOS_EVAL).getPublicUrl(nombreArchivo);
     return (data && data.publicUrl) ? data.publicUrl : '';
+};
+
+// ==========================================
+// EL MATERIAL DE UNA ENCUESTA
+// ==========================================
+// Una encuesta que imparte una capacitación no se entiende sola: quien la
+// contesta necesita antes la presentación que se dio, el formato en Excel o el
+// procedimiento en PDF. Es de la encuesta entera y no de una pregunta, y son
+// varios archivos, así que viven en su propia tabla —`materiales_encuesta`,
+// script en `sql/`— y los archivos en su bucket.
+//
+// **No se encogen ni se tocan**, al revés que las fotos: un PowerPoint
+// comprimido deja de ser un PowerPoint. Lo único que hay es un tope, porque la
+// cuenta de Supabase es gratuita y una presentación con fotos se va a decenas
+// de MB sin darse cuenta.
+window.BUCKET_MATERIALES = 'materiales-evaluaciones';
+window.MAX_MB_MATERIAL = 25;
+
+// Qué se puede subir. La lista es la del `accept` del campo y la que decide el
+// icono, así que un tipo nuevo se agrega en un solo sitio. `ext` va en
+// minúsculas y sin punto.
+window.TIPOS_DE_MATERIAL = [
+    { ext: 'pdf',  icono: '📕', nombre: 'PDF' },
+    { ext: 'ppt',  icono: '📊', nombre: 'Presentación' },
+    { ext: 'pptx', icono: '📊', nombre: 'Presentación' },
+    { ext: 'xls',  icono: '📗', nombre: 'Hoja de cálculo' },
+    { ext: 'xlsx', icono: '📗', nombre: 'Hoja de cálculo' },
+    { ext: 'csv',  icono: '📗', nombre: 'Hoja de cálculo' },
+    { ext: 'doc',  icono: '📘', nombre: 'Documento' },
+    { ext: 'docx', icono: '📘', nombre: 'Documento' },
+    { ext: 'jpg',  icono: '🖼️', nombre: 'Imagen' },
+    { ext: 'jpeg', icono: '🖼️', nombre: 'Imagen' },
+    { ext: 'png',  icono: '🖼️', nombre: 'Imagen' },
+    { ext: 'mp4',  icono: '🎬', nombre: 'Video' }
+];
+
+window.extensionDeArchivo = (nombre) => {
+    const partes = String(nombre || '').split('.');
+    return partes.length > 1 ? partes.pop().toLowerCase() : '';
+};
+
+window.tipoDeMaterial = (nombre) =>
+    window.TIPOS_DE_MATERIAL.find(t => t.ext === window.extensionDeArchivo(nombre)) || null;
+
+window.iconoDeMaterial = (nombre) => {
+    const tipo = window.tipoDeMaterial(nombre);
+    return tipo ? tipo.icono : '📎';
+};
+
+window.aceptaDeMaterial = () =>
+    window.TIPOS_DE_MATERIAL.map(t => '.' + t.ext).join(',');
+
+// El peso, en lo que se lee de un vistazo. Por debajo de un mega, en KB.
+window.pesoLegible = (bytes) => {
+    const n = Number(bytes);
+    if (!isFinite(n) || n <= 0) return '';
+    return n < 1024 * 1024
+        ? `${Math.round(n / 1024)} KB`
+        : `${(n / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+// El nombre con el que se guarda en el bucket. El original se conserva en la
+// tabla y es el que se enseña; aquí hace falta uno que no choque y que no lleve
+// acentos ni espacios, que en una ruta de Storage dan problemas.
+window.rutaDeMaterial = (evaluationId, nombre) => {
+    const ext = window.extensionDeArchivo(nombre);
+    const base = String(nombre || 'archivo')
+        .replace(/\.[^.]*$/, '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Za-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 60) || 'archivo';
+    return `${evaluationId}/${base}-${Date.now()}${ext ? '.' + ext : ''}`;
+};
+
+window.subirMaterialEncuesta = async (file, evaluationId) => {
+    const ruta = window.rutaDeMaterial(evaluationId, file.name);
+
+    const { error } = await sb.storage
+        .from(window.BUCKET_MATERIALES)
+        .upload(ruta, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+
+    if (error) {
+        console.error('Error al subir el material:', error);
+        throw new Error(`No se pudo subir el archivo. Si el problema sigue, revisa que exista el bucket '${window.BUCKET_MATERIALES}' en Supabase (script sql/materiales-encuesta.sql).`);
+    }
+
+    const { data } = sb.storage.from(window.BUCKET_MATERIALES).getPublicUrl(ruta);
+    return { archivo: ruta, url: (data && data.publicUrl) ? data.publicUrl : '' };
 };
 
 window.fotoDeArea = (respuesta) => {

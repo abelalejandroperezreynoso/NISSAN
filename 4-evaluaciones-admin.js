@@ -105,6 +105,11 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // revisar la encuesta aunque no sea jefe de nadie.
     const encuestaDeLaLista = await window.encuestaDeLaRespuesta(evalId);
 
+    // El material de apoyo. Va aquí y no en paralelo con lo demás porque una
+    // tabla que todavía no existe deja el recuadro sin dibujar y no puede
+    // llevarse por delante el resto de la hoja.
+    await window.cargarMaterialesEncuesta(evalId);
+
     let responses = [];
     const { data: todasLasRespuestas } = await sb.from('evaluation_responses').select('*').eq('evaluation_id', evalId).order('submitted_at', {ascending: false});
     if (window.modoAdminActivo) {
@@ -277,11 +282,18 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // El estado se deja puesto para la hoja de pasar lista, que dibuja lo mismo
     // desde los mismos datos: así marcar a alguien no obliga a volver a
     // consultar nada.
+    // Subir y quitar material es de quien la imparte, como los nombres del pase
+    // de lista y por lo mismo: el administrador y quien la revisa. Cualquiera
+    // que abra la encuesta lo puede leer, que es para lo que está.
+    const imparte = window.modoAdminActivo || (evalData && window.puedeEditarDestinatarios(evalData, user.id));
+    window.materialDeLaHoja = { id: evalId, puedeSubir: imparte };
+    const materialHtml = `<div id="material-encuesta">${window.bloqueDeMaterial(evalId, imparte)}</div>`;
+
     window.paseDeLista = {
         ev: evalData,
         preguntas: qs || [],
         respuestas: todasLasRespuestas || [],
-        verNombres: window.modoAdminActivo || (evalData && window.puedeEditarDestinatarios(evalData, user.id)),
+        verNombres: imparte,
         pregunta: null,
         huboCambios: false
     };
@@ -294,6 +306,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             ${revisoresHtml}
 
         ${bannerHtml}
+        ${materialHtml}
         ${paseDeListaHtml}
         <div id="stats-dashboard" style="display:none; margin-top:20px;"></div>
         <details id="lista-wrapper" class="hoja-plegable" ${cuantasMeTocan > 0 ? 'open' : ''}>
@@ -426,6 +439,184 @@ window.listaDePaseDeLista = (rotulo, gente, clase) => {
             </summary>
             <div class="pase-plegable-cuerpo">${filas}</div>
         </details>`;
+};
+
+// ==========================================
+// EL MATERIAL DE UNA ENCUESTA
+// ==========================================
+// La presentación que se dio, el formato en Excel, el procedimiento en PDF.
+// Quien la imparte los sube desde la hoja de la encuesta y quien la contesta
+// los abre desde ahí mismo, que es donde va a estar mirando antes de responder.
+//
+// Los archivos viven en el bucket y sus fichas en `materiales_encuesta`, cuyo
+// script se corre a mano. **Sin la tabla el recuadro no se dibuja**, y quien
+// intente subir algo se entera de qué falta: es lo mismo que hacen las demás
+// columnas y tablas que añade un script de `sql/`.
+//
+// El estado va aparte del pase de lista porque son dos cosas de la misma hoja
+// que se repintan por su cuenta.
+window.materialesEncuesta = null;
+
+// Se piden al abrir la hoja. Una tabla que todavía no existe no revienta nada:
+// se deja en `null` y el recuadro no sale.
+window.cargarMaterialesEncuesta = async (evaluationId) => {
+    const { data, error } = await sb.from('materiales_encuesta')
+        .select('*').eq('evaluation_id', String(evaluationId))
+        .order('subido_en', { ascending: true });
+
+    window.materialesEncuesta = error ? null : (data || []);
+    return window.materialesEncuesta;
+};
+
+// El recuadro. Va debajo de los botones y encima del pase de lista: se mira
+// antes de contestar, pero la acción de la hoja sigue siendo el botón azul.
+//
+// **Sin material y sin permiso para subirlo no se dibuja nada**: un recuadro
+// vacío que dice «no hay material» ocupa lo mismo que uno lleno y no cuenta
+// nada. Quien lo puede subir sí ve el recuadro vacío, que es su puerta.
+window.bloqueDeMaterial = (evalId, puedeSubir) => {
+    const materiales = window.materialesEncuesta;
+    if (materiales === null) return '';
+    if (materiales.length === 0 && !puedeSubir) return '';
+
+    const filas = materiales.map(m => {
+        const quien = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(m.subido_por));
+        const detalle = [window.pesoLegible(m.bytes), quien && quien.name ? quien.name.split(' ')[0] : '']
+            .filter(Boolean).join(' · ');
+        const borrar = puedeSubir
+            ? `<button type="button" class="material-quitar" onclick="window.quitarMaterial('${m.id}')"
+                       title="Quitar este material" aria-label="Quitar este material">✕</button>`
+            : '';
+        // Un `target="_blank"` y no una descarga: iOS enseña el PDF y ofrece
+        // abrir la presentación con la app que toque, que es lo que se espera
+        // de un enlace a un documento.
+        return `
+            <div class="material-fila">
+                <a class="material-enlace" href="${window.sanitizeForHTML(m.url)}" target="_blank" rel="noopener">
+                    <span class="material-icono" aria-hidden="true">${window.iconoDeMaterial(m.nombre)}</span>
+                    <span class="material-texto">
+                        <span class="material-nombre">${window.sanitizeForHTML(m.nombre)}</span>
+                        ${detalle ? `<span class="material-detalle">${window.sanitizeForHTML(detalle)}</span>` : ''}
+                    </span>
+                    <span class="material-flecha" aria-hidden="true">&rsaquo;</span>
+                </a>
+                ${borrar}
+            </div>`;
+    }).join('');
+
+    // El campo se abre con un `<label for>` y no con un `.click()` sobre el
+    // input escondido: en iOS ese click programático es indistinguible del
+    // toque fantasma que sintetizan las ruedas al cerrarse.
+    const subirHtml = puedeSubir ? `
+        <input type="file" id="inp-material-eval" accept="${window.aceptaDeMaterial()}"
+               style="display:none;" onchange="window.agregarMaterial(this, '${evalId}')">
+        <label for="inp-material-eval" id="btn-material-eval" class="material-agregar">
+            Agregar material
+        </label>
+        <div class="material-nota" id="nota-material">Presentaciones, hojas de cálculo y PDF, hasta ${window.MAX_MB_MATERIAL} MB.</div>` : '';
+
+    const vacio = materiales.length === 0
+        ? `<div class="material-vacio">Todavía no hay material.</div>` : '';
+
+    return `
+        <div class="material-tarjeta">
+            <div class="material-rotulo">Material</div>
+            ${filas}${vacio}${subirHtml}
+        </div>`;
+};
+
+// Sube el archivo y guarda su ficha. El orden importa: **primero el archivo y
+// después la fila**. Al revés, una fila cuya subida falle apuntaría a un
+// archivo que no existe; así, lo peor que puede pasar es un archivo en el
+// bucket sin nadie que lo nombre, que no le miente a nadie.
+window.agregarMaterial = async (input, evalId) => {
+    const file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+
+    const tope = window.MAX_MB_MATERIAL * 1024 * 1024;
+    if (file.size > tope) {
+        alert(`«${file.name}» pesa ${window.pesoLegible(file.size)} y el tope son ${window.MAX_MB_MATERIAL} MB.\n\nUna presentación se baja de peso guardándola como PDF o comprimiendo sus imágenes.`);
+        return;
+    }
+
+    const user = JSON.parse(localStorage.getItem("usuarioLogueado") || 'null');
+    const btn = document.getElementById('btn-material-eval');
+    const nota = document.getElementById('nota-material');
+    if (btn) btn.classList.add('esta-subiendo');
+    // El estado va en la nota de debajo y no en el rótulo del botón: éste es un
+    // `<label>` y escribirle dentro se llevaría por delante su `for`… y de paso
+    // el nombre, que es lo que lo hace pulsable.
+    if (nota) nota.innerText = `Subiendo «${file.name}»…`;
+
+    try {
+        const { archivo, url } = await window.subirMaterialEncuesta(file, evalId);
+
+        // Contar las filas del `.select()`: aquí escribe alguien que no es
+        // administrador y una política de RLS que lo rechace no da error, sólo
+        // afecta a cero filas.
+        const { data, error } = await sb.from('materiales_encuesta').insert({
+            evaluation_id: String(evalId),
+            nombre: file.name,
+            archivo: archivo,
+            url: url,
+            tipo: file.type || null,
+            bytes: file.size,
+            subido_por: user ? String(user.id) : null
+        }).select();
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            alert("El archivo se subió, pero la base no aceptó su ficha: no se guardó ninguna fila. Pide a un administrador que revise los permisos de `materiales_encuesta`.");
+            return;
+        }
+        (window.materialesEncuesta = window.materialesEncuesta || []).push(data[0]);
+        window.pintarMaterialEncuesta();
+    } catch (e) {
+        console.error(e);
+        alert("No se pudo agregar el material: " + (e.message || e));
+    } finally {
+        if (btn) btn.classList.remove('esta-subiendo');
+        const n = document.getElementById('nota-material');
+        if (n) n.innerText = `Presentaciones, hojas de cálculo y PDF, hasta ${window.MAX_MB_MATERIAL} MB.`;
+    }
+};
+
+// **Primero la ficha y después el archivo**, que es el orden de lo que no tiene
+// vuelta atrás: si la base rechaza el borrado no se ha perdido nada; al revés,
+// el archivo se habría ido dejando en pie una fila que apunta al vacío. Un
+// archivo que se quede en el bucket sin ficha no lo ve nadie, y se avisa para
+// que se pueda limpiar desde el panel de Storage.
+window.quitarMaterial = async (id) => {
+    const ficha = (window.materialesEncuesta || []).find(m => String(m.id) === String(id));
+    if (!ficha) return;
+    if (!confirm(`¿Quitar «${ficha.nombre}» del material de esta encuesta?`)) return;
+
+    const { data, error } = await sb.from('materiales_encuesta')
+        .delete().eq('id', ficha.id).select();
+
+    if (error || !data || data.length === 0) {
+        alert("La base no aceptó el borrado: no se quitó ninguna fila. Pide a un administrador que revise los permisos de `materiales_encuesta`.");
+        return;
+    }
+
+    const { error: errArchivo } = await sb.storage
+        .from(window.BUCKET_MATERIALES).remove([ficha.archivo]);
+    if (errArchivo) {
+        console.error(errArchivo);
+        alert(`Se quitó «${ficha.nombre}» de la encuesta, pero el archivo sigue en el bucket '${window.BUCKET_MATERIALES}': hay que borrarlo a mano desde Storage.`);
+    }
+
+    window.materialesEncuesta = (window.materialesEncuesta || []).filter(m => String(m.id) !== String(id));
+    window.pintarMaterialEncuesta();
+};
+
+// El recuadro se repinta solo, sin rehacer la hoja entera: subir un archivo no
+// cambia nada de lo que hay alrededor.
+window.pintarMaterialEncuesta = () => {
+    const hueco = document.getElementById('material-encuesta');
+    if (!hueco || !window.materialDeLaHoja) return;
+    hueco.innerHTML = window.bloqueDeMaterial(window.materialDeLaHoja.id, window.materialDeLaHoja.puedeSubir);
 };
 
 // ==========================================

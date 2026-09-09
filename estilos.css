@@ -2642,6 +2642,140 @@ textarea:focus {
 }
 
 /* =========================================
+   EL MATERIAL DE UNA ENCUESTA
+   =========================================
+   La presentación, el formato en Excel, el procedimiento en PDF: lo que hay
+   que leer antes de contestarla. Un recuadro en la hoja de la encuesta, con la
+   misma forma que el del pase de lista. */
+.material-tarjeta {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.material-rotulo {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 8px;
+}
+
+/* Dos acciones —abrir el archivo y quitarlo—, así que el enlace y la «✕» son
+   hermanos: un botón dentro de un enlace no vale en HTML. */
+.material-fila {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+}
+
+.material-enlace {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 10px;
+    border-radius: 10px;
+    background: #f8fafc;
+    text-decoration: none;
+}
+
+.material-icono {
+    flex-shrink: 0;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+.material-texto {
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+/* De una línea y recortado: «Presentación dojo de mantenimiento línea E3.pptx»
+   partido en tres renglones hace la lista el doble de alta. */
+.material-nombre {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.material-detalle {
+    font-size: 0.72rem;
+    color: #94a3b8;
+}
+
+.material-flecha {
+    flex-shrink: 0;
+    color: #cbd5e1;
+    font-size: 1.3rem;
+    line-height: 1;
+}
+
+.material-quitar {
+    flex-shrink: 0;
+    width: 36px;
+    align-self: stretch;
+    border: none;
+    background: none;
+    border-radius: 10px;
+    color: #cbd5e1;
+    font-family: inherit;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+/* Es un `<label for>` y no un botón: en iOS el `.click()` programático sobre un
+   input escondido es indistinguible del toque fantasma de las ruedas. */
+.material-agregar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 8px;
+    padding: 11px;
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px dashed #93c5fd;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.material-agregar.esta-subiendo {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.material-nota {
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: #94a3b8;
+    margin-top: 6px;
+    text-align: center;
+}
+
+.material-vacio {
+    padding: 4px 2px 2px;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+/* =========================================
    EL PASE DE LISTA DE UNA ENCUESTA DE ASISTENCIA
    =========================================
    Una encuesta de asistencia se contesta con un toque, así que lo que se viene

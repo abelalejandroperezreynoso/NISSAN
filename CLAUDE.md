@@ -1653,6 +1653,85 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   añade un script de `sql/`: `window.camposConColumna(campos, tabla, columna)`
   y un envoltorio con nombre. Sin la columna todo se comporta como antes, la
   casilla se queda apagada y la hoja dice qué script falta.
+- **Una encuesta puede llevar material: la presentación, el Excel, el PDF.** Una
+  que imparte una capacitación —un dojo de mantenimiento, una junta de
+  seguridad— no se entiende sola: quien la contesta necesita antes lo que se
+  dio. Eso viajaba por WhatsApp y no quedaba pegado a la encuesta, así que quien
+  la abría un mes después no tenía de dónde sacarlo.
+
+  Va en un recuadro de la hoja de la encuesta, entre los botones y el pase de
+  lista: se mira antes de contestar, pero la acción sigue siendo el botón azul.
+
+  ```js
+  window.BUCKET_MATERIALES      // 'materiales-evaluaciones'
+  window.MAX_MB_MATERIAL        // 25
+  window.TIPOS_DE_MATERIAL      // [{ ext, icono, nombre }, …]
+  window.iconoDeMaterial(nombre)  window.aceptaDeMaterial()  window.pesoLegible(bytes)
+  window.rutaDeMaterial(evaluationId, nombre)
+  window.subirMaterialEncuesta(file, evaluationId)   // → { archivo, url }
+
+  window.cargarMaterialesEncuesta(evaluationId)      // llena window.materialesEncuesta
+  window.bloqueDeMaterial(evalId, puedeSubir)
+  window.pintarMaterialEncuesta()
+  window.agregarMaterial(input, evalId)  window.quitarMaterial(id)
+  ```
+
+  Es **de la encuesta entera y no de una pregunta**, y son varios archivos, así
+  que va en su propia tabla —`materiales_encuesta`, con
+  `sql/materiales-encuesta.sql`— en lugar de una columna: quitar uno no
+  reescribe los demás, y cada uno guarda de dónde salió y quién lo subió. Los
+  archivos viven en el bucket `materiales-evaluaciones`, que el mismo script
+  crea. **Sin correrlo el recuadro no se dibuja** y quien intente subir algo se
+  entera de qué falta; el resto de la hoja no se entera —por eso el material se
+  pide con su propio `await` y no en paralelo con lo demás—.
+
+  **Subir y quitar es de quien la imparte** —el administrador y quien la revisa,
+  el mismo `puedeEditarDestinatarios` que decide los nombres del pase de lista—;
+  **leerlo lo puede cualquiera** que abra la encuesta, que es para lo que está.
+  Sin material y sin permiso para subirlo el recuadro no se dibuja: un recuadro
+  vacío que dice «no hay material» ocupa lo mismo que uno lleno y no cuenta
+  nada.
+
+  Seis cosas que hay que mantener:
+
+  - **No se encogen ni se tocan**, al revés que las fotos: un PowerPoint
+    comprimido deja de ser un PowerPoint. Lo único que hay es el tope de
+    `MAX_MB_MATERIAL`, porque la cuenta de Supabase es gratuita y una
+    presentación con fotos se va a decenas de MB sin darse cuenta. El aviso dice
+    cuánto pesa y cómo bajarlo.
+  - **Se guardan la ruta y la URL.** `archivo` es la ruta dentro del bucket y es
+    lo único que sirve para borrarlo; `url` es su `publicUrl`, que es lo que
+    abre el enlace. De la URL pública no se puede volver a la ruta con
+    seguridad, así que van las dos.
+  - **El nombre del archivo en el bucket no es el original.** `rutaDeMaterial`
+    le quita acentos y espacios y le pega la hora, que en una ruta de Storage
+    dan problemas y dos archivos con el mismo nombre chocarían; el original se
+    guarda en la tabla y es el que se enseña.
+  - **Al subir va primero el archivo y después la fila.** Al revés, una fila
+    cuya subida falle apuntaría a un archivo que no existe; así lo peor que
+    puede pasar es un archivo en el bucket sin nadie que lo nombre, que no le
+    miente a nadie.
+  - **Al quitar va primero la fila y después el archivo**, que es el orden de lo
+    que no tiene vuelta atrás —el mismo de `eliminarEmpleado`—: si la base
+    rechaza el borrado no se ha perdido nada. Si el archivo no se deja borrar se
+    avisa para limpiarlo desde Storage. Las tres escrituras cuentan las filas
+    del `.select()`, que aquí escribe alguien que no es administrador.
+  - **El campo se abre con un `<label for>`**, nunca con un `.click()` sobre el
+    input escondido: en iOS ese click programático es indistinguible del toque
+    fantasma de las ruedas. Y el estado de la subida va en la nota de debajo y
+    no en el rótulo del `<label>`: escribirle dentro se llevaría por delante su
+    `for`, que es lo que lo hace pulsable —es la misma trampa del `innerText`
+    sobre un botón con `<svg>`—.
+
+  El enlace lleva `target="_blank"` y no una descarga: iOS enseña el PDF y
+  ofrece abrir la presentación con la app que toque, que es lo que se espera de
+  un enlace a un documento. El archivo vive en supabase.co, fuera del `scope`
+  del manifiesto, así que se abre en Safari y no dentro de la app instalada, que
+  es lo correcto —un `.pptx` no se dibuja en una página—.
+
+  Un tipo nuevo se agrega a `TIPOS_DE_MATERIAL` y aparece solo en el `accept`
+  del campo y en el icono de su fila; lo que no esté en la lista lleva 📎.
+
 - **Ya no se relanza ninguna encuesta, pero lo relanzado sigue contando como se
   relanzó.** Hubo una hoja —«Relanzar encuesta», en el panel de detalles— que
   volvía a pedir una encuesta a todo el que la tuviera asignada sellando el
