@@ -1832,9 +1832,21 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **Y `tamano_buckets` se cancela por tiempo agotado**, que no es ni un permiso
   ni un script que falte: PostgREST le pone plazo a cada consulta y recorrer
   `storage.objects` entero no cabe en él. `notaDeFallo` reconoce el caso y manda
-  a mirar el peso de `storage` en vez de a correr nada. Mientras tanto la
-  pantalla cae al listado desde el cliente, que en este proyecto sí funciona y da
-  la misma cifra.
+  a mirar cuántas filas tiene esa tabla en la lista de abajo. Mientras tanto la
+  pantalla cae al listado desde el cliente, que en este proyecto sí funciona.
+
+  **Ese mensaje culpó primero al hinchado, y era falso.** La sospecha venía de
+  que `storage` se lleva 264 MB de una base de 334.8; pero en cuanto la lista de
+  tablas enseñó las filas, salió que `objects` tiene **150.210** y que eso son
+  1.80 KB por fila, que es lo que pesa una fila de `storage.objects` —ruta,
+  `metadata` jsonb, los tokens del camino—. La tabla no está hinchada: es que de
+  verdad tiene ciento cincuenta mil filas, y por eso no cabe en el plazo. El
+  aviso de hinchazón **no** salió, que es exactamente lo que su umbral promete.
+
+  Es la lección de las tres capturas: **la pantalla dice el dato y quien mira
+  saca la conclusión**. Un mensaje que aventura la causa manda a buscar un
+  problema que puede no existir, así que hoy dice cuántas filas hay y dónde
+  mirarlas, y nada más.
 
   **Y las tablas son todas, no sólo las de `public`.** Ahí estaba el resto del
   problema: la pantalla enseñaba 58.5 MB de tablas debajo de una base de 334.8
@@ -1864,9 +1876,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   muertas tienen que ser muchas y ganarle a las vivas. Este aviso manda a alguien
   a correr un `VACUUM FULL`, que bloquea la tabla mientras corre, así que **no
   puede equivocarse**. Por eso se compara con las filas vivas y no con el peso
-  por fila: `incident_signatures` pesa 50 MB porque una firma en base64 pesa lo
-  suyo —está sana— y `lineas` con doce filas y nueve mil muertas no es un
-  problema de nadie. Sólo `storage.objects` cae en los tres criterios.
+  por fila, que es justo lo que habría fallado aquí: `objects` pesa 264 MB y
+  parecía el caso de libro, y son 150.210 filas legítimas. En este proyecto **no
+  se señala ninguna tabla**, y está bien: `incident_signatures` son 145.355 filas
+  de 361 bytes —una fila de cruce por empleado y registro, 455 × 319, sin ninguna
+  imagen dentro— y `lineas` con doce filas y nueve mil muertas no es un problema
+  de nadie.
 
   `sql/diagnostico-storage.sql` se queda para mirarlo desde el editor SQL con más
   detalle —datos contra índices, la última vez que pasó el autovacuum—, y **sólo

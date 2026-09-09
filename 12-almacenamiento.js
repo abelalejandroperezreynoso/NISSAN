@@ -107,12 +107,14 @@ window.notaDeFallo = (funcion) => {
     if (/could not find|does not exist|schema cache/i.test(msg))
         return `Falta la función <b>${funcion}()</b>: corre <b>sql/consumo-almacenamiento.sql</b> en Supabase.`;
     // Un tiempo agotado no es un permiso ni un script que falte: la consulta
-    // empezó y no acabó a tiempo. En `tamano_buckets` eso apunta a una sola
-    // cosa —recorrer `storage.objects` cuesta más de lo que dura la paciencia
-    // de PostgREST— y lo que hay que mirar es cuánto pesa ese esquema en el
-    // desglose de la base, no volver a correr nada.
+    // empezó y no acabó a tiempo. En `tamano_buckets` eso significa que
+    // `storage.objects` tiene demasiadas filas para recorrerlas dentro del plazo
+    // de PostgREST, y **cuántas son lo dice esta misma pantalla**, en la lista de
+    // tablas de abajo. Aquí no se aventura por qué: la primera versión de este
+    // mensaje culpaba al hinchado y la tabla no estaba hinchada —tenía 150 mil
+    // filas de verdad—, así que mandaba a buscar un problema que no existía.
     if (/timeout|canceling statement/i.test(msg))
-        return `<b>${funcion}()</b> tardó más de lo que Supabase deja y se canceló. Mira lo que pesa el esquema <b>storage</b> en el desglose de la base: si se ha hinchado, recorrerlo entero no cabe en el plazo.`;
+        return `<b>${funcion}()</b> tardó más de lo que Supabase deja y se canceló: hay demasiadas filas que recorrer. Mira <b>objects</b> en las tablas de abajo para ver cuántas son.`;
     return `La base rechazó <b>${funcion}()</b>: «${window.sanitizeForHTML(msg)}». La función existe, así que volver a correr el script no lo arregla.`;
 };
 
