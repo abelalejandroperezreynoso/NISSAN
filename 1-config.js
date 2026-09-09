@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-09-3';
+window.VERSION_APP = '2026-09-09-4';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -523,7 +523,7 @@ window.avisoDeAsistencia = (pregunta, ahora) => {
 // sueltas en lo que se venía a saber —cuántos de cuántos fueron—.
 //
 // Cuenta **sólo la vuelta en curso**: una encuesta relanzada nombra otro evento
-// —la hoja de relanzar obliga a volver a fecharla—, así que los registros de la
+// —se copia y se vuelve a fechar—, así que los registros de la
 // vuelta anterior son de otra junta y no de ésta.
 //
 // Quien registró y hoy ya no está en el padrón —se dio de baja, o le quitaron
@@ -768,24 +768,24 @@ window.reintentoDeRespuesta = (ev, resp, fecha) => {
 };
 
 // ==========================================
-// RELANZAR UNA ENCUESTA
+// UNA ENCUESTA QUE SE RELANZÓ
 // ==========================================
-// Volver a pedir una encuesta que la gente ya contestó: la clasificación se
-// repite, la capacitación se vuelve a dar, el evento se celebra otra vez. Lo
-// hace quien la revisa —el instructor que la imparte, que es quien sabe cuándo
-// toca— desde el panel de detalles de la encuesta.
+// **Ya no se relanza ninguna, pero lo relanzado sigue contando como se
+// relanzó.** Hubo una hoja que volvía a pedir una encuesta a todo el que la
+// tuviera asignada; se quitó cuando el «+» del detalle de una clasificación
+// aprendió a crear una encuesta copiando otra —con la fecha de hoy en el
+// título—, que es mejor manera de repetir una junta o una auditoría: cada
+// vuelta queda con su propia lista, su propio pase de lista y su propio
+// historial en vez de mezclar dos eventos en una encuesta.
 //
-// Es **un instante, no un interruptor**, que es la misma idea que la orden de
-// cerrar sesiones: `relaunched_at` sella la hora en que se dio y toda respuesta
-// anterior deja de cerrar el pendiente, así que la encuesta vuelve a salir
-// entre los de todo el mundo. En cuanto cada quien la contesta de nuevo, su
-// respuesta es posterior al instante y su pendiente se cierra solo; un
-// interruptor encendido y olvidado la estaría pidiendo para siempre. Volver a
-// relanzarla es adelantar el instante, y no hay nada que apagar después.
+// Lo que se queda es esto, la **lectura**: `relaunched_at` sella la hora en que
+// se dio la orden y toda respuesta anterior deja de cerrar el pendiente. Las
+// encuestas que ya lo llevan puesto en la base lo siguen respetando; dejar de
+// mirarlo cerraría de golpe los pendientes que ese relanzamiento abrió.
 //
-// Lo que **no** hace es tocar las respuestas anteriores: siguen en el
+// Lo que **no** hizo nunca es tocar las respuestas anteriores: siguen en el
 // historial, en las estadísticas y en lo que ya estuviera certificado. Lo
-// único que pierden es la capacidad de cerrar el pendiente.
+// único que perdieron es la capacidad de cerrar el pendiente.
 window.fechaDeRelanzamiento = (ev) => {
     if (!ev || !ev.relaunched_at) return null;
     const f = new Date(ev.relaunched_at);
@@ -805,12 +805,6 @@ window.respuestaTrasRelanzar = (ev, resp) => {
 
 window.respuestasTrasRelanzar = (ev, respuestas) =>
     (respuestas || []).filter(r => window.respuestaTrasRelanzar(ev, r));
-
-// Relanzar es de quien revisa la encuesta, por lo mismo que corregir a quién va
-// dirigida: es quien la imparte. El modo administrador es aparte y lo resuelve
-// cada pantalla, como en `puedeEditarDestinatarios`.
-window.puedeRelanzarEncuesta = (ev, empleadoId) =>
-    window.revisoresDeEncuesta(ev).includes(String(empleadoId));
 
 // El nombre del área es texto libre: la respuesta guarda el que tenía el
 // empleado ese día y la pantalla de estadísticas agrupa por el de su ficha. Se

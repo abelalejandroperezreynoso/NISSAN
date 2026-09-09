@@ -619,8 +619,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   `abrirHistorialEvaluacion` —la de `4-evaluaciones-admin.js`, que es la que
   manda— pasa lo que devuelva ese ayudante, así que hereda el camino sin saber
-  cuál fue: es lo que hace que relanzar una encuesta, que la vuelve a abrir desde
-  dentro de la hoja, conserve el botón que ya tenía.
+  cuál fue: cualquier cosa que vuelva a abrir la encuesta desde dentro de la
+  hoja conserva el botón que ya tenía.
 
   **En modo administrador va además el lápiz de editar la encuesta**, a la
   izquierda de ese botón y agrupado con él en `.hoja-acciones`, como cualquier
@@ -1000,8 +1000,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Cuatro reglas que lo sostienen:
 
   - **Cuenta sólo la vuelta en curso** (`respuestasTrasRelanzar`). Una encuesta
-    relanzada nombra otro evento —la hoja de relanzar obliga a volver a
-    fecharla—, así que los registros de la vuelta anterior son de otra junta.
+    que se relanzó en su día nombra otro evento, así que los registros de la
+    vuelta anterior son de otra junta. Ya no se relanza ninguna —se copian, más
+    abajo—, pero las que lo llevan puesto se siguen respetando.
   - **Cuenta gente, no respuestas**: quien contestó dos veces asistió una.
   - **Quien registró y hoy ya no está en el padrón sigue contando como
     presente** —se dio de baja, o le quitaron la encuesta después del evento—:
@@ -1652,97 +1653,46 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   añade un script de `sql/`: `window.camposConColumna(campos, tabla, columna)`
   y un envoltorio con nombre. Sin la columna todo se comporta como antes, la
   casilla se queda apagada y la hoja dice qué script falta.
-- **Relanzar una encuesta es un instante, no un interruptor.** Volver a pedir
-  una encuesta que la gente ya contestó —la auditoría se repite, la
-  capacitación se vuelve a dar, el evento se celebra otra vez— lo hace **quien
-  la revisa**, con el botón «Relanzar encuesta» del panel de detalles, junto
-  al de editar a quién va dirigida y por lo mismo: es el instructor que la
-  imparte y quien sabe cuándo toca repetirla. El modo administrador también
-  puede, como en todo lo demás.
+- **Ya no se relanza ninguna encuesta, pero lo relanzado sigue contando como se
+  relanzó.** Hubo una hoja —«Relanzar encuesta», en el panel de detalles— que
+  volvía a pedir una encuesta a todo el que la tuviera asignada sellando el
+  instante en `evaluations.relaunched_at`: toda respuesta anterior dejaba de
+  cerrar el pendiente sin dejar de existir. Se quitó cuando el **«+» del detalle
+  de una clasificación** aprendió a crear una encuesta **copiando otra** —con la
+  fecha de hoy en el título—, que es mejor manera de repetir una junta o una
+  auditoría: cada vuelta queda con su propia lista, su propio pase de lista y su
+  propio historial, en vez de mezclar dos eventos en una encuesta. Con la hoja
+  se fueron `window.puedeRelanzarEncuesta`, `#modal-relanzar-encuesta` y las
+  tres funciones que la abrían, la llenaban y la guardaban.
+
+  **Lo que se queda es la lectura**, en `1-config.js`, y no se puede quitar:
 
   ```js
-  window.puedeRelanzarEncuesta(ev, empleadoId)   // ¿le toca a esta persona?
-  window.fechaDeRelanzamiento(ev)                // Date, o null
-  window.respuestaTrasRelanzar(ev, resp)         // ¿esta respuesta todavía cuenta?
+  window.fechaDeRelanzamiento(ev)            // Date, o null
+  window.respuestaTrasRelanzar(ev, resp)     // ¿esta respuesta todavía cuenta?
   window.respuestasTrasRelanzar(ev, respuestas)
+  window.camposConRelanzamiento(campos)      // la columna, en las consultas
   ```
 
-  `evaluations.relaunched_at` sella la hora de la orden, y **toda respuesta
-  anterior deja de cerrar el pendiente**: la encuesta vuelve a salir en los
-  pendientes de todo el que la tenga asignada. La diferencia con un interruptor
-  es la misma que en el cierre de sesiones global: uno encendido y olvidado
-  estaría pidiendo la encuesta para siempre, mientras que un instante **se
-  agota solo** —en cuanto cada quien la contesta de nuevo, su respuesta es
-  posterior a la orden y su pendiente se cierra—. Volver a relanzarla es
-  adelantar el instante, y no hay nada que apagar después.
+  Las encuestas que ya se relanzaron llevan su instante puesto en la base, y
+  dejar de mirarlo **cerraría de golpe los pendientes que ese relanzamiento
+  abrió**. Lo siguen mirando `esEvaluacionPendiente` —de donde lo heredan la
+  pantalla de pendientes, el badge del panel y las tarjetas del equipo— y el
+  pase de lista, que por eso cuenta sólo la vuelta en curso. Las consultas que
+  deciden un pendiente siguen encadenando `camposConRelanzamiento`
+  (`7-pendientes.js` y `2b-core-dashboard.js`): sin la columna todo se comporta
+  como si nunca se hubiera relanzado nada, que es lo de siempre.
 
-  Lo que **no** hace es tocar las respuestas anteriores: siguen en el historial,
-  en las estadísticas, en las insignias y en lo que ya estuviera certificado.
-  Lo único que pierden es la capacidad de cerrar el pendiente. Por eso la hoja
-  dice cuántas lleva la vuelta en curso antes de confirmar —una consulta con
-  `{ count: 'exact', head: true }`, así no viaja ninguna fila—: relanzar es
-  pedirle otra vuelta a esa gente, y conviene saber a cuánta.
+  Su script, `sql/relanzar-encuesta.sql`, se queda por lo mismo: documenta una
+  columna que se sigue leyendo.
 
-  Se engancha **dentro de `esEvaluacionPendiente`**, que es la única puerta por
-  la que se decide un pendiente de encuesta: aparta las respuestas anteriores y
-  sigue como siempre. Con eso lo heredan la pantalla de pendientes, el badge del
-  panel y las tarjetas del equipo sin tocarlos; lo que sí hay que hacer es
-  **traerse la columna**, con `window.camposConRelanzamiento(...)` encadenado
-  como los demás (`7-pendientes.js` y `2b-core-dashboard.js`). Sin ella —o sin
-  correr el script— no hay relanzamiento y todo se comporta como antes.
-
-  **Quien ya la había contestado no ve «Nunca contestada».** Sería mentirle: la
-  contestó, y la racha de periodos omitidos no es suya sino de una orden de
-  hoy. Ese caso es un `tipoAviso` propio, `'relanzada'`, sin atraso acumulado
-  —el instante lo pone a cero—.
-
-  **Y su rama casi no pinta nada, a propósito.** Llevó tres cosas y las tres
-  sobraban: una insignia «🔄 Relanzada», un `.pendiente-nota` azul contando que
-  la encuesta se volvió a lanzar y el estado «¡Se volvió a lanzar!». Quien
-  acaba de contestarla ya sabe que se relanzó, y un pendiente que se explica
-  más que los demás parece un problema en vez de otra vuelta. Hoy la tarjeta se
-  lee **como cualquier otro pendiente**: el «¡Pendiente!» de siempre, la
-  etiqueta de la frecuencia y el recuadro con el periodo y la última vez que la
-  contestó —que ahí sigue diciendo la fecha de la respuesta que dejó de
-  contar—. Con ellas se fueron `window.bloqueDeRelanzamiento`, la variante
-  `.pendiente-nota.relanzada` de `estilos.css` y el campo `relanzamiento` que
-  devolvía `esEvaluacionPendiente`, que no alimentaban nada más.
-
-  Lo único que sí hace la rama es **apagar la etiqueta roja de «cuándo apareció
-  el pendiente»** (`badgeTiempoHtml`), que en las demás tarjetas de encuesta
-  tapa alguna de vencimiento y aquí quedaba a la vista diciendo «⌛ Hoy» —el
-  día del relanzamiento— en el rojo de lo urgente, que es justo lo que un
-  relanzamiento no es.
-
-  Y **no puede desaparecer** aunque haga tan poco: sin ella el pendiente cae al
-  `else` que anuncia el vencimiento, y una encuesta de «única vez» no tiene
-  periodo, así que diría «Vence en 0 días».
-
-  **Una encuesta de asistencia no se puede relanzar sin volver a fecharla**, y
-  la hoja no deja: el enunciado nombra un evento que ya pasó y la hora vieja
-  esconde el pendiente —fuera de su ventana no aparece—, así que relanzarla tal
-  cual no le llegaría a nadie. Por eso pide **a qué se asiste y cuándo** por
-  cada pregunta de asistencia, las dos cosas obligatorias, y las escribe donde
-  ya viven: el enunciado en `question_text` y la hora en la primera posición de
-  `options`, en ISO. **Las preguntas se escriben antes que el instante**, no al
-  revés: si la base rechaza la fecha nueva, la encuesta se queda como estaba en
-  vez de quedar relanzada nombrando el evento del mes pasado. Y al terminar se
-  rehace `cargarVentanasDeAsistencia(true)`, que es de donde salen esos
-  pendientes.
-
-  Las dos escrituras **cuentan las filas** que devuelve el `.select()`: aquí
-  escribe alguien que no es administrador y una política de RLS que lo rechace
-  no da error, sólo afecta a cero filas.
-
-  La hoja es `#modal-relanzar-encuesta`, en `index.html`, y su cuerpo se arma
-  con `innerHTML` al abrirla y se vacía al cerrarla —una encuesta de asistencia
-  pide fecha y las demás no—, así que los ids de sus campos existen sólo
-  mientras está a la vista. La acción principal va en el encabezado por la
-  razón de siempre: el campo de fecha abre una rueda y al cerrarse iOS
-  sintetiza un click donde estaba el dedo.
-
-  El script es `sql/relanzar-encuesta.sql` y se corre a mano. Sin él, el botón
-  sale igual pero avisa de qué falta en vez de escribir nada.
+  **La rama `'relanzada'` de `esEvaluacionPendiente` también se queda**, y sigue
+  haciendo dos cosas. A quien ya la había contestado no le dice «Nunca
+  contestada» —sería mentirle: la contestó, y la racha de periodos omitidos no
+  es suya— y le apaga la etiqueta roja de «cuándo apareció el pendiente», que
+  diría «⌛ Hoy» en el rojo de lo urgente. No puede desaparecer aunque haga tan
+  poco: sin ella el pendiente cae al `else` que anuncia el vencimiento, y una
+  encuesta de «única vez» no tiene periodo, así que diría «Vence en 0 días».
 
 - **Quién manda en las refacciones.** El permiso para ver todas las
   solicitudes de la empresa —y para repartirlas entre atendedores desde el
