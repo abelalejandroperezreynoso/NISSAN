@@ -36,6 +36,7 @@ Los mensajes de commit van en español.
 | `4-evaluaciones-*.js` | Evaluaciones (base, admin, estadísticas) |
 | `5-objetivos.js` … `9-estadisticas.js` | Objetivos, calendario, pendientes, hallazgos, estadísticas |
 | `10-refacciones.js` | Solo inyecta el botón; la pantalla vive aparte |
+| `12-almacenamiento.js` | Consumo de Supabase: archivos por bucket y peso de la base |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -1731,6 +1732,73 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   Un tipo nuevo se agrega a `TIPOS_DE_MATERIAL` y aparece solo en el `accept`
   del campo y en el icono de su fila; lo que no esté en la lista lleva 📎.
+
+- **Cuánto ocupa todo esto en Supabase.** La cuenta es gratuita y tiene un tope
+  —1 GB de archivos y 500 MB de base—, y hasta ahora no había manera de saber
+  por dónde iba sin entrar al panel de Supabase, que es justo lo que no se hace
+  hasta que algo deja de subir. Se entra por **«💾 Consumo»** del panel de
+  administración y vive en `12-almacenamiento.js`, en la hoja
+  `#modal-almacenamiento`.
+
+  ```js
+  window.BUCKETS_DE_LA_APP        // en 1-config.js: [{ id, nombre, borrable }, …]
+  window.CUOTA_ARCHIVOS  window.CUOTA_BASE
+  window.archivosDelBucket(bucket, tope)
+  window.medirAlmacenamiento()    // llena window.consumoAlmacenamiento
+  window.abrirConsumoAlmacenamiento()  window.cerrarConsumoAlmacenamiento()
+  window.pintarConsumo(html)      // sin argumento, la pantalla que toque
+  window.abrirBucket(i)  window.volverAConsumo()
+  window.limpiarHuerfanos()
+  ```
+
+  **Los archivos se miden desde el cliente**, listando cada bucket y sumando el
+  `metadata.size`. `archivosDelBucket` hace las dos cosas que `list()` no hace
+  solo: **pagina de mil en mil** —el tope de PostgREST, y fotos de refacciones
+  lo pasa de largo— y **baja a las subcarpetas**, que llegan como entradas sin
+  `id` y sin metadata; el material vive bajo el id de su encuesta, así que sin
+  recorrerlas ese bucket parecería vacío. El `.emptyFolderPlaceholder` que
+  Supabase deja en una carpeta vacía no cuenta.
+
+  Va **bucket por bucket y no en paralelo** a propósito: son seis listados de
+  hasta miles de filas, y desde un teléfono en 4G lanzarlos a la vez es la
+  manera de que alguno se caiga por tiempo.
+
+  **Un bucket que no se pueda leer sale con 0 archivos y no rompe el total**:
+  `list()` devuelve una lista vacía sin error cuando la política no deja, así
+  que no hay forma de distinguirlo de un bucket vacío —la pantalla del bucket lo
+  dice al entrar—. Y **un bucket nuevo se agrega a `BUCKETS_DE_LA_APP`** o su
+  peso no se contará: `listBuckets()` no siempre está al alcance de la clave
+  `anon`, así que la lista se escribe a mano.
+
+  **El peso de la base no se puede preguntar desde el cliente**: hace falta
+  `pg_total_relation_size`, que vive en el catálogo. Lo da la función
+  `tamano_tablas()` de `sql/consumo-almacenamiento.sql` —`security definer`, con
+  el `search_path` fijado y de sólo lectura—, y sin ella esa mitad de la
+  pantalla dice qué script falta mientras los archivos se siguen midiendo.
+
+  **Es de consulta, con una sola excepción: los huérfanos del material.** Un
+  huérfano es un archivo que está en `materiales-evaluaciones` y que ninguna fila
+  de `materiales_encuesta` nombra —los deja el camino de error de la subida, que
+  sube el archivo antes de guardar la ficha a propósito—, así que no lo enseña
+  ninguna encuesta y sólo ocupa sitio. Ésos sí se retiran desde aquí.
+
+  Todo lo demás **no se borra desde esta pantalla**, y no por timidez: una foto
+  de evaluación es la constancia de cómo estaba un área y su bucket ni siquiera
+  da permiso de borrado; un material se quita **desde su encuesta**, que además
+  se lleva su ficha —borrarlo aquí dejaría la fila apuntando al vacío—. La
+  pantalla dice dónde está el peso; quitarlo se hace donde vive.
+
+  Aquí **sí hay umbrales de color** —verde hasta el 70%, ámbar hasta el 90, rojo
+  de ahí—, al revés que la barra del pase de lista: una cuota es un tope de
+  verdad, y pintar de rojo el 60% de asistencia sería inventarse uno que nadie
+  definió.
+
+  Son **dos pantallas en un solo overlay**, como la hoja de evaluaciones: el
+  resumen y los archivos de un bucket, con el botón de volver del encabezado
+  escondido en la primera —con `hidden`, así que depende de la regla
+  `.ios-boton-icono[hidden]` de `estilos.css`—. La lista de un bucket enseña los
+  **cincuenta más pesados**: de ahí para abajo lo que queda no mueve la aguja, y
+  dibujar mil doscientas filas sí se nota.
 
 - **Ya no se relanza ninguna encuesta, pero lo relanzado sigue contando como se
   relanzó.** Hubo una hoja —«Relanzar encuesta», en el panel de detalles— que

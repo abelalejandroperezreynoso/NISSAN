@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-09-5';
+window.VERSION_APP = '2026-09-09-6';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -882,14 +882,41 @@ window.iconoDeMaterial = (nombre) => {
 window.aceptaDeMaterial = () =>
     window.TIPOS_DE_MATERIAL.map(t => '.' + t.ext).join(',');
 
-// El peso, en lo que se lee de un vistazo. Por debajo de un mega, en KB.
+// El peso, en lo que se lee de un vistazo: KB por debajo de un mega, MB por
+// debajo de un giga y GB de ahí en adelante. Cero devuelve cadena vacía, que es
+// lo que hace que un archivo sin tamaño conocido no diga «0 KB».
 window.pesoLegible = (bytes) => {
     const n = Number(bytes);
     if (!isFinite(n) || n <= 0) return '';
-    return n < 1024 * 1024
-        ? `${Math.round(n / 1024)} KB`
-        : `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 };
+
+// Los buckets de la aplicación, para la pantalla que mide el consumo. Están
+// aquí y no en esa pantalla porque son los mismos que usan los tres documentos,
+// y porque `listBuckets()` no siempre está al alcance de la clave `anon`: la
+// lista de verdad se pregunta, y ésta es la red de seguridad para que ninguno
+// se quede sin contar.
+//
+// `borrable` dice si el bucket admite que se borre desde la aplicación, que va
+// por política y no por gusto: las fotos de una evaluación son la constancia de
+// cómo estaba un área ese día y su script no da permiso de borrado a propósito.
+// **Un bucket nuevo se agrega aquí**, o su peso no se contará.
+window.BUCKETS_DE_LA_APP = [
+    { id: 'materiales-evaluaciones', nombre: 'Material de encuestas', borrable: true },
+    { id: 'fotos-evaluaciones', nombre: 'Fotos de evaluaciones', borrable: false },
+    { id: 'fotos-refacciones', nombre: 'Fotos de refacciones', borrable: false },
+    { id: 'incident-images', nombre: 'Imágenes de incidentes', borrable: false },
+    { id: 'avatars', nombre: 'Fotos de perfil', borrable: false },
+    { id: 'signatures', nombre: 'Firmas', borrable: false }
+];
+
+// Contra qué se compara el total. El plan gratuito de Supabase da 1 GB de
+// archivos y 500 MB de base; no hay forma de preguntárselo desde el cliente, así
+// que se escribe aquí y se cambia aquí si el plan cambia.
+window.CUOTA_ARCHIVOS = 1024 * 1024 * 1024;
+window.CUOTA_BASE = 500 * 1024 * 1024;
 
 // El nombre con el que se guarda en el bucket. El original se conserva en la
 // tabla y es el que se enseña; aquí hace falta uno que no choque y que no lleve
