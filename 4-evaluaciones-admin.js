@@ -153,13 +153,12 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // revisores nombrados no dibuja nada: ahí califica el jefe inmediato de
         // cada quien, que es lo de siempre.
         //
-        // Con destinatarios asignados el reparto deja de ser «entre todos», y
-        // conviene decirlo: es lo que explica que a un revisor le aparezcan
-        // unas respuestas y no otras. Va como nota del mismo recuadro.
-        const hayAsignados = Object.keys(window.asignacionesDeEncuesta(evalData)).length > 0;
-        revisoresHtml = window.filaDeRevisores(
-            { filas: [{ ev: evalData }] },
-            hayAsignados ? 'Cada quien califica a los colaboradores que dirigió a esta encuesta.' : '');
+        // Debajo estuvo un renglón que contaba que con destinatarios asignados
+        // cada revisor califica a los suyos. Se quitó: son dos renglones de
+        // letra pequeña explicando un reparto que quien revisa ya ve —le salen
+        // unas respuestas y no otras—, y las caras de encima no lo necesitan
+        // para leerse. Con él se fue el segundo argumento de `filaDeRevisores`.
+        revisoresHtml = window.filaDeRevisores({ filas: [{ ev: evalData }] });
 
         // Con la frecuencia en el subtítulo y los revisores en su propio
         // recuadro, éste puede quedarse sin nada que decir: entonces no se

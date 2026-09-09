@@ -689,9 +689,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   el grupo de una sola (`{ filas: [{ ev }] }`) y su `title` dice «revisa esta
   encuesta».
 
-  Lo que una encuesta suelta tiene que decir además —que con destinatarios
-  asignados cada revisor califica a los suyos— va en el **segundo argumento**,
-  `nota`, dentro del mismo recuadro; la hoja de una clasificación llama sin él.
+  Debajo de las caras estuvo un renglón que contaba que con destinatarios
+  asignados cada revisor califica a los suyos, y se quitó: eran dos líneas de
+  letra pequeña explicando un reparto que quien revisa ya ve —le salen unas
+  respuestas y no otras—, y las caras de encima no lo necesitan para leerse. Con
+  él se fue el segundo argumento que se le había añadido al ayudante, que vuelve
+  a recibir sólo el grupo.
+
   Y con los revisores fuera del recuadro gris, ése **puede quedarse sin nada que
   decir**: la condición que lo dibuja mira ya sólo la descripción, «Opcional» y
   «Mide por Área».
