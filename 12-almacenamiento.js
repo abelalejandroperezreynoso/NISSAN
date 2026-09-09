@@ -169,7 +169,18 @@ window.medirAlmacenamiento = async () => {
         ? filas.map(f => ({ nombre: String(f[campo]), bytes: Number(f.bytes) || 0 }))
                .filter(f => f.bytes > 0)
         : null;
-    const tablas = limpiar(tablasRpc, 'tabla');
+
+    // Las tablas traen además de qué esquema son y sus filas vivas y muertas,
+    // que es lo que separa una tabla grande de una hinchada.
+    const tablas = Array.isArray(tablasRpc)
+        ? tablasRpc.map(f => ({
+              nombre: String(f.tabla),
+              esquema: String(f.esquema || ''),
+              bytes: Number(f.bytes) || 0,
+              vivas: Number(f.filas_vivas) || 0,
+              muertas: Number(f.filas_muertas) || 0
+          })).filter(f => f.bytes > 0)
+        : null;
 
     // Los huérfanos del material: archivos que están en el bucket y que ninguna
     // fila de `materiales_encuesta` nombra. Los deja el camino de error de la
@@ -268,6 +279,40 @@ window.barraDeCuota = (bytes, cuota) => {
                  style="width:${Math.max(parte * 100, bytes > 0 ? 1.5 : 0)}%; background:${color};"></div></div>`;
 };
 
+// **Una tabla hinchada es la que tiene más filas muertas que vivas.** Una fila
+// borrada o actualizada no devuelve su sitio hasta que alguien lo recoge, y el
+// archivo de la tabla no encoge solo: se puede acabar con cientos de MB para
+// describir unos miles de registros.
+//
+// El umbral es deliberadamente conservador —tiene que pesar de verdad y las
+// muertas tienen que ser muchas y ganarle a las vivas— porque **este aviso no
+// puede equivocarse**: manda a alguien a correr un `VACUUM FULL`, que bloquea
+// la tabla mientras corre. Una tabla pequeña con churn no es un problema, y una
+// tabla grande de filas gordas —una firma en base64 pesa lo suyo— tampoco: por
+// eso se compara con las vivas y no con el peso por fila.
+window.MIN_BYTES_HINCHAZON = 4 * 1024 * 1024;
+window.MIN_MUERTAS = 1000;
+
+window.estaHinchada = (f) => !!f && f.bytes >= window.MIN_BYTES_HINCHAZON
+    && f.muertas >= window.MIN_MUERTAS && f.muertas > f.vivas;
+
+// Sale sólo si hay alguna, y dice lo que hay que saber: que ese peso no son
+// datos y que recuperarlo no se hace desde aquí.
+window.avisoDeHinchazon = (tablas) => {
+    const malas = (tablas || []).filter(window.estaHinchada);
+    if (malas.length === 0) return '';
+    const bytes = malas.reduce((s, f) => s + f.bytes, 0);
+    const una = malas.length === 1;
+    return `
+        <div class="consumo-aviso">
+            <div class="consumo-aviso-titulo">${una ? 'Una tabla hinchada' : `${malas.length} tablas hinchadas`} · ${window.pesoLegible(bytes)}</div>
+            <div class="consumo-aviso-texto">${una
+                ? `<b>${window.sanitizeForHTML(malas[0].nombre)}</b> tiene más filas muertas que vivas: buena parte de ese peso es espacio que las filas borradas dejaron sin devolver, no datos.`
+                : `Tienen más filas muertas que vivas: buena parte de ese peso es espacio que las filas borradas dejaron sin devolver, no datos.`}
+                Recuperarlo es un <b>VACUUM FULL</b>, que bloquea la tabla mientras corre, así que no se hace desde aquí.</div>
+        </div>`;
+};
+
 window.pantallaDeConsumo = (c) => {
     const subtitulo = document.getElementById('subtitulo-almacenamiento');
     if (subtitulo) subtitulo.innerText = `Medido a las ${window.horaLegible(c.medidoEn)}`;
@@ -301,6 +346,25 @@ window.pantallaDeConsumo = (c) => {
             <span class="consumo-fila-peso">${window.pesoLegible(f.bytes) || '—'}</span>
         </div>`;
 
+    // Una tabla dice **de qué esquema es y cuántas filas tiene**, y las dos cosas
+    // hacen falta: sin el esquema no se sabe que `objects` es de Supabase y no
+    // de esta aplicación, y sin las filas un número grande no dice si es mucho.
+    // 264 MB para 1735 filas se ve solo en cuanto están las dos al lado.
+    const filaTabla = (f) => {
+        const trozos = [];
+        if (f.esquema && f.esquema !== 'public') trozos.push(f.esquema);
+        if (f.vivas > 0) trozos.push(`${f.vivas.toLocaleString('es-MX')} fila${f.vivas === 1 ? '' : 's'}`);
+        if (window.estaHinchada(f)) trozos.push(`${f.muertas.toLocaleString('es-MX')} muertas`);
+        return `
+        <div class="consumo-fila consumo-fila--quieta">
+            <span class="consumo-fila-texto">
+                <span class="consumo-fila-nombre">${window.sanitizeForHTML(f.nombre)}</span>
+                ${trozos.length ? `<span class="consumo-fila-detalle">${window.sanitizeForHTML(trozos.join(' · '))}</span>` : ''}
+            </span>
+            <span class="consumo-fila-peso">${window.pesoLegible(f.bytes) || '—'}</span>
+        </div>`;
+    };
+
     // Un huérfano es un archivo que subió bien y cuya ficha no llegó a
     // guardarse: no lo enseña ninguna encuesta y sólo ocupa sitio.
     const h = c.huerfanos;
@@ -328,8 +392,9 @@ window.pantallaDeConsumo = (c) => {
               'El proyecto entero, que es lo que cuenta Supabase: los esquemas de sistema y el espacio de las filas borradas van dentro.') +
           (c.esquemas ? `<div class="consumo-lista">${c.esquemas.slice(0, 8).map(filaPeso).join('')}</div>` : '') +
           (c.tablas && c.tablas.length > 0 ? `
-              <div class="consumo-rotulo" style="padding:0 2px 6px;">Tablas de public</div>
-              <div class="consumo-lista">${c.tablas.slice(0, 12).map(filaPeso).join('')}</div>` : '');
+              <div class="consumo-rotulo" style="padding:0 2px 6px;">Las tablas que más pesan</div>
+              <div class="consumo-lista">${c.tablas.slice(0, 12).map(filaTabla).join('')}</div>
+              ${window.avisoDeHinchazon(c.tablas)}` : '');
 
     // De dónde salió la cifra de los archivos. No es un detalle: listándolos
     // desde el cliente, un bucket cuya política no deje leerlo sale en cero y

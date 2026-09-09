@@ -1832,14 +1832,46 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   **Y `tamano_buckets` se cancela por tiempo agotado**, que no es ni un permiso
   ni un script que falte: PostgREST le pone plazo a cada consulta y recorrer
-  `storage.objects` entero no cabe en él. La causa está en el desglose de la
-  misma pantalla —el esquema `storage` se lleva 264.6 MB de una base de 334.8, el
-  79%, para describir 1735 archivos: 156 KB por fila—, y una tabla de metadatos
-  no pesa eso por sus datos sino por el espacio que las filas borradas dejaron
-  sin devolver. `notaDeFallo` reconoce el caso y manda a mirar ahí en vez de a
-  correr nada; `sql/diagnostico-storage.sql` lo confirma con filas vivas contra
-  muertas, y **sólo mira**. Mientras tanto la pantalla cae al listado desde el
-  cliente, que en este proyecto sí funciona y da la misma cifra.
+  `storage.objects` entero no cabe en él. `notaDeFallo` reconoce el caso y manda
+  a mirar el peso de `storage` en vez de a correr nada. Mientras tanto la
+  pantalla cae al listado desde el cliente, que en este proyecto sí funciona y da
+  la misma cifra.
+
+  **Y las tablas son todas, no sólo las de `public`.** Ahí estaba el resto del
+  problema: la pantalla enseñaba 58.5 MB de tablas debajo de una base de 334.8
+  sin decir dónde estaban los otros 276. Los tres cuartos del peso de este
+  proyecto viven en `storage`, que es de Supabase y no aparecía en ninguna lista;
+  el desglose por esquema decía cuál, pero no qué tabla. `tamano_tablas` mira hoy
+  todos los esquemas y cada fila dice **de dónde es y cuántas filas tiene**, que
+  hacen falta las dos: sin el esquema no se sabe que `objects` no es de esta
+  aplicación, y sin las filas un número grande no dice si es mucho. «264 MB ·
+  1735 filas» se lee solo.
+
+  ```js
+  window.MIN_BYTES_HINCHAZON  window.MIN_MUERTAS
+  window.estaHinchada(tabla)        // ¿más filas muertas que vivas?
+  window.avisoDeHinchazon(tablas)   // el recuadro, o '' si no hay ninguna
+  ```
+
+  **Una tabla hinchada es la que tiene más filas muertas que vivas**, y eso lo
+  dicen `n_live_tup` y `n_dead_tup` del recolector de estadísticas, que no
+  cuestan ningún recorrido. Es lo que separa una tabla grande de una que sobra:
+  una fila borrada no devuelve su sitio hasta que alguien lo recoge y el archivo
+  de la tabla no encoge solo, así que se puede acabar con cientos de MB para
+  describir unos miles de registros —y con una consulta que ya no cabe en su
+  plazo, que es de donde salió todo esto—.
+
+  **El umbral es conservador a propósito**: tiene que pesar de verdad y las
+  muertas tienen que ser muchas y ganarle a las vivas. Este aviso manda a alguien
+  a correr un `VACUUM FULL`, que bloquea la tabla mientras corre, así que **no
+  puede equivocarse**. Por eso se compara con las filas vivas y no con el peso
+  por fila: `incident_signatures` pesa 50 MB porque una firma en base64 pesa lo
+  suyo —está sana— y `lineas` con doce filas y nueve mil muertas no es un
+  problema de nadie. Sólo `storage.objects` cae en los tres criterios.
+
+  `sql/diagnostico-storage.sql` se queda para mirarlo desde el editor SQL con más
+  detalle —datos contra índices, la última vez que pasó el autovacuum—, y **sólo
+  mira**.
 
   `archivosDelBucket` se queda, porque los archivos de un bucket se siguen
   listando **al entrar a él** —con la cuenta ya hecha por la base, traerse mil

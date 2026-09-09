@@ -78,24 +78,42 @@ comment on function public.tamano_esquemas() is
     'Dónde está el peso de la base: public, storage, auth, realtime, los catálogos…';
 
 
+-- **Todas las tablas, no sólo las de `public`.** La primera versión miraba sólo
+-- ese esquema y por eso la pantalla enseñaba 58.5 MB de tablas debajo de una
+-- base de 334.8 sin decir dónde estaban los otros 276: los tres cuartos del peso
+-- de este proyecto están en `storage`, que es de Supabase y no aparecía en
+-- ninguna lista. El desglose por esquema decía cuál, pero no qué tabla.
+--
+-- Y van con **las filas vivas y las muertas**, que salen del recolector de
+-- estadísticas y no cuestan ningún recorrido. Son lo que separa una tabla grande
+-- de una tabla hinchada: 1735 filas vivas en 264 MB no es un problema de datos,
+-- es espacio que las filas borradas dejaron sin devolver. Sin esas dos cifras la
+-- pantalla enseña un número grande sin decir si sobra o no.
 create or replace function public.tamano_tablas()
-returns table (tabla text, bytes bigint)
+returns table (esquema text, tabla text, bytes bigint,
+               filas_vivas bigint, filas_muertas bigint)
 language sql
 stable
 security definer
 set search_path = pg_catalog, public
 as $$
-    select c.relname::text,
-           pg_total_relation_size(c.oid)::bigint
+    select n.nspname::text,
+           c.relname::text,
+           pg_total_relation_size(c.oid)::bigint,
+           coalesce(st.n_live_tup, 0)::bigint,
+           coalesce(st.n_dead_tup, 0)::bigint
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
-     where n.nspname = 'public'
-       and c.relkind in ('r', 'p')
-     order by 2 desc
+      left join pg_stat_all_tables st on st.relid = c.oid
+     where c.relkind in ('r', 'p')
+       and n.nspname not in ('information_schema')
+       and n.nspname !~ '^pg_temp'
+     order by 3 desc
+     limit 40
 $$;
 
 comment on function public.tamano_tablas() is
-    'El peso de cada tabla pública con sus índices, para el desglose de la pantalla.';
+    'Las tablas más pesadas del proyecto, con sus filas vivas y muertas: es lo que separa una tabla grande de una hinchada.';
 
 
 -- `metadata->>'size'` es lo que Storage guarda de cada objeto y lo que devuelve
