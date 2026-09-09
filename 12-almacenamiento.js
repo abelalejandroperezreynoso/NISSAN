@@ -78,9 +78,35 @@ window.archivosDelBucket = async (bucket, tope = 5000) => {
 // Una llamada a una función de `sql/consumo-almacenamiento.sql`, que puede no
 // existir todavía. Devuelve null en vez de reventar, que es lo que deja la
 // pantalla en pie sin el script corrido.
+//
+// **Y se queda con el porqué.** «No se pudo, corre el script» es la respuesta
+// correcta cuando el script no se ha corrido y una mentira cuando sí: pasó con
+// `tamano_buckets`, que existía y fallaba por otra cosa, y la pantalla mandaba a
+// correr un script ya corrido mientras las otras tres funciones respondían al
+// lado. El motivo lo dice la base —falta la función, la política no deja leer la
+// tabla, un valor no convierte— y no cuesta nada guardarlo.
+window.falloDeLaBase = {};
+
 window.pedirALaBase = async (funcion) => {
     const { data, error } = await sb.rpc(funcion);
-    return error ? null : data;
+    if (error) {
+        window.falloDeLaBase[funcion] = error.message || String(error);
+        console.warn(`Consumo: ${funcion}() no respondió →`, error);
+        return null;
+    }
+    delete window.falloDeLaBase[funcion];
+    return data;
+};
+
+// Lo que se le dice a quien mira cuando una de esas funciones no respondió.
+// PostgREST distingue el «no existe» de todo lo demás con su propio código, y
+// son dos consejos distintos: uno se arregla corriendo el script y el otro no.
+window.notaDeFallo = (funcion) => {
+    const msg = window.falloDeLaBase[funcion];
+    if (!msg) return `Corre <b>sql/consumo-almacenamiento.sql</b> en Supabase para que la cuente la base.`;
+    if (/could not find|does not exist|schema cache/i.test(msg))
+        return `Falta la función <b>${funcion}()</b>: corre <b>sql/consumo-almacenamiento.sql</b> en Supabase.`;
+    return `La base rechazó <b>${funcion}()</b>: «${window.sanitizeForHTML(msg)}». La función existe, así que volver a correr el script no lo arregla.`;
 };
 
 window.medirAlmacenamiento = async () => {
@@ -289,7 +315,7 @@ window.pantallaDeConsumo = (c) => {
     const baseHtml = c.base === null
         ? `<div class="consumo-tarjeta">
                <div class="consumo-rotulo">Base de datos</div>
-               <div class="consumo-pie">No se puede medir: falta correr <b>sql/consumo-almacenamiento.sql</b> en Supabase. Los archivos de arriba se miden igual.</div>
+               <div class="consumo-pie">No se puede medir. ${window.notaDeFallo('tamano_base')} Los archivos de arriba se miden igual.</div>
            </div>`
         : resumen('Base de datos', c.base, window.CUOTA_BASE,
               'El proyecto entero, que es lo que cuenta Supabase: los esquemas de sistema y el espacio de las filas borradas van dentro.') +
@@ -303,7 +329,7 @@ window.pantallaDeConsumo = (c) => {
     // el total se queda corto sin decirlo.
     const origen = c.desdeLaBase
         ? `Contados por la base, que es la misma cifra que suma Supabase.`
-        : `Contados listando cada bucket desde la aplicación. Corre <b>sql/consumo-almacenamiento.sql</b> para que los cuente la base: un bucket que no se deje listar sale aquí en cero.`;
+        : `Contados listando cada bucket desde la aplicación, así que un bucket que no se deje listar sale aquí en cero. ${window.notaDeFallo('tamano_buckets')}`;
     const sinMedida = c.sinMedida > 0
         ? ` ${c.sinMedida} sin tamaño registrado, que cuentan como cero.` : '';
 

@@ -1745,6 +1745,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.CUOTA_ARCHIVOS  window.CUOTA_BASE
   window.archivosDelBucket(bucket, tope)
   window.pedirALaBase(funcion)    // una rpc que puede no existir; null si no está
+  window.falloDeLaBase            // { funcion: por qué no respondió }
+  window.notaDeFallo(funcion)     // lo que se le dice a quien mira
   window.medirAlmacenamiento()    // llena window.consumoAlmacenamiento
   window.abrirConsumoAlmacenamiento()  window.cerrarConsumoAlmacenamiento()
   window.pintarConsumo(html)      // sin argumento, la pantalla que toque
@@ -1798,6 +1800,35 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   falta. El pie de la tarjeta de archivos **dice siempre de dónde salió la
   cifra**, que no es un adorno: es la diferencia entre un total corto y un total
   corto que además se cree.
+
+  **Y dice el porqué, no «corre el script».** Ese consejo es correcto cuando el
+  script no se ha corrido y una mentira cuando sí: pasó con `tamano_buckets`, que
+  existía y fallaba por otra cosa, y la pantalla mandaba a correr un script ya
+  corrido mientras las otras tres funciones respondían al lado —con el desglose
+  por esquema dibujado justo debajo—. `pedirALaBase` se queda con el mensaje de
+  la base en `window.falloDeLaBase` y `notaDeFallo` lo reparte en dos consejos,
+  que es lo que son: **falta la función** —PostgREST lo dice con su propio código,
+  «could not find … in the schema cache»— se arregla corriendo el script;
+  cualquier otra cosa —una política que no deja leer `storage.objects`, un valor
+  que no convierte— no, y decirlo así ahorra la vuelta entera.
+
+  **Dos trampas de las funciones mismas**, las dos aprendidas del mismo par de
+  capturas:
+
+  - **`pg_total_relation_size` de una tabla ya incluye sus índices y su TOAST**,
+    así que darle además su propio renglón a cada índice (`i`) y a cada tabla
+    toast (`t`) los cuenta dos veces. `tamano_esquemas` lo hacía y su suma daba
+    **527 MB dentro de una base de 334.8** —un desglose cuya suma pasa del total
+    no es un desglose, y `public` decía 70.3 MB mientras sus propias tablas
+    sumaban 58.2, que es exactamente el hueco de sus índices—. Hoy mira sólo
+    `r`, `p` y `m`; con eso desaparece de la lista el esquema `pg_toast`, que
+    nunca fue un sitio aparte donde se guarde nada.
+  - **Un `::bigint` sobre un jsonb libre no se lleva por delante esa fila sino la
+    consulta entera.** `metadata->>'size'` viene de Storage y basta un valor que
+    no sea un entero para que `tamano_buckets` falle del todo y la pantalla se
+    quede sin la cifra de **todos** los buckets por culpa de un archivo. Se
+    comprueba con `~ '^[0-9]+$'` antes de convertir y lo que no lo sea cuenta
+    como sin medida, que es lo que de verdad es.
 
   `archivosDelBucket` se queda, porque los archivos de un bucket se siguen
   listando **al entrar a él** —con la cuenta ya hecha por la base, traerse mil

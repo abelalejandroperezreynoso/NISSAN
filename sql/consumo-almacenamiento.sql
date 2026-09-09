@@ -50,6 +50,13 @@ comment on function public.tamano_base() is
     'El peso del proyecto entero, que es lo que enseña la página de uso de Supabase.';
 
 
+-- **Sólo tablas: `r`, `p` y `m`.** `pg_total_relation_size` de una tabla ya
+-- incluye sus índices y su tabla TOAST, así que darle además su propio renglón
+-- a cada índice (`i`) y a cada toast (`t`) los cuenta dos veces. La primera
+-- versión lo hacía y la suma de los esquemas daba 527 MB dentro de una base de
+-- 334.8: un desglose cuya suma pasa del total no es un desglose. Por lo mismo
+-- desaparece el esquema `pg_toast`, que nunca fue un sitio aparte donde se
+-- guarde nada: es el desván de las tablas que ya están contadas.
 create or replace function public.tamano_esquemas()
 returns table (esquema text, bytes bigint)
 language sql
@@ -61,7 +68,7 @@ as $$
            sum(pg_total_relation_size(c.oid))::bigint
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
-     where c.relkind in ('r', 'p', 'm', 'i', 't')
+     where c.relkind in ('r', 'p', 'm')
      group by n.nspname
     having sum(pg_total_relation_size(c.oid)) > 0
      order by 2 desc
@@ -94,6 +101,13 @@ comment on function public.tamano_tablas() is
 -- `metadata->>'size'` es lo que Storage guarda de cada objeto y lo que devuelve
 -- la API al listar. Un objeto sin ese dato cuenta como cero y se dice aparte,
 -- que no es lo mismo que un archivo vacío.
+--
+-- **El valor se comprueba antes de convertirlo.** `metadata` es un jsonb libre y
+-- un `size` que no sea un número entero —una cadena vacía, un decimal, lo que
+-- dejara una versión vieja de Storage— hace fallar el `::bigint`, y eso no se
+-- lleva por delante esa fila sino **la consulta entera**: la pantalla se queda
+-- sin la cifra de todos los buckets por culpa de un archivo. Lo que no sea un
+-- entero cuenta como sin medida, que es lo que de verdad es.
 create or replace function public.tamano_buckets()
 returns table (bucket text, archivos bigint, bytes bigint, sin_medida bigint)
 language sql
@@ -103,8 +117,9 @@ set search_path = pg_catalog, public, storage
 as $$
     select o.bucket_id::text,
            count(*)::bigint,
-           coalesce(sum((o.metadata->>'size')::bigint), 0)::bigint,
-           count(*) filter (where o.metadata->>'size' is null)::bigint
+           coalesce(sum(case when o.metadata->>'size' ~ '^[0-9]+$'
+                             then (o.metadata->>'size')::bigint end), 0)::bigint,
+           count(*) filter (where coalesce(o.metadata->>'size', '') !~ '^[0-9]+$')::bigint
       from storage.objects o
      where o.name <> '.emptyFolderPlaceholder'
      group by o.bucket_id
