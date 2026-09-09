@@ -10,11 +10,23 @@
 // con una sola excepción: los archivos huérfanos del material de encuestas, que
 // se pueden retirar de aquí porque no los reclama nadie (más abajo).
 //
-// Los archivos se miden desde el cliente, listando cada bucket y sumando el
-// `metadata.size` que devuelve Storage. El peso de la base no se puede
-// preguntar así: hace falta la función `tamano_tablas()` de
-// `sql/consumo-almacenamiento.sql`, y sin ella esa mitad de la pantalla dice qué
-// script falta.
+// **Lo que se mide es lo que cobra Supabase**, y eso obliga a preguntárselo a
+// la base: las cuatro funciones de `sql/consumo-almacenamiento.sql`.
+//
+// La primera versión medía los archivos desde el cliente y la base sumando las
+// tablas de `public`, y las dos cifras discrepaban de la página de uso de
+// Supabase: decía 58 MB de base donde Supabase decía 366. No era un fallo de la
+// cuenta, eran dos cosas distintas —Supabase cobra el archivo de base entero,
+// con los esquemas de sistema y el espacio que las filas borradas dejan sin
+// devolver—, así que hoy se pregunta `pg_database_size` y el desglose por
+// esquema enseña de dónde sale.
+//
+// Los archivos se cuentan igual, desde `storage.objects`: es la misma fila de
+// la que sale el `metadata.size` que devuelve la API, una consulta en lugar de
+// nueve vueltas de listado, y si las dos cifras no cuadran manda ésta.
+//
+// **Sin el script todo sigue en pie**: los archivos se listan desde el cliente
+// como antes y la mitad de la base dice qué falta.
 
 // Lo que se está mirando. Lo llena `window.medirAlmacenamiento` y lo leen las
 // dos pantallas de la hoja, que dibujan desde aquí sin volver a consultar.
@@ -63,31 +75,68 @@ window.archivosDelBucket = async (bucket, tope = 5000) => {
     return archivos;
 };
 
-// Los archivos de todos los buckets y el peso de la base. Va bucket por bucket
-// y no en paralelo a propósito: son seis listados que pueden traer miles de
-// filas cada uno, y desde un teléfono en 4G lanzarlos a la vez es la manera de
-// que alguno se caiga por tiempo.
-//
-// Un bucket que no exista, o cuya política no deje leerlo, devuelve una lista
-// vacía sin dar error, así que sale con 0 archivos y no rompe el total.
+// Una llamada a una función de `sql/consumo-almacenamiento.sql`, que puede no
+// existir todavía. Devuelve null en vez de reventar, que es lo que deja la
+// pantalla en pie sin el script corrido.
+window.pedirALaBase = async (funcion) => {
+    const { data, error } = await sb.rpc(funcion);
+    return error ? null : data;
+};
+
 window.medirAlmacenamiento = async () => {
-    const buckets = [];
-    for (const b of window.BUCKETS_DE_LA_APP) {
-        const archivos = await window.archivosDelBucket(b.id);
-        archivos.sort((x, y) => y.bytes - x.bytes);
-        buckets.push({ ...b, archivos: archivos, bytes: archivos.reduce((s, a) => s + a.bytes, 0) });
+    // Los archivos, contados por la base: una consulta en lugar de nueve vueltas
+    // de listado, y es la cifra que suma Supabase para su página de uso.
+    const porBucket = await window.pedirALaBase('tamano_buckets');
+    let buckets;
+    let desdeLaBase = Array.isArray(porBucket);
+
+    if (desdeLaBase) {
+        const cuenta = {};
+        porBucket.forEach(b => { cuenta[String(b.bucket)] = b; });
+        // Se listan los de la aplicación y además cualquier otro que la base
+        // conozca: un bucket que nadie agregó a `BUCKETS_DE_LA_APP` seguiría
+        // ocupando sitio y quedándose fuera del total.
+        const conocidos = new Set(window.BUCKETS_DE_LA_APP.map(b => b.id));
+        const otros = Object.keys(cuenta).filter(id => !conocidos.has(id))
+            .map(id => ({ id: id, nombre: id, borrable: false }));
+
+        buckets = window.BUCKETS_DE_LA_APP.concat(otros).map(b => {
+            const c = cuenta[b.id];
+            return { ...b,
+                archivos: null,                       // se listan al entrar
+                cuantos: c ? Number(c.archivos) || 0 : 0,
+                bytes: c ? Number(c.bytes) || 0 : 0,
+                sinMedida: c ? Number(c.sin_medida) || 0 : 0 };
+        });
+    } else {
+        // Sin la función, como antes: listando cada bucket desde el cliente.
+        // Va bucket por bucket y no en paralelo a propósito: son seis listados
+        // que pueden traer miles de filas cada uno, y desde un teléfono en 4G
+        // lanzarlos a la vez es la manera de que alguno se caiga por tiempo. Un
+        // bucket que no exista, o cuya política no deje leerlo, devuelve una
+        // lista vacía sin dar error, así que sale con 0 y no rompe el total.
+        buckets = [];
+        for (const b of window.BUCKETS_DE_LA_APP) {
+            const archivos = await window.archivosDelBucket(b.id);
+            archivos.sort((x, y) => y.bytes - x.bytes);
+            buckets.push({ ...b, archivos: archivos, cuantos: archivos.length,
+                bytes: archivos.reduce((s, a) => s + a.bytes, 0), sinMedida: 0 });
+        }
     }
     buckets.sort((a, b) => b.bytes - a.bytes);
 
-    // El peso de la base necesita la función de `sql/`. Sin ella se queda en
-    // null y la pantalla lo dice, como cualquier otra columna o tabla que añade
-    // un script que se corre a mano.
-    let tablas = null;
-    const { data, error } = await sb.rpc('tamano_tablas');
-    if (!error && Array.isArray(data)) {
-        tablas = data.map(t => ({ tabla: t.tabla, bytes: Number(t.bytes) || 0 }))
-            .filter(t => t.bytes > 0);
-    }
+    // El peso de la base es el del proyecto entero —lo que cobra Supabase—, y
+    // el desglose por esquema es lo que explica la diferencia con la suma de
+    // las tablas de `public`.
+    const base = await window.pedirALaBase('tamano_base');
+    const esquemas = await window.pedirALaBase('tamano_esquemas');
+    const tablasRpc = await window.pedirALaBase('tamano_tablas');
+
+    const limpiar = (filas, campo) => Array.isArray(filas)
+        ? filas.map(f => ({ nombre: String(f[campo]), bytes: Number(f.bytes) || 0 }))
+               .filter(f => f.bytes > 0)
+        : null;
+    const tablas = limpiar(tablasRpc, 'tabla');
 
     // Los huérfanos del material: archivos que están en el bucket y que ninguna
     // fila de `materiales_encuesta` nombra. Los deja el camino de error de la
@@ -95,9 +144,12 @@ window.medirAlmacenamiento = async () => {
     // retirar desde aquí sin romperle nada a nadie.
     let huerfanos = null;
     const material = buckets.find(b => b.id === window.BUCKET_MATERIALES);
-    if (material) {
+    if (material && material.cuantos > 0) {
         const { data: fichas, error: errFichas } = await sb.from('materiales_encuesta').select('archivo');
         if (!errFichas && Array.isArray(fichas)) {
+            // Aquí sí hace falta la lista: para saber cuáles sobran hay que
+            // tener los nombres. Se lista sólo este bucket, que es el pequeño.
+            if (!material.archivos) material.archivos = await window.archivosDelBucket(material.id);
             const usados = new Set(fichas.map(f => String(f.archivo)));
             huerfanos = material.archivos.filter(a => !usados.has(a.ruta));
         }
@@ -105,10 +157,13 @@ window.medirAlmacenamiento = async () => {
 
     window.consumoAlmacenamiento = {
         buckets: buckets,
+        desdeLaBase: desdeLaBase,
         archivos: buckets.reduce((s, b) => s + b.bytes, 0),
-        cuantos: buckets.reduce((s, b) => s + b.archivos.length, 0),
+        cuantos: buckets.reduce((s, b) => s + b.cuantos, 0),
+        sinMedida: buckets.reduce((s, b) => s + (b.sinMedida || 0), 0),
+        esquemas: limpiar(esquemas, 'esquema'),
         tablas: tablas,
-        base: tablas ? tablas.reduce((s, t) => s + t.bytes, 0) : null,
+        base: typeof base === 'number' ? base : null,
         huerfanos: huerfanos,
         medidoEn: new Date()
     };
@@ -199,11 +254,19 @@ window.pantallaDeConsumo = (c) => {
         <button type="button" class="consumo-fila" onclick="window.abrirBucket(${i})">
             <span class="consumo-fila-texto">
                 <span class="consumo-fila-nombre">${window.sanitizeForHTML(b.nombre)}</span>
-                <span class="consumo-fila-detalle">${b.archivos.length} archivo${b.archivos.length === 1 ? '' : 's'} · ${window.sanitizeForHTML(b.id)}</span>
+                <span class="consumo-fila-detalle">${b.cuantos} archivo${b.cuantos === 1 ? '' : 's'} · ${window.sanitizeForHTML(b.id)}</span>
             </span>
             <span class="consumo-fila-peso">${window.pesoLegible(b.bytes) || '—'}</span>
             <span class="consumo-flecha" aria-hidden="true">&rsaquo;</span>
         </button>`;
+
+    const filaPeso = (f) => `
+        <div class="consumo-fila consumo-fila--quieta">
+            <span class="consumo-fila-texto">
+                <span class="consumo-fila-nombre">${window.sanitizeForHTML(f.nombre)}</span>
+            </span>
+            <span class="consumo-fila-peso">${window.pesoLegible(f.bytes) || '—'}</span>
+        </div>`;
 
     // Un huérfano es un archivo que subió bien y cuya ficha no llegó a
     // guardarse: no lo enseña ninguna encuesta y sólo ocupa sitio.
@@ -219,34 +282,59 @@ window.pantallaDeConsumo = (c) => {
             <button type="button" class="consumo-aviso-boton" onclick="window.limpiarHuerfanos()">Quitar ${uno ? 'el huérfano' : 'los huérfanos'}</button>
         </div>` : '';
 
-    const baseHtml = c.tablas === null
+    // El peso del proyecto entero, que es lo que cobra Supabase. Debajo, por
+    // esquema: es lo que explica que `public` sea una parte y no el total —el
+    // resto son los esquemas de sistema y el espacio que las filas borradas
+    // dejan sin devolver—.
+    const baseHtml = c.base === null
         ? `<div class="consumo-tarjeta">
                <div class="consumo-rotulo">Base de datos</div>
                <div class="consumo-pie">No se puede medir: falta correr <b>sql/consumo-almacenamiento.sql</b> en Supabase. Los archivos de arriba se miden igual.</div>
            </div>`
         : resumen('Base de datos', c.base, window.CUOTA_BASE,
-              `${c.tablas.length} tabla${c.tablas.length === 1 ? '' : 's'}`) +
-          `<div class="consumo-lista">${c.tablas.slice(0, 12).map(t => `
-              <div class="consumo-fila consumo-fila--quieta">
-                  <span class="consumo-fila-texto">
-                      <span class="consumo-fila-nombre">${window.sanitizeForHTML(t.tabla)}</span>
-                  </span>
-                  <span class="consumo-fila-peso">${window.pesoLegible(t.bytes) || '—'}</span>
-              </div>`).join('')}</div>`;
+              'El proyecto entero, que es lo que cuenta Supabase: los esquemas de sistema y el espacio de las filas borradas van dentro.') +
+          (c.esquemas ? `<div class="consumo-lista">${c.esquemas.slice(0, 8).map(filaPeso).join('')}</div>` : '') +
+          (c.tablas && c.tablas.length > 0 ? `
+              <div class="consumo-rotulo" style="padding:0 2px 6px;">Tablas de public</div>
+              <div class="consumo-lista">${c.tablas.slice(0, 12).map(filaPeso).join('')}</div>` : '');
+
+    // De dónde salió la cifra de los archivos. No es un detalle: listándolos
+    // desde el cliente, un bucket cuya política no deje leerlo sale en cero y
+    // el total se queda corto sin decirlo.
+    const origen = c.desdeLaBase
+        ? `Contados por la base, que es la misma cifra que suma Supabase.`
+        : `Contados listando cada bucket desde la aplicación. Corre <b>sql/consumo-almacenamiento.sql</b> para que los cuente la base: un bucket que no se deje listar sale aquí en cero.`;
+    const sinMedida = c.sinMedida > 0
+        ? ` ${c.sinMedida} sin tamaño registrado, que cuentan como cero.` : '';
 
     return resumen('Archivos', c.archivos, window.CUOTA_ARCHIVOS,
-               `${c.cuantos} archivo${c.cuantos === 1 ? '' : 's'} en ${c.buckets.length} buckets`) +
+               `${c.cuantos} archivo${c.cuantos === 1 ? '' : 's'} en ${c.buckets.length} buckets. ${origen}${sinMedida}`) +
            huerfanosHtml +
            `<div class="consumo-lista">${c.buckets.map(filaBucket).join('')}</div>` +
            baseHtml;
 };
 
-window.abrirBucket = (i) => {
+// Los archivos de un bucket se listan **al entrar y no al medir**: con la
+// cuenta ya hecha por la base, traerse mil setecientos nombres para dibujar
+// cincuenta es cobrarle a todo el mundo lo que mira uno. Una vez listados se
+// quedan en el nodo, así que volver a entrar no vuelve a pedirlos.
+window.abrirBucket = async (i) => {
     const c = window.consumoAlmacenamiento;
     if (!c || !c.buckets[i]) return;
-    window.bucketAbierto = c.buckets[i];
+
+    const b = c.buckets[i];
+    window.bucketAbierto = b;
     const cuerpo = document.getElementById('cuerpo-almacenamiento');
     if (cuerpo) cuerpo.scrollTop = 0;
+
+    if (b.archivos === null) {
+        window.pintarConsumo(`<div class="consumo-cargando"><div class="spinner"></div>Listando los archivos…</div>`);
+        b.archivos = await window.archivosDelBucket(b.id);
+        b.archivos.sort((x, y) => y.bytes - x.bytes);
+        // La hoja pudo cerrarse, o abrirse otro bucket, mientras el listado
+        // venía de camino.
+        if (window.bucketAbierto !== b) return;
+    }
     window.pintarConsumo();
 };
 
@@ -262,16 +350,23 @@ window.volverAConsumo = () => {
 // partir de ahí lo que queda no mueve la aguja— y cada uno abre su archivo.
 window.pantallaDeBucket = (b) => {
     const subtitulo = document.getElementById('subtitulo-almacenamiento');
-    if (subtitulo) subtitulo.innerText = `${window.pesoLegible(b.bytes) || '0 KB'} · ${b.archivos.length} archivo${b.archivos.length === 1 ? '' : 's'}`;
+    if (subtitulo) subtitulo.innerText = `${window.pesoLegible(b.bytes) || '0 KB'} · ${b.cuantos} archivo${b.cuantos === 1 ? '' : 's'}`;
 
-    if (b.archivos.length === 0) {
+    const listados = b.archivos || [];
+    if (listados.length === 0) {
+        // Que la base diga que hay archivos y el listado no los vea significa
+        // una cosa: la política de lectura del bucket no deja listarlo desde la
+        // aplicación. Decirlo es más útil que enseñar una lista vacía.
+        const nota = b.cuantos > 0
+            ? `La base dice que este bucket tiene ${b.cuantos} archivo${b.cuantos === 1 ? '' : 's'} y ${window.pesoLegible(b.bytes)}, pero su política de lectura no deja listarlos desde la aplicación. El peso del total de arriba sí los cuenta.`
+            : `Sin archivos.`;
         return `<div class="consumo-tarjeta">
                     <div class="consumo-rotulo">${window.sanitizeForHTML(b.nombre)}</div>
-                    <div class="consumo-pie">Sin archivos. Si esperabas alguno, puede que la política de lectura del bucket no deje listarlo desde la aplicación.</div>
+                    <div class="consumo-pie">${nota}</div>
                 </div>`;
     }
 
-    const filas = b.archivos.slice(0, 50).map(a => {
+    const filas = listados.slice(0, 50).map(a => {
         const { data } = sb.storage.from(b.id).getPublicUrl(a.ruta);
         const fecha = a.cuando ? new Date(a.cuando).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
         const detalle = [window.pesoLegible(a.bytes), fecha].filter(Boolean).join(' · ');
@@ -285,8 +380,8 @@ window.pantallaDeBucket = (b) => {
             </a>`;
     }).join('');
 
-    const resto = b.archivos.length > 50
-        ? `<div class="consumo-pie" style="padding:10px 2px;">Y ${b.archivos.length - 50} más, todos por debajo de ${window.pesoLegible(b.archivos[49].bytes)}.</div>`
+    const resto = listados.length > 50
+        ? `<div class="consumo-pie" style="padding:10px 2px;">Y ${listados.length - 50} más, todos por debajo de ${window.pesoLegible(listados[49].bytes)}.</div>`
         : '';
 
     // De consulta: lo que se borra se borra desde donde vive. Una foto de

@@ -1744,6 +1744,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.BUCKETS_DE_LA_APP        // en 1-config.js: [{ id, nombre, borrable }, …]
   window.CUOTA_ARCHIVOS  window.CUOTA_BASE
   window.archivosDelBucket(bucket, tope)
+  window.pedirALaBase(funcion)    // una rpc que puede no existir; null si no está
   window.medirAlmacenamiento()    // llena window.consumoAlmacenamiento
   window.abrirConsumoAlmacenamiento()  window.cerrarConsumoAlmacenamiento()
   window.pintarConsumo(html)      // sin argumento, la pantalla que toque
@@ -1751,30 +1752,65 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.limpiarHuerfanos()
   ```
 
-  **Los archivos se miden desde el cliente**, listando cada bucket y sumando el
-  `metadata.size`. `archivosDelBucket` hace las dos cosas que `list()` no hace
-  solo: **pagina de mil en mil** —el tope de PostgREST, y fotos de refacciones
-  lo pasa de largo— y **baja a las subcarpetas**, que llegan como entradas sin
-  `id` y sin metadata; el material vive bajo el id de su encuesta, así que sin
-  recorrerlas ese bucket parecería vacío. El `.emptyFolderPlaceholder` que
-  Supabase deja en una carpeta vacía no cuenta.
+  **Lo que se enseña es lo que cobra Supabase, y por eso se lo pregunta a la
+  base.** La primera versión medía los archivos listándolos desde el cliente y
+  la base sumando las tablas de `public`, y las dos cifras discrepaban de la
+  página de uso de Supabase —decía 58 MB de base donde Supabase decía 366, y 425
+  MB de archivos donde Supabase decía cero—. Una pantalla de consumo que no
+  coincide con la factura no sirve para lo que está: para saber cuánto queda.
 
-  Va **bucket por bucket y no en paralelo** a propósito: son seis listados de
-  hasta miles de filas, y desde un teléfono en 4G lanzarlos a la vez es la
-  manera de que alguno se caiga por tiempo.
+  Lo dan las cuatro funciones de `sql/consumo-almacenamiento.sql`, todas
+  `security definer`, con el `search_path` fijado, de sólo lectura y `create or
+  replace` —se puede correr las veces que haga falta—:
 
-  **Un bucket que no se pueda leer sale con 0 archivos y no rompe el total**:
-  `list()` devuelve una lista vacía sin error cuando la política no deja, así
-  que no hay forma de distinguirlo de un bucket vacío —la pantalla del bucket lo
-  dice al entrar—. Y **un bucket nuevo se agrega a `BUCKETS_DE_LA_APP`** o su
-  peso no se contará: `listBuckets()` no siempre está al alcance de la clave
-  `anon`, así que la lista se escribe a mano.
+  ```
+  tamano_base()       pg_database_size: el proyecto entero
+  tamano_esquemas()   dónde está ese peso: public, storage, auth, realtime…
+  tamano_tablas()     las tablas de public, una por una
+  tamano_buckets()    los archivos, contados sobre storage.objects
+  ```
 
-  **El peso de la base no se puede preguntar desde el cliente**: hace falta
-  `pg_total_relation_size`, que vive en el catálogo. Lo da la función
-  `tamano_tablas()` de `sql/consumo-almacenamiento.sql` —`security definer`, con
-  el `search_path` fijado y de sólo lectura—, y sin ella esa mitad de la
-  pantalla dice qué script falta mientras los archivos se siguen midiendo.
+  **La base no es la suma de sus tablas.** Supabase cobra el archivo de base
+  entero: los esquemas de sistema —`storage`, `auth`, `realtime`—, los catálogos
+  y el espacio que las filas borradas dejan sin devolver, que en un proyecto con
+  mucha escritura es la mayor parte. Sumar `public` daba una fracción y se leía
+  como el total. Hoy la cifra es `pg_database_size` y **debajo va el desglose por
+  esquema**, que es lo que explica que `public` sea una parte: sin él, ver un
+  número cuatro veces mayor que la suma de las tablas parece un error.
+
+  **Y los archivos se cuentan sobre `storage.objects`**, que es la fila de la que
+  sale el `metadata.size` que devuelve la API al listar y la misma que suma
+  Supabase. Es además una consulta en lugar de nueve vueltas de listado, y
+  resuelve lo que desde el cliente no tiene arreglo: **un bucket cuya política no
+  deje listarlo devuelve una lista vacía sin error**, indistinguible de un bucket
+  vacío, así que salía en cero y se llevaba su peso del total sin decirlo. Desde
+  la base sí se ve, y la pantalla de ese bucket dice que no lo puede listar en
+  lugar de enseñar una lista vacía. **Si las dos cuentas no cuadran, manda ésta.**
+
+  Un bucket que la base conozca y que no esté en `BUCKETS_DE_LA_APP` **entra
+  igual en el total**, con su id por nombre: uno que nadie agregó a la lista
+  seguiría ocupando sitio y quedándose fuera. La lista se sigue escribiendo a
+  mano —`listBuckets()` no siempre está al alcance de la clave `anon`— pero ya
+  no es lo que decide qué se cuenta, sólo cómo se llama cada uno.
+
+  **Sin el script todo sigue en pie**: los archivos se listan desde el cliente
+  como antes —el camino de `archivosDelBucket`— y la mitad de la base dice qué
+  falta. El pie de la tarjeta de archivos **dice siempre de dónde salió la
+  cifra**, que no es un adorno: es la diferencia entre un total corto y un total
+  corto que además se cree.
+
+  `archivosDelBucket` se queda, porque los archivos de un bucket se siguen
+  listando **al entrar a él** —con la cuenta ya hecha por la base, traerse mil
+  setecientos nombres para dibujar cincuenta es cobrarle a todo el mundo lo que
+  mira uno—, y hace las dos cosas que `list()` no hace solo: **pagina de mil en
+  mil** —el tope de PostgREST, y fotos de refacciones lo pasa de largo— y **baja
+  a las subcarpetas**, que llegan como entradas sin `id` y sin metadata; el
+  material vive bajo el id de su encuesta, así que sin recorrerlas ese bucket
+  parecería vacío. El `.emptyFolderPlaceholder` que Supabase deja en una carpeta
+  vacía no cuenta. Va **bucket por bucket y no en paralelo** cuando le toca medir
+  entero: son seis listados de hasta miles de filas, y desde un teléfono en 4G
+  lanzarlos a la vez es la manera de que alguno se caiga por tiempo. Lo listado
+  se queda en el nodo del bucket, así que volver a entrar no lo vuelve a pedir.
 
   **Es de consulta, con una sola excepción: los huérfanos del material.** Un
   huérfano es un archivo que está en `materiales-evaluaciones` y que ninguna fila
