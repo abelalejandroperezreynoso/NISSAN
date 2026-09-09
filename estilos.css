@@ -2869,19 +2869,31 @@ textarea:focus {
     padding: 0 2px 6px;
 }
 
-/* La fila entera es el blanco del dedo: una casilla de 20px no se acierta, y
-   aquí se marca gente de una en una. */
+/* La fila lleva dos acciones —marcar la asistencia y quitar a esa persona de la
+   lista—, así que es un contenedor con dos botones hermanos: uno dentro de otro
+   no vale en HTML. El grande es el blanco del dedo, que una casilla de 20px no
+   se acierta y aquí se marca gente de una en una. */
 .pase-fila {
     display: flex;
     align-items: center;
-    gap: 10px;
-    width: 100%;
-    box-sizing: border-box;
-    padding: 9px 10px;
+    gap: 4px;
     margin-bottom: 4px;
     border: 1px solid transparent;
     border-radius: 10px;
     background: #f8fafc;
+}
+
+.pase-fila-principal {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 9px 10px;
+    border: none;
+    background: none;
+    border-radius: 10px;
     font-family: inherit;
     text-align: left;
     cursor: pointer;
@@ -2890,6 +2902,21 @@ textarea:focus {
 .pase-fila.esta-presente {
     background: #eff6ff;
     border-color: #bfdbfe;
+}
+
+/* La «×» sólo sale cuando la encuesta va dirigida por nombre: si va por puesto
+   o departamento, no hay lista de la que quitar a nadie. */
+.pase-quitar {
+    flex-shrink: 0;
+    width: 36px;
+    align-self: stretch;
+    border: none;
+    background: none;
+    border-radius: 10px;
+    color: #cbd5e1;
+    font-family: inherit;
+    font-size: 0.95rem;
+    cursor: pointer;
 }
 
 .pase-fila-texto {
@@ -2920,6 +2947,14 @@ textarea:focus {
 .pase-fila.esta-presente .pase-marca {
     background: #2563eb;
     border-color: #2563eb;
+}
+
+/* Fuera de la lista lo que se ofrece no es marcar sino agregar, y el círculo lo
+   dice: un «+» en lugar del hueco de la palomita. */
+.pase-marca--agregar {
+    border-style: dashed;
+    color: #64748b;
+    font-size: 1rem;
 }
 
 .pase-hoja-vacio {

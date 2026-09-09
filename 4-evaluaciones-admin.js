@@ -536,31 +536,172 @@ window.pintarHojaPaseDeLista = () => {
             .slice(0, 30)
         : [];
 
-    const fila = (emp, marcado) => `
-        <button type="button" class="pase-fila${marcado ? ' esta-presente' : ''}"
-                onclick="window.alternarAsistencia('${String(emp.id).replace(/'/g, "\\'")}')">
-            ${window.miniaturaDeEmpleado(emp, 30)}
-            <span class="pase-fila-texto">
-                <span class="pase-persona-nombre">${window.sanitizeForHTML(emp.name || `ID ${emp.id}`)}</span>
-                ${emp.puesto ? `<span class="pase-persona-puesto">${window.sanitizeForHTML(emp.puesto)}</span>` : ''}
-            </span>
-            <span class="pase-marca" aria-hidden="true">${marcado ? '✓' : ''}</span>
-        </button>`;
+    // La lista de destinatarios concretos: sólo se puede quitar a alguien de
+    // ella cuando la encuesta va dirigida por nombre. Si va por puesto o
+    // departamento, quién la tiene lo deciden esos dos campos.
+    const porNombre = window.destinatariosConcretos(estado.ev);
 
-    const seccion = (rotulo, gente, nota) => gente.length === 0 ? '' : `
+    const dato = (emp) => `
+        ${window.miniaturaDeEmpleado(emp, 30)}
+        <span class="pase-fila-texto">
+            <span class="pase-persona-nombre">${window.sanitizeForHTML(emp.name || `ID ${emp.id}`)}</span>
+            ${emp.puesto ? `<span class="pase-persona-puesto">${window.sanitizeForHTML(emp.puesto)}</span>` : ''}
+        </span>`;
+
+    // Un id de empleado va en el `onclick`, así que se escapa la comilla: son
+    // números, pero nada garantiza que lo sigan siendo.
+    const arg = (emp) => String(emp.id).replace(/'/g, "\\'");
+
+    // En la lista, la fila marca la asistencia y la «×» quita a esa persona de
+    // los destinatarios. Son dos botones hermanos y no uno dentro de otro, que
+    // no vale en HTML.
+    const filaDeLaLista = (emp) => {
+        const marcado = presentes.has(String(emp.id));
+        const quitar = porNombre && porNombre.includes(String(emp.id))
+            ? `<button type="button" class="pase-quitar" onclick="window.quitarDelPadron('${arg(emp)}')"
+                       title="Quitar de la lista" aria-label="Quitar de la lista">✕</button>`
+            : '';
+        return `
+            <div class="pase-fila${marcado ? ' esta-presente' : ''}">
+                <button type="button" class="pase-fila-principal" onclick="window.alternarAsistencia('${arg(emp)}')"
+                        title="${marcado ? 'Quitar la asistencia' : 'Marcar que asistió'}">
+                    ${dato(emp)}
+                    <span class="pase-marca" aria-hidden="true">${marcado ? '✓' : ''}</span>
+                </button>
+                ${quitar}
+            </div>`;
+    };
+
+    // Fuera de la lista, la fila hace una sola cosa: agregar a esa persona a
+    // los destinatarios. **No le marca la asistencia**, que es otra cosa y se
+    // decide después con su círculo: se agrega a quien tenía que ir, haya ido o
+    // no.
+    const filaDeFuera = (emp) => `
+        <div class="pase-fila">
+            <button type="button" class="pase-fila-principal" onclick="window.agregarAlPadron('${arg(emp)}')"
+                    title="Agregar a la lista">
+                ${dato(emp)}
+                <span class="pase-marca pase-marca--agregar" aria-hidden="true">+</span>
+            </button>
+        </div>`;
+
+    const seccion = (rotulo, gente, nota, comoFila) => gente.length === 0 ? '' : `
         <div class="pase-seccion">
             <div class="pase-seccion-rotulo">${rotulo}</div>
             ${nota ? `<div class="pase-seccion-nota">${nota}</div>` : ''}
-            ${gente.map(emp => fila(emp, presentes.has(String(emp.id)))).join('')}
+            ${gente.map(comoFila).join('')}
         </div>`;
 
     const vacio = enLaLista.length === 0 && otras.length === 0
         ? `<div class="pase-hoja-vacio">Nadie coincide con lo que buscas.</div>` : '';
 
     cuerpo.innerHTML =
-        seccion('A quién va dirigida', enLaLista) +
-        seccion('Otras personas', otras, 'No tienen la encuesta asignada. Marcarlas apunta que asistieron; no se las agrega a los destinatarios.') +
+        seccion('A quién va dirigida', enLaLista, '', filaDeLaLista) +
+        seccion('Otras personas', otras,
+            'Agregarlas las pone en la lista; que asistieran o no se marca después.', filaDeFuera) +
         vacio;
+};
+
+// Agregar a alguien a la lista es escribir `target_employees`: es a quién va
+// dirigida la encuesta, y **no tiene nada que ver con si asistió**. Se agrega a
+// quien tenía que ir; la asistencia se marca aparte, con su círculo.
+//
+// Quien agrega se queda con la revisión de esa persona, con las mismas reglas
+// que la hoja de destinatarios: es el mismo gesto por otra puerta.
+window.agregarAlPadron = async (idEmpleado) => {
+    const estado = window.paseDeLista;
+    if (!estado || estado.escribiendo) return;
+
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(idEmpleado));
+    if (!emp) return;
+
+    const actuales = window.destinatariosConcretos(estado.ev);
+    let lista;
+    if (actuales) {
+        if (actuales.includes(String(emp.id))) return;
+        lista = actuales.concat(String(emp.id));
+    } else {
+        // La encuesta va dirigida por puesto o departamento, así que quién la
+        // tiene se decide solo: alguien que cambie de puesto la gana o la
+        // pierde. Escribir una lista de nombres la congela, y eso no se hace a
+        // espaldas de quien lo pide.
+        const padron = window.padronDeLaEncuesta(estado.ev).map(e => String(e.id));
+        const aviso = `Esta encuesta va dirigida por puesto o departamento, así que quién la tiene se decide solo.\n\n` +
+            `Agregar a ${emp.name} la convierte en una lista fija de ${padron.length + 1} personas: ` +
+            `de aquí en adelante, quien cambie de puesto o de departamento ya no la ganará ni la perderá.\n\n¿Continuar?`;
+        if (!confirm(aviso)) return;
+        lista = [...new Set(padron.concat(String(emp.id)))];
+    }
+
+    await window.guardarPadron(lista, String(emp.id));
+};
+
+window.quitarDelPadron = async (idEmpleado) => {
+    const estado = window.paseDeLista;
+    if (!estado || estado.escribiendo) return;
+
+    const actuales = window.destinatariosConcretos(estado.ev);
+    if (!actuales || !actuales.includes(String(idEmpleado))) return;
+
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(idEmpleado));
+    const nombre = emp && emp.name ? emp.name : `ID ${idEmpleado}`;
+
+    // Quitar al último dejaría la encuesta sin nadie a quien acotar, y entonces
+    // le tocaría a todo el mundo: no es lo que pide quien quita a una persona.
+    if (actuales.length === 1) {
+        alert(`${nombre} es la única persona a la que va dirigida. Quitarla dejaría la encuesta sin destinatarios, y entonces le tocaría a todo el mundo.`);
+        return;
+    }
+    if (!confirm(`¿Quitar a ${nombre} de a quién va dirigida esta encuesta?`)) return;
+
+    await window.guardarPadron(actuales.filter(id => id !== String(idEmpleado)));
+};
+
+// La escritura de los destinatarios desde el pase de lista. `agregado` es a
+// quién se acaba de poner, para apuntar que lo dirigió quien está mirando.
+window.guardarPadron = async (lista, agregado) => {
+    const estado = window.paseDeLista;
+    const ev = estado.ev;
+    const user = JSON.parse(localStorage.getItem("usuarioLogueado") || 'null');
+
+    let asignaciones = agregado
+        ? window.conApunteDeAsignacion(ev, agregado, user && user.id)
+        : window.asignacionesDeEncuesta(ev);
+    asignaciones = window.asignacionesVigentes(asignaciones, lista, window.revisoresDeEncuesta(ev));
+
+    const cambios = { target_employees: lista };
+    // Sin la columna se guardan sólo los destinatarios y el pendiente se
+    // reparte entre todos los revisores, como antes de que existiera.
+    if (await window.hayColumnaAsignador()) cambios.assigned_by = asignaciones;
+
+    estado.escribiendo = true;
+    try {
+        // Aquí escribe alguien que no es administrador, y una política de RLS
+        // que lo rechace no da error: sólo afecta a cero filas.
+        const { data, error } = await sb.from('evaluations')
+            .update(cambios).eq('id', ev.id).select('id');
+        if (error || !data || data.length === 0) {
+            alert("La base no aceptó el cambio: no se modificó ninguna fila. Pide a un administrador que revise los permisos de la tabla de encuestas.");
+            return;
+        }
+    } finally {
+        estado.escribiendo = false;
+    }
+
+    // La encuesta que hay en memoria es la misma que la de `cacheEncuestasRevision`,
+    // así que corregirla aquí basta para que el padrón se recalcule; la lista de
+    // encuestas sí se vuelve a pedir, que se trae la fila entera.
+    ev.target_employees = lista;
+    if (cambios.assigned_by) ev.assigned_by = asignaciones;
+    window.evalCache = null;
+    estado.huboCambios = true;
+    if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+
+    // Quien acaba de entrar en la lista ya no es «otra persona»: se limpia el
+    // buscador para que se le vea en su sitio.
+    const buscador = document.getElementById('buscador-pase-lista');
+    if (agregado && buscador) buscador.value = '';
+    window.pintarHojaPaseDeLista();
 };
 
 // Marcar y desmarcar es escribir y borrar la respuesta de esa persona, que es

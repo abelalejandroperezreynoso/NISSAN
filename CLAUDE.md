@@ -1086,19 +1086,54 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     la caché del panel con `invalidarCacheDashboard`, porque una asistencia
     recién apuntada cierra el pendiente de esa persona.
 
-  **Agregar a quien no estaba se hace buscándolo.** El buscador filtra el padrón
-  y, debajo, ofrece a cualquier otra persona de la plantilla —sólo mientras se
-  busca: sin término no se listan cuatrocientas que no vienen a cuento—.
-  Marcarla la apunta como asistente y **no la agrega a los destinatarios**: eso
-  es «Editar a quién va dirigida», y son dos cosas distintas —haber ido a una
-  junta no es tener la encuesta asignada—. Aparece entonces como `ajeno` de
-  `pasoDeLista`, que ya contaba ese caso.
+  **La lista y la asistencia son dos cosas, y se tocan por separado.** Estar en
+  la lista es que la encuesta va dirigida a esa persona; haber asistido es otra
+  cosa, y por eso se agrega a quien tenía que ir **haya ido o no**. En la
+  sección «A quién va dirigida», la fila marca la asistencia y la «×» del final
+  saca a esa persona de los destinatarios; en «Otras personas» la fila hace una
+  sola cosa, agregar, y su círculo lleva un «+» en vez del hueco de la palomita.
 
-  Por lo mismo, **desmarcar hace dos cosas según quién sea**: a un destinatario
-  lo pasa a «Faltaron» —la encuesta le sigue tocando—, y a alguien de fuera lo
-  quita de la lista del todo, que es como se elimina a un asistente apuntado por
-  error. Para sacar a un destinatario de la lista hay que quitarlo de a quién va
-  dirigida.
+  ```js
+  window.agregarAlPadron(idEmpleado)
+  window.quitarDelPadron(idEmpleado)
+  window.guardarPadron(lista, agregado)   // la escritura de las dos
+  window.destinatariosConcretos(ev)       // en 1-config.js: los ids, o null
+  window.conApunteDeAsignacion(ev, empleadoId, revisorId)
+  ```
+
+  Agregar y quitar es escribir `evaluations.target_employees`, la misma columna
+  de «Editar a quién va dirigida»: son dos puertas al mismo dato, y por eso
+  **quien agrega se queda con la revisión de esa persona** —`conApunteDeAsignacion`
+  aplica las tres reglas de `apuntarQuienAsigno`: no se pisa un apunte anterior,
+  nadie se asigna a sí mismo y sólo se queda con él quien sea revisor— y por eso
+  el mapa se poda con `asignacionesVigentes`, igual que al guardar la hoja.
+
+  Tres cosas que hay que mantener:
+
+  - **Una encuesta dirigida por puesto o departamento se avisa antes de
+    congelarla.** `target_employees` con nombres **manda sobre todo lo demás**,
+    así que agregar a una persona concreta a una encuesta de «todo PRODUCCION»
+    la convertiría en una lista fija y en silencio: quien cambiara de puesto
+    dejaría de tenerla. Se pregunta, diciendo en cuántas personas queda, y sólo
+    se escribe si se acepta —es la misma trampa que congelar los revisores
+    heredados al guardar—. La «×» de quitar, por lo mismo, **sólo sale cuando la
+    encuesta va dirigida por nombre**: si va por puesto, no hay lista de la que
+    quitar a nadie.
+  - **No se quita al último.** Dejar `target_employees` vacío no acota nada, y
+    entonces la encuesta le tocaría a todo el mundo, que es lo contrario de lo
+    que pide quien quita a una persona.
+  - **La fila lleva dos botones hermanos, no uno dentro de otro** —eso no vale
+    en HTML—: `.pase-fila` es el contenedor, `.pase-fila-principal` el blanco
+    grande del dedo y `.pase-quitar` la «×».
+
+  Quitar de la lista a alguien que sí asistió **no le borra la asistencia**:
+  pasa a ser un `ajeno` de `pasoDeLista` y se sigue contando como presente. Fue,
+  y el acta no cambia porque se corrija a quién iba dirigida la encuesta.
+
+  Y **desmarcar la asistencia sigue haciendo dos cosas según quién sea**: a un
+  destinatario lo pasa a «Faltaron» —la encuesta le sigue tocando—, y a alguien
+  de fuera lo quita de la lista del todo, que es como se elimina a un asistente
+  apuntado por error.
 
   El buscador vive **fuera** del cuerpo que se repinta, como el de la pantalla
   de certificación y por lo mismo: dentro, cada letra se llevaría el foco por

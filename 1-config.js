@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-09-2';
+window.VERSION_APP = '2026-09-09-3';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -222,10 +222,8 @@ window.leTocaEstaEncuesta = (ev, empleado, tieneEquipo) => {
     };
 
     // Dirigida a personas concretas: manda sobre todo lo demás.
-    const destinatarios = comoLista(ev.target_employees);
-    if (destinatarios.length > 0 && !destinatarios.includes('ALL')) {
-        return destinatarios.includes(String(empleado.id));
-    }
+    const concretos = window.destinatariosConcretos(ev);
+    if (concretos) return concretos.includes(String(empleado.id));
 
     // Una lista vacía o con 'ALL' no acota nada; si acota, hay que estar en ella.
     const acota = (valor, valorDelEmpleado, siFalta) => {
@@ -259,6 +257,36 @@ window.leTocaEstaEncuesta = (ev, empleado, tieneEquipo) => {
 // las encuestas de modo `boss`.
 window.tieneEquipoDirecto = (empleadoId) =>
     (window.todosLosEmpleadosData || []).some(e => String(e.supId) === String(empleadoId));
+
+// A quién va dirigida una encuesta **por nombre**: la lista de ids concretos, o
+// `null` cuando no acota por personas —vacía, con 'ALL', o sin traer siquiera la
+// columna— y manda entonces el puesto y el departamento. Lo lee
+// `leTocaEstaEncuesta` y lo lee el pase de lista para saber si puede agregar a
+// alguien sin cambiarle el sentido a la encuesta.
+window.destinatariosConcretos = (ev) => {
+    let v = ev ? ev.target_employees : null;
+    if (typeof v === 'string') {
+        try { v = JSON.parse(v); } catch (e) { return null; }
+    }
+    if (!Array.isArray(v) || v.length === 0) return null;
+    const ids = v.map(x => String(x).trim());
+    return ids.some(x => x.toUpperCase() === 'ALL') ? null : ids;
+};
+
+// El apunte de quién dirigió la encuesta a alguien, con las mismas tres reglas
+// que la hoja de destinatarios: no se pisa un apunte anterior —el de otro
+// revisor es suyo—, nadie se asigna a sí mismo, y sólo se queda con él quien
+// sea revisor de esta encuesta. Devuelve el mapa nuevo, sin tocar el de la
+// encuesta.
+window.conApunteDeAsignacion = (ev, empleadoId, revisorId) => {
+    const mapa = { ...window.asignacionesDeEncuesta(ev) };
+    const clave = String(empleadoId);
+    const yo = String(revisorId == null ? '' : revisorId).trim();
+    if (!mapa[clave] && yo && yo !== clave && window.revisoresDeEncuesta(ev).includes(yo)) {
+        mapa[clave] = yo;
+    }
+    return mapa;
+};
 
 // A cuánta gente le toca una encuesta: el padrón contra el que se mide un pase
 // de lista, y el denominador de cualquier «N de M» que hable de ella. Sale de
