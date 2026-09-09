@@ -5,7 +5,14 @@
 -- `anon` no alcanza. Todas son `security definer`, con el `search_path` fijado
 -- —que es lo que hay que hacer siempre en una función así— y **sólo leen**.
 --
--- Se puede correr las veces que haga falta: todas son `create or replace`.
+-- **Se puede correr las veces que haga falta, y por eso cada una se borra
+-- antes.** `create or replace` sólo sirve mientras la función no cambie de
+-- forma: en cuanto se le añade una columna al `returns table`, Postgres
+-- responde «42P13: cannot change return type of existing function» y **el
+-- script entero se queda sin correr** —el editor de Supabase lo envuelve en una
+-- transacción—. Pasó al añadirle el esquema y las filas a `tamano_tablas`. Con
+-- el `drop … if exists` delante da igual cuántas veces se corra y cuánto haya
+-- cambiado; los permisos se vuelven a dar al final, que un `drop` se los lleva.
 --
 --   tamano_base()       el peso del proyecto entero, que es lo que cobra
 --                       Supabase y lo que enseña su página de uso
@@ -36,6 +43,8 @@
 -- localStorage y todas sus peticiones van con la clave `anon`, así que el
 -- esquema público es legible de todos modos.
 
+drop function if exists public.tamano_base();
+
 create or replace function public.tamano_base()
 returns bigint
 language sql
@@ -57,6 +66,8 @@ comment on function public.tamano_base() is
 -- 334.8: un desglose cuya suma pasa del total no es un desglose. Por lo mismo
 -- desaparece el esquema `pg_toast`, que nunca fue un sitio aparte donde se
 -- guarde nada: es el desván de las tablas que ya están contadas.
+drop function if exists public.tamano_esquemas();
+
 create or replace function public.tamano_esquemas()
 returns table (esquema text, bytes bigint)
 language sql
@@ -89,6 +100,8 @@ comment on function public.tamano_esquemas() is
 -- de una tabla hinchada: 1735 filas vivas en 264 MB no es un problema de datos,
 -- es espacio que las filas borradas dejaron sin devolver. Sin esas dos cifras la
 -- pantalla enseña un número grande sin decir si sobra o no.
+drop function if exists public.tamano_tablas();
+
 create or replace function public.tamano_tablas()
 returns table (esquema text, tabla text, bytes bigint,
                filas_vivas bigint, filas_muertas bigint)
@@ -126,6 +139,8 @@ comment on function public.tamano_tablas() is
 -- lleva por delante esa fila sino **la consulta entera**: la pantalla se queda
 -- sin la cifra de todos los buckets por culpa de un archivo. Lo que no sea un
 -- entero cuenta como sin medida, que es lo que de verdad es.
+drop function if exists public.tamano_buckets();
+
 create or replace function public.tamano_buckets()
 returns table (bucket text, archivos bigint, bytes bigint, sin_medida bigint)
 language sql

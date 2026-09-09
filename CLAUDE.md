@@ -1762,8 +1762,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   coincide con la factura no sirve para lo que está: para saber cuánto queda.
 
   Lo dan las cuatro funciones de `sql/consumo-almacenamiento.sql`, todas
-  `security definer`, con el `search_path` fijado, de sólo lectura y `create or
-  replace` —se puede correr las veces que haga falta—:
+  `security definer`, con el `search_path` fijado y de sólo lectura:
 
   ```
   tamano_base()       pg_database_size: el proyecto entero
@@ -1872,6 +1871,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `sql/diagnostico-storage.sql` se queda para mirarlo desde el editor SQL con más
   detalle —datos contra índices, la última vez que pasó el autovacuum—, y **sólo
   mira**.
+
+  **Cada función se borra antes de crearse, y hace falta.** `create or replace`
+  sólo sirve mientras la función no cambie de forma: en cuanto se le añade una
+  columna al `returns table`, Postgres responde «42P13: cannot change return type
+  of existing function» y **el script entero se queda sin correr**, porque el
+  editor de Supabase lo envuelve en una transacción. Pasó al añadirle el esquema
+  y las filas a `tamano_tablas`, y con un `drop … if exists` delante da igual
+  cuántas veces se corra y cuánto haya cambiado. Los `grant` van al final por lo
+  mismo: un `drop` se lleva los permisos por delante.
 
   `archivosDelBucket` se queda, porque los archivos de un bucket se siguen
   listando **al entrar a él** —con la cuenta ya hecha por la base, traerse mil
