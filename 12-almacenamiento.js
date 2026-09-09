@@ -106,6 +106,13 @@ window.notaDeFallo = (funcion) => {
     if (!msg) return `Corre <b>sql/consumo-almacenamiento.sql</b> en Supabase para que la cuente la base.`;
     if (/could not find|does not exist|schema cache/i.test(msg))
         return `Falta la función <b>${funcion}()</b>: corre <b>sql/consumo-almacenamiento.sql</b> en Supabase.`;
+    // Un tiempo agotado no es un permiso ni un script que falte: la consulta
+    // empezó y no acabó a tiempo. En `tamano_buckets` eso apunta a una sola
+    // cosa —recorrer `storage.objects` cuesta más de lo que dura la paciencia
+    // de PostgREST— y lo que hay que mirar es cuánto pesa ese esquema en el
+    // desglose de la base, no volver a correr nada.
+    if (/timeout|canceling statement/i.test(msg))
+        return `<b>${funcion}()</b> tardó más de lo que Supabase deja y se canceló. Mira lo que pesa el esquema <b>storage</b> en el desglose de la base: si se ha hinchado, recorrerlo entero no cabe en el plazo.`;
     return `La base rechazó <b>${funcion}()</b>: «${window.sanitizeForHTML(msg)}». La función existe, así que volver a correr el script no lo arregla.`;
 };
 

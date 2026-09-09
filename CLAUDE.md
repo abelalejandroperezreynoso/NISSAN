@@ -1830,6 +1830,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     comprueba con `~ '^[0-9]+$'` antes de convertir y lo que no lo sea cuenta
     como sin medida, que es lo que de verdad es.
 
+  **Y `tamano_buckets` se cancela por tiempo agotado**, que no es ni un permiso
+  ni un script que falte: PostgREST le pone plazo a cada consulta y recorrer
+  `storage.objects` entero no cabe en él. La causa está en el desglose de la
+  misma pantalla —el esquema `storage` se lleva 264.6 MB de una base de 334.8, el
+  79%, para describir 1735 archivos: 156 KB por fila—, y una tabla de metadatos
+  no pesa eso por sus datos sino por el espacio que las filas borradas dejaron
+  sin devolver. `notaDeFallo` reconoce el caso y manda a mirar ahí en vez de a
+  correr nada; `sql/diagnostico-storage.sql` lo confirma con filas vivas contra
+  muertas, y **sólo mira**. Mientras tanto la pantalla cae al listado desde el
+  cliente, que en este proyecto sí funciona y da la misma cifra.
+
   `archivosDelBucket` se queda, porque los archivos de un bucket se siguen
   listando **al entrar a él** —con la cuenta ya hecha por la base, traerse mil
   setecientos nombres para dibujar cincuenta es cobrarle a todo el mundo lo que
