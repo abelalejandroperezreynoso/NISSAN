@@ -898,6 +898,26 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   «Certificar por Clasificación»: vacía se llevaba sus 20px de margen por
   encima de la lista.
 
+  **Las dos que quedan son dos filas de ajustes de iOS**, en la misma
+  `.lista-ios` que usa la hoja de gestión: cada una abre una pantalla, así que
+  es exactamente lo que hace una fila con su icono, su renglón de qué es y su
+  chevron. Eran dos pastillas de colores con emoji —«🔎 Revisar por Empleado»,
+  «⭐ Certificar por Clasificación»— de antes de que la aplicación tuviera ese
+  lenguaje.
+
+  El icono va en un cuadrado redondeado del color de la acción con el glifo en
+  blanco (`.fila-ios-icono--tinta`), que es el ajuste de iOS de hoy, y es un
+  `<svg>` y no un emoji: cada sistema dibuja el suyo a su manera y aquí hacen
+  falta dos que se vean del mismo tamaño y del mismo trazo. El renglón de debajo
+  del título **se deja envolver** aquí (`.fila-ios-detalle--envuelve`), que en
+  una fila de acción es una frase y no un dato corto: recortar «Resuelve juntas
+  las evaluaciones de una persona» a mitad de palabra no dice nada.
+
+  Y con ellas **se fue la chapa de «⚙️ Modo Admin Activo»**: que el modo está
+  encendido lo dicen el título del panel en rojo y el «+» de su encabezado, así
+  que ahí era un rótulo de color que no llevaba a ningún sitio, justo al lado de
+  los dos que sí.
+
   Con la pantalla se fue la marca `window.isGlobalHistory`, que sólo servía
   para que cada renglón de `renderizarListaRespuestas` dijera además de qué
   encuesta era la respuesta. Esa función se queda —la usa la lista de
@@ -2309,6 +2329,11 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - **El buscador vive fuera del cuerpo que se repinta**, como el de la pantalla
     de certificación y por lo mismo: dentro, cada letra se llevaría el foco por
     delante.
+  - **La fila de esta hoja no es suya: es `.lista-ios` / `.fila-ios`**, la
+    tarjeta blanca con sus renglones, su icono, su detalle y su chevron. Se
+    llamaba `.gestion-*` mientras la usó sólo aquí; desde que las dos acciones
+    del administrador de la hoja de evaluaciones se dibujan igual, el nombre no
+    es de ninguna pantalla. Una lista nueva la reusa en vez de copiarla.
   - **Los catálogos de texto libre no tienen tabla detrás.** El departamento, el
     puesto y el encargo viajan en la ficha de cada persona, así que renombrar
     uno es reescribir todas las que lo llevan —los encargos, uno a uno, que son

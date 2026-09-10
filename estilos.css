@@ -5048,17 +5048,20 @@ html.fondo-anclado body {
 }
 
 /* La tarjeta blanca que agrupa filas, con su línea fina entre una y otra: es
-   la lista de ajustes de iOS, que es de donde el dedo espera que se entre. */
-.gestion-lista {
+   la lista de ajustes de iOS, que es de donde el dedo espera que se entre.
+   Se llamó `.gestion-*` mientras la usó sólo esa hoja; desde que la comparte
+   la de evaluaciones —las dos acciones del administrador— lleva un nombre que
+   no es de ninguna pantalla. Una lista nueva la reusa en vez de copiarla. */
+.lista-ios {
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 14px;
     overflow: hidden;
 }
 
-.gestion-lista + .hoja-grupo-titulo { margin-top: 20px; }
+.lista-ios + .hoja-grupo-titulo { margin-top: 20px; }
 
-.gestion-fila {
+.fila-ios {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -5073,11 +5076,11 @@ html.fondo-anclado body {
     cursor: pointer;
 }
 
-.gestion-fila:last-child { border-bottom: none; }
-.gestion-fila:active { background: #f8fafc; }
-.gestion-fila.esta-apagado { opacity: 0.55; }
+.fila-ios:last-child { border-bottom: none; }
+.fila-ios:active { background: #f8fafc; }
+.fila-ios.esta-apagado { opacity: 0.55; }
 
-.gestion-fila-icono {
+.fila-ios-icono {
     flex-shrink: 0;
     width: 34px;
     text-align: center;
@@ -5085,15 +5088,32 @@ html.fondo-anclado body {
     color: #94a3b8;
 }
 
+/* El icono de los ajustes de iOS de hoy: un cuadrado redondeado del color de
+   la acción con el glifo en blanco dentro. Lo llevan las filas que **son una
+   acción** —«Revisar por empleado», «Certificar por clasificación»— y no las
+   que sólo abren una lista, donde el icono es un rótulo y va apagado. El color
+   lo pone quien la dibuja, que es lo único que cambia de una a otra. */
+.fila-ios-icono--tinta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    color: white;
+}
+
+.fila-ios-icono--tinta svg { width: 17px; height: 17px; }
+
 /* Sin `min-width: 0` la columna del texto no encoge por debajo de su palabra
    más larga y empuja el chevron fuera de la tarjeta. */
-.gestion-fila-texto {
+.fila-ios-texto {
     flex: 1;
     min-width: 0;
     display: block;
 }
 
-.gestion-fila-titulo {
+.fila-ios-titulo {
     display: block;
     font-size: 0.95rem;
     font-weight: 500;
@@ -5103,7 +5123,7 @@ html.fondo-anclado body {
     text-overflow: ellipsis;
 }
 
-.gestion-fila-detalle {
+.fila-ios-detalle {
     display: block;
     margin-top: 1px;
     font-size: 0.78rem;
@@ -5113,7 +5133,17 @@ html.fondo-anclado body {
     text-overflow: ellipsis;
 }
 
-.gestion-fila-chevron {
+/* El renglón de debajo del título va de una línea y recortado —en una lista de
+   cosas es un dato corto: «12 personas», «2 plantas»—, pero cuando la fila es
+   una acción lo que lleva es una frase que la explica, y ahí se deja envolver:
+   recortar «Resuelve juntas las evaluaciones de una persona» a mitad de palabra
+   no dice nada. */
+.fila-ios-detalle--envuelve {
+    white-space: normal;
+    line-height: 1.3;
+}
+
+.fila-ios-chevron {
     flex-shrink: 0;
     font-size: 1.1rem;
     color: #c7c7cc;   /* el gris de los chevrons de iOS */

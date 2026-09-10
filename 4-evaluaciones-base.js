@@ -635,18 +635,42 @@ window.cargarVistaEvaluaciones = async () => {
     // listado mezclaba las respuestas de todas y no se usaba—. Con él fuera,
     // a un usuario normal le quedaba una fila vacía con sus 20px de margen
     // por encima de la lista.
+    //
+    // **Van como dos filas de ajustes de iOS y no como dos pastillas de
+    // colores**, que es lo que llevan siendo desde antes de que la aplicación
+    // tuviera ese lenguaje: cada una abre una pantalla, así que es exactamente
+    // lo que hace una fila con su icono, su renglón de qué es y su chevron.
+    // Comparten la lista con la hoja de gestión (`.lista-ios`, `.fila-ios`),
+    // que es la misma cosa. Sin emoji: el icono es un `<svg>` sobre el cuadrado
+    // redondeado de su color —cada sistema dibuja el emoji a su manera, y aquí
+    // hacen falta dos que se vean del mismo tamaño y del mismo trazo—.
+    //
+    // Y **se fue la chapa de «Modo Admin Activo»**: que el modo está encendido
+    // lo dicen ya el título del panel en rojo y el «+» de su encabezado, así
+    // que aquí era un rótulo de color que no llevaba a ningún sitio, al lado
+    // justo de los dos que sí.
     if (window.modoAdminActivo) {
+        const accionAdmin = (color, icono, titulo, detalle, onclick) => `
+            <button type="button" class="fila-ios" onclick="${onclick}">
+                <span class="fila-ios-icono fila-ios-icono--tinta" style="background:${color};" aria-hidden="true">${icono}</span>
+                <span class="fila-ios-texto">
+                    <span class="fila-ios-titulo">${titulo}</span>
+                    <span class="fila-ios-detalle fila-ios-detalle--envuelve">${detalle}</span>
+                </span>
+                <span class="fila-ios-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>`;
+
+        const svgRevisar = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M16 11l2 2 4-4"/></svg>';
+        const svgCertificar = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.5 13.5L17 22l-5-3-5 3 1.5-8.5"/></svg>';
+
         container.insertAdjacentHTML('beforeend', `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
-            <div style="display:flex; flex-wrap:wrap; gap:10px;">
-                <button onclick="if(window.abrirRevisionPorEmpleado) window.abrirRevisionPorEmpleado(); else alert('Módulo en actualización');" style="background:#ccfbf1; color:#0f766e; padding:8px 16px; border-radius:8px; border:1px solid #5eead4; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(13, 148, 136, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#99f6e4'" onmouseout="this.style.background='#ccfbf1'">
-                    🔎 Revisar por Empleado
-                </button>
-                <button onclick="if(window.abrirCertificacionPorClasificacion) window.abrirCertificacionPorClasificacion(); else alert('Módulo en actualización');" style="background:#eff6ff; color:#1d4ed8; padding:8px 16px; border-radius:8px; border:1px solid #93c5fd; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(29, 78, 216, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
-                    ⭐ Certificar por Clasificación
-                </button>
-            </div>
-            <span style="background:#f1f5f9; color:#ef4444; padding:4px 8px; border-radius:6px; font-size:0.8rem; border:1px solid #fecaca; font-weight:bold;">⚙️ Modo Admin Activo</span>
+        <div class="lista-ios" style="margin-bottom:20px;">
+            ${accionAdmin('#0d9488', svgRevisar, 'Revisar por empleado',
+                'Resuelve juntas las evaluaciones de una persona',
+                "if (window.abrirRevisionPorEmpleado) window.abrirRevisionPorEmpleado(); else alert('Módulo en actualización');")}
+            ${accionAdmin('#2563eb', svgCertificar, 'Certificar por clasificación',
+                'Da fe de lo contestado en un periodo',
+                "if (window.abrirCertificacionPorClasificacion) window.abrirCertificacionPorClasificacion(); else alert('Módulo en actualización');")}
         </div>
         `);
     }

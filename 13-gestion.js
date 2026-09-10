@@ -374,18 +374,18 @@ window.pintarGestion = (html) => {
 // =========================================================
 
 window.filaGestion = (fila) => `
-    <button type="button" class="gestion-fila${fila.apagado ? ' esta-apagado' : ''}" onclick="${fila.accion}">
-        ${fila.figura || (fila.icono ? `<span class="gestion-fila-icono" aria-hidden="true">${fila.icono}</span>` : '')}
-        <span class="gestion-fila-texto">
-            <span class="gestion-fila-titulo">${fila.titulo}</span>
-            ${fila.detalle ? `<span class="gestion-fila-detalle">${fila.detalle}</span>` : ''}
+    <button type="button" class="fila-ios${fila.apagado ? ' esta-apagado' : ''}" onclick="${fila.accion}">
+        ${fila.figura || (fila.icono ? `<span class="fila-ios-icono" aria-hidden="true">${fila.icono}</span>` : '')}
+        <span class="fila-ios-texto">
+            <span class="fila-ios-titulo">${fila.titulo}</span>
+            ${fila.detalle ? `<span class="fila-ios-detalle">${fila.detalle}</span>` : ''}
         </span>
         ${fila.chapa || ''}
-        <span class="gestion-fila-chevron" aria-hidden="true">›</span>
+        <span class="fila-ios-chevron" aria-hidden="true">›</span>
     </button>`;
 
 window.listaGestion = (filas, vacio) => filas.length
-    ? `<div class="gestion-lista">${filas.join('')}</div>`
+    ? `<div class="lista-ios">${filas.join('')}</div>`
     : `<div class="gestion-vacio">${vacio || 'No hay nada que enseñar aquí.'}</div>`;
 
 window.avatarGestion = (emp) => {
