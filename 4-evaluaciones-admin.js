@@ -1558,7 +1558,7 @@ window.verDetalleRespuesta = async (resp) => {
         if (motivo) {
             motivoHtml = `
                 <div style="margin-top:12px; background:#faf5ff; border:1px solid #e9d5ff; border-left:3px solid #a855f7; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:0.75rem; font-weight:700; color:#7e22ce; margin-bottom:4px;">💬 Por qué</div>
+                    <div style="font-size:0.75rem; font-weight:700; color:#7e22ce; margin-bottom:4px;">💬 Comentario</div>
                     <div style="font-size:0.95rem; color:#334155; white-space:pre-wrap;">${window.sanitizeForHTML(motivo)}</div>
                 </div>`;
         } else if (window.llevaMotivo(q) && rawRespuesta) {

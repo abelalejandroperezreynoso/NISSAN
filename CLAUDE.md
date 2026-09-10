@@ -1562,6 +1562,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   quedan `text` —que ya es texto libre— y `list_match`, que es una lista de
   elementos y no una elección.
 
+  **El campo se llama «Comentario»**, al contestar y al calificar. Se llamó
+  «¿Por qué?», y una pregunta encima de la que se acaba de contestar se lee
+  como otra pregunta más; en una escala, además, el tope no pide explicación
+  —ver más abajo— y ahí «¿Por qué?» reclamaba el porqué de algo que está bien.
+  Lo que se espera sigue diciéndolo el marcador de obligatorio y el
+  `placeholder` («Explica el motivo de tu calificación…»). En la pantalla de
+  calificar es el mismo rótulo con su 💬.
+
   **Una pregunta que se califica sola no lleva motivo.** Ahí sí hay una
   respuesta buena y otra mala —se acierta o no se acierta—, y pedir además el
   porqué de cada una convierte un examen de diez preguntas en diez redacciones:
@@ -1628,12 +1636,29 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Eso es el segundo argumento de `bloqueGuiaEscala(pregunta, elegible)`, que
   pasa sólo la pantalla de contestar; la de calificar la enseña para leerla,
   que allí el control es otro. Lleva un renglón **cada valor que ofrece la
-  escala**, también los que nadie explicó —«Sin descripción»—: con la guía
-  abierta, si no, no habría manera de elegirlos. Los dos sitios comparten el
+  escala**, también los que nadie explicó: con la guía abierta, si no, no
+  habría manera de elegirlos. Los dos sitios comparten el
   `name` del grupo de radios, así que sólo uno puede quedar marcado y el envío
   sigue leyendo un `input[name="range-N"]:checked`; lo que **no** se puede es
   pintar por `checked`, porque marcar el círculo de un sitio desmarca al gemelo
   del otro: `updateRangeVisual` compara por **valor** y repinta los dos.
+
+  **Un medio punto no es un valor sin descripción: es el de arriba cumplido a
+  medias.** Nadie escribe una explicación para el 3.5 —lo que significa es que
+  lo del 4 se cumple en parte—, así que ese renglón lo dice con esas palabras
+  («Se cumple en parte lo del 4») y **se pega al valor que explica**: sin la
+  línea que separa un valor del siguiente y con el hueco de la rejilla
+  recogido, de modo que 3.5 y 4 se leen como un solo bloque. Antes decía «Sin
+  descripción», que en la mitad de los renglones de una escala con medios
+  puntos se leía como que a la guía le faltaba la mitad de las explicaciones.
+  La marca es `.guia-escala-fila--parcial`, y la regla que le quita el
+  separador al renglón de debajo va **después** de la del separador en
+  `estilos.css`: las dos tienen la misma especificidad.
+
+  Ese texto sólo sale mientras haya un valor explicado **por encima**: al 4 de
+  una escala cuyo último explicado es el 3 no le queda nada que cumplir a
+  medias, así que ahí sí se dice «Sin descripción». Y no alcanza a la pantalla
+  de calificar, que lista sólo los valores explicados.
 
   Cuántos recuadros hay lo dicen el «Puntaje máximo» y la casilla de puntos
   medios, que son **de la encuesta entera**: cambiar cualquiera de los dos

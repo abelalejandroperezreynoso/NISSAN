@@ -1393,7 +1393,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             comentarioHtml = `
                 <div style="margin-top:16px; border-top:1px solid #f1f5f9; padding-top:14px;">
                     <label style="display:block; font-weight:600; color:#475569; margin-bottom:8px; font-size:0.9rem;">
-                        ¿Por qué?
+                        Comentario
                         <span id="motivo-obligatorio-${q.id}" style="color:#ef4444;">*</span>
                         <span id="motivo-opcional-${q.id}" style="display:none; color:#94a3b8; font-weight:500;">(opcional)</span>
                     </label>

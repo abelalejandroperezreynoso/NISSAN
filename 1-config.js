@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-10-11';
+window.VERSION_APP = '2026-09-10-12';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1179,7 +1179,19 @@ window.bloqueGuiaEscala = (pregunta, elegible) => {
     const eligeAqui = !!(elegible && Array.isArray(elegible.valores) && elegible.valores.length && explicados.length);
     const valores = eligeAqui ? elegible.valores.map(v => String(v)) : explicados;
 
-    const filas = valores.map(v => {
+    // Un valor sin descripción propia no es un hueco en la guía: es el medio
+    // punto del siguiente, que se cumple sólo en parte —3.5 y 4 hablan de lo
+    // mismo, y 3.5 significa que lo del 4 se cumple a medias—. Así que dice eso
+    // en vez de «Sin descripción», que se leía como que a la guía le faltaba
+    // algo, y va pegado al valor que explica, sin la línea que los separaría.
+    const siguienteExplicado = (desde) => {
+        for (let i = desde + 1; i < valores.length; i++) {
+            if (porValor[valores[i]]) return valores[i];
+        }
+        return '';
+    };
+
+    const filas = valores.map((v, i) => {
         const valor = window.sanitizeForHTML(v);
         const texto = window.sanitizeForHTML(porValor[v] || '');
 
@@ -1191,9 +1203,15 @@ window.bloqueGuiaEscala = (pregunta, elegible) => {
                     </div>`;
         }
 
-        const significado = texto || '<span class="guia-escala-sin-texto">Sin descripción</span>';
+        // Por encima del último valor explicado no hay descripción que cumplir
+        // a medias, así que ahí sí se dice que no la tiene.
+        const explicaAl = texto ? '' : siguienteExplicado(i);
+        const significado = texto
+            || (explicaAl
+                ? `<span class="guia-escala-sin-texto">Se cumple en parte lo del ${window.sanitizeForHTML(explicaAl)}</span>`
+                : '<span class="guia-escala-sin-texto">Sin descripción</span>');
         return `
-                    <label class="guia-escala-fila guia-escala-fila--elegible">
+                    <label class="guia-escala-fila guia-escala-fila--elegible${explicaAl ? ' guia-escala-fila--parcial' : ''}">
                         <input type="radio" name="${window.sanitizeForHTML(elegible.nombre)}" value="${valor}" class="resp-range"
                                data-id="${window.sanitizeForHTML(elegible.id)}" data-max="${window.sanitizeForHTML(elegible.max)}"
                                style="display:none;" onchange="updateRangeVisual(this)">

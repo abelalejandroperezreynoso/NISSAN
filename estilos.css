@@ -4602,6 +4602,20 @@ html.fondo-anclado body {
     border-top: 1px solid #f5d0fe;
 }
 
+/* Un valor sin descripción propia es el medio punto del que viene detrás: 3.5
+   y 4 hablan de lo mismo y 3.5 significa que lo del 4 se cumple a medias. Así
+   que los dos renglones se leen como un solo bloque —sin la línea que separa
+   un valor del de al lado y con el hueco de la rejilla recogido—, que es lo
+   que evita leer el medio punto como un valor huérfano. Va después de la regla
+   del separador, que tiene la misma especificidad. */
+.guia-escala-fila--parcial + .guia-escala-fila--elegible {
+    border-top: none;
+}
+
+.guia-escala-fila--parcial {
+    margin-bottom: -8px;
+}
+
 /* Es el mismo círculo de abajo —lleva también `.range-circle`, que es lo que
    `updateRangeVisual` pinta—, sólo que aquí vive en un renglón. */
 .guia-escala-boton {
