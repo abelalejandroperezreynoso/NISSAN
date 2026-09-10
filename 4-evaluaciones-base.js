@@ -607,8 +607,18 @@ window.cargarVistaEvaluaciones = async () => {
         allPending.forEach(item => {
             if (String(item.employee_id) === String(user.id)) return;
 
-            const meToca = window.modoAdminActivo ||
-                window.leTocaRevisar(evalPorId[String(item.evaluation_id)], item.employee_id, user.id);
+            // **El modo administrador ya no lo da todo por suyo.** Estaba
+            // escrito `window.modoAdminActivo || leTocaRevisar(…)`, así que en
+            // ese modo el globo rojo contaba las respuestas sin calificar de la
+            // empresa entera —51 en una pantalla donde ninguna era suya— y su
+            // propio `title` decía «esperan **tu** calificación». Con eso, una
+            // encuesta que no le toca ni revisa se dibujaba además con el icono
+            // de «por calificar» en vez del neutro que promete
+            // `estadoDeEncuestaEnLista`. Hoy la cuenta es la misma para todos:
+            // lo que espera la calificación de quien mira. Lo de los demás se
+            // ve en «Revisar por Empleado», que es la pantalla que habla de eso.
+            const meToca = window.leTocaRevisar(
+                evalPorId[String(item.evaluation_id)], item.employee_id, user.id);
 
             if (meToca) {
                 pendingMap[item.evaluation_id] = (pendingMap[item.evaluation_id] || 0) + 1;
@@ -706,7 +716,14 @@ window.cargarVistaEvaluaciones = async () => {
     // de la rejilla. Va a la derecha —del renglón de la encuesta y del de su
     // clasificación—, que es donde no le quita ancho al título ni alarga el pie
     // a un segundo renglón.
-    const globoDeCalificar = (cuantas, quePasa) => cuantas > 0
+    //
+    // **En modo administrador no se dibuja.** Ahí la lista es la de todo el
+    // mundo, y un globo rojo por renglón se lee como una bandeja de trabajo que
+    // no es la suya: lo que el administrador tiene que calificar le sale igual
+    // en su panel de inicio y en «Revisar por Empleado». Sin el globo, esta
+    // pantalla queda para lo que es en ese modo: ver y configurar las
+    // encuestas.
+    const globoDeCalificar = (cuantas, quePasa) => (cuantas > 0 && !window.modoAdminActivo)
         ? `<div class="globo-por-calificar" title="${cuantas} ${quePasa}">${cuantas}</div>`
         : '';
 
@@ -789,9 +806,18 @@ window.cargarVistaEvaluaciones = async () => {
             // Los botones del administrador —y el del revisor, que sólo puede
             // corregir a quién va dirigida— van en el propio renglón y cortan
             // la propagación: el resto de la fila abre la encuesta.
-            // Los botones del administrador —y el del revisor, que sólo puede
-            // corregir a quién va dirigida— van en el propio renglón y cortan
-            // la propagación: el resto de la fila abre la encuesta.
+            //
+            // **Al administrador le queda uno solo: encender y apagar.** Aquí
+            // hubo tres, y los otros dos se fueron a donde ya se llegaba:
+            //
+            //   - el lápiz de **editar** lo repetía el del encabezado de la
+            //     pantalla de la encuesta, que es adonde lleva tocar el
+            //     renglón; tenerlo dos veces sólo quitaba ancho al título;
+            //   - el bote de basura de **eliminar** se mudó al encabezado de
+            //     esa misma hoja de edición. Borrar una encuesta se lleva por
+            //     delante lo que contestó todo el mundo, y ése no es un botón
+            //     que deba estar a un toque de distancia en una lista, al lado
+            //     de otros dos y del que abre la encuesta.
             const botonIcono = (fondo, colorTexto, onclick, titulo, icono) => `
                 <button class="encuesta-boton" style="background:${fondo}; color:${colorTexto};"
                         onclick="event.stopPropagation(); ${onclick}"
@@ -799,15 +825,10 @@ window.cargarVistaEvaluaciones = async () => {
 
             let acciones = '';
             if (window.modoAdminActivo) {
-                acciones = botonIcono('#e2e8f0', '#475569',
-                        `window.cerrarModalEvaluaciones(); window.editarEvaluacion('${ev.id}')`,
-                        'Editar Evaluación', '✏️')
-                    + botonIcono(estaActiva ? '#e0f2fe' : '#dcfce7', estaActiva ? '#0369a1' : '#15803d',
+                acciones = botonIcono(estaActiva ? '#e0f2fe' : '#dcfce7', estaActiva ? '#0369a1' : '#15803d',
                         `window.alternarEncuestaActiva('${ev.id}', ${estaActiva ? 'false' : 'true'})`,
                         estaActiva ? 'Desactivar (sólo la verá el administrador)' : 'Activar (volverá a verla todo el mundo)',
-                        estaActiva ? '🚫' : '✅')
-                    + botonIcono('#fee2e2', '#ef4444',
-                        `window.borrarEvaluacion('${ev.id}')`, 'Eliminar Evaluación', '🗑️');
+                        estaActiva ? '🚫' : '✅');
             } else if (laReviso(ev)) {
                 // Quien revisa la encuesta puede corregir a quién va dirigida
                 // sin ser administrador: es quien sabe a quién le falta
@@ -919,7 +940,9 @@ window.cargarVistaEvaluaciones = async () => {
     const resumen = [
         `${todasLasFilas.length} encuesta${todasLasFilas.length === 1 ? '' : 's'}`,
         pendientesTotal > 0 ? `${pendientesTotal} pendiente${pendientesTotal === 1 ? '' : 's'}` : null,
-        porCalificarTotal > 0 ? `${porCalificarTotal} por calificar` : null,
+        // Lo mismo que el globo rojo, y por lo mismo: en modo administrador esa
+        // cuenta no habla de quien mira.
+        (porCalificarTotal > 0 && !window.modoAdminActivo) ? `${porCalificarTotal} por calificar` : null,
         promedioTotal === null ? null : `promedio ${promedioTotal}%`
     ].filter(Boolean).join(' · ');
 

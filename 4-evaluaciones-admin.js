@@ -3781,6 +3781,16 @@ window.prepararEncabezadoEval = (editando, soloDestinatarios = false) => {
         guardar.title = etiqueta;
         guardar.setAttribute('aria-label', etiqueta);
     }
+
+    // El bote de basura sólo tiene a qué apuntar cuando se está editando una
+    // encuesta que ya existe: al crear no hay nada que borrar, una copia todavía
+    // no es ninguna fila —`editarEvaluacion` la abre con `editando` en false— y
+    // el revisor que corrige a quién va dirigida no puede eliminar nada. Se
+    // esconde con `hidden`, así que depende de la regla
+    // `.ios-boton-icono[hidden]` de estilos.css: es un flex y un `display` de
+    // autor le gana al `[hidden]` del navegador.
+    const borrar = document.getElementById('btn-borrar-eval');
+    if (borrar) borrar.hidden = !(editando && !soloDestinatarios && window.modoAdminActivo);
     // La escala arranca plegada; quien la necesite la abre, y al editar la
     // abre window.editarEvaluacion si la encuesta ya trae etiquetas.
     if (escala) escala.open = false;
@@ -5052,15 +5062,99 @@ window.alternarEncuestaActiva = async (id, activar) => {
     }
 };
 
+// --- ELIMINAR UNA ENCUESTA ---------------------------------------------
+// Se entra por el bote de basura del encabezado de la hoja de edición, que es
+// donde vive desde que se quitó del renglón de la lista: borrar una encuesta se
+// lleva por delante lo que contestó todo el mundo, y ése no es un botón que
+// deba estar a un toque en una lista, entre otros dos.
+//
+// El aviso dice **cuántas respuestas se van con ella**, que es lo que de verdad
+// se pierde —una encuesta sin contestar no es nada, una con doscientas es el
+// historial de doscientas personas—. Se cuenta con `head` y `count`, así que no
+// viaja ninguna fila. Si la cuenta no se puede hacer se dice, que no es lo mismo
+// que decir que no hay ninguna.
+//
+// Devuelve `true` sólo si la fila dejó de existir, que es cuando quien llama
+// tiene que cerrar su hoja y recargar.
 window.borrarEvaluacion = async (id) => {
-    if(!confirm("¿Estás seguro de eliminar esta evaluación?")) return;
+    if (!window.modoAdminActivo) return false;
+
+    const ev = window.encuestaEnCache(id);
+    const titulo = (ev && ev.title) ? ev.title : 'esta encuesta';
+
+    let respuestas = null;
     try {
-        const { error } = await sb.from('evaluations').delete().eq('id', id);
+        const { count, error } = await sb.from('evaluation_responses')
+            .select('id', { count: 'exact', head: true })
+            .eq('evaluation_id', id);
         if (error) throw error;
-        alert("Evaluación eliminada.");
+        respuestas = typeof count === 'number' ? count : null;
+    } catch (e) {
+        console.warn('No se pudo contar las respuestas de la encuesta:', e);
+    }
+
+    let aviso = `⚠️ Vas a ELIMINAR «${titulo}».`;
+    aviso += respuestas === null
+        ? '\n\nNo se pudo comprobar cuántas respuestas tiene, así que no se sabe cuánto se pierde.'
+        : (respuestas > 0
+            ? `\n\nSe va con sus ${respuestas} respuesta${respuestas === 1 ? '' : 's'}, con sus preguntas y con sus calificaciones. No se puede deshacer.`
+            : '\n\nTodavía no la ha contestado nadie.');
+    aviso += '\n\nSi lo que quieres es retirarla conservando lo contestado, ciérrala y usa el botón 🚫 de su renglón en la lista: deja de verla todo el mundo menos el administrador.';
+    aviso += '\n\n¿Eliminarla?';
+    if (!confirm(aviso)) return false;
+
+    if (respuestas === null || respuestas > 0) {
+        if (!confirm(`Confirma otra vez: «${titulo}» y lo que se haya contestado en ella no se pueden recuperar.`)) return false;
+    }
+
+    try {
+        // El `.select()` no es adorno: PostgREST responde con éxito a un delete
+        // que las políticas de RLS rechazan —afecta a cero filas—, y sin este
+        // conteo la pantalla decía «Evaluación eliminada» mientras la encuesta
+        // seguía ahí hasta la siguiente recarga.
+        const { data, error } = await sb.from('evaluations').delete().eq('id', id).select('id');
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            throw new Error("La base no borró la encuesta: no se eliminó ninguna fila. Revisa que la tabla evaluations tenga política de DELETE (RLS).");
+        }
+
         window.evalCache = null;
-        window.cargarVistaEvaluaciones();
-    } catch (e) { alert("Error al eliminar: " + e.message); }
+        if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+        alert(`🗑️ Se eliminó «${titulo}».`);
+        return true;
+    } catch (e) {
+        console.error('Error al eliminar la encuesta:', e);
+        // 23503 es la llave foránea: alguna tabla —sus respuestas, sus
+        // preguntas— la tiene declarada sin borrado en cascada y la base se
+        // niega a dejar el registro huérfano. Ahí apagarla es la salida.
+        if (e && (e.code === '23503' || String(e.message || '').includes('foreign key'))) {
+            alert("No se puede eliminar: hay respuestas o preguntas que dependen de esta encuesta y la base no las borra en cascada.\n\nApágala con el botón 🚫 de su renglón para retirarla conservando lo contestado.");
+        } else {
+            alert("No se pudo eliminar la encuesta: " + (e.message || JSON.stringify(e)));
+        }
+        return false;
+    }
+};
+
+// El botón del encabezado de la hoja de edición. La encuesta es la que se está
+// editando, así que no hace falta escapar ningún id en el marcado.
+window.borrarEvaluacionEditada = async () => {
+    const id = window.idEditandoEval;
+    if (!id || window.editandoSoloDestinatarios) return;
+
+    const boton = document.getElementById('btn-borrar-eval');
+    if (boton) boton.disabled = true;
+    const seFue = await window.borrarEvaluacion(id);
+    if (boton) boton.disabled = false;
+    if (!seFue) return;
+
+    // La hoja habla de algo que ya no existe: se cierra y se vuelve a la lista,
+    // que es de donde se venía —por su renglón o por el lápiz del encabezado de
+    // la encuesta, que la cierra al abrir ésta—.
+    const hoja = document.getElementById('modal-crear-eval');
+    if (hoja) hoja.style.display = 'none';
+    window.idEditandoEval = null;
+    window.cargarVistaEvaluaciones();
 };
 
 window.toggleTipoPregunta = (s) => {

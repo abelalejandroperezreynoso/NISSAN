@@ -831,16 +831,59 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     rejilla, y ahora está en los dos renglones —el de la encuesta y el de su
     clasificación—. En el pie era un cuarto trozo y lo partía en dos líneas,
     dejando el encabezado de la clasificación más alto que sus encuestas.
+
+    **Y no se dibuja en modo administrador**, ni él ni su «N por calificar» del
+    renglón de resumen: ahí la lista es la de todo el mundo y un globo rojo por
+    encuesta se lee como una bandeja de trabajo que no es la suya. Lo que el
+    administrador tiene que calificar le sale igual en su panel de inicio y en
+    «Revisar por Empleado», que es la pantalla que habla de eso.
+
+    De paso se quitó lo que inflaba esa cuenta: el mapa se armaba con
+    `window.modoAdminActivo || leTocaRevisar(…)`, así que en ese modo contaba
+    las respuestas sin calificar de la empresa entera —51 en una pantalla donde
+    ninguna era suya— mientras su propio `title` decía «esperan **tu**
+    calificación». Con la cuenta inflada, además, una encuesta que no le toca ni
+    revisa se dibujaba con el icono de «por calificar» en vez del neutro que
+    promete `estadoDeEncuestaEnLista`. Hoy la cuenta significa lo mismo para
+    todos.
   - **La insignia de certificación va en su propio renglón** del encabezado
     (`.grupo-eval-chapa`) y no al lado del nombre: «📉 1 por debajo de 80%» no
     cabe en lo que queda del ancho de un teléfono.
-  - **Los tres botones del administrador se van a su propio renglón en un
-    teléfono** (`.encuesta-acciones` con `flex: 1 1 100%` bajo
-    `@media (max-width:600px)`), que es lo que hace el botón de una tarjeta de
-    pendiente y por lo mismo: en línea se llevaban la mitad del ancho y dejaban
-    el título en una columna de dos palabras. `.encuesta-fila-texto` necesita
-    `min-width: 0` o no encoge por debajo de su palabra más larga y los empuja
-    fuera del renglón.
+  - **Al administrador le queda un botón por renglón: encender y apagar.**
+    Hubo tres, y los otros dos se fueron a donde ya se llegaba: el lápiz de
+    **editar** lo repetía el del encabezado de la pantalla de la encuesta —que
+    es adonde lleva tocar el renglón—, y el bote de basura de **eliminar** se
+    mudó al encabezado de esa misma hoja de edición (más abajo). Con uno solo
+    cabe al final del renglón, así que se fue también la regla que los mandaba a
+    su propia fila en un teléfono (`.encuesta-acciones` con `flex: 1 1 100%`),
+    que existía porque tres se llevaban la mitad del ancho y dejaban el título
+    en una columna de dos palabras. `.encuesta-fila-texto` sigue necesitando
+    `min-width: 0` o no encoge por debajo de su palabra más larga y empuja al
+    botón fuera del renglón.
+
+    El lápiz del revisor —«Editar a quién va dirigida», que no es el mismo
+    botón— se queda: esa hoja restringida es lo único que puede abrir desde la
+    lista.
+
+  - **Eliminar una encuesta vive en el encabezado de la hoja de edición**
+    (`#btn-borrar-eval`, con `window.borrarEvaluacionEditada`), no en su
+    renglón: se lleva por delante lo que contestó todo el mundo, y ése no es un
+    botón que deba estar a un toque de distancia en una lista, al lado de otros
+    dos y del que abre la encuesta. Lo enseña y lo esconde
+    `prepararEncabezadoEval` —sólo al editar una que ya existe: al crear no hay
+    nada que borrar, una copia todavía no es ninguna fila y el revisor que
+    corrige a quién va dirigida no puede eliminar nada—, con `hidden` y la regla
+    `.ios-boton-icono[hidden]` de siempre.
+
+    `window.borrarEvaluacion(id)` **dice cuántas respuestas se van con ella**
+    —con `head` y `count`, así que no viaja ninguna fila— y pregunta dos veces
+    cuando hay algo que perder, como el borrado de un empleado y por lo mismo.
+    **Cuenta las filas del `.select()`**: PostgREST responde con éxito a un
+    delete que las políticas de RLS rechazan y la pantalla decía «Evaluación
+    eliminada» mientras la encuesta seguía ahí. Y si la base se planta con un
+    23503 —sus respuestas o sus preguntas la tienen declarada sin borrado en
+    cascada— el aviso manda a **apagarla** con el 🚫 de su renglón, que es la
+    salida que conserva lo contestado.
 
   **Y encima de la lista ya no hay ninguna fila de botones para el usuario.**
   Ahí estuvo «🗂️ Ver Historial Global (Todas)», lo único de esa fila que veía

@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-10-7">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-10-8">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -370,6 +370,17 @@
                     <div class="hoja-subtitulo" id="subtitulo-crear-eval">Define el cuestionario y a quién le toca</div>
                 </div>
                 <div class="hoja-acciones">
+                    <!-- Eliminar la encuesta vive aquí, y no en su renglón de la
+                         lista: se lleva por delante lo que contestó todo el
+                         mundo, así que no puede estar a un toque de distancia
+                         entre otros botones. Lo enseña y lo esconde
+                         `prepararEncabezadoEval` —sólo al editar una que ya
+                         existe, nunca al crear, al copiar ni en el modo
+                         restringido del revisor—, con el atributo `hidden` y la
+                         regla `.ios-boton-icono[hidden]` de estilos.css. -->
+                    <button id="btn-borrar-eval" onclick="window.borrarEvaluacionEditada()" class="ios-boton-icono ios-boton-icono--destructivo" hidden title="Eliminar evaluación" aria-label="Eliminar evaluación">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7"/><path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7"/></svg>
+                    </button>
                     <button id="btn-guardar-eval" onclick="guardarNuevaEvaluacion()" class="ios-boton-icono" title="Publicar evaluación" aria-label="Publicar evaluación"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5.5 5.5L20 7"/></svg></button>
                     <button onclick="document.getElementById('modal-crear-eval').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                 </div>
@@ -1044,22 +1055,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-10-7"></script>
-    <script src="2a-core-nav.js?v=2026-09-10-7"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-10-7"></script>
-    <script src="3-incidentes.js?v=2026-09-10-7"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-10-7"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-10-7"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-10-7"></script>
-    <script src="5-objetivos.js?v=2026-09-10-7"></script>
-    <script src="6-calendario.js?v=2026-09-10-7"></script>
-    <script src="7-pendientes.js?v=2026-09-10-7"></script>
-    <script src="8-hallazgos.js?v=2026-09-10-7"></script>
-    <script src="9-estadisticas.js?v=2026-09-10-7"></script>
+    <script src="1-config.js?v=2026-09-10-8"></script>
+    <script src="2a-core-nav.js?v=2026-09-10-8"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-10-8"></script>
+    <script src="3-incidentes.js?v=2026-09-10-8"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-10-8"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-10-8"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-10-8"></script>
+    <script src="5-objetivos.js?v=2026-09-10-8"></script>
+    <script src="6-calendario.js?v=2026-09-10-8"></script>
+    <script src="7-pendientes.js?v=2026-09-10-8"></script>
+    <script src="8-hallazgos.js?v=2026-09-10-8"></script>
+    <script src="9-estadisticas.js?v=2026-09-10-8"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-09-10-7"></script>
-    <script src="13-gestion.js?v=2026-09-10-7"></script>
-    <script src="10-refacciones.js?v=2026-09-10-7"></script> 
+    <script src="12-almacenamiento.js?v=2026-09-10-8"></script>
+    <script src="13-gestion.js?v=2026-09-10-8"></script>
+    <script src="10-refacciones.js?v=2026-09-10-8"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

@@ -4879,13 +4879,13 @@ html.fondo-anclado body {
     font-weight: bold;
 }
 
-/* En un teléfono los tres botones del administrador se llevan la mitad del
-   ancho y dejan el título en una columna de dos palabras. Se van a su propio
-   renglón —es lo que hace el botón de una tarjeta de pendiente y por lo
-   mismo—, donde además son un blanco mucho más fácil para el dedo. */
+/* Aquí hubo una regla que mandaba estos botones a su propio renglón en un
+   teléfono: eran tres —editar, apagar y eliminar—, se llevaban la mitad del
+   ancho y dejaban el título en una columna de dos palabras. Hoy queda uno
+   —encender y apagar—, así que cabe de sobra al final del renglón y bajarlo a
+   una fila suya sería gastar 33px de alto por encuesta para nada. */
 @media (max-width: 600px) {
     .encuesta-fila { padding-left: 18px; }
-    .encuesta-acciones { flex: 1 1 100%; justify-content: flex-end; }
 }
 
 /* =========================================
