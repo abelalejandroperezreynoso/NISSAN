@@ -592,8 +592,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   sesión lo apaga.
 - **La hoja de evaluaciones dice en el encabezado en qué pantalla estás.**
   Seis pantallas se dibujan dentro del mismo `#contenido-modal-evaluaciones`
-  —la lista, la encuesta abierta, el historial global, la revisión por
-  empleado, el expediente y la certificación por clasificación—, así que el
+  —la lista, la pantalla de una clasificación, la encuesta abierta, la
+  revisión por empleado, el expediente y la certificación por
+  clasificación—, así que el
   título de la hoja no puede ser fijo: se pone con
   `window.encabezadoHojaEvaluaciones(titulo, alVolver, idEncuesta, subtitulo)`,
   en `4-evaluaciones-base.js`. Sin argumentos vuelve a «Evaluaciones y
@@ -782,6 +783,23 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     el título en una columna de dos palabras. `.encuesta-fila-texto` necesita
     `min-width: 0` o no encoge por debajo de su palabra más larga y los empuja
     fuera del renglón.
+
+  **Y encima de la lista ya no hay ninguna fila de botones para el usuario.**
+  Ahí estuvo «🗂️ Ver Historial Global (Todas)», lo único de esa fila que veía
+  todo el mundo, y se quitó con su `window.abrirHistorialGlobal`: mezclaba en
+  un solo listado las respuestas de todas las encuestas —de la plantilla
+  entera en modo administrador— cuando el historial de una se lee entrando en
+  ella, que es donde tiene contexto y donde además está su gráfica. La fila
+  **sólo se dibuja en modo administrador**, con «Revisar por Empleado» y
+  «Certificar por Clasificación»: vacía se llevaba sus 20px de margen por
+  encima de la lista.
+
+  Con la pantalla se fue la marca `window.isGlobalHistory`, que sólo servía
+  para que cada renglón de `renderizarListaRespuestas` dijera además de qué
+  encuesta era la respuesta. Esa función se queda —la usa la lista de
+  «Respuestas (N)» de cada encuesta, con los mismos ids
+  (`buscador-historial`, `lista-respuestas-historial`, `contador-respuestas`)—
+  y ahí el nombre de la encuesta lo dice el encabezado de la hoja.
 
   El grupo **nace abierto si hay algo esperando a quien mira** —lo suyo
   pendiente, o algo que le toque calificar—, como la lista de respuestas de una

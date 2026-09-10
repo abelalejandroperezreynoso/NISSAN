@@ -582,29 +582,29 @@ window.cargarVistaEvaluaciones = async () => {
     }
 
    container.innerHTML = '';
-    
-    let adminBadge = window.modoAdminActivo ? `<span style="background:#f1f5f9; color:#ef4444; padding:4px 8px; border-radius:6px; font-size:0.8rem; border:1px solid #fecaca; font-weight:bold;">⚙️ Modo Admin Activo</span>` : '';
 
-    // Acceso rápido del administrador para trabajar por persona en vez de por evaluación.
-    let botonPorEmpleado = window.modoAdminActivo ? `
-            <button onclick="if(window.abrirRevisionPorEmpleado) window.abrirRevisionPorEmpleado(); else alert('Módulo en actualización');" style="background:#ccfbf1; color:#0f766e; padding:8px 16px; border-radius:8px; border:1px solid #5eead4; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(13, 148, 136, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#99f6e4'" onmouseout="this.style.background='#ccfbf1'">
-                🔎 Revisar por Empleado
-            </button>
-            <button onclick="if(window.abrirCertificacionPorClasificacion) window.abrirCertificacionPorClasificacion(); else alert('Módulo en actualización');" style="background:#eff6ff; color:#1d4ed8; padding:8px 16px; border-radius:8px; border:1px solid #93c5fd; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(29, 78, 216, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
-                ⭐ Certificar por Clasificación
-            </button>` : '';
-
-    container.insertAdjacentHTML('beforeend', `
+    // La fila de botones es **sólo del administrador**, y por eso ni se dibuja
+    // sin el modo encendido: aquí estuvo «🗂️ Ver Historial Global (Todas)»,
+    // que era lo único que veía todo el mundo y se quitó —el historial de una
+    // encuesta se lee entrando en ella, que es donde tiene contexto; ese
+    // listado mezclaba las respuestas de todas y no se usaba—. Con él fuera,
+    // a un usuario normal le quedaba una fila vacía con sus 20px de margen
+    // por encima de la lista.
+    if (window.modoAdminActivo) {
+        container.insertAdjacentHTML('beforeend', `
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
             <div style="display:flex; flex-wrap:wrap; gap:10px;">
-                <button onclick="if(window.abrirHistorialGlobal) window.abrirHistorialGlobal(); else alert('Módulo en actualización');" style="background:#f3e8ff; color:#7e22ce; padding:8px 16px; border-radius:8px; border:1px solid #d8b4fe; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(126, 34, 206, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#e9d5ff'" onmouseout="this.style.background='#f3e8ff'">
-                    🗂️ Ver Historial Global (Todas)
+                <button onclick="if(window.abrirRevisionPorEmpleado) window.abrirRevisionPorEmpleado(); else alert('Módulo en actualización');" style="background:#ccfbf1; color:#0f766e; padding:8px 16px; border-radius:8px; border:1px solid #5eead4; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(13, 148, 136, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#99f6e4'" onmouseout="this.style.background='#ccfbf1'">
+                    🔎 Revisar por Empleado
                 </button>
-                ${botonPorEmpleado}
+                <button onclick="if(window.abrirCertificacionPorClasificacion) window.abrirCertificacionPorClasificacion(); else alert('Módulo en actualización');" style="background:#eff6ff; color:#1d4ed8; padding:8px 16px; border-radius:8px; border:1px solid #93c5fd; font-weight:bold; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; gap:6px; box-shadow:0 2px 4px rgba(29, 78, 216, 0.1); transition:all 0.2s;" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+                    ⭐ Certificar por Clasificación
+                </button>
             </div>
-            ${adminBadge}
+            <span style="background:#f1f5f9; color:#ef4444; padding:4px 8px; border-radius:6px; font-size:0.8rem; border:1px solid #fecaca; font-weight:bold;">⚙️ Modo Admin Activo</span>
         </div>
-    `);
+        `);
+    }
     
     // Las encuestas inactivas sólo se listan en modo administrador. La
     // cronología de arriba sí recibe la lista completa: sirve para saber de

@@ -76,7 +76,6 @@ window.puedeCalificar = (ev, empleadoQueContesto) => {
 window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) => {
     window.evalIdRespondiendo = evalId;
     window.evalTituloRespondiendo = title;
-    window.isGlobalHistory = false;
     
     const container = document.getElementById('contenido-modal-evaluaciones');
     
@@ -1001,61 +1000,6 @@ window.borrarAsistencia = async (q, respuestas) => {
     return true;
 };
 
-window.abrirHistorialGlobal = async () => {
-    const container = document.getElementById('contenido-modal-evaluaciones');
-    if(container) { container.scrollTop = 0; container.style.display = 'block'; }
-    // Estas pantallas llevan su propia flecha en el cuerpo; el encabezado de
-    // la hoja vuelve al de la lista para no quedarse con el título de la
-    // encuesta que se estuviera viendo.
-    window.encabezadoHojaEvaluaciones();
-    
-    container.innerHTML = '<div style="padding:40px; text-align:center;"><div class="spinner" style="margin: 0 auto 15px auto;"></div>Obteniendo todas las respuestas...</div>';
-    
-    const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
-    let responses = [];
-    
-    if (window.modoAdminActivo) {
-        const { data } = await sb.from('evaluation_responses').select('*').order('submitted_at', {ascending: false});
-        responses = data || [];
-    } else {
-        const hierarchyIds = window.obtenerJerarquiaCompletaEvaluaciones(user.id);
-        const idsArray = Array.from(hierarchyIds);
-        if (idsArray.length > 0) {
-             const { data } = await sb.from('evaluation_responses').select('*').in('employee_id', idsArray).order('submitted_at', {ascending: false});
-             responses = data || [];
-        } else {
-             const { data } = await sb.from('evaluation_responses').select('*').eq('employee_id', user.id).order('submitted_at', {ascending: false});
-             responses = data || [];
-        }
-    }
-    
-    window.respuestasCacheActual = responses;
-    window.isGlobalHistory = true;
-
-    container.innerHTML = `
-        <div style="display:flex; align-items:center; margin-bottom:20px; flex-wrap: wrap; gap: 10px;">
-            <button onclick="window.isGlobalHistory=false; window.cargarVistaEvaluaciones()" style="background:#f1f5f9; border:none; color:#334155; font-weight:bold; cursor:pointer; font-size:1.2rem; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: background 0.2s;" title="Volver a la lista">←</button>
-            <div>
-                <h2 style="margin:0; font-size:1.2rem; color:#7c3aed;">🗂️ Historial Global de Respuestas</h2>
-                <div style="font-size:0.85rem; color:#64748b;">Listado de todas las evaluaciones recibidas</div>
-            </div>
-        </div>
-        
-        <div id="lista-wrapper">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; border-bottom:1px solid #e2e8f0; padding-bottom:10px; margin-bottom: 10px; flex-wrap:wrap; gap:10px;">
-                <h3 style="color:#64748b; font-size:1rem; margin:0;">
-                    ${window.modoAdminActivo ? 'Todas las Respuestas' : 'Mi Equipo y Mías'} (<span id="contador-respuestas">${responses.length}</span>)
-                </h3>
-                <input type="text" id="buscador-historial" placeholder="🔍 Buscar usuario o evaluación..." oninput="window.renderizarListaRespuestas()" style="padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; width: 250px; font-size: 0.9rem; outline:none; background:#f8fafc;">
-            </div>
-            <div id="lista-respuestas-historial">Cargando...</div>
-        </div>
-    `;
-    
-    window.renderizarListaRespuestas();
-};
-
-
 window.renderizarListaRespuestas = () => {
     const listContainer = document.getElementById('lista-respuestas-historial');
     // La lista no existe si el administrador llegó desde el expediente por
@@ -1099,15 +1043,9 @@ window.renderizarListaRespuestas = () => {
         
         if (resp.employee_id !== user.id) tituloCard = `<b>${nombreEmp}</b>`;
 
-        // LÓGICA GLOBAL: Mostrar el nombre de la evaluación si estamos en la vista de historial de todas las encuestas
-        if (window.isGlobalHistory) {
-             const evalName = window.evalCache && window.evalCache.evals ? (window.evalCache.evals.find(e => e.id === resp.evaluation_id)?.title || 'Evaluación') : 'Evaluación';
-             if (resp.employee_id === user.id) {
-                 tituloCard = `<b>Tú</b> en <span style="color:#64748b; font-weight:normal;">${evalName}</span>`;
-             } else {
-                 tituloCard = `<b>${nombreEmp}</b> en <span style="color:#64748b; font-weight:normal;">${evalName}</span>`;
-             }
-        }
+        // Aquí iba el nombre de la encuesta cuando esta misma lista servía al
+        // historial global; hoy la lista sale siempre dentro de una encuesta y
+        // el nombre lo dice el encabezado de la hoja.
 
         let scoreBadge = '';
         if(resp.review_status === 'Revisado' || resp.review_status === 'Certificada') {
