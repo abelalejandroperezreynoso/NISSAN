@@ -632,6 +632,74 @@ window.cambiarOrdenStats = (criterio) => {
 };
 
 
+// --- POR DÓNDE SE CORTA EL DESGLOSE ---
+// De qué habla cada fila del gráfico. Estaban escritos a mano en media docena
+// de sitios —tres copias del mismo `getPuesto`, otras tres del mismo `getArea`—
+// y cada corte nuevo obligaba a tocarlos todos.
+//
+// El empleado llega de `window.todosLosEmpleadosData`, que unas pantallas
+// llenan con los nombres de la base y otras con los suyos, así que cada
+// ayudante mira los dos.
+window.deptDeEmpleado = (e) => (e.department || e.departamento || e.dept || "Sin Departamento").trim();
+window.supDeEmpleado = (e) => (e.sup || e.supervisor || e.supervisor_name || "Sin Supervisor").trim();
+window.puestoDeEmpleado = (e) => (e.puesto || e.Puesto || "").trim() || "Sin Puesto";
+
+window.areaDeEmpleado = (e) => {
+    if (e.areas && e.areas.name) return e.areas.name;
+    if (e.area && typeof e.area === 'object' && e.area.name) return e.area.name;
+    if (e.area && typeof e.area === 'string' && e.area.trim() !== '') return e.area.trim();
+    return "Sin Área";
+};
+
+// Los encargos los trae `cargarDatosEmpleados` desde que este desglose existe.
+// Si la columna todavía no está en la base —la añade un script de sql/— llegan
+// vacíos y todo el mundo cae en «Sin encargos», que es lo que de verdad hay.
+window.encargosDeEmpleado = (e) => window.normalizarEncargos(e && e.encargos);
+
+// **El desglose por encargos reparte a una persona en varias filas**, porque un
+// encargo no es como el puesto: se llevan varios a la vez. Quien tiene
+// «Seguridad» y «Capacitación» suma sus encuestas en las dos filas, que es lo
+// que se está preguntando —cómo va la gente de seguridad, cómo va la de
+// capacitación—, y por eso la suma de las filas de este corte pasa del total de
+// la plantilla. La cifra del encabezado no se saca sumando filas sino de
+// `universo`, la fila que cuenta a cada quien una sola vez.
+window.DIMENSIONES_DESGLOSE = [
+    { clave: 'departamento', etiqueta: 'Departamento', cache: 'statsCache',
+      alTocar: 'verStatsDetalleDepto',   valores: (e) => [window.deptDeEmpleado(e)] },
+    { clave: 'puesto', etiqueta: 'Puesto', cache: 'puestoCache',
+      alTocar: 'verStatsDetallePuesto',  valores: (e) => [window.puestoDeEmpleado(e)] },
+    { clave: 'area', etiqueta: 'Área', cache: 'areaCache',
+      alTocar: 'verStatsDetalleArea',    valores: (e) => [window.areaDeEmpleado(e)] },
+    { clave: 'encargos', etiqueta: 'Encargos', cache: 'encargoCache', varias: true,
+      alTocar: 'verStatsDetalleEncargo',
+      valores: (e) => {
+          const suyos = window.encargosDeEmpleado(e);
+          return suyos.length ? suyos : ['Sin encargos'];
+      } }
+];
+
+// Nadie lee `window.dimensionDesglose` a pelo: `sessionStorage` puede traer un
+// corte de una versión anterior, y todo lo que no esté en la lista es
+// departamento. Es lo mismo que hace `formaDesgloseActual`.
+window.dimensionStats = () => window.DIMENSIONES_DESGLOSE.find(d => d.clave === window.dimensionDesglose)
+    || window.DIMENSIONES_DESGLOSE[0];
+
+window.dimensionStatsPor = (clave) => window.DIMENSIONES_DESGLOSE.find(d => d.clave === clave)
+    || window.DIMENSIONES_DESGLOSE[0];
+
+// Los contadores de una fila de caché, todos a cero. Los cinco cortes y el
+// universo llevan exactamente los mismos, que es lo que permite sumarlos con un
+// solo recorrido y lo que hace que `valorDeCriterio` mida cualquiera de ellos
+// sin saber de cuál viene. Una caché nueva que quiera dibujarse aquí sale de
+// esta función y no de un literal copiado.
+window.filaVaciaStats = () => ({
+    employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0,
+    reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0,
+    personasAlMinimo: 0, personasEvaluadas: 0, sumScore: 0, countScore: 0,
+    sumDias: 0, countDias: 0, sumProntitud: 0, countProntitud: 0,
+    empleados: []
+});
+
 // --- 2. MOTOR DE CÁLCULO Y RENDERIZADO ---
 window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT') => {
     const raw = window.encuestasRawData;
@@ -693,19 +761,31 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
 
     const statsCache = {};
     const puestoCache = {};
+    const areaCache = {};
+    const encargoCache = {};
+    // El nivel entero contado **una vez por persona**. Es lo que dice la cifra
+    // del encabezado del gráfico: sumar las filas del corte por encargos daría
+    // de más, porque ahí una persona está en varias.
+    const universo = window.filaVaciaStats();
     // Una fila por persona, con su ficha y sus mismos contadores. Es lo que
     // convierte cada figura del gráfico de personas en alguien con nombre: el
     // cuadro guarda la lista de ids y el dibujo saca de aquí a quién le toca
     // cada figura, cuánto lleva y qué decir en el globo.
     const porEmpleado = {};
-    const getDept = (e) => (e.department || e.departamento || e.dept || "Sin Departamento").trim();
-    const getSup = (e) => (e.sup || e.supervisor || e.supervisor_name || "Sin Supervisor").trim();
-    const getPuesto = (e) => (e.puesto || e.Puesto || "").trim() || "Sin Puesto";
-    const getAreaEmp = (e) => {
-        if (e.areas && e.areas.name) return e.areas.name;
-        if (e.area && typeof e.area === 'object' && e.area.name) return e.area.name;
-        if (e.area && typeof e.area === 'string' && e.area.trim() !== '') return e.area.trim();
-        return "Sin Área";
+    const getDept = window.deptDeEmpleado;
+    const getSup = window.supDeEmpleado;
+    const getPuesto = window.puestoDeEmpleado;
+    const getAreaEmp = window.areaDeEmpleado;
+
+    // A qué filas suma cada persona: la de su departamento, la de su
+    // supervisor, la de su puesto, la de su área y una por cada encargo que
+    // lleve. Se arma una vez y se recorre en cada contador, que es lo que evita
+    // el cuarteto de `if`s repetido diez veces —y lo que hacía que añadir un
+    // corte obligara a tocarlos todos—.
+    const filasDeGrupo = {};
+    const filaDe = (cache, clave) => {
+        if (!cache[clave]) cache[clave] = window.filaVaciaStats();
+        return cache[clave];
     };
 
     let totalAsignadasGlobal = 0;
@@ -723,17 +803,24 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         // plantilla entera (`employeesCount`) a propósito: a quien no le toca
         // ninguna encuesta no le puede tocar ninguna respuesta, así que su
         // figura no podría colorearse nunca y sólo engordaría el gris.
-        if (!statsCache[dept]) statsCache[dept] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, personasAlMinimo: 0, personasEvaluadas: 0, sumScore: 0, countScore: 0, empleados: [], supervisors: {} };
-        if (!statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, personasAlMinimo: 0, personasEvaluadas: 0, sumScore: 0, countScore: 0, empleados: [] };
-
-        statsCache[dept].employeesCount++;
-        statsCache[dept].supervisors[sup].employeesCount++;
+        if (!statsCache[dept]) statsCache[dept] = Object.assign(window.filaVaciaStats(), { supervisors: {} });
+        if (!statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup] = window.filaVaciaStats();
 
         let empAssignments = 0;
 
         const empPuestoKey = getPuesto(e);
-        if (!puestoCache[empPuestoKey]) puestoCache[empPuestoKey] = { employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0, personasAlMinimo: 0, personasEvaluadas: 0, sumScore: 0, countScore: 0, empleados: [] };
-        puestoCache[empPuestoKey].employeesCount++;
+
+        // Las filas de este empleado, en el orden del catálogo de cortes. El
+        // departamento lleva además la de su supervisor, que es el nivel de
+        // dentro y no un corte suyo.
+        const suyas = [statsCache[dept], statsCache[dept].supervisors[sup], filaDe(puestoCache, empPuestoKey)];
+        suyas.push(filaDe(areaCache, getAreaEmp(e)));
+        window.dimensionStatsPor('encargos').valores(e)
+            .forEach(encargo => suyas.push(filaDe(encargoCache, encargo)));
+        suyas.push(universo);
+        filasDeGrupo[empId] = suyas;
+
+        suyas.forEach(fila => { fila.employeesCount++; });
 
         porEmpleado[empId] = {
             nombre: e.name || e.nombre || 'Sin nombre',
@@ -758,9 +845,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
              }
         });
 
-        statsCache[dept].assignedCount += empAssignments;
-        statsCache[dept].supervisors[sup].assignedCount += empAssignments;
-        puestoCache[empPuestoKey].assignedCount += empAssignments;
+        suyas.forEach(fila => { fila.assignedCount += empAssignments; });
         totalAsignadasGlobal += empAssignments;
 
         porEmpleado[empId].assignedCount = empAssignments;
@@ -768,12 +853,10 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         // Sólo entra en la lista quien tiene algo asignado: son las figuras
         // que se van a dibujar, y su cuenta es `personasAsignadas`.
         if (empAssignments > 0) {
-            statsCache[dept].personasAsignadas++;
-            statsCache[dept].supervisors[sup].personasAsignadas++;
-            puestoCache[empPuestoKey].personasAsignadas++;
-            statsCache[dept].empleados.push(empId);
-            statsCache[dept].supervisors[sup].empleados.push(empId);
-            puestoCache[empPuestoKey].empleados.push(empId);
+            suyas.forEach(fila => {
+                fila.personasAsignadas++;
+                fila.empleados.push(empId);
+            });
         }
     });
 
@@ -928,15 +1011,14 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         // propia figura en el gráfico de personas y la que cuenta su globo.
         const suya = porEmpleado[empId];
 
-        if (statsCache[dept]) {
-            statsCache[dept].responses++;
-            if (statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].responses++;
-        }
-        
-        if (puestoCache[empPuestoKey]) {
-            puestoCache[empPuestoKey].responses++;
-        }
-        if (suya) suya.responses++;
+        // Las filas a las que suma esta respuesta: los cortes de esa persona
+        // —departamento, supervisor, puesto, área y cada encargo—, el universo
+        // y la suya propia. Todos los contadores de aquí abajo se incrementan
+        // igual en todas, que es lo que permitió que añadir un corte no fuera
+        // repetir un `if` más en cada uno.
+        const filas = (filasDeGrupo[empId] || []).concat(suya ? [suya] : []);
+
+        filas.forEach(fila => { fila.responses++; });
 
         const sumarTiempos = (fila) => {
             if (!fila) return;
@@ -949,33 +1031,19 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
                 fila.countProntitud = (fila.countProntitud || 0) + 1;
             }
         };
-        sumarTiempos(statsCache[dept]);
-        if (statsCache[dept]) sumarTiempos(statsCache[dept].supervisors[sup]);
-        sumarTiempos(puestoCache[empPuestoKey]);
-        sumarTiempos(suya);
+        filas.forEach(sumarTiempos);
         if (r.diasAtencion !== null) { totalDiasAtencion += r.diasAtencion; countDiasAtencion++; }
 
         if(!evalPerfMap[title]) evalPerfMap[title] = { sum: 0, countRevisadas: 0, countTotal: 0 };
         evalPerfMap[title].countTotal++;
         
         // Clasificación detallada para las barras
-        if (r.review_status === 'Falsa') {
-            if (statsCache[dept]) { statsCache[dept].falsas++; if(statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].falsas++; }
-            if (puestoCache[empPuestoKey]) puestoCache[empPuestoKey].falsas++;
-            if (suya) suya.falsas++;
-        } else if (r.review_status === 'Certificada') {
-            if (statsCache[dept]) { statsCache[dept].certificadas++; if(statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].certificadas++; }
-            if (puestoCache[empPuestoKey]) puestoCache[empPuestoKey].certificadas++;
-            if (suya) suya.certificadas++;
-        } else if (r.review_status === 'Revisado') {
-            if (statsCache[dept]) { statsCache[dept].reviewed++; if(statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].reviewed++; }
-            if (puestoCache[empPuestoKey]) puestoCache[empPuestoKey].reviewed++;
-            if (suya) suya.reviewed++;
-        } else if (r.review_status === 'Mal Revisada') {
-            if (statsCache[dept]) { statsCache[dept].malRevisadas++; if(statsCache[dept].supervisors[sup]) statsCache[dept].supervisors[sup].malRevisadas++; }
-            if (puestoCache[empPuestoKey]) puestoCache[empPuestoKey].malRevisadas++;
-            if (suya) suya.malRevisadas++;
-        }
+        const CONTADOR_DE_ESTADO = {
+            'Falsa': 'falsas', 'Certificada': 'certificadas',
+            'Revisado': 'reviewed', 'Mal Revisada': 'malRevisadas'
+        };
+        const contador = CONTADOR_DE_ESTADO[r.review_status];
+        if (contador) filas.forEach(fila => { fila[contador]++; });
         
         // 1. CALCULAMOS EL PUNTAJE PARA TODAS LAS RESPUESTAS
         const grades = r.grades_json || {};
@@ -1018,33 +1086,12 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         
         // 2. CONTADOR DE REVISADAS ALTAS (Para cualquier evaluación procesada que supere 80%)
         if (['Revisado', 'Certificada', 'Falsa', 'Mal Revisada'].includes(r.review_status) && finalScore >= 80) {
-            if (statsCache[dept]) {
-                statsCache[dept].revisadasAltas = (statsCache[dept].revisadasAltas || 0) + 1;
-                if (statsCache[dept].supervisors[sup]) {
-                    statsCache[dept].supervisors[sup].revisadasAltas = (statsCache[dept].supervisors[sup].revisadasAltas || 0) + 1;
-                }
-            }
-            if (puestoCache[empPuestoKey]) {
-                puestoCache[empPuestoKey].revisadasAltas = (puestoCache[empPuestoKey].revisadasAltas || 0) + 1;
-            }
-            if (suya) suya.revisadasAltas++;
+            filas.forEach(fila => { fila.revisadasAltas = (fila.revisadasAltas || 0) + 1; });
         }
 
         // 3. Lógica Global Original: Tanto Revisado como Certificada suman puntos y cuentan como progreso general
         if (r.review_status === 'Revisado' || r.review_status === 'Certificada') {
-        if (statsCache[dept]) {
-        statsCache[dept].sumScore += finalScore;
-        statsCache[dept].countScore++;
-        if (statsCache[dept].supervisors[sup]) {
-        statsCache[dept].supervisors[sup].sumScore += finalScore;
-        statsCache[dept].supervisors[sup].countScore++;
-        }
-        }
-        if (puestoCache[empPuestoKey]) {
-        puestoCache[empPuestoKey].sumScore += finalScore;
-        puestoCache[empPuestoKey].countScore++;
-        }
-        if (suya) { suya.sumScore += finalScore; suya.countScore++; }
+        filas.forEach(fila => { fila.sumScore += finalScore; fila.countScore++; });
         totalRevisadas++;
         totalScoreSum += finalScore;
             
@@ -1091,13 +1138,11 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     // cada persona se resuelve con lo suyo y suma uno en su departamento, en su
     // supervisor y en su puesto. Sumarlo dentro del bucle de respuestas contaría
     // a la misma persona una vez por encuesta.
-    Object.values(porEmpleado).forEach(ficha => {
+    Object.entries(porEmpleado).forEach(([empId, ficha]) => {
         window.conMinimoEnTodas(ficha);
         if (!ficha.personasEvaluadas) return;
 
-        const dep = statsCache[ficha.departamento];
-        [dep, dep && dep.supervisors[ficha.supervisor], puestoCache[ficha.puesto]].forEach(fila => {
-            if (!fila) return;
+        (filasDeGrupo[empId] || []).forEach(fila => {
             fila.personasEvaluadas = (fila.personasEvaluadas || 0) + 1;
             fila.personasAlMinimo = (fila.personasAlMinimo || 0) + ficha.personasAlMinimo;
         });
@@ -1138,6 +1183,9 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     window.encuestasStatsCacheForDrilldown = {
         statsCache,
         puestoCache,
+        areaCache,
+        encargoCache,
+        universo,
         porEmpleado,
         cleanResponses: dataset,
         activeEvalsList: evalsList
@@ -1233,9 +1281,11 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         <div class="stats-seccion">
             <div class="stats-seccion-encabezado">
                 <h3 class="stats-seccion-titulo">Desglose</h3>
-                <div class="stats-conmutador" id="conmutador-dimension">
-                    <button data-dimension="departamento" onclick="window.cambiarDimensionDesglose('departamento')">Departamento</button>
-                    <button data-dimension="puesto" onclick="window.cambiarDimensionDesglose('puesto')">Puesto</button>
+                <!-- Los cuatro cortes no caben de ancho en un teléfono, así que
+                     este conmutador se arrastra como el de los criterios. -->
+                <div class="stats-conmutador stats-conmutador--desliza hide-scrollbar" id="conmutador-dimension">
+                    ${window.DIMENSIONES_DESGLOSE.map(d =>
+                        `<button data-dimension="${d.clave}" onclick="window.cambiarDimensionDesglose('${d.clave}')">${d.etiqueta}</button>`).join('')}
                 </div>
                 <div class="stats-conmutador" id="conmutador-forma">
                     <button data-forma="cuadros" onclick="window.cambiarFormaDesglose('cuadros')">Cuadros</button>
@@ -1397,14 +1447,19 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
 // Redibuja el radar con el recorte que se esté mirando: un departamento, el
 // grupo de un supervisor o un puesto. El título de la sección es lo único que
 // dice a qué recorte pertenece lo que muestra la gráfica.
-window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null) => {
+// El recorte que enseña el radar. Los dos primeros argumentos son los niveles
+// del departamento; el tercero, `grupo`, es un corte de los que no tienen
+// supervisores debajo —el puesto, el área o un encargo— y llega como
+// `{ dimension, valor }`, que es lo que sabe qué gente cae dentro sin que esta
+// función tenga que conocer cada corte.
+window.actualizarRadarDOM = (deptName = null, supName = null, grupo = null) => {
     const cache = window.encuestasStatsCacheForDrilldown;
     if (!cache || !cache.activeEvalsList) return;
 
     let tituloBase = 'Panorama de cumplimiento';
 
-    if (puestoName) {
-        tituloBase = `Panorama del puesto: ${puestoName}`;
+    if (grupo && grupo.valor) {
+        tituloBase = `Panorama · ${grupo.dimension.etiqueta}: ${grupo.valor}`;
     } else if (deptName && supName) {
         tituloBase = `Panorama: ${supName}`;
     } else if (deptName) {
@@ -1414,19 +1469,17 @@ window.actualizarRadarDOM = (deptName = null, supName = null, puestoName = null)
     const tituloEl = document.getElementById('titulo-radar-text');
     if (tituloEl) tituloEl.innerText = tituloBase;
 
-    const getDept = (e) => (e.department || e.departamento || e.dept || "Sin Departamento").trim();
-    const getSup = (e) => (e.sup || e.supervisor || e.supervisor_name || "Sin Supervisor").trim();
-    const getPuesto = (e) => (e.puesto || e.Puesto || "").trim() || "Sin Puesto";
+    const getDept = window.deptDeEmpleado;
+    const getSup = window.supDeEmpleado;
 
     const validEmpIds = new Set();
     window.todosLosEmpleadosData.forEach(e => {
          if (e.isActive === false) return; // Los dados de baja no cuentan en el radar
          const d = getDept(e);
          const s = getSup(e);
-         const p = getPuesto(e);
-         
-         if (puestoName) {
-             if (p === puestoName) validEmpIds.add(String(e.id));
+
+         if (grupo && grupo.valor) {
+             if (grupo.dimension.valores(e).indexOf(grupo.valor) >= 0) validEmpIds.add(String(e.id));
          } else if (deptName && supName) {
              if (d === deptName && s === supName) validEmpIds.add(String(e.id));
          } else if (deptName) {
@@ -1799,7 +1852,7 @@ window.formaDesgloseActual = () =>
     window.FORMAS_DESGLOSE.indexOf(window.formaDesglose) >= 0 ? window.formaDesglose : 'cuadros';
 
 window.cambiarDimensionDesglose = (dimension) => {
-    window.dimensionDesglose = dimension === 'puesto' ? 'puesto' : 'departamento';
+    window.dimensionDesglose = window.dimensionStatsPor(dimension).clave;
     sessionStorage.setItem('dimensionDesglose', window.dimensionDesglose);
     window.pintarDesglose();
 };
@@ -1817,11 +1870,11 @@ window.pintarDesglose = () => {
     const cache = window.encuestasStatsCacheForDrilldown;
     if (!cont || !cache) return;
 
-    const esPuesto = window.dimensionDesglose === 'puesto';
+    const dimension = window.dimensionStats();
     const forma = window.formaDesgloseActual();
 
     document.querySelectorAll('#conmutador-dimension button').forEach(b => {
-        b.setAttribute('aria-pressed', String((b.dataset.dimension === 'puesto') === esPuesto));
+        b.setAttribute('aria-pressed', String(b.dataset.dimension === dimension.clave));
     });
     document.querySelectorAll('#conmutador-forma button').forEach(b => {
         b.setAttribute('aria-pressed', String(b.dataset.forma === forma));
@@ -1839,19 +1892,24 @@ window.pintarDesglose = () => {
     // El gráfico dice de entrada qué está midiendo. El conmutador lo marca,
     // pero se desplaza y el elegido puede quedar fuera de la vista; además,
     // dentro de los cuadros pequeños no cabe ningún texto.
-    const nodos = window.nodosDeCuadros(esPuesto ? cache.puestoCache : cache.statsCache);
-    const encabezado = window.encabezadoDelGrafico(nodos);
+    const mapa = cache[dimension.cache] || {};
+    const nodos = window.nodosDeCuadros(mapa);
+    // En el corte por encargos una persona está en varias filas, así que el
+    // total no se saca sumándolas: se pasa el universo, que la cuenta una vez.
+    // Y se dice, que es lo que evita leer el gráfico como si sobrara gente:
+    // los cuadros suman más que la plantilla a propósito.
+    const encabezado = window.encabezadoDelGrafico(nodos, dimension.varias ? cache.universo : null)
+        + (dimension.varias
+            ? '<div class="stats-nota-dimension">Quien lleva varios encargos cuenta en cada uno, así que los cuadros suman más gente que la plantilla. La cifra de arriba cuenta a cada quien una vez.</div>'
+            : '');
 
     if (forma === 'barras') {
-        cont.innerHTML = encabezado +
-            (esPuesto
-                ? window.renderPuestoDetailed(cache.puestoCache)
-                : window.renderDeptDetailed(cache.statsCache));
+        cont.innerHTML = encabezado + window.renderCacheDetailed(mapa, dimension.alTocar);
         return;
     }
 
     cont.innerHTML = encabezado + window.lienzoDeCuadros();
-    window.dibujarCuadros(nodos, esPuesto ? window.verStatsDetallePuesto : window.verStatsDetalleDepto);
+    window.dibujarCuadros(nodos, window[dimension.alTocar]);
 };
 
 // El lienzo donde se reparten los cuadros. En personas necesita más alto: una
@@ -1955,9 +2013,13 @@ window.lineaGrupos = (g) => `👥 Grupos con alguien que cumple: ${g.conAlguno}/
 
 // Encabezado del gráfico: qué se está midiendo y cuánto suma el nivel entero.
 // Lo comparten el nivel de arriba y los de dentro.
-window.encabezadoDelGrafico = (nodos) => {
+// `filaTotal` sólo la pasa el corte por encargos, donde sumar los cuadros
+// contaría dos veces a quien lleva dos: ahí el total viene del universo, que
+// cuenta a cada persona una sola vez. En los demás cortes la suma de las filas
+// **es** el universo, así que no hace falta.
+window.encabezadoDelGrafico = (nodos, filaTotal) => {
     const criterio = window.criterioStats();
-    const total = window.cifraDelCriterio(window.totalDelNivel(nodos));
+    const total = window.cifraDelCriterio(filaTotal || window.totalDelNivel(nodos));
     const grupos = window.gruposDelNivel(nodos);
 
     // Las dos cifras van juntas y a la derecha, una debajo de otra: la de la
@@ -2127,10 +2189,10 @@ window.__redibujarCuadros = null;
 window.dibujarCuadrosDesglose = () => {
     const cache = window.encuestasStatsCacheForDrilldown;
     if (!cache) return;
-    const esPuesto = window.dimensionDesglose === 'puesto';
+    const dimension = window.dimensionStats();
     window.dibujarCuadros(
-        window.nodosDeCuadros(esPuesto ? cache.puestoCache : cache.statsCache),
-        esPuesto ? window.verStatsDetallePuesto : window.verStatsDetalleDepto
+        window.nodosDeCuadros(cache[dimension.cache] || {}),
+        window[dimension.alTocar]
     );
 };
 
@@ -2797,7 +2859,6 @@ window.renderCacheDetailed = (dataMap, funcionAlTocar) => {
 };
 
 window.renderDeptDetailed = (dataMap) => window.renderCacheDetailed(dataMap, 'verStatsDetalleDepto');
-window.renderPuestoDetailed = (dataMap) => window.renderCacheDetailed(dataMap, 'verStatsDetallePuesto');
 
 window.verStatsDetalleDepto = (deptName) => {
     window.actualizarRadarDOM(deptName);
@@ -2998,24 +3059,27 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
     document.getElementById('desglose-container').innerHTML = html;
 };
 
-window.verStatsDetallePuesto = (puestoName) => {
-    window.actualizarRadarDOM(null, null, puestoName);
-    
+// El nivel de dentro de un corte que no tiene supervisores debajo: el puesto,
+// el área y cada encargo. Los tres enseñan lo mismo —los colaboradores de ese
+// grupo, uno por cuadro o por columna—, así que sólo se diferencian en qué
+// gente cae dentro, y eso lo dice `valores` del catálogo de cortes.
+//
+// El departamento va aparte (`verStatsDetalleDepto`) porque debajo tiene otro
+// nivel, el de los supervisores.
+window.verStatsDetalleGrupo = (claveDimension, nombre) => {
+    const dimension = window.dimensionStatsPor(claveDimension);
+    window.actualizarRadarDOM(null, null, { dimension: dimension, valor: nombre });
+
     const data = window.encuestasStatsCacheForDrilldown;
     const allEmps = window.todosLosEmpleadosData;
     const responses = data.cleanResponses || [];
     const activeEvals = data.activeEvalsList || [];
-    const getPuesto = (e) => (e.puesto || e.Puesto || "").trim() || "Sin Puesto";
-    const getDept = (e) => (e.department || e.departamento || e.dept || "Sin Departamento").trim();
-    
-    const getArea = (e) => {
-        if (e.areas && e.areas.name) return e.areas.name;
-        if (e.area && typeof e.area === 'object' && e.area.name) return e.area.name;
-        if (e.area && typeof e.area === 'string' && e.area.trim() !== '') return e.area.trim();
-        return "Sin Área";
-    };
-    
-    const employeesInRole = allEmps.filter(e => e.isActive !== false && getPuesto(e) === puestoName);
+    const getPuesto = window.puestoDeEmpleado;
+    const getDept = window.deptDeEmpleado;
+    const getArea = window.areaDeEmpleado;
+
+    const employeesInRole = allEmps.filter(e =>
+        e.isActive !== false && dimension.valores(e).indexOf(nombre) >= 0);
 
     let empStats = employeesInRole.map(emp => {
         let totalAssigned = 0;
@@ -3100,7 +3164,7 @@ window.verStatsDetallePuesto = (puestoName) => {
 
     if (window.formaDesglose !== 'barras') {
         window.vistaCuadrosDentro({
-            titulo: puestoName,
+            titulo: nombre,
             subtitulo: `${empStats.length} evaluados`,
             volver: () => window.pintarDesglose(),
             nodos: window.nodosDeColaboradores(empStats),
@@ -3109,7 +3173,7 @@ window.verStatsDetallePuesto = (puestoName) => {
         return;
     }
 
-    const safePuesto = window.sanitizeForHTML(puestoName);
+    const safePuesto = window.sanitizeForHTML(nombre);
 
     let html = `
     <div style="margin-bottom:15px; display:flex; flex-direction:column; gap:5px;">
@@ -3130,5 +3194,12 @@ window.verStatsDetallePuesto = (puestoName) => {
     html += `</div>`;
     document.getElementById('desglose-container').innerHTML = html;
 };
+
+// Las tres puertas a esa pantalla. Van con nombre propio y colgadas de
+// `window` porque el gráfico de barras las nombra dentro de un `onclick` del
+// marcado, que sólo alcanza a lo que cuelgue de ahí.
+window.verStatsDetallePuesto = (nombre) => window.verStatsDetalleGrupo('puesto', nombre);
+window.verStatsDetalleArea = (nombre) => window.verStatsDetalleGrupo('area', nombre);
+window.verStatsDetalleEncargo = (nombre) => window.verStatsDetalleGrupo('encargos', nombre);
 
 console.log("✅ Evaluaciones Stats v63: BARRA INDEPENDIENTE PARA CERTIFICADAS");

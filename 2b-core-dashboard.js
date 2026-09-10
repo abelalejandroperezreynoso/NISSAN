@@ -2287,10 +2287,16 @@ window.abrirEncuestaQueReviso = window.abrirEncuestaDesdeInicio;
 
 window.cargarDatosEmpleados = async () => {
     // 1. Agregamos is_active al select (quitamos el filtro .not)
-    const { data, error } = await sb.from('employees')
-        .select('employee_id, name, department, area_id, puesto, supervisor_id, created_at, avatar_url, areas(nombre), is_active');
-    
-    if(error) return;
+    //
+    // Va por `consultarEmpleados` y no por un `select` a pelo desde que también
+    // se traen los encargos: esa columna la añade un script de sql/ que se corre
+    // a mano, y pedirle a PostgREST una columna que no existe no devuelve la
+    // fila sin ese campo, revienta la consulta entera —y con ella la caché de la
+    // que cuelga medio panel—. El ayudante la reintenta sin ella.
+    const { data, error } = await window.consultarEmpleados(
+        'employee_id, name, department, area_id, puesto, supervisor_id, created_at, avatar_url, areas(nombre), is_active, encargos');
+
+    if(error || !data) return;
     
     window.todosLosEmpleadosData = [];
     window.employeeNameMap = {}; window.employeeDeptMap = {}; window.employeeSupMap = {};
@@ -2310,6 +2316,10 @@ window.cargarDatosEmpleados = async () => {
         window.todosLosEmpleadosData.push({
             date: fecha, dept: depto, area: areaNombre, sup: supervisorNombre, supId: supervisorId,
             id: String(d.employee_id), name: d.name, puesto: puesto,
+            // Los encargos extra son otro corte del desglose de estadísticas.
+            // Sin la columna en la base llegan vacíos y todo el mundo cae en
+            // «Sin encargos», que es lo que de verdad hay.
+            encargos: window.normalizarEncargos(d.encargos),
             avatar: d.avatar_url,
             isActive: d.is_active !== false // <-- NUEVO: Guardamos el estado para usarlo visualmente
         });

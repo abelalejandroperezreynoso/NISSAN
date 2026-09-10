@@ -2947,13 +2947,56 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   estrujaban el título hasta dejarlo en una columna de tres letras. Su fuente
   es de 16px por la trampa de siempre del zoom de Safari.
 
-  Departamento y puesto comparten un solo bloque, «Desglose», con tres
-  conmutadores en su encabezado: por qué se corta —`dimensionDesglose`—, con
-  qué forma se dibuja —`formaDesglose`— y qué se mide
-  —`currentStatsSortCriterion`, de la lista `window.CRITERIOS_STATS`—. Las tres
-  elecciones viven en `sessionStorage` y las pinta `window.pintarDesglose()`,
-  que es también lo que llaman los botones «Volver» para no salirse del modo, y
-  que de paso devuelve el radar a la vista general. Los tres desgloses
+  Los cortes comparten un solo bloque, «Desglose», con tres conmutadores en su
+  encabezado: por dónde se corta —`dimensionDesglose`—, con qué forma se dibuja
+  —`formaDesglose`— y qué se mide —`currentStatsSortCriterion`, de la lista
+  `window.CRITERIOS_STATS`—. Las tres elecciones viven en `sessionStorage` y las
+  pinta `window.pintarDesglose()`, que es también lo que llaman los botones
+  «Volver» para no salirse del modo, y que de paso devuelve el radar a la vista
+  general.
+
+  **Por dónde se corta lo dice `window.DIMENSIONES_DESGLOSE`**, y son cuatro:
+  departamento, puesto, área y encargos extra. Cada uno trae su etiqueta, el
+  nombre de su caché, la función que abre su nivel de dentro y —lo que de verdad
+  lo define— `valores(empleado)`, la lista de filas a las que esa persona suma:
+
+  ```js
+  window.DIMENSIONES_DESGLOSE   // [{ clave, etiqueta, cache, alTocar, valores, varias }]
+  window.dimensionStats()       // el corte elegido; cualquier cosa rara es departamento
+  window.dimensionStatsPor(clave)
+  window.filaVaciaStats()       // los contadores de una fila, todos a cero
+  window.deptDeEmpleado(e)  window.supDeEmpleado(e)  window.puestoDeEmpleado(e)
+  window.areaDeEmpleado(e)  window.encargosDeEmpleado(e)
+  ```
+
+  Un corte nuevo se añade a esa lista y **no hay que tocar el motor**: cada
+  persona se resuelve una vez en `filasDeGrupo[empId]` —su departamento, su
+  supervisor, su puesto, su área, cada uno de sus encargos y el universo— y
+  todos los contadores se incrementan recorriendo esa lista. Antes eran cuartetos
+  de `if`s repetidos diez veces —uno por contador—, y añadir un corte era tocar
+  los diez sin que nada avisara del que se olvidara. Por lo mismo, los
+  contadores de una fila salen de `filaVaciaStats()` y no de un literal copiado,
+  y los cinco ayudantes de arriba sustituyen a las tres copias que había de
+  `getPuesto` y de `getArea`.
+
+  **Los encargos son el primer corte donde una persona cae en varias filas**
+  —quien lleva «Seguridad» y «Capacitación» suma sus encuestas en las dos, que es
+  lo que se está preguntando—, y eso tiene dos consecuencias que hay que
+  mantener:
+
+  - **La cifra del encabezado no se saca sumando las filas.** Sumarlas contaría
+    dos veces a quien lleva dos encargos, así que ahí se pasa `universo`, la fila
+    que cuenta a cada quien una sola vez (segundo argumento de
+    `encabezadoDelGrafico`). En los demás cortes la suma de las filas **es** el
+    universo y no hace falta.
+  - **Y se dice en su renglón** (`.stats-nota-dimension`), porque los cuadros
+    suman más gente que la plantilla a propósito: sin decirlo, el gráfico se lee
+    como si sobrara personal.
+
+  Área y encargos **no tienen supervisores debajo**, como el puesto: los tres
+  entran a `window.verStatsDetalleGrupo(clave, nombre)`, que filtra la plantilla
+  con el `valores` de su corte. El departamento sigue teniendo su propia función,
+  que es la única con un nivel intermedio. Los tres desgloses
   —departamento, supervisor y puesto— escriben en el mismo
   `#desglose-container` y respetan la forma elegida: en cuadros, entrar a un
   departamento dibuja los cuadros de sus supervisores y entrar a uno de ellos

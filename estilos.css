@@ -4036,6 +4036,16 @@ html.fondo-anclado body {
     margin: 2px 0 10px;
 }
 
+/* Lo que hay que saber de un corte antes de leerlo. Sólo lo lleva el de
+   encargos, que es el único donde una persona cae en varias filas y por tanto
+   el único cuyos cuadros suman más gente que la plantilla. */
+.stats-nota-dimension {
+    margin: -6px 0 10px;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: #64748b;
+}
+
 .stats-grafico-punto {
     width: 10px;
     height: 10px;
