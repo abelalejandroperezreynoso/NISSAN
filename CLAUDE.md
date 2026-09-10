@@ -1010,10 +1010,11 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   foto y no la URL: editarla desde ahí no tendría sentido —habría que volver a
   tomarla—, así que ni en modo administrador aparece un campo de texto.
 
-  Comparte con la foto del área el encogido, el bucket y
-  `window.subirFotoEvaluacion(blob, prefijo)`; lo que cambia es dónde acaba la
-  URL: la del área bajo `__foto_area`, la de cada evidencia bajo el id de su
-  pregunta, que es donde va la respuesta de cualquier otra.
+  El encogido y el bucket son los de `window.subirFotoEvaluacion(blob,
+  prefijo)`, y la URL acaba bajo el id de su pregunta, que es donde va la
+  respuesta de cualquier otra. **Esta pregunta es la que sustituyó a la foto
+  del área** de las encuestas `evaluates_area`, que era un recuadro aparte y
+  obligatorio: ver más abajo.
 - **El registro de asistencia no se contesta: se confirma.** Es para pasar
   lista de una junta o una capacitación. La encuesta se dirige a quien tenía
   que ir, el enunciado dice a qué —«Capacitación de seguridad del 4 de
@@ -1304,13 +1305,48 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   acierta—, con el círculo de la marca a la derecha: lo que distingue a quien
   asistió no puede ser sólo el color del renglón.
 
-- **Una evaluación por área lleva foto, y la foto se encoge antes de subir.**
-  Las encuestas con `evaluates_area` piden una fotografía del área que se está
-  evaluando: sin ella la evaluación es la palabra de quien la llenó contra
-  nada. Es obligatoria y el envío se planta igual que con el área.
+- **Una foto se encoge antes de subirla, y ya no hay ninguna foto del área.**
+  Las encuestas con `evaluates_area` pidieron un tiempo **una fotografía del
+  área**, en un recuadro propio encima de las preguntas y obligatoria como el
+  área misma. Se quitó cuando la **evidencia fotográfica** pasó a ser un tipo
+  de pregunta más: hace lo mismo y mejor —lo que hay que fotografiar lo dice su
+  enunciado, se ordena, se edita, se borra y se califica como las demás, y se
+  pueden pedir varias—, así que una encuesta por área que necesite foto agrega
+  su pregunta de evidencia y ya. Con el recuadro se fueron
+  `window.fotoAreaLista`, `window.mostrarFotoArea`, la validación del envío que
+  se plantaba sin foto y la subida bajo `__foto_area`.
 
-  La cuenta de Supabase es gratuita y una foto de teléfono son varios MB, así
-  que **ninguna se sube tal cual**: `window.optimizarImagen(file, { maxLado,
+  **El área sigue igual**: `evaluates_area` no se toca, la chapa «📍 Área a
+  evaluar» sigue arriba y elegirla sigue siendo obligatorio para enviar.
+
+  Lo que se queda de aquello, y no se puede quitar:
+
+  ```js
+  window.LLAVE_FOTO_AREA   // '__foto_area', sólo para leer lo ya guardado
+  window.fotoDeArea(respuesta)
+  ```
+
+  Las respuestas de antes traen su foto puesta, y la **pantalla de calificar la
+  sigue enseñando** arriba del todo: es la constancia de cómo estaba el área
+  ese día, y sin foto ese recuadro no se dibuja. Es la misma idea que
+  `fechaDeRelanzamiento` y por lo mismo. La llave importa además porque
+  `borrarAsistencia` cuenta como «algo contestado» sólo las llaves numéricas de
+  `answers_json`: las que empiezan por `__` son las reservadas.
+
+  **Con ella se fue la foto de las estadísticas.** «Comparativa de desempeño
+  por áreas» encabezaba cada tarjeta con la última foto de esa área y su fecha,
+  con su propia consulta —`.not('answers_json->>__foto_area', 'is', null)`,
+  ordenada de la más reciente y con tope de 400 filas—. No se puede quedar: no
+  se va a tomar ninguna foto de área más, así que ese encabezado se habría
+  clavado en la última de antes del cambio y se enseñaría durante años como si
+  fuera el estado de hoy. Las que ya se subieron siguen en el bucket y en
+  `answers_json`; se ven abriendo su respuesta. Con la foto se fueron la quinta
+  consulta de `cargarStatsEncuestasGlobales`, el mapa `fotosPorArea` de
+  `window.encuestasRawData` y el segundo argumento de `renderAreaStats`.
+
+  **El encogido y el bucket se quedan, que son de la evidencia también.** La
+  cuenta de Supabase es gratuita y una foto de teléfono son varios MB, así que
+  **ninguna se sube tal cual**: `window.optimizarImagen(file, { maxLado,
   maxBytes })` en `1-config.js` la reescala por su lado más largo y la comprime
   —WebP, y JPEG si el navegador no lo da— hasta caber. Las de evaluación van a
   `window.MAX_LADO_FOTO_EVAL` (600px) y 300 KB de tope; medido con una imagen
@@ -1319,35 +1355,24 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   aquí en cuanto lo necesitaron dos documentos.
 
   Se encoge **al elegirla, no al enviar**: así se ve el tamaño real de lo que
-  se va a subir y el envío no se queda pensando. El blob espera en
-  `window.fotoAreaLista`.
+  se va a subir y el envío no se queda pensando. Los blobs esperan en
+  `window.fotosPreguntaListas`, por id de pregunta.
 
-  Se sube **después** de validar toda la encuesta, o cada arrepentimiento
+  Se suben **después** de validar toda la encuesta, o cada arrepentimiento
   dejaría un archivo huérfano en el bucket. La URL se guarda dentro de
-  `answers_json`, bajo `window.LLAVE_FOTO_AREA` (`__foto_area`), igual que los
-  motivos y por lo mismo: así no hay columna nueva que crear. Lo que sí hace
-  falta es el bucket `fotos-evaluaciones`, y su script está en
-  `sql/fotos-evaluaciones.sql`; sin correrlo la foto se toma y se encoge igual
-  pero el envío avisa de que falta. Ese script no da permiso de borrado a
-  propósito.
+  `answers_json`, bajo el id de su pregunta. El bucket es
+  `fotos-evaluaciones` y su script, `sql/fotos-evaluaciones.sql`; sin correrlo
+  la foto se toma y se encoge igual pero el envío avisa de que falta. Ese
+  script no da permiso de borrado a propósito.
 
   El campo se abre con un `<label for>` y no con un `.click()` sobre el input
   escondido: en iOS ese click programático es indistinguible del toque fantasma
   de las ruedas (ver más arriba).
 
-  **La última foto de cada área sale en las estadísticas**, encabezando su
-  tarjeta en «Comparativa de desempeño por áreas», con la fecha en que se tomó
-  y ampliable al tocarla. No se traen con el resto de las respuestas —que se
-  piden sin `answers_json`—, sino en una consulta aparte que filtra por la
-  llave del jsonb (`.not('answers_json->>__foto_area', 'is', null)`), ordenada
-  de la más reciente y con tope de 400 filas: la primera de cada área es la que
-  se enseña. Si esa consulta falla, la sección se dibuja igual sin foto.
-
-  El área se agrupa por nombre normalizado con `window.claveDeArea()`: la
-  respuesta guarda el nombre que tenía el empleado ese día y la pantalla agrupa
-  por el de su ficha, así que «Planta 1» y « planta 1 » tienen que caer en el
-  mismo sitio. La foto **no** sigue al filtro de periodo de esa pantalla: es
-  siempre la última que hay, y por eso lleva la fecha encima.
+  El área de una respuesta se agrupa por nombre normalizado con
+  `window.claveDeArea()`: la respuesta guarda el nombre que tenía el empleado
+  ese día y la pantalla agrupa por el de su ficha, así que «Planta 1» y
+  « planta 1 » tienen que caer en el mismo sitio.
 - **Una encuesta se entrega completa.** No se puede enviar dejando preguntas en
   blanco: `enviarRespuestasEval` reúne lo que falta —lo sin contestar y los
   motivos sin escribir—, lo dice todo junto en un solo aviso, señala en rojo

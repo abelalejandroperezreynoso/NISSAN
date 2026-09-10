@@ -1081,7 +1081,6 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
     }
 
     let areaBadgeHtml = '';
-    window.fotoAreaLista = null;
     window.fotosPreguntaListas = {};
     if (evaluatesArea) {
         window.areaConfirmadaParaEstaSesion = false;
@@ -1112,32 +1111,6 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                         <span id="area-save-indicator" style="display:none; font-size:0.75rem; color:#be185d;">⏳ Guardando...</span>
                         <button onclick="document.getElementById('area-edit-container').style.display='none'; document.getElementById('area-display-text').style.display='inline-block';" style="background:transparent; color:#be185d; border:none; cursor:pointer; font-size:0.9rem; padding:0 4px;" title="Cancelar">✕</button>
                     </span>
-                </div>`;
-
-        // Una evaluación de área sin foto es la palabra de quien la llenó
-        // contra nada: la foto es la constancia de cómo estaba el área ese día.
-        // El `<label for>` es lo que abre la cámara sin un `.click()`
-        // programático, que en iOS se confunde con el toque fantasma de las
-        // ruedas (ver 1-config.js).
-        areaBadgeHtml += `
-                <div id="foto-area-bloque" style="margin-top:12px; background:white; border:1px solid #e2e8f0; border-radius:12px; padding:14px;">
-                    <div style="font-weight:600; color:#475569; font-size:0.9rem; margin-bottom:4px;">
-                        Fotografía del área <span style="color:#ef4444;">*</span>
-                    </div>
-                    <div style="font-size:0.78rem; color:#94a3b8; margin-bottom:10px;">Se guarda reducida a ${window.MAX_LADO_FOTO_EVAL}px para no ocupar espacio.</div>
-
-                    <input type="file" id="inp-foto-area" accept="image/*" capture="environment" style="display:none;" onchange="window.mostrarFotoArea(this)">
-                    <label for="inp-foto-area" id="btn-foto-area" style="display:flex; align-items:center; justify-content:center; gap:8px; width:100%; box-sizing:border-box; padding:12px; background:#eff6ff; color:#2563eb; border:1px dashed #93c5fd; border-radius:10px; font-weight:600; font-size:0.95rem; cursor:pointer;">
-                        📷 Tomar fotografía
-                    </label>
-
-                    <div id="previo-foto-area" style="display:none; margin-top:10px;">
-                        <img id="previo-foto-area-img" alt="Fotografía del área" style="width:100%; border-radius:10px; display:block;">
-                        <div style="display:flex; align-items:center; justify-content:space-between; margin-top:6px;">
-                            <span id="previo-foto-area-peso" style="font-size:0.75rem; color:#94a3b8;"></span>
-                            <label for="inp-foto-area" style="font-size:0.8rem; color:#2563eb; font-weight:600; cursor:pointer;">Cambiar</label>
-                        </div>
-                    </div>
                 </div>`;
     }
 
@@ -1349,42 +1322,8 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
 };
 
 // La foto se encoge en cuanto se elige, no al enviar: así se ve el tamaño real
-// de lo que se va a subir y el envío no se queda pensando. El blob se guarda
-// aquí y `enviarRespuestasEval` lo recoge.
-window.fotoAreaLista = null;
-
-window.mostrarFotoArea = async (input) => {
-    const previo = document.getElementById('previo-foto-area');
-    const img = document.getElementById('previo-foto-area-img');
-    const peso = document.getElementById('previo-foto-area-peso');
-    const boton = document.getElementById('btn-foto-area');
-
-    window.fotoAreaLista = null;
-    if (!input.files || !input.files[0]) { if (previo) previo.style.display = 'none'; return; }
-
-    if (boton) boton.innerText = '⏳ Preparando la foto…';
-    try {
-        const blob = await window.optimizarImagen(input.files[0], {
-            maxLado: window.MAX_LADO_FOTO_EVAL,
-            maxBytes: 300 * 1024
-        });
-        window.fotoAreaLista = blob;
-
-        if (img) img.src = URL.createObjectURL(blob);
-        if (peso) peso.innerText = `${Math.round(blob.size / 1024)} KB`;
-        if (previo) previo.style.display = 'block';
-        if (boton) boton.innerText = '📷 Tomar otra fotografía';
-    } catch (e) {
-        console.error('No se pudo preparar la foto del área:', e);
-        alert('No se pudo procesar la foto: ' + (e.message || e));
-        if (previo) previo.style.display = 'none';
-        if (boton) boton.innerText = '📷 Tomar fotografía';
-        input.value = '';
-    }
-};
-
-// Las evidencias de cada pregunta, por id. Se encogen al elegirlas, igual que
-// la del área, y `enviarRespuestasEval` las sube al final.
+// de lo que se va a subir y el envío no se queda pensando. Los blobs esperan
+// aquí y `enviarRespuestasEval` los recoge.
 window.fotosPreguntaListas = {};
 
 // La casilla de asistencia se pinta de verde al marcarse. Se hace con una
@@ -1510,15 +1449,6 @@ window.enviarRespuestasEval = async () => {
         if (evaluatesArea) {
             if (!targetAreaName || targetAreaName === 'Sin Área') {
                 alert("⚠️ Es obligatorio seleccionar un área para esta evaluación.\n\nHaz clic en '⚠️ Selecciona tu área ✏️' en la parte superior para elegir una.");
-                if (btn) { btn.disabled = false; btn.innerText = "Enviar Respuestas"; }
-                return;
-            }
-
-            // La foto es la constancia de cómo estaba el área ese día.
-            if (!window.fotoAreaLista) {
-                alert("⚠️ Falta la fotografía del área.\n\nToca '📷 Tomar fotografía' en la parte superior.");
-                const bloque = document.getElementById('foto-area-bloque');
-                if (bloque) bloque.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 if (btn) { btn.disabled = false; btn.innerText = "Enviar Respuestas"; }
                 return;
             }
@@ -1738,15 +1668,6 @@ window.enviarRespuestasEval = async () => {
             const { id, blob } = evidenciasPorSubir[i];
             if (btn) btn.innerText = `Subiendo evidencia ${i + 1} de ${evidenciasPorSubir.length}…`;
             answersMap[id] = await window.subirFotoEvaluacion(blob, `preg-${id}-${targetEmployeeId}`);
-        }
-
-        // La foto se sube al final, cuando ya se sabe que la encuesta está
-        // completa: subirla antes dejaría archivos huérfanos en el bucket cada
-        // vez que alguien se arrepiente o le falta una pregunta.
-        if (evaluatesArea && window.fotoAreaLista) {
-            if (btn) btn.innerText = "Subiendo foto del área…";
-            answersMap[window.LLAVE_FOTO_AREA] = await window.subirFotoEvaluacion(
-                window.fotoAreaLista, `area-${window.evalIdRespondiendo}-${targetEmployeeId}`);
         }
 
         // Mandamos EL TEXTO a employee_area para conservar el registro histórico en esa tabla

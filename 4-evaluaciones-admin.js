@@ -1226,8 +1226,11 @@ window.verDetalleRespuesta = async (resp) => {
             badgeCalificacionHtml = `<span style="background:#f1f5f9; color:#64748b; border: 1px solid #cbd5e1; padding:4px 12px; border-radius:12px; font-size:0.85rem; font-weight:bold; white-space:nowrap;">Calificando...</span>`;
         }
 
-        // La foto del área, cuando la encuesta la pidió. Va arriba del todo: es
-        // el contexto con el que se leen las respuestas de abajo.
+        // La foto del área, en las respuestas que la traen. Va arriba del todo:
+        // es el contexto con el que se leen las respuestas de abajo. Ya no se
+        // toma ninguna nueva —lo que haya que fotografiar se pide con una
+        // pregunta de evidencia—, así que esto es sólo para lo ya contestado:
+        // sin foto, el recuadro no se dibuja.
         const urlFoto = window.fotoDeArea(resp);
         const fotoAreaHtml = urlFoto ? `
                 <div style="margin-bottom:20px; background:white; border:1px solid #e2e8f0; border-radius:12px; padding:12px;">

@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-10-3';
+window.VERSION_APP = '2026-09-10-4';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -409,9 +409,18 @@ window.optimizarImagen = async (file, opciones) => {
     });
 };
 
-// La foto del área que se evalúa. Viaja donde los motivos, dentro de
+// La foto del área que se evaluaba. Viajaba donde los motivos, dentro de
 // `answers_json` y bajo su propia llave reservada, para no obligar a correr
-// otro script en la base; lo que sí hace falta es el bucket.
+// otro script en la base.
+//
+// **Ya no se toma ninguna, y esto es sólo lectura**: lo que haya que
+// fotografiar se pide hoy con una pregunta de evidencia, que sirve en
+// cualquier encuesta y se ordena, se edita y se califica como las demás. La
+// llave se queda porque las respuestas de antes la traen puesta y hay que
+// seguir enseñando esa foto al abrirlas —es la constancia de cómo estaba el
+// área ese día—, igual que `fechaDeRelanzamiento` y por lo mismo. Y porque
+// `borrarAsistencia` cuenta como «algo contestado» sólo las llaves numéricas:
+// las que empiezan por `__` siguen siendo las reservadas.
 window.LLAVE_FOTO_AREA = '__foto_area';
 window.BUCKET_FOTOS_EVAL = 'fotos-evaluaciones';
 window.MAX_LADO_FOTO_EVAL = 600;
@@ -948,6 +957,9 @@ window.subirMaterialEncuesta = async (file, evaluationId) => {
     return { archivo: ruta, url: (data && data.publicUrl) ? data.publicUrl : '' };
 };
 
+// La foto de área de una respuesta ya guardada, o '' si no trae ninguna —que
+// es el caso de todo lo que se contesta desde que se quitó ese campo—. La lee
+// la pantalla de calificar, que es el único sitio que queda.
 window.fotoDeArea = (respuesta) => {
     const url = respuesta && respuesta.answers_json ? respuesta.answers_json[window.LLAVE_FOTO_AREA] : null;
     return typeof url === 'string' && url ? url : '';

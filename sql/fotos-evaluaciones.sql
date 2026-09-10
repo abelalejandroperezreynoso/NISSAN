@@ -1,14 +1,20 @@
--- Bucket para las fotografías de las evaluaciones por área
+-- Bucket para las fotografías de las encuestas
 -- ------------------------------------------------------------------
--- Una evaluación marcada «por área» —una auditoría de 5S, por ejemplo— pide
--- una fotografía del área que se está evaluando. La aplicación la encoge a
--- 600px de lado y la comprime antes de subirla, así que cada una pesa unas
--- decenas de KB: la cuenta es gratuita y una foto de teléfono sin tocar son
--- varios MB.
+-- Una pregunta de evidencia fotográfica se contesta con una foto: su enunciado
+-- dice qué hay que fotografiar y su respuesta es la URL de lo que se subió.
+-- La aplicación la encoge a 600px de lado y la comprime antes de subirla, así
+-- que cada una pesa unas decenas de KB: la cuenta es gratuita y una foto de
+-- teléfono sin tocar son varios MB.
 --
--- La URL se guarda dentro de `answers_json`, bajo la llave `__foto_area`, así
+-- La URL se guarda dentro de `answers_json`, bajo el id de su pregunta, así
 -- que aquí no hay ninguna columna que crear. Lo único que hace falta es el
 -- bucket y sus permisos.
+--
+-- Aquí vivieron también las fotos del área de las encuestas «por área», bajo
+-- la llave `__foto_area`. Ese campo se quitó —lo que haya que fotografiar se
+-- pide con una pregunta de evidencia, que sirve en cualquier encuesta— y las
+-- que ya se subieron siguen en este bucket: la pantalla de calificar las
+-- enseña al abrir esas respuestas.
 --
 -- Ejecutar una sola vez en el SQL Editor de Supabase. Sin correrlo, la
 -- fotografía se toma y se encoge igual pero al enviar avisa de que falta el
