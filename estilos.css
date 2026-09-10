@@ -4877,3 +4877,104 @@ html.fondo-anclado body {
     .encuesta-fila { padding-left: 18px; }
     .encuesta-acciones { flex: 1 1 100%; justify-content: flex-end; }
 }
+
+/* =========================================
+   EL ÁREA QUE SE EVALÚA, EN LA HOJA DE RESPONDER
+   =========================================
+   Una encuesta «por área» dice arriba a cuál se refiere, y se puede cambiar
+   ahí mismo. Era una chapa rosa con un 📍 y el nombre subrayado con un lápiz
+   al lado —un enlace disfrazado—; hoy es la fila de ajustes de iOS: rótulo
+   gris a la izquierda, valor a la derecha y el chevron que dice que se toca.
+   Sin emoji: lo que hace lo cuenta su `aria-label`. */
+.area-eval {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 18px;
+}
+
+/* La fila entera es el blanco del dedo, y con los 44px que pide iOS. */
+.area-eval-fila {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 11px 14px;
+    background: none;
+    border: none;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.area-eval-fila:active { background: #f8fafc; }
+
+.area-eval-rotulo {
+    font-size: 0.9rem;
+    color: #64748b;
+    flex-shrink: 0;
+}
+
+/* El valor se lleva el sitio que sobra y se recorta: un área puede llamarse
+   «Area Satelite Linea E3» y partirla en dos renglones descuadra la fila. */
+.area-eval-valor {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: right;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.area-eval-chevron {
+    flex-shrink: 0;
+    color: #c7c7cc;   /* el gris de los chevrons de iOS */
+}
+
+/* Sin área elegida no hay nada que enseñar, así que el valor lo pide —en rojo,
+   que es lo que impide enviar—. */
+.area-eval--falta { border-color: #fecaca; }
+.area-eval--falta .area-eval-valor { color: #dc2626; }
+
+/* El desplegable sale debajo, dentro de la misma tarjeta: apilar una hoja por
+   un solo campo deja dos tiradores a la vista. */
+.area-eval-editor {
+    display: block;
+    padding: 12px 14px 14px;
+    border-top: 1px solid #f1f5f9;
+    background: #f8fafc;
+}
+
+/* `.area-eval-editor` lleva `display` de autor, y eso le gana al `[hidden]` de
+   la hoja del navegador: sin esta regla el desplegable se vería siempre. Es la
+   trampa de `.tipos-pregunta`. */
+.area-eval-editor[hidden] { display: none; }
+
+/* 16px clavados: por debajo de eso, Safari en iOS hace zoom al enfocar. */
+.area-eval-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 11px 12px;
+    font-size: 16px;
+    font-family: inherit;
+    color: #1e293b;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    outline: none;
+}
+
+.area-eval-estado {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+.area-eval-estado[hidden] { display: none; }

@@ -214,9 +214,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   años» y otras «Bienal»—, pero lo que se veía era otra cosa: **ninguna de las
   tres del panel de pendientes traducía `once`**, y como el fallback era el
   valor crudo de la base, la tarjeta de una encuesta de única vez enseñaba
-  «⏱️ once». Toda pantalla que escriba una frecuencia pasa por el ayudante.
-  La excepción es el mapa con emoji de `4-evaluaciones-base.js` («📅 Semanal»),
-  que adorna cada frecuencia con su icono y se queda aparte.
+  «⏱️ once». Toda pantalla que escriba una frecuencia pasa por el ayudante, sin
+  excepciones: la última que quedaba era el mapa con emoji de
+  `4-evaluaciones-base.js` («🈷️ Mensual»), que adornaba el subtítulo de la hoja
+  de responder, y ese icono no decía nada que no dijera ya la palabra.
 
 - **Fuente de 16px en los campos de formulario.** Safari en iOS ignora el
   `user-scalable=no` del viewport, así que cualquier `input`, `select` o
@@ -716,6 +717,62 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `.hoja-plegable-resumen`, que es un flex con `gap`: cada nodo suelto del
   `<summary>` cuenta como elemento, así que el rótulo y su contador van
   envueltos en un solo `<span>` o el «(3)» se separa del texto.
+- **La hoja de responder no explica lo que ya se ve.** Encima de las preguntas
+  hubo dos renglones —«Responde las siguientes preguntas.» y «Todas las
+  preguntas son obligatorias.»— y los dos se quitaron: debajo estaban las
+  preguntas y el botón de enviar, así que el primero decía en voz alta lo que
+  se está viendo, y el segundo una regla que **se cumple sola** —el envío no
+  deja mandar nada en blanco, lo dice todo junto y señala en rojo lo que
+  falta—. Del bloque de arriba queda sólo lo que escribió quien creó la
+  encuesta (`description`) y, en modo jefe, el renglón que dice cuál se está
+  contestando: ahí el título de la hoja es la persona a la que se evalúa.
+
+  Ese bloque **no se dibuja si se queda vacío** (`introHtml`): sin descripción
+  y sin área dejaba un hueco de 25px por encima de la primera pregunta. Es la
+  misma regla que el recuadro gris de la pantalla de una encuesta.
+
+  Y el subtítulo del encabezado va **sin emoji**, por `textoDeFrecuencia`: ahí
+  vivía la última copia del mapa de frecuencias adornadas (ver más arriba).
+
+- **El área que se evalúa es una fila de ajustes de iOS, no una chapa.** Una
+  encuesta `evaluates_area` dice arriba a cuál se refiere y deja cambiarla ahí
+  mismo. Era una chapa rosa con un 📍, el nombre subrayado y un lápiz al lado
+  —un enlace disfrazado, con un `<select>` de 0.8rem que además hacía **zoom al
+  enfocarlo** en Safari—. Hoy es lo que el dedo espera en iOS: rótulo gris a la
+  izquierda, el área a la derecha en negrita y el chevron que dice que se toca.
+  Las clases están en `estilos.css` (`.area-eval`, `.area-eval-fila`,
+  `.area-eval-valor`, `.area-eval-editor`…) y no se estilan a mano.
+
+  ```js
+  window.abrirSelectorDeArea()        // la fila abre y cierra el desplegable
+  window.pintarAreaElegida(nombre)    // la deja puesta, en un solo sitio
+  ```
+
+  Cinco cosas que hay que mantener:
+
+  - **La fila entera es el blanco del dedo**, con los 44px que pide iOS, y
+    **vuelve a cerrar** al tocarla otra vez: por eso no hay botón de cancelar
+    —era otro blanco fácil al lado del que sí importa—.
+  - **El desplegable sale dentro de la misma tarjeta**, debajo de la fila.
+    Apilar una hoja por un solo campo deja dos tiradores a la vista, que es la
+    razón de la lista de tipos de pregunta y de la de clasificaciones.
+  - **16px clavados en el `<select>`**: por debajo de eso Safari en iOS hace
+    zoom al enfocar, y ése era el defecto de la chapa vieja.
+  - **Se esconde con `hidden`**, así que `.area-eval-editor` y
+    `.area-eval-estado` llevan su propia regla `[hidden] { display: none }`:
+    tienen `display` de autor y eso le gana al `[hidden]` del navegador. Es la
+    trampa de `.tipos-pregunta`.
+  - **Sin área elegida la fila lo pide en rojo** («Selecciona un área», con
+    `.area-eval--falta`) y sin emoji; el envío sigue plantándose igual, que es
+    quien de verdad lo exige.
+
+  Los ids se quedaron como estaban —`area-badge-container`,
+  `area-display-text`, `area-edit-container`, `eval-inline-area-select`,
+  `area-save-indicator`—, que son los que busca `guardarAreaEnEvaluacion`; lo
+  que cambió es que esa función ya no escribe estilos a mano ni le pega un
+  lápiz al nombre: llama a `pintarAreaElegida`, y el «Guardando el área…» va en
+  su renglón de estado con el desplegable apagado mientras tanto.
+
 - **La lista de encuestas de la hoja va como la tarjeta del panel de inicio:
   una clasificación por renglón, plegada, y sus encuestas dentro.** Era una
   rejilla de cuadros de 64px con el título recortado a dos renglones debajo

@@ -145,6 +145,48 @@ window.guardarAreaUsuario = async () => {
     }
 };
 
+// El desplegable del área sale y se esconde con la propia fila: tocarla dos
+// veces lo cierra, así que no hace falta ningún botón de cancelar —era otro
+// blanco fácil al lado del que sí importa—. El `<select>` se sincroniza al
+// abrirlo, porque el área pudo cambiarse desde otro sitio mientras la hoja
+// estaba abierta.
+window.abrirSelectorDeArea = () => {
+    const editor = document.getElementById('area-edit-container');
+    if (!editor) return;
+
+    editor.hidden = !editor.hidden;
+    if (editor.hidden) return;
+
+    const select = document.getElementById('eval-inline-area-select');
+    const valor = document.getElementById('area-display-text');
+    if (select && valor) {
+        const nombre = (valor.innerText || '').trim();
+        const opcion = Array.from(select.options)
+            .find(o => (o.getAttribute('data-nombre') || '') === nombre);
+        select.value = opcion ? opcion.value : '';
+    }
+    // Lo lleva a la vista: en un teléfono la tarjeta puede quedar justo en el
+    // borde y el desplegable nacer fuera de la pantalla.
+    editor.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+};
+
+// El área que quedó elegida, en la fila y en un solo sitio: quien guarda no
+// vuelve a escribir estilos a mano.
+window.pintarAreaElegida = (areaName) => {
+    const tarjeta = document.getElementById('area-badge-container');
+    const valor = document.getElementById('area-display-text');
+    const editor = document.getElementById('area-edit-container');
+    const boton = tarjeta ? tarjeta.querySelector('.area-eval-fila') : null;
+
+    if (valor) valor.innerText = areaName;
+    if (tarjeta) tarjeta.classList.remove('area-eval--falta');
+    if (editor) editor.hidden = true;
+    if (boton) {
+        boton.title = 'Cambiar el área a evaluar';
+        boton.setAttribute('aria-label', 'Cambiar el área a evaluar');
+    }
+};
+
 window.guardarAreaEnEvaluacion = async (empId) => {
     const selectEl = document.getElementById('eval-inline-area-select');
     const indicator = document.getElementById('area-save-indicator');
@@ -159,7 +201,7 @@ window.guardarAreaEnEvaluacion = async (empId) => {
     const areaName = selectedOption.getAttribute('data-nombre');
     
     if (selectEl) selectEl.disabled = true;
-    if (indicator) indicator.style.display = 'inline-block';
+    if (indicator) indicator.hidden = false;
     
     try {
         const uuidToSave = areaIdValue;
@@ -189,21 +231,14 @@ window.guardarAreaEnEvaluacion = async (empId) => {
         
         window.areaConfirmadaParaEstaSesion = true;
         
-        const displaySpan = document.getElementById('area-display-text');
-        if (displaySpan) {
-            displaySpan.innerHTML = `${areaName} ✏️`;
-            displaySpan.style.display = 'inline-block';
-            displaySpan.style.color = '';
-            displaySpan.style.background = '';
-            document.getElementById('area-edit-container').style.display = 'none';
-        }
+        window.pintarAreaElegida(areaName);
         
     } catch (e) {
         console.error(e);
         alert("Error al actualizar el área: " + e.message);
     } finally {
         if (selectEl) selectEl.disabled = false;
-        if (indicator) indicator.style.display = 'none';
+        if (indicator) indicator.hidden = true;
     }
 };
 
@@ -1053,18 +1088,12 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         }
     }
 
-    const freqMap = {
-        'once': 'Única vez',
-        'weekly': '📅 Semanal',
-        'biweekly': '🗓️ Quincenal',
-        'monthly': '🈷️ Mensual',
-        'quarterly': '🍂 Trimestral',
-        'semiannual': '🌗 Semestral',
-        'yearly': '🎂 Anual',
-        'biennial': '⏳ Cada 2 años'
-    };
-    
-    const freqText = freqMap[currentFreq] || 'Única vez';
+    // Sin emoji, y por el mismo ayudante que el resto de la aplicación: aquí
+    // vivía la última copia del mapa de frecuencias —la que las adornaba con
+    // «🈷️ Mensual»—, y en el subtítulo de la hoja ese icono no decía nada que
+    // no dijera la palabra.
+    const freqText = window.textoDeFrecuencia
+        ? window.textoDeFrecuencia(currentFreq) : 'Única vez';
 
     const userLogueado = JSON.parse(localStorage.getItem("usuarioLogueado")) || {};
     let currentAreaId = userLogueado.area_id || null;
@@ -1091,26 +1120,33 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             optionsHtml += `<option value="${a.id}" data-nombre="${a.nombre}" ${isSelected ? 'selected' : ''}>${a.nombre}</option>`;
         });
         
-        let displayAreaText = currentAreaName;
-        let areaAlertStyle = "";
-        
-        if (currentAreaName === "Sin Área" || !currentAreaName) {
-            displayAreaText = "⚠️ Selecciona tu área";
-            areaAlertStyle = "color: #ef4444; font-weight: bold; background: #fee2e2; padding: 2px 6px; border-radius: 4px;";
-        }
+        // La fila de ajustes de iOS: rótulo a la izquierda, el área a la derecha
+        // y el chevron que dice que se toca. Sin emoji —ni el 📍 ni el lápiz—:
+        // lo que hace lo cuentan su `aria-label` y su `title`, y el chevron.
+        // Los ids se quedan como estaban, que son los que busca
+        // `guardarAreaEnEvaluacion`.
+        const faltaArea = !currentAreaName || currentAreaName === 'Sin Área';
+        const valorArea = faltaArea ? 'Selecciona un área' : currentAreaName;
+        const etiquetaArea = faltaArea ? 'Elegir el área a evaluar' : 'Cambiar el área a evaluar';
 
         areaBadgeHtml = `
-                <div id="area-badge-container" style="display:inline-block; background:#fdf4ff; color:#be185d; padding:6px 12px; border-radius:8px; font-size:0.85rem; font-weight:bold; border:1px solid #fbcfe8; margin-top:10px;">
-                    📍 Área a evaluar: 
-                    <span id="area-display-text" style="text-decoration:underline; cursor:pointer; margin-left:2px; ${areaAlertStyle}" title="Clic para cambiar área" onclick="document.getElementById('area-edit-container').style.display='inline-flex'; this.style.display='none';">${displayAreaText} ✏️</span>
-                    
-                    <span id="area-edit-container" style="display:none; align-items:center; margin-left:5px; gap:5px;">
-                        <select id="eval-inline-area-select" onchange="window.guardarAreaEnEvaluacion('${targetId}')" style="padding:2px 5px; border-radius:4px; border:1px solid #fbcfe8; outline:none; font-family:inherit; font-size:0.8rem; color:#be185d; background:white; cursor:pointer;">
+                <div id="area-badge-container" class="area-eval${faltaArea ? ' area-eval--falta' : ''}">
+                    <button type="button" class="area-eval-fila" onclick="window.abrirSelectorDeArea()"
+                            title="${etiquetaArea}" aria-label="${etiquetaArea}">
+                        <span class="area-eval-rotulo">Área a evaluar</span>
+                        <span class="area-eval-valor" id="area-display-text">${window.sanitizeForHTML(valorArea)}</span>
+                        <svg class="area-eval-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                    </button>
+                    <div class="area-eval-editor" id="area-edit-container" hidden>
+                        <select id="eval-inline-area-select" class="area-eval-select"
+                                onchange="window.guardarAreaEnEvaluacion('${targetId}')"
+                                aria-label="Área a evaluar">
                             ${optionsHtml}
                         </select>
-                        <span id="area-save-indicator" style="display:none; font-size:0.75rem; color:#be185d;">⏳ Guardando...</span>
-                        <button onclick="document.getElementById('area-edit-container').style.display='none'; document.getElementById('area-display-text').style.display='inline-block';" style="background:transparent; color:#be185d; border:none; cursor:pointer; font-size:0.9rem; padding:0 4px;" title="Cancelar">✕</button>
-                    </span>
+                        <div class="area-eval-estado" id="area-save-indicator" hidden>Guardando el área…</div>
+                    </div>
                 </div>`;
     }
 
@@ -1128,18 +1164,31 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         modal.style.cssText = 'display:flex; z-index:999999;';
         
         let headerTitle = title;
-    let subTitle = currentDesc ? currentDesc : "Responde las siguientes preguntas.";
-    // El aviso de que van todas va aparte y no dentro del subtítulo: las
-    // encuestas con descripción propia la enseñan en su lugar y se quedaban sin
-    // enterarse de la regla hasta que el envío se lo decía.
-    const avisoObligatorias = '<p style="color:#94a3b8; margin:6px 0 0; font-size:0.85rem;">Todas las preguntas son obligatorias.</p>';
+    // **Sin «Responde las siguientes preguntas» ni «Todas las preguntas son
+    // obligatorias».** Debajo estaban las preguntas y el botón de enviar, así
+    // que la primera decía en voz alta lo que ya se ve, y la segunda una regla
+    // que se cumple sola: el envío no deja mandar nada en blanco y lo dice
+    // señalando lo que falta. Sólo queda lo que escribió quien creó la
+    // encuesta, que es información suya, y en modo jefe el renglón que dice
+    // cuál se está contestando —ahí el título de la hoja es la persona—.
+    let subTitle = currentDesc || '';
     let headerStyle = "color:#1e293b;";
-    
+
     if (window.targetUserForEval) {
         headerTitle = `Evaluando a: <span style="color:#be185d;">${window.targetUserForEval.name}</span>`;
         subTitle = currentDesc ? `<b>Instrucciones:</b> ${currentDesc}` : `Encuesta: <b>${title}</b>. Los resultados se guardarán en el perfil del colaborador.`;
         headerStyle = "color:#334155; border-left: 4px solid #be185d; padding-left: 10px;";
     }
+
+    // El bloque de arriba no se dibuja si no tiene nada que decir: con los dos
+    // textos fuera, una encuesta sin descripción y sin área dejaba un hueco de
+    // 25px por encima de la primera pregunta.
+    const introHtml = (subTitle || areaBadgeHtml)
+        ? `<div style="margin-bottom:18px; ${headerStyle}">
+                ${subTitle ? `<p style="color:#64748b; margin:0 0 14px; font-size:0.95rem;">${subTitle}</p>` : ''}
+                ${areaBadgeHtml}
+           </div>`
+        : '';
 
     // El fondo gris de la hoja deja que las tarjetas blancas de cada pregunta
     // se sigan leyendo como tarjetas.
@@ -1153,11 +1202,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             <button onclick="cancelarRespuesta('main')" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
         </div>
         <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
-            <div style="margin-bottom:25px; ${headerStyle}">
-                <p style="color:#64748b; margin:0; font-size:0.95rem;">${subTitle}</p>
-                ${avisoObligatorias}
-                ${areaBadgeHtml} 
-            </div>
+            ${introHtml}
             <div id="dynamic-questions-root"></div>
             <button id="btn-enviar-respuestas" onclick="enviarRespuestasEval()" style="width:100%; background:#2563eb; color:white; padding:15px; border:none; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px -1px rgba(37, 99, 235, 0.3); margin-top:20px; transition: transform 0.1s;">Enviar Respuestas</button>
         </div>
