@@ -410,12 +410,6 @@ window.montarHojaEvaluaciones = () => {
 // Devuelve además el `peso` con el que se ordena —lo vencido primero, lo neutro
 // al final— y si cuenta como pendiente de quien mira, que es lo que suma el pie
 // de la clasificación.
-// El ojo y el ojo tachado del botón que decide quién ve una encuesta. Van como
-// `<svg>` y no como emoji por lo de siempre: cada sistema dibuja el suyo, y el
-// 🚫 que llevaba antes se leía como el de eliminar.
-window.ICONO_OCULTAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.1-5.9"/><path d="M9.9 4.2A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.2 3.2"/><path d="M14.1 14.1a3 3 0 1 1-4.2-4.2"/><path d="M2 2l20 20"/></svg>';
-window.ICONO_MOSTRAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
-
 window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalificar }) => {
     // Una encuesta apagada no le pide nada a nadie —sólo llega hasta aquí en
     // modo administrador—, así que va con el estado neutro y al final de su
@@ -809,42 +803,37 @@ window.cargarVistaEvaluaciones = async () => {
 
             const globoPendientes = globoDeCalificar(porCalificar, 'requieren revisión');
 
-            // Los botones del administrador —y el del revisor, que sólo puede
-            // corregir a quién va dirigida— van en el propio renglón y cortan
-            // la propagación: el resto de la fila abre la encuesta.
+            // **El renglón del administrador ya no lleva ningún botón.** Aquí
+            // hubo tres, y los tres se fueron a donde ya se llegaba —la hoja de
+            // editar la encuesta, a un toque del renglón por el lápiz del
+            // encabezado de su pantalla—:
             //
-            // **Al administrador le queda uno solo: encender y apagar.** Aquí
-            // hubo tres, y los otros dos se fueron a donde ya se llegaba:
+            //   - el lápiz de **editar** repetía ese mismo lápiz y sólo quitaba
+            //     ancho al título;
+            //   - el bote de basura de **eliminar** es hoy el del encabezado de
+            //     la hoja de edición: borrar una encuesta se lleva por delante
+            //     lo que contestó todo el mundo, y ése no es un botón que deba
+            //     estar a un toque de distancia en una lista;
+            //   - y **encender y apagar** ya era la casilla «Activa» del grupo
+            //     «Opciones» de esa hoja, así que el botón del renglón era el
+            //     mismo interruptor por otra puerta. Con los otros dos fuera se
+            //     quedó además ocupando su sitio: primero fue un 🚫, que se leía
+            //     como el de eliminar, y después un ojo tachado, que seguía
+            //     siendo un botón al final de la fila para algo que se hace de
+            //     tarde en tarde. Que está apagada lo sigue diciendo su etiqueta
+            //     «INACTIVA», que es lo que hay que ver desde la lista.
             //
-            //   - el lápiz de **editar** lo repetía el del encabezado de la
-            //     pantalla de la encuesta, que es adonde lleva tocar el
-            //     renglón; tenerlo dos veces sólo quitaba ancho al título;
-            //   - el bote de basura de **eliminar** se mudó al encabezado de
-            //     esa misma hoja de edición. Borrar una encuesta se lleva por
-            //     delante lo que contestó todo el mundo, y ése no es un botón
-            //     que deba estar a un toque de distancia en una lista, al lado
-            //     de otros dos y del que abre la encuesta.
+            // Queda el del revisor, que no es lo mismo: corregir a quién va
+            // dirigida es lo único que puede abrir desde aquí quien no es
+            // administrador. Corta la propagación, que el resto de la fila abre
+            // la encuesta.
             const botonIcono = (fondo, colorTexto, onclick, titulo, icono) => `
                 <button class="encuesta-boton" style="background:${fondo}; color:${colorTexto};"
                         onclick="event.stopPropagation(); ${onclick}"
                         title="${titulo}" aria-label="${titulo}">${icono}</button>`;
 
             let acciones = '';
-            if (window.modoAdminActivo) {
-                // **El icono es un ojo y no un 🚫.** Lo que hace este botón es
-                // decidir quién la ve, y el emoji de prohibido se leía como el
-                // de eliminar —que es justo el que se acaba de quitar de aquí—:
-                // un círculo rojo tachado al final del renglón no dice
-                // «ocultar», dice «borrar». El ojo tachado esconde y el ojo
-                // vuelve a enseñar, que es lo que el botón hace de verdad y lo
-                // que ya decía su etiqueta.
-                acciones = botonIcono(estaActiva ? '#e0f2fe' : '#dcfce7', estaActiva ? '#0369a1' : '#15803d',
-                        `window.alternarEncuestaActiva('${ev.id}', ${estaActiva ? 'false' : 'true'})`,
-                        estaActiva
-                            ? 'Ocultarla: dejará de verla todo el mundo menos el administrador'
-                            : 'Volver a mostrarla a todo el mundo',
-                        estaActiva ? window.ICONO_OCULTAR : window.ICONO_MOSTRAR);
-            } else if (laReviso(ev)) {
+            if (!window.modoAdminActivo && laReviso(ev)) {
                 // Quien revisa la encuesta puede corregir a quién va dirigida
                 // sin ser administrador: es quien sabe a quién le falta
                 // tomarla. La hoja se abre restringida a ese bloque; el resto

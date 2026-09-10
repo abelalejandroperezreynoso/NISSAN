@@ -5034,33 +5034,11 @@ window.borrarPreguntaDB = async (questionId, btnElement) => {
 // inactiva se queda en la base con todas sus respuestas, pero sólo la ve el
 // administrador y deja de generar pendientes: las consultas que los arman
 // filtran por `active`.
-window.alternarEncuestaActiva = async (id, activar) => {
-    if (!window.modoAdminActivo) { alert("Requiere permisos de administrador"); return; }
-
-    const quiereActivar = (activar === true || activar === 'true');
-    if (!quiereActivar && !confirm("¿Desactivar esta encuesta?\n\nDejará de aparecer a los usuarios y de generar pendientes. Sus respuestas se conservan y tú la seguirás viendo en modo administrador.")) return;
-
-    try {
-        // PostgREST responde con éxito aunque las políticas rechacen la
-        // escritura: se encadena .select() para contar las filas que de
-        // verdad cambiaron.
-        const { data, error } = await sb.from('evaluations')
-            .update({ active: quiereActivar })
-            .eq('id', id)
-            .select('id');
-
-        if (error) throw error;
-        if (!data || data.length === 0) {
-            alert("La base no aplicó el cambio: no hay permiso para modificar esta encuesta.");
-            return;
-        }
-
-        window.evalCache = null;
-        if (window.cargarVistaEvaluaciones) await window.cargarVistaEvaluaciones();
-    } catch (e) {
-        alert("Error al cambiar el estado: " + e.message);
-    }
-};
+// El interruptor de «Activa» vive en la hoja de editar la encuesta —la casilla
+// del grupo «Opciones», que `guardarNuevaEvaluacion` escribe con el resto—, así
+// que aquí ya no hay ninguna función suelta que lo cambie de un toque: la había
+// para el botón del renglón de la lista, que se quitó por ser ese mismo
+// interruptor por otra puerta.
 
 // --- ELIMINAR UNA ENCUESTA ---------------------------------------------
 // Se entra por el bote de basura del encabezado de la hoja de edición, que es
@@ -5099,7 +5077,7 @@ window.borrarEvaluacion = async (id) => {
         : (respuestas > 0
             ? `\n\nSe va con sus ${respuestas} respuesta${respuestas === 1 ? '' : 's'}, con sus preguntas y con sus calificaciones. No se puede deshacer.`
             : '\n\nTodavía no la ha contestado nadie.');
-    aviso += '\n\nSi lo que quieres es retirarla conservando lo contestado, ciérrala y usa el botón del ojo tachado de su renglón en la lista: deja de verla todo el mundo menos el administrador.';
+    aviso += '\n\nSi lo que quieres es retirarla conservando lo contestado, cierra este aviso y desmarca «Activa» en el grupo «Opciones» de esta misma hoja: deja de verla todo el mundo menos el administrador.';
     aviso += '\n\n¿Eliminarla?';
     if (!confirm(aviso)) return false;
 
@@ -5128,7 +5106,7 @@ window.borrarEvaluacion = async (id) => {
         // preguntas— la tiene declarada sin borrado en cascada y la base se
         // niega a dejar el registro huérfano. Ahí apagarla es la salida.
         if (e && (e.code === '23503' || String(e.message || '').includes('foreign key'))) {
-            alert("No se puede eliminar: hay respuestas o preguntas que dependen de esta encuesta y la base no las borra en cascada.\n\nOcúltala con el botón del ojo tachado de su renglón para retirarla conservando lo contestado.");
+            alert("No se puede eliminar: hay respuestas o preguntas que dependen de esta encuesta y la base no las borra en cascada.\n\nDesmarca «Activa» en el grupo «Opciones» de esta hoja para retirarla conservando lo contestado.");
         } else {
             alert("No se pudo eliminar la encuesta: " + (e.message || JSON.stringify(e)));
         }

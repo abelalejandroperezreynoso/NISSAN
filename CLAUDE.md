@@ -849,21 +849,24 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - **La insignia de certificación va en su propio renglón** del encabezado
     (`.grupo-eval-chapa`) y no al lado del nombre: «📉 1 por debajo de 80%» no
     cabe en lo que queda del ancho de un teléfono.
-  - **Al administrador le queda un botón por renglón: encender y apagar.**
-    Hubo tres, y los otros dos se fueron a donde ya se llegaba: el lápiz de
-    **editar** lo repetía el del encabezado de la pantalla de la encuesta —que
-    es adonde lleva tocar el renglón—, y el bote de basura de **eliminar** se
-    mudó al encabezado de esa misma hoja de edición (más abajo). Con uno solo
-    cabe al final del renglón, así que se fue también la regla que los mandaba a
-    su propia fila en un teléfono (`.encuesta-acciones` con `flex: 1 1 100%`),
-    que existía porque tres se llevaban la mitad del ancho y dejaban el título
-    en una columna de dos palabras. `.encuesta-fila-texto` sigue necesitando
-    `min-width: 0` o no encoge por debajo de su palabra más larga y empuja al
-    botón fuera del renglón.
+  - **El renglón del administrador no lleva ningún botón.** Hubo tres, y los
+    tres se fueron a la hoja de editar la encuesta, que está a un toque del
+    renglón —se abre con el lápiz del encabezado de su pantalla—: el lápiz de
+    **editar** repetía ese mismo lápiz, el bote de basura de **eliminar** es hoy
+    el del encabezado de esa hoja (más abajo) y **encender y apagar** ya era la
+    casilla «Activa» de su grupo «Opciones», así que el botón del renglón era el
+    mismo interruptor por otra puerta. Que una encuesta está apagada lo sigue
+    diciendo su etiqueta «INACTIVA», que es lo que hay que ver desde una lista.
+
+    Con ellos se fue la regla que los mandaba a su propia fila en un teléfono
+    (`.encuesta-acciones` con `flex: 1 1 100%`), que existía porque tres se
+    llevaban la mitad del ancho y dejaban el título en una columna de dos
+    palabras. `.encuesta-fila-texto` sigue necesitando `min-width: 0` o no
+    encoge por debajo de su palabra más larga.
 
     El lápiz del revisor —«Editar a quién va dirigida», que no es el mismo
     botón— se queda: esa hoja restringida es lo único que puede abrir desde la
-    lista.
+    lista quien no es administrador.
 
   - **Eliminar una encuesta vive en el encabezado de la hoja de edición**
     (`#btn-borrar-eval`, con `window.borrarEvaluacionEditada`), no en su
@@ -882,9 +885,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     delete que las políticas de RLS rechazan y la pantalla decía «Evaluación
     eliminada» mientras la encuesta seguía ahí. Y si la base se planta con un
     23503 —sus respuestas o sus preguntas la tienen declarada sin borrado en
-    cascada— el aviso manda a **ocultarla** con el ojo tachado de su renglón,
-    que es la
-    salida que conserva lo contestado.
+    cascada— el aviso manda a **desmarcar «Activa»** en el grupo «Opciones» de
+    esa misma hoja, que es la salida que conserva lo contestado.
 
   **Y encima de la lista ya no hay ninguna fila de botones para el usuario.**
   Ahí estuvo «🗂️ Ver Historial Global (Todas)», lo único de esa fila que veía
@@ -2688,18 +2690,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.encuestaActiva(ev)   // en 1-config.js; si el campo no vino, activa
   ```
 
-  Se apaga y se enciende desde el botón del ojo de su renglón en la lista
-  —`window.alternarEncuestaActiva(id, activar)`, en `4-evaluaciones-admin.js`—
-  o desde la casilla «Activa» de la hoja de crear y editar.
+  **Se apaga y se enciende en un solo sitio: la casilla «Activa» del grupo
+  «Opciones» de la hoja de crear y editar**, que `guardarNuevaEvaluacion`
+  escribe con el resto del formulario y `editarEvaluacion` carga con
+  `encuestaActiva`. Plegado, el renglón del grupo lo dice —«Obligatoria · Exige
+  80% · Inactiva»—, así que no hay que abrirlo para saberlo.
 
-  **Ese botón lleva un ojo, y no es un detalle.** Va tachado mientras la
-  encuesta se ve y entero cuando está apagada (`window.ICONO_OCULTAR` y
-  `window.ICONO_MOSTRAR`, en `4-evaluaciones-base.js`), porque lo que decide es
-  quién la ve. Era un 🚫 —y un ✅ al revés—, y en cuanto se quedó solo en el
-  renglón se leyó como el botón de eliminar que se acababa de quitar de ahí: un
-  círculo rojo tachado al final de la fila no dice «ocultar». Van como `<svg>`
-  por lo mismo que las estrellas de las insignias: cada sistema dibuja su emoji
-  a su manera. El tamaño se lo da `.encuesta-boton svg` en `estilos.css`.
+  Su renglón de la lista tuvo un botón que lo cambiaba de un toque
+  (`alternarEncuestaActiva`), y se quitó: era el mismo interruptor por otra
+  puerta, y en cuanto se quedó solo en la fila —fuera el lápiz, fuera el bote de
+  basura— pasó a leerse como el de eliminar, primero siendo un 🚫 y después un
+  ojo tachado. Con él se fueron sus dos iconos y la regla `.encuesta-boton svg`.
+  La contrapartida es que apagarla ya no es un toque sino guardar la hoja; a
+  cambio, el único sitio donde se decide quién ve una encuesta es el mismo donde
+  se decide todo lo demás de ella.
 
   Los pendientes salen de dos sitios y hay que apagar los dos. Las consultas
   que preguntan **qué encuesta falta por contestar** parten de `evaluations` y
