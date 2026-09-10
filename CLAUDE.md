@@ -882,7 +882,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     delete que las políticas de RLS rechazan y la pantalla decía «Evaluación
     eliminada» mientras la encuesta seguía ahí. Y si la base se planta con un
     23503 —sus respuestas o sus preguntas la tienen declarada sin borrado en
-    cascada— el aviso manda a **apagarla** con el 🚫 de su renglón, que es la
+    cascada— el aviso manda a **ocultarla** con el ojo tachado de su renglón,
+    que es la
     salida que conserva lo contestado.
 
   **Y encima de la lista ya no hay ninguna fila de botones para el usuario.**
@@ -2687,9 +2688,18 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.encuestaActiva(ev)   // en 1-config.js; si el campo no vino, activa
   ```
 
-  Se apaga y se enciende desde el botón 🚫/✅ de la tarjeta —
-  `window.alternarEncuestaActiva(id, activar)` en `4-evaluaciones-admin.js`— o
-  desde la casilla «Activa» de la hoja de crear y editar.
+  Se apaga y se enciende desde el botón del ojo de su renglón en la lista
+  —`window.alternarEncuestaActiva(id, activar)`, en `4-evaluaciones-admin.js`—
+  o desde la casilla «Activa» de la hoja de crear y editar.
+
+  **Ese botón lleva un ojo, y no es un detalle.** Va tachado mientras la
+  encuesta se ve y entero cuando está apagada (`window.ICONO_OCULTAR` y
+  `window.ICONO_MOSTRAR`, en `4-evaluaciones-base.js`), porque lo que decide es
+  quién la ve. Era un 🚫 —y un ✅ al revés—, y en cuanto se quedó solo en el
+  renglón se leyó como el botón de eliminar que se acababa de quitar de ahí: un
+  círculo rojo tachado al final de la fila no dice «ocultar». Van como `<svg>`
+  por lo mismo que las estrellas de las insignias: cada sistema dibuja su emoji
+  a su manera. El tamaño se lo da `.encuesta-boton svg` en `estilos.css`.
 
   Los pendientes salen de dos sitios y hay que apagar los dos. Las consultas
   que preguntan **qué encuesta falta por contestar** parten de `evaluations` y

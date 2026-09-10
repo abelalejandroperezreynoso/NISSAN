@@ -410,6 +410,12 @@ window.montarHojaEvaluaciones = () => {
 // Devuelve además el `peso` con el que se ordena —lo vencido primero, lo neutro
 // al final— y si cuenta como pendiente de quien mira, que es lo que suma el pie
 // de la clasificación.
+// El ojo y el ojo tachado del botón que decide quién ve una encuesta. Van como
+// `<svg>` y no como emoji por lo de siempre: cada sistema dibuja el suyo, y el
+// 🚫 que llevaba antes se leía como el de eliminar.
+window.ICONO_OCULTAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.9 17.9A10.1 10.1 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.1-5.9"/><path d="M9.9 4.2A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.2 3.2"/><path d="M14.1 14.1a3 3 0 1 1-4.2-4.2"/><path d="M2 2l20 20"/></svg>';
+window.ICONO_MOSTRAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+
 window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalificar }) => {
     // Una encuesta apagada no le pide nada a nadie —sólo llega hasta aquí en
     // modo administrador—, así que va con el estado neutro y al final de su
@@ -825,10 +831,19 @@ window.cargarVistaEvaluaciones = async () => {
 
             let acciones = '';
             if (window.modoAdminActivo) {
+                // **El icono es un ojo y no un 🚫.** Lo que hace este botón es
+                // decidir quién la ve, y el emoji de prohibido se leía como el
+                // de eliminar —que es justo el que se acaba de quitar de aquí—:
+                // un círculo rojo tachado al final del renglón no dice
+                // «ocultar», dice «borrar». El ojo tachado esconde y el ojo
+                // vuelve a enseñar, que es lo que el botón hace de verdad y lo
+                // que ya decía su etiqueta.
                 acciones = botonIcono(estaActiva ? '#e0f2fe' : '#dcfce7', estaActiva ? '#0369a1' : '#15803d',
                         `window.alternarEncuestaActiva('${ev.id}', ${estaActiva ? 'false' : 'true'})`,
-                        estaActiva ? 'Desactivar (sólo la verá el administrador)' : 'Activar (volverá a verla todo el mundo)',
-                        estaActiva ? '🚫' : '✅');
+                        estaActiva
+                            ? 'Ocultarla: dejará de verla todo el mundo menos el administrador'
+                            : 'Volver a mostrarla a todo el mundo',
+                        estaActiva ? window.ICONO_OCULTAR : window.ICONO_MOSTRAR);
             } else if (laReviso(ev)) {
                 // Quien revisa la encuesta puede corregir a quién va dirigida
                 // sin ser administrador: es quien sabe a quién le falta

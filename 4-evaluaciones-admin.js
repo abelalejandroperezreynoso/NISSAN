@@ -5099,7 +5099,7 @@ window.borrarEvaluacion = async (id) => {
         : (respuestas > 0
             ? `\n\nSe va con sus ${respuestas} respuesta${respuestas === 1 ? '' : 's'}, con sus preguntas y con sus calificaciones. No se puede deshacer.`
             : '\n\nTodavía no la ha contestado nadie.');
-    aviso += '\n\nSi lo que quieres es retirarla conservando lo contestado, ciérrala y usa el botón 🚫 de su renglón en la lista: deja de verla todo el mundo menos el administrador.';
+    aviso += '\n\nSi lo que quieres es retirarla conservando lo contestado, ciérrala y usa el botón del ojo tachado de su renglón en la lista: deja de verla todo el mundo menos el administrador.';
     aviso += '\n\n¿Eliminarla?';
     if (!confirm(aviso)) return false;
 
@@ -5128,7 +5128,7 @@ window.borrarEvaluacion = async (id) => {
         // preguntas— la tiene declarada sin borrado en cascada y la base se
         // niega a dejar el registro huérfano. Ahí apagarla es la salida.
         if (e && (e.code === '23503' || String(e.message || '').includes('foreign key'))) {
-            alert("No se puede eliminar: hay respuestas o preguntas que dependen de esta encuesta y la base no las borra en cascada.\n\nApágala con el botón 🚫 de su renglón para retirarla conservando lo contestado.");
+            alert("No se puede eliminar: hay respuestas o preguntas que dependen de esta encuesta y la base no las borra en cascada.\n\nOcúltala con el botón del ojo tachado de su renglón para retirarla conservando lo contestado.");
         } else {
             alert("No se pudo eliminar la encuesta: " + (e.message || JSON.stringify(e)));
         }

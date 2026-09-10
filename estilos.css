@@ -4849,6 +4849,10 @@ html.fondo-anclado body {
 
 .encuesta-boton:hover { filter: brightness(0.94); }
 
+/* El botón de ocultar y mostrar lleva un `<svg>` dentro, no un emoji: el 🚫 que
+   llevaba antes se leía como el de eliminar. */
+.encuesta-boton svg { width: 15px; height: 15px; }
+
 /* Cuántas respuestas esperan calificación, que es lo que llevaba el globo rojo
    sobre el cuadro de la rejilla. Va a la derecha: en el renglón de la encuesta
    y en el de su clasificación. */
