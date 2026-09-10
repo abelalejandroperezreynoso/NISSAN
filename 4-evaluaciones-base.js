@@ -232,10 +232,22 @@ window.cerrarModalEvaluaciones = () => {
 // contenedor con el nombre de una encuesta.
 window.vengoDeLaListaDeEncuestas = false;
 
+// Y si se pasó además por la pantalla de una clasificación, cuál: ahí es donde
+// vuelve el botón del encabezado, que es de donde se tocó la encuesta. Guarda el
+// índice del grupo en `window.clasificacionesDeLaLista`, o null si no se entró
+// por ahí. La pone `abrirClasificacionDeLaLista` y la quitan las otras dos
+// puertas —la lista y la entrada directa desde el inicio—.
+window.grupoDeLaListaAbierto = null;
+
 // El «volver» de la hoja de una encuesta, o null si no hay a dónde volver, que es
 // lo que `encabezadoHojaEvaluaciones` entiende como «deja la cruz».
-window.volverALaListaDeEncuestas = () =>
-    window.vengoDeLaListaDeEncuestas ? () => window.cargarVistaEvaluaciones() : null;
+window.volverALaListaDeEncuestas = () => {
+    if (window.grupoDeLaListaAbierto !== null && window.grupoDeLaListaAbierto !== undefined) {
+        const indice = window.grupoDeLaListaAbierto;
+        return () => window.abrirClasificacionDeLaLista(indice);
+    }
+    return window.vengoDeLaListaDeEncuestas ? () => window.cargarVistaEvaluaciones() : null;
+};
 
 window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta, subtitulo) => {
     const h = document.getElementById('titulo-hoja-evaluaciones');
@@ -259,6 +271,15 @@ window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta, subtitulo) =>
             ? () => { window.cerrarModalEvaluaciones(); window.editarEvaluacion(idEncuesta); }
             : null;
     }
+
+    // Los dos de una clasificación se esconden siempre: sólo los enseña la
+    // pantalla que sabe de cuál se trata, llamando a `botonesDeClasificacion`
+    // **después** de esto. Es lo mismo que hace el lápiz con la encuesta y por
+    // lo mismo: si no, se quedaría el de la clasificación anterior.
+    ['btn-revisores-hoja-eval', 'btn-nueva-encuesta-hoja-eval'].forEach(id => {
+        const b = document.getElementById(id);
+        if (b) { b.hidden = true; b.onclick = null; }
+    });
 
     if (!btn) return;
 
@@ -297,6 +318,22 @@ window.montarHojaEvaluaciones = () => {
                         <div id="subtitulo-hoja-evaluaciones" class="hoja-subtitulo"></div>
                     </div>
                     <div class="hoja-acciones">
+                        <!-- Los dos de la pantalla de una clasificación:
+                             quién revisa sus encuestas y crear una nueva en
+                             ella. Los engancha botonesDeClasificacion, el
+                             mismo que los de la hoja de detalle del panel de
+                             inicio, y los esconde encabezadoHojaEvaluaciones
+                             en las demás pantallas de la hoja. Sin acentos
+                             graves aquí dentro: este marcado va en una
+                             plantilla de JavaScript y uno la cerraría. -->
+                        <button id="btn-revisores-hoja-eval" class="ios-boton-icono" hidden
+                                title="Revisores" aria-label="Revisores de esta clasificación">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </button>
+                        <button id="btn-nueva-encuesta-hoja-eval" class="ios-boton-icono" hidden
+                                title="Nueva encuesta" aria-label="Nueva encuesta en esta clasificación">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                        </button>
                         <button id="btn-editar-hoja-evaluaciones" class="ios-boton-icono" hidden
                                 title="Editar encuesta" aria-label="Editar encuesta">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
@@ -360,6 +397,10 @@ window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalifica
             respuestas, ev.id, ev.frequency, ev.created_at, ev, contestaQuienMira);
         return {
             estado: window.estadoDeAsignada(v),
+            // El vencimiento se devuelve entero porque la pantalla de la
+            // clasificación saca de él la fecha de la última vez que se
+            // contestó, cuando no hay respuesta en el periodo que corre.
+            vencimiento: v,
             pendiente: !!(v && v.mostrar),
             peso: !(v && v.mostrar) ? 2 : (v.vencida ? 0 : 1)
         };
@@ -380,11 +421,70 @@ window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalifica
     };
 };
 
+// La pantalla de una clasificación de la lista: la séptima que se dibuja dentro
+// de `#contenido-modal-evaluaciones`. Es el mismo cuerpo que la hoja de detalle
+// del panel de inicio —resultado del último periodo, la línea de los
+// anteriores, quién revisa y sus encuestas—, y por eso lo arma el ayudante
+// compartido `cuerpoDetalleClasificacion` en lugar de una segunda copia.
+//
+// **Va dentro de esta hoja y no como una hoja encima.** Apilar
+// `#modal-detalle-clasificacion` sobre la de evaluaciones dejaría dos tiradores
+// a la vista y esconderría la de abajo, que es justo lo que la aplicación no
+// hace en ningún sitio; y como las dos llevan el mismo z-index, la de
+// evaluaciones —que se inserta al final del `<body>`— taparía a la otra. Aquí
+// ya hay una hoja abierta con su encabezado, así que lo que toca es cambiar de
+// pantalla, como al abrir una encuesta.
+//
+// El botón del encabezado es la flecha de volver a la lista, y los dos de la
+// clasificación —el ojo y el «+»— son los mismos de la hoja del inicio, con sus
+// ids de aquí y cerrando esta hoja antes de abrir la suya.
+window.abrirClasificacionDeLaLista = (indice) => {
+    const grupo = (window.clasificacionesDeLaLista || [])[indice];
+    if (!grupo || !window.cuerpoDetalleClasificacion) return;
+
+    // Se entró por la pantalla de una clasificación, así que la encuesta que se
+    // abra desde aquí vuelve a ella y no a la lista.
+    window.grupoDeLaListaAbierto = indice;
+    window.vengoDeLaListaDeEncuestas = true;
+
+    const container = window.montarHojaEvaluaciones();
+
+    // El subtítulo va en texto pelado —lo escribe `innerText`—, así que el pie
+    // del renglón, que lleva el promedio con su color, no sirve tal cual.
+    const total = grupo.filas.length;
+    const subtitulo = [
+        `${total} encuesta${total === 1 ? '' : 's'}`,
+        grupo.pendientes > 0 ? `${grupo.pendientes} pendiente${grupo.pendientes === 1 ? '' : 's'}` : null,
+        grupo.porCalificar > 0 ? `${grupo.porCalificar} por calificar` : null
+    ].filter(Boolean).join(' · ');
+
+    window.encabezadoHojaEvaluaciones(
+        grupo.nombre, () => window.cargarVistaEvaluaciones(), null, subtitulo);
+
+    // Después del encabezado, que es quien los esconde.
+    if (window.botonesDeClasificacion) {
+        window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev), {
+            idOjo: 'btn-revisores-hoja-eval',
+            idMas: 'btn-nueva-encuesta-hoja-eval',
+            cerrar: window.cerrarModalEvaluaciones
+        });
+    }
+
+    // El «abridor» es `abrirHistorialEvaluacion` y no `abrirEncuestaDesdeInicio`:
+    // la encuesta se dibuja en esta misma hoja y conserva la flecha de volver,
+    // que con la marca de arriba lleva de vuelta a esta pantalla.
+    container.innerHTML = window.cuerpoDetalleClasificacion(
+        grupo, window.respuestasDeLaLista, 'window.abrirHistorialEvaluacion');
+    container.scrollTop = 0;
+};
+
 // --- 1. CARGAR LISTA PRINCIPAL ---
 window.cargarVistaEvaluaciones = async () => {
     // Se entró por la lista, así que las encuestas que se abran desde aquí sí
-    // tienen a dónde volver.
+    // tienen a dónde volver —y a la lista, no a la pantalla de una
+    // clasificación: por eso se limpia esa otra marca—.
     window.vengoDeLaListaDeEncuestas = true;
+    window.grupoDeLaListaAbierto = null;
     const container = window.montarHojaEvaluaciones();
     window.encabezadoHojaEvaluaciones();
 
@@ -587,9 +687,11 @@ window.cargarVistaEvaluaciones = async () => {
                 leToca, revisor: laReviso(ev), respuestas: misRespuestas, porCalificar
             });
             // El puntaje del periodo, como en la tarjeta del panel: es la misma
-            // pregunta y la respuesta ya está en `misRespuestas`.
+            // pregunta y la respuesta ya está en `misRespuestas`. La respuesta
+            // se guarda porque de ella salen la fecha y el puntaje que enseña
+            // la pantalla de la clasificación.
             const resp = leToca ? window.respuestaDelPeriodo(ev, misRespuestas, ahora) : null;
-            return Object.assign({ ev, porCalificar, leToca, puntaje: window.puntajeDeRespuesta(resp) }, lectura);
+            return Object.assign({ ev, resp, porCalificar, leToca, puntaje: window.puntajeDeRespuesta(resp) }, lectura);
         });
 
         // Dentro del grupo manda lo que urge; entre grupos, el que peor está.
@@ -608,12 +710,22 @@ window.cargarVistaEvaluaciones = async () => {
     const gruposVisibles = grupos.filter(g => g.filas.length > 0);
     gruposVisibles.sort((a, b) => (a.peso - b.peso) || a.nombre.localeCompare(b.nombre, 'es'));
 
+    // Lo que la pantalla de una clasificación vuelve a leer al abrirse, sin
+    // recalcular nada ni volver a preguntarle a la base. Se le pasa el índice
+    // del grupo y no su nombre, igual que en la tarjeta del panel de inicio:
+    // así no hay que escapar la clasificación en un atributo.
+    //
+    // Las respuestas van enteras y no sólo las del periodo que corre: la
+    // gráfica de esa pantalla recorre los periodos de atrás.
+    window.clasificacionesDeLaLista = gruposVisibles;
+    window.respuestasDeLaLista = misRespuestas || [];
+
     if (gruposVisibles.length === 0) {
         container.insertAdjacentHTML('beforeend', `<div style="text-align:center; padding:40px; color:#64748b;">No hay evaluaciones disponibles.</div>`);
         return;
     }
 
-    const bloques = gruposVisibles.map(g => {
+    const bloques = gruposVisibles.map((g, indice) => {
         const renglones = g.filas.map(({ ev, estado, porCalificar, puntaje }) => {
             const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
             const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
@@ -725,12 +837,13 @@ window.cargarVistaEvaluaciones = async () => {
                 : `<span style="color:${colorGrupo}; font-weight:700;">${g.promedio}%</span>`
         ].filter(Boolean).join(' · ');
 
-        // Un <details> y no una función colgada de `window`: abrir y cerrar lo
-        // hace el navegador solo, como en la tarjeta del panel de inicio y en
-        // los plegables de las hojas. Aquí el renglón entero pliega y despliega
-        // —no hay una hoja de detalle que abrir, que ésta ya es la hoja—, así
-        // que la flecha es un adorno y no un botón: la pulsa quien la mire, y
-        // el <summary> de debajo hace el trabajo.
+        // El renglón hace dos cosas, igual que en la tarjeta del panel de
+        // inicio: tocarlo abre la **pantalla de la clasificación** —cómo va,
+        // su gráfica y quién la revisa— y la flecha de la derecha despliega
+        // aquí mismo sus encuestas. Las dos no caben en el mismo toque, así
+        // que la flecha es un botón suyo (`alternarGrupoAsignadas`) y el
+        // `<summary>` hace `preventDefault` para que el navegador no despliegue
+        // por su cuenta lo que ya decide el botón.
         //
         // Nace abierta si hay algo esperando a quien mira, como la lista de
         // respuestas de una encuesta y por lo mismo. En modo administrador no:
@@ -740,7 +853,7 @@ window.cargarVistaEvaluaciones = async () => {
 
         return `
             <details class="grupo-asignadas"${abrir ? ' open' : ''}>
-                <summary>
+                <summary onclick="event.preventDefault(); window.abrirClasificacionDeLaLista(${indice})">
                     ${window.iconoDeAsignada(estadoGrupo)}
                     <div style="flex:1; min-width:0;">
                         <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
@@ -748,11 +861,15 @@ window.cargarVistaEvaluaciones = async () => {
                         ${chapaCert}
                     </div>
                     ${globoDeCalificar(g.porCalificar, 'esperan tu calificación en esta clasificación')}
-                    <span class="grupo-asignadas-boton" aria-hidden="true">
+                    <span style="color:#cbd5e1; font-size:1.3rem; line-height:1; flex-shrink:0;">&rsaquo;</span>
+                    <button type="button" class="grupo-asignadas-boton" aria-expanded="${abrir ? 'true' : 'false'}"
+                            onclick="window.alternarGrupoAsignadas(this, event)"
+                            title="${abrir ? 'Ocultar sus encuestas' : 'Ver sus encuestas'}"
+                            aria-label="${abrir ? 'Ocultar sus encuestas' : 'Ver sus encuestas'}">
                         <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
                              fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
-                             stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
-                    </span>
+                             stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
                 </summary>
                 ${renglones}
             </details>`;

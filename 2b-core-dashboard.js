@@ -1453,8 +1453,13 @@ window.etiquetasDeEje = (inicio, frecuencia) => {
 //
 // Un periodo sin nada calificado devuelve `promedio: null` —no un cero, que se
 // leería como haberlo hecho mal— y la gráfica se lo salta.
-window.historialDeClasificacion = (grupo, cuantos) => {
+window.historialDeClasificacion = (grupo, cuantos, respuestas) => {
     const encuestas = (grupo.filas || []).map(f => f.ev);
+    // Las respuestas se pueden pasar: la hoja del panel de inicio lee las que
+    // dejó `cargarEncuestasAsignadas`, y la pantalla de una clasificación de la
+    // hoja de evaluaciones, las de su propia lista. Sin argumento, las del
+    // panel, que es de donde salió esto.
+    const suyas = respuestas || window.respuestasAsignadas || [];
     const periodos = window.periodosDeClasificacion(encuestas, cuantos || window.PERIODOS_EN_LA_GRAFICA);
     // El ritmo del grupo, que es el que decide cómo se rotula el eje.
     const ritmo = window.encuestaQueMarcaElRitmo(encuestas);
@@ -1463,7 +1468,7 @@ window.historialDeClasificacion = (grupo, cuantos) => {
     return periodos.slice().reverse().map(p => {
         const puntajes = encuestas
             .map(ev => window.puntajeDeRespuesta(
-                window.respuestaDelPeriodo(ev, window.respuestasAsignadas || [], p.referencia)))
+                window.respuestaDelPeriodo(ev, suyas, p.referencia)))
             .filter(n => n !== null);
 
         const rotulos = window.etiquetasDeEje(p.inicio, frecuencia);
@@ -1724,14 +1729,22 @@ window.filaDeRevisores = (grupo) => {
 // —el observador de `1-config.js` apartaría ésta al ver dos abiertas, pero así
 // no hay ni el fotograma con las dos a la vista— y con la etiqueta enganchada
 // desde JavaScript, que el nombre cambia con cada clasificación.
-window.botonesDeClasificacion = (nombre, cuantas, encuestas) => {
+// Los ids y el cierre van por argumento porque estos dos botones se dibujan en
+// dos encabezados: el de la hoja `#modal-detalle-clasificacion` del panel de
+// inicio y el de la hoja de evaluaciones, cuando enseña la pantalla de una
+// clasificación. Lo que cambia entre los dos es qué hoja hay que cerrar antes
+// de abrir la que ellos abren.
+window.botonesDeClasificacion = (nombre, cuantas, encuestas, opciones) => {
+    const idOjo = (opciones && opciones.idOjo) || 'btn-revisores-clasif';
+    const idMas = (opciones && opciones.idMas) || 'btn-nueva-encuesta-clasif';
+    const cerrar = (opciones && opciones.cerrar) || window.cerrarDetalleClasificacion;
     const esAdmin = !!window.modoAdminActivo;
 
     // **El ojo se queda sólo para el administrador.** Nombrar revisores es
     // repartir quién califica a quién, y un revisor podría quitarse a sí mismo
     // o quedarse con la clasificación entera; crear una encuesta, en cambio,
     // sólo se añade trabajo a sí mismo.
-    const ojo = document.getElementById('btn-revisores-clasif');
+    const ojo = document.getElementById(idOjo);
     if (ojo) {
         const puede = esAdmin && !!window.abrirRevisoresDeClasificacion;
         ojo.hidden = !puede;
@@ -1739,7 +1752,7 @@ window.botonesDeClasificacion = (nombre, cuantas, encuestas) => {
         ojo.title = etiqueta;
         ojo.setAttribute('aria-label', etiqueta);
         ojo.onclick = puede
-            ? () => { window.cerrarDetalleClasificacion(); window.abrirRevisoresDeClasificacion(nombre, cuantas); }
+            ? () => { cerrar(); window.abrirRevisoresDeClasificacion(nombre, cuantas); }
             : null;
     }
 
@@ -1748,7 +1761,7 @@ window.botonesDeClasificacion = (nombre, cuantas, encuestas) => {
     // pasa la clasificación **fijada**, que es lo que bloquea el campo de la
     // hoja y lo que se vuelve a comprobar al guardar; para el administrador va
     // suelta, como siempre.
-    const mas = document.getElementById('btn-nueva-encuesta-clasif');
+    const mas = document.getElementById(idMas);
     if (mas) {
         const user = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
         const revisa = !esAdmin && !!user
@@ -1759,30 +1772,28 @@ window.botonesDeClasificacion = (nombre, cuantas, encuestas) => {
         mas.title = etiqueta;
         mas.setAttribute('aria-label', etiqueta);
         mas.onclick = puede
-            ? () => { window.cerrarDetalleClasificacion(); window.abrirNuevaEvaluacion(nombre, !esAdmin); }
+            ? () => { cerrar(); window.abrirNuevaEvaluacion(nombre, !esAdmin); }
             : null;
     }
 };
 
-window.abrirDetalleClasificacion = (indice) => {
-    const grupo = (window.clasificacionesAsignadas || [])[indice];
-    const overlay = document.getElementById('modal-detalle-clasificacion');
-    const cuerpo = document.getElementById('cuerpo-detalle-clasif');
-    if (!grupo || !overlay || !cuerpo) return;
-
-    const total = grupo.filas.length;
-
-    document.getElementById('titulo-detalle-clasif').innerText = grupo.nombre;
-    document.getElementById('subtitulo-detalle-clasif').innerText =
-        `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
-
-    window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev));
-
+// El cuerpo de una clasificación: el resultado del último periodo, la línea de
+// los anteriores, quién las revisa y sus encuestas. Se dibuja en **dos sitios**
+// —la hoja `#modal-detalle-clasificacion` del panel de inicio y la pantalla de
+// una clasificación de la hoja de evaluaciones—, así que vive aquí suelto y no
+// dentro de la función que abre una de las dos. Cada sitio escribe su propio
+// título: el subtítulo no dice lo mismo en los dos.
+//
+// `abridor` es lo que se llama al tocar una encuesta, y es lo único que cambia:
+// desde el panel hay que cerrar esa hoja antes de entrar a la encuesta, y desde
+// la hoja de evaluaciones se entra por `abrirHistorialEvaluacion`, que dibuja la
+// encuesta en la misma hoja y conserva la flecha de volver.
+window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
     // Lo que se viene a ver es cómo va: el resultado del último periodo que
     // dejó alguno —con su nombre, que puede no ser el que corre— y la línea de
     // los anteriores. Cuántas faltan y cuántas están al día ya lo dice el
-    // renglón de la tarjeta del panel, y aquí lo dice cada encuesta de abajo.
-    const historial = window.historialDeClasificacion(grupo);
+    // renglón de la clasificación, y aquí lo dice cada encuesta de abajo.
+    const historial = window.historialDeClasificacion(grupo, null, respuestas);
     const conDato = historial.filter(p => p.promedio !== null);
     const ultimo = conDato.length > 0 ? conDato[conDato.length - 1] : null;
 
@@ -1809,7 +1820,7 @@ window.abrirDetalleClasificacion = (indice) => {
 
         // La fecha de la que cuenta en este periodo; si no hay, la de la última
         // vez que se contestó, que es lo que la deja en contexto.
-        const cuando = resp ? resp.submitted_at : (vencimiento.ultimaFecha || null);
+        const cuando = resp ? resp.submitted_at : ((vencimiento && vencimiento.ultimaFecha) || null);
         const fecha = cuando
             ? new Date(cuando).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
             : '';
@@ -1819,11 +1830,8 @@ window.abrirDetalleClasificacion = (indice) => {
             fecha ? `${resp ? 'contestada' : 'última vez'} ${fecha}` : null
         ].filter(Boolean).join(' · ');
 
-        // La hoja se cierra ella misma antes de abrir la de la encuesta: el
-        // observador de `1-config.js` apartaría ésta al ver dos abiertas, pero
-        // así no hay ni el fotograma con las dos a la vista.
         return `
-            <div onclick="window.cerrarDetalleClasificacion(); window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
+            <div onclick="${abridor}('${ev.id}', '${safeTitle}')"
                  style="display:flex; align-items:center; gap:12px; padding:12px 4px; border-top:1px solid #f1f5f9; cursor:pointer;">
                 ${window.iconoDeAsignada(estado)}
                 <div style="flex:1; min-width:0;">
@@ -1837,7 +1845,29 @@ window.abrirDetalleClasificacion = (indice) => {
 
     // Quién las revisa va entre el resultado y la lista: lo que se viene a ver
     // es cómo va, así que el resultado se queda arriba del todo.
-    cuerpo.innerHTML = resumen + window.filaDeRevisores(grupo) + renglones;
+    return resumen + window.filaDeRevisores(grupo) + renglones;
+};
+
+window.abrirDetalleClasificacion = (indice) => {
+    const grupo = (window.clasificacionesAsignadas || [])[indice];
+    const overlay = document.getElementById('modal-detalle-clasificacion');
+    const cuerpo = document.getElementById('cuerpo-detalle-clasif');
+    if (!grupo || !overlay || !cuerpo) return;
+
+    const total = grupo.filas.length;
+
+    document.getElementById('titulo-detalle-clasif').innerText = grupo.nombre;
+    document.getElementById('subtitulo-detalle-clasif').innerText =
+        `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
+
+    window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev));
+
+    // La hoja se cierra ella misma antes de abrir la de la encuesta: el
+    // observador de `1-config.js` apartaría ésta al ver dos abiertas, pero así
+    // no hay ni el fotograma con las dos a la vista.
+    cuerpo.innerHTML = window.cuerpoDetalleClasificacion(
+        grupo, window.respuestasAsignadas,
+        'window.cerrarDetalleClasificacion(); window.abrirEncuestaDesdeInicio');
     overlay.style.display = 'flex';
 };
 
@@ -2239,6 +2269,9 @@ window.abrirEncuestaDesdeInicio = async (evalId, titulo) => {
     }
 
     window.vengoDeLaListaDeEncuestas = false;
+    // Ni a la pantalla de una clasificación de la lista: por aquí no se pasó
+    // por ninguna de las dos, así que el encabezado se queda con la cruz.
+    window.grupoDeLaListaAbierto = null;
     const container = window.montarHojaEvaluaciones();
     window.encabezadoHojaEvaluaciones(titulo, null, evalId);
     if (container) {

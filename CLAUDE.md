@@ -615,8 +615,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   ```js
   window.vengoDeLaListaDeEncuestas        // la pone la lista al dibujarse; el inicio la quita
+  window.grupoDeLaListaAbierto            // el grupo cuya pantalla se está mirando, o null
   window.volverALaListaDeEncuestas()      // el «volver», o null si no hay a dónde
   ```
+
+  Hoy son **tres** caminos, no dos: el tercero es la pantalla de una
+  clasificación de la propia lista, y de ahí el segundo marcador —se explica
+  más abajo, con esa pantalla—. El ayudante los mira en orden de lo más
+  cercano a lo más lejano, así que quien entró por una clasificación vuelve a
+  ella y no a la lista.
 
   `abrirHistorialEvaluacion` —la de `4-evaluaciones-admin.js`, que es la que
   manda— pasa lo que devuelva ese ayudante, así que hereda el camino sin saber
@@ -782,11 +789,68 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   encuestas de todo el mundo y casi todas tienen algo pendiente de alguien, así
   que abrirlas todas es no plegar nada.
 
-  Y a diferencia de la tarjeta del inicio, **aquí el renglón de la
-  clasificación sólo pliega y despliega**: no hay hoja de detalle que abrir,
-  que ésta ya es la hoja. Por eso el `<summary>` hace el trabajo del navegador
-  —sin `preventDefault`— y la flecha es un `<span>` con la clase del botón, no
-  un botón: no tiene nada suyo que hacer.
+  **Y el renglón de una clasificación hace las mismas dos cosas que en el
+  inicio**: tocarlo abre la **pantalla de la clasificación** —cómo va, su
+  gráfica de periodos, quién la revisa y sus encuestas— y la flecha de la
+  derecha despliega ahí mismo la lista de sus encuestas. Las dos no caben en el
+  mismo toque, así que la flecha es un botón suyo (`alternarGrupoAsignadas`,
+  con su `stopPropagation` y su `preventDefault`) y el `<summary>` hace
+  `preventDefault` para que el navegador no despliegue por su cuenta lo que ya
+  decide el botón.
+
+  ```js
+  window.clasificacionesDeLaLista   // los grupos ya calculados, por índice
+  window.respuestasDeLaLista        // las respuestas enteras, para la gráfica
+  window.abrirClasificacionDeLaLista(indice)
+  ```
+
+  **Esa pantalla va dentro de la hoja, no como una hoja encima.** Es la
+  séptima que se dibuja en `#contenido-modal-evaluaciones`, con la flecha de
+  volver a la lista en el encabezado. Apilar `#modal-detalle-clasificacion`
+  sobre la hoja de evaluaciones dejaría dos tiradores a la vista y esconderría
+  la de abajo —lo que esta aplicación no hace en ningún sitio, y lo que el
+  observador de `1-config.js` sólo desdobla para el panel de administración—;
+  y como las dos llevan el mismo z-index y la de evaluaciones se inserta al
+  final del `<body>`, taparía a la otra. Aquí ya hay una hoja abierta, así que
+  lo que toca es cambiar de pantalla, como al abrir una encuesta.
+
+  **El cuerpo es el mismo que el de la hoja del inicio, y por eso se extrajo**
+  a `window.cuerpoDetalleClasificacion(grupo, respuestas, abridor)` (en
+  `2b-core-dashboard.js`): el resultado del último periodo, la línea de los
+  anteriores, la fila de quién revisa y las encuestas con su fecha y su
+  puntaje. `abrirDetalleClasificacion` —la hoja del panel— pasa por ahí
+  también, así que las dos pantallas no pueden divergir. Lo que cambia es lo
+  que cada una escribe alrededor:
+
+  - **El `abridor`**, que es lo que se llama al tocar una encuesta. Desde el
+    panel hay que cerrar esa hoja antes de entrar
+    (`cerrarDetalleClasificacion(); abrirEncuestaDesdeInicio`); desde la lista
+    es `abrirHistorialEvaluacion` a secas, que dibuja la encuesta en la misma
+    hoja y conserva la flecha de volver.
+  - **El título y el subtítulo**, que no dicen lo mismo: en el panel, «N
+    encuestas asignadas»; en la lista, la cuenta con lo pendiente y lo que
+    espera calificación —y en texto pelado, que lo escribe `innerText` y el
+    pie del renglón lleva el promedio con su color—.
+  - **Las respuestas**, que son de cada pantalla: `historialDeClasificacion`
+    admite un tercer argumento en vez de leer sólo `respuestasAsignadas`.
+  - **Los dos botones del encabezado** —el ojo y el «+»—, que son los mismos
+    (`botonesDeClasificacion`) con **otros ids y otro cierre**: la hoja de
+    evaluaciones tiene los suyos (`btn-revisores-hoja-eval`,
+    `btn-nueva-encuesta-hoja-eval`) y cierra ella misma antes de abrir la que
+    ellos abren. Los esconde `encabezadoHojaEvaluaciones`, como al lápiz y por
+    lo mismo, así que la pantalla de la clasificación los repone **después** de
+    llamarlo.
+
+  **Y el «volver» de una encuesta sabe por dónde se entró.** A la pantalla de
+  una encuesta se llega ya por tres caminos, y el botón del encabezado no puede
+  llevar a una pantalla por la que nadie pasó: además de
+  `vengoDeLaListaDeEncuestas` está `window.grupoDeLaListaAbierto`, el índice
+  del grupo cuya pantalla se está mirando —o null—. Lo pone
+  `abrirClasificacionDeLaLista` y lo quitan las otras dos puertas: la lista, que
+  vuelve a ella misma, y `abrirEncuestaDesdeInicio`, que se queda con la cruz.
+  `volverALaListaDeEncuestas()` mira primero esa marca, de modo que desde una
+  encuesta abierta en la pantalla de su clasificación se vuelve a ella y no dos
+  pasos atrás.
 - **El `id_interno` identifica al equipo y el nombre va pegado a él.** La
   misma máquina suele estar dada de alta varias veces en `equipos`, una fila
   por línea, todas con el mismo `id_interno`. La base no tiene restricción de
