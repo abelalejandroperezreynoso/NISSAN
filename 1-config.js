@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-10-5';
+window.VERSION_APP = '2026-09-10-6';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -2001,6 +2001,334 @@ window.tienePermisoRefacciones = async (encargosDelUsuario) => {
         : window.normalizarEncargos(encargosDelUsuario);
 
     return mios.map(e => e.toUpperCase()).some(e => autorizados.includes(e));
+};
+
+// =========================================================
+// --- LA FICHA DEL EMPLEADO, QUE SE EDITA DESDE DOS SITIOS ---
+// =========================================================
+// El panel de refacciones tuvo la primera pantalla de personal y el panel
+// principal tiene ahora la suya («Gestionar información»). Son dos documentos
+// distintos que no comparten más JavaScript que este archivo, así que lo que
+// no puede discrepar de una pantalla a la otra vive aquí: cómo se consulta la
+// tabla, cómo se leen sus columnas de lista y qué se barre al eliminar a
+// alguien. Dos copias de esto último es lo que dejaría historial sin dueño.
+
+// La columna encargos —y lineas_ids— las añade un script de sql/ que se corre a
+// mano. Pedirle a PostgREST una columna que no existe no devuelve la fila sin
+// ese campo: revienta la consulta entera. Se reintenta sin la columna de la que
+// se queja, así la pantalla sigue en pie mientras el script no se haya corrido.
+window.COLUMNAS_OPCIONALES_EMPLEADO = ['encargos', 'lineas_ids'];
+
+window.consultarEmpleados = async (columnas, ordenarPor) => {
+    let cols = columnas.split(',').map(c => c.trim()).filter(c => c !== '');
+
+    for (let intento = 0; intento <= window.COLUMNAS_OPCIONALES_EMPLEADO.length; intento++) {
+        const q = sb.from('employees').select(cols.join(', '));
+        const res = await (ordenarPor ? q.order(ordenarPor) : q);
+        if (!res.error) return res;
+
+        const mensaje = String(res.error.message || '');
+        const culpable = cols.find(c =>
+            window.COLUMNAS_OPCIONALES_EMPLEADO.includes(c) && mensaje.includes(c));
+        if (!culpable) return res;
+
+        cols = cols.filter(c => c !== culpable);
+    }
+    return { data: null, error: { message: 'No se pudo consultar la tabla de empleados.' } };
+};
+
+// lineas_ids es bigint[], pero se acepta una cadena separada por comas por si
+// alguna fila se capturó a mano desde Supabase. Es el mismo criterio que
+// `normalizarEncargos`, unas líneas más arriba.
+window.normalizarIdsLineas = (valor) => {
+    if (!valor) return [];
+    const lista = Array.isArray(valor) ? valor : String(valor).replace(/[{}]/g, '').split(',');
+    return lista.map(v => String(v).trim()).filter(v => v !== '');
+};
+
+// --- ELIMINAR UN EMPLEADO Y SU HISTORIAL ---------------------------------
+// Eliminar borra la ficha y **todo lo que esa persona dejó hecho**: sus firmas
+// de incidentes, sus respuestas de encuestas, sus objetivos, sus hallazgos, sus
+// encuestas programadas, sus solicitudes de refacciones y sus actas de
+// certificación. No hay vuelta atrás y no hay papelera. Quien quiera conservar
+// el historial da de baja —desmarcar «Activo»—, que es el camino normal.
+//
+// La base no lo hace sola: esas tablas guardan a la persona por su número
+// —unas veces el `id` numérico de la fila y otras el `employee_id` de texto,
+// según la antigüedad del registro— y ninguna de esas columnas es llave
+// foránea, así que borrar la ficha no borra en cascada ni se queja: dejaba el
+// registro apuntando a alguien que ya no existe, y un alta futura con ese mismo
+// número lo heredaba.
+//
+// Se distingue lo suyo de lo ajeno, que no es lo mismo:
+//   · `suyas`     — columnas que dicen que la fila ES suya (la solicitud que
+//                   pidió, la encuesta que contestó). La fila entera se borra.
+//   · `menciones` — columnas donde aparece dentro de la fila de otro (la
+//                   solicitud que atendió, el hallazgo que le asignaron, el
+//                   acta que firmó, sus subordinados). Ahí sólo se le desliga,
+//                   poniendo la columna a null: borrar esa fila destruiría el
+//                   registro de un tercero, que no es lo que se pidió.
+//
+// Toda tabla nueva que guarde a una persona por su número se añade a esta
+// lista, o su historial sobrevivirá al borrado sin dueño que lo reclame.
+window.RASTROS_DEL_EMPLEADO = [
+    { tabla: 'refacciones',           suyas: ['solicitante_id'], menciones: ['atendido_por_id', 'asignado_por_id'], que: 'solicitudes de refacciones' },
+    { tabla: 'incident_signatures',   suyas: ['employee_id'],                                que: 'firmas de incidentes' },
+    { tabla: 'evaluation_responses',  suyas: ['employee_id'],                                que: 'respuestas de encuestas' },
+    { tabla: 'scheduled_evaluations', suyas: ['employee_id'],                                que: 'encuestas programadas' },
+    { tabla: 'objectives',            suyas: ['employee_id'],                                que: 'objetivos' },
+    { tabla: 'hallazgos',             suyas: ['employee_id'], menciones: ['assigned_to'],    que: 'hallazgos' },
+    // Las dos columnas de las actas sí son llaves foráneas contra employees(id),
+    // así que aquí sólo vale el id numérico: el employee_id de texto es otro
+    // número y podría casar con la fila de otra persona. `employee_id` lleva
+    // además ON DELETE CASCADE, de modo que la base ya borraría el acta sola; se
+    // barre igual para no depender de que el script se haya corrido con esa
+    // cláusula. `certificado_por` no la lleva, y es lo que hace que la base se
+    // niegue a borrar la ficha de quien haya certificado algo.
+    { tabla: 'certificaciones_clasificacion', suyas: ['employee_id'], menciones: ['certificado_por'], soloIdNumerico: true, que: 'actas de certificación' },
+    // La cadena de mando: supervisor_id guarda el employee_id de texto. No hay
+    // nada que borrar, sólo subordinados que desligar.
+    { tabla: 'employees',             menciones: ['supervisor_id'],                          que: 'subordinados a su cargo', desligadoEs: 'se quedarán sin supervisor' }
+];
+
+// Los identificadores con los que se le puede haber guardado. Las columnas que
+// son llave foránea contra employees(id) sólo admiten el numérico.
+window.idsDelEmpleado = (emp, soloIdNumerico) => {
+    const ids = [];
+    const fuentes = soloIdNumerico ? [emp.id] : [emp.id, emp.employee_id];
+    fuentes.forEach(v => {
+        const t = String(v == null ? '' : v).trim();
+        if (t && !ids.includes(t)) ids.push(t);
+    });
+    return ids;
+};
+
+// Un `or` de PostgREST con las columnas que interesen. Una sola consulta por
+// tabla, así que la solicitud que alguien se atendió a sí mismo no se cuenta
+// dos veces.
+window.filtroDeRastro = (columnas, ids) => {
+    const lista = '(' + ids.map(v => '"' + String(v).replace(/"/g, '') + '"').join(',') + ')';
+    return columnas.map(c => c + '.in.' + lista).join(',');
+};
+
+// Cuántas filas hay. Se pide `head` con `count`, así que no viaja ninguna fila:
+// sólo el número. Una tabla que no exista todavía —o una columna que le falte—
+// no puede tumbar el aviso: devuelve null y el resumen dice que no se pudo
+// comprobar, que es distinto de decir que no hay nada.
+window.contarRastroEmpleado = async (tabla, columnas, ids) => {
+    try {
+        const { count, error } = await sb.from(tabla)
+            .select('id', { count: 'exact', head: true })
+            .or(window.filtroDeRastro(columnas, ids));
+        if (error) throw error;
+        return typeof count === 'number' ? count : null;
+    } catch (e) {
+        console.warn('No se pudo contar el historial en ' + tabla + ':', e);
+        return null;
+    }
+};
+
+// Lo que se va a borrar y lo que se va a desligar, tabla por tabla, para
+// enseñarlo antes de preguntar. Se consulta todo a la vez.
+window.resumenHistorialEmpleado = async (emp) => {
+    const tareas = [];
+    window.RASTROS_DEL_EMPLEADO.forEach(r => {
+        const ids = window.idsDelEmpleado(emp, r.soloIdNumerico);
+        if (r.suyas) tareas.push({ rastro: r, tipo: 'suyas', ids, columnas: r.suyas });
+        if (r.menciones) tareas.push({ rastro: r, tipo: 'menciones', ids, columnas: r.menciones });
+    });
+    const cuentas = await Promise.all(tareas.map(t =>
+        window.contarRastroEmpleado(t.rastro.tabla, t.columnas, t.ids)));
+    return tareas.map((t, i) => ({ ...t, cuantos: cuentas[i] }));
+};
+
+// El borrado entero: el aviso de lo que se lleva por delante, las dos
+// confirmaciones, la ficha, el barrido y el resumen final. Devuelve `true` sólo
+// si la ficha dejó de existir, que es cuando quien llama tiene que recargar sus
+// listas; `false` si se canceló o si la base se plantó.
+//
+// `avisar(texto)` es cómo cada pantalla cuenta en qué va —el subtítulo de su
+// encabezado— y puede no venir.
+window.eliminarEmpleadoConHistorial = async (emp, avisar) => {
+    const decir = (t) => { if (typeof avisar === 'function') avisar(t || ''); };
+    if (!emp || !emp.id) return false;
+
+    // Nadie borra su propia ficha: la sesión de este navegador dura treinta días
+    // y seguiría abierta apuntando a un empleado que ya no existe, con todo lo
+    // que decide por su número —permisos incluidos— sin nada detrás.
+    let userLog = null;
+    try { userLog = JSON.parse(localStorage.getItem('usuarioLogueado')); } catch (e) { userLog = null; }
+    if (userLog && window.idsDelEmpleado(emp).includes(String(userLog.id).trim())) {
+        alert("No puedes eliminar tu propia ficha. Pídeselo a otro administrador.");
+        return false;
+    }
+
+    decir('Revisando su historial…');
+    let tareas;
+    try {
+        tareas = await window.resumenHistorialEmpleado(emp);
+    } catch (e) {
+        console.error("Error al revisar el historial del empleado:", e);
+        tareas = null;
+    } finally {
+        decir('');
+    }
+
+    const conAlgo = (t) => t.cuantos === null || t.cuantos > 0;
+    const aBorrar = (tareas || []).filter(t => t.tipo === 'suyas' && conAlgo(t));
+    const aDesligar = (tareas || []).filter(t => t.tipo === 'menciones' && conAlgo(t));
+    const cuantosTexto = (t) => (t.cuantos === null ? 'no se pudo comprobar' : t.cuantos);
+
+    let aviso = `⚠️ Vas a ELIMINAR de forma permanente a ${emp.name}`;
+    aviso += emp.employee_id ? ` (#${emp.employee_id}).` : '.';
+    aviso += "\n\nSe borra su ficha y también su historial. No se puede deshacer.";
+    aviso += "\n\nSi lo que quieres es que deje de aparecer conservando su historial, cierra esto y desmarca la casilla «Activo».";
+
+    if (tareas === null) {
+        aviso += "\n\nNo se pudo revisar su historial, así que no se sabe cuánto se va a borrar.";
+    } else if (aBorrar.length) {
+        aviso += "\n\nSe borrará:";
+        aBorrar.forEach(t => { aviso += "\n· " + t.rastro.que + ": " + cuantosTexto(t); });
+    } else {
+        aviso += "\n\nNo se le encontró historial: sólo se borra la ficha.";
+    }
+
+    if (aDesligar.length) {
+        aviso += "\n\nY se le desligará de lo que es de otros, que no se borra:";
+        aDesligar.forEach(t => {
+            aviso += "\n· " + t.rastro.que + ": " + cuantosTexto(t) +
+                (t.rastro.desligadoEs ? ' (' + t.rastro.desligadoEs + ')' : '');
+        });
+    }
+
+    aviso += "\n\n¿Eliminar a esta persona y todo su historial?";
+    if (!confirm(aviso)) return false;
+
+    // Segunda pregunta sólo cuando hay algo que perder: al alta duplicada, que
+    // es el caso normal, no se le pide dos veces.
+    if (tareas === null || aBorrar.length) {
+        if (!confirm(`Confirma otra vez: se borra a ${emp.name} y todo lo que dejó registrado. No hay copia.`)) return false;
+    }
+
+    decir('Eliminando…');
+
+    const fallos = [];
+    const borrado = [];
+    const desligado = [];
+
+    // Cada escritura encadena .select() por lo de siempre: PostgREST responde
+    // con éxito a un delete o un update que las políticas de RLS rechazan y sólo
+    // el conteo de filas delata que no se hizo nada. Las políticas van por
+    // operación, así que una tabla puede dejar actualizar —la baja funciona— y
+    // no dejar borrar.
+    const barrer = async (t) => {
+        const filtro = window.filtroDeRastro(t.columnas, t.ids);
+        if (t.tipo === 'suyas') {
+            const { data, error } = await sb.from(t.rastro.tabla)
+                .delete().or(filtro).select('id');
+            if (error) throw error;
+            if ((data || []).length) borrado.push(t.rastro.que + ': ' + (data || []).length);
+            return (data || []).length;
+        }
+        // Desligar es una columna a la vez: el update pone a null la que toque y
+        // el `or` no sabe de cuál de las dos vino cada fila.
+        let tocadas = 0;
+        for (const col of t.columnas) {
+            const parche = {}; parche[col] = null;
+            const { data, error } = await sb.from(t.rastro.tabla)
+                .update(parche).in(col, t.ids).select('id');
+            if (error) throw error;
+            tocadas += (data || []).length;
+        }
+        if (tocadas) desligado.push(t.rastro.que + ': ' + tocadas);
+        return tocadas;
+    };
+
+    // Desligarlo de lo ajeno. Es lo único que hay que hacer antes de borrar la
+    // ficha, y sólo cuando la base se queja: `certificado_por` es llave foránea
+    // contra employees(id) y sin ponerla a null se niega a borrar a quien haya
+    // certificado algo.
+    let yaDesligado = false;
+    const desligarDeLoAjeno = async () => {
+        if (yaDesligado) return;
+        yaDesligado = true;
+        for (const t of (tareas || []).filter(t => t.tipo === 'menciones' && t.cuantos !== 0)) {
+            try { await barrer(t); }
+            catch (e) {
+                console.error('No se pudo desligar en ' + t.rastro.tabla + ':', e);
+                fallos.push('no se pudo desligar de ' + t.rastro.que);
+            }
+        }
+    };
+
+    try {
+        // El orden lo manda lo que no tiene vuelta atrás: la ficha se borra
+        // ANTES que el historial. Si la base rechaza el borrado —una política de
+        // RLS sin DELETE, por ejemplo— no se ha perdido nada todavía; al revés,
+        // el historial se habría barrido para dejar la ficha en pie.
+        let { data: filas, error } = await sb.from('employees')
+            .delete().eq('id', emp.id).select('id');
+
+        // La única razón conocida para que la base se plante es la llave foránea
+        // de las actas. Se desliga y se reintenta una vez; si vuelve a fallar, se
+        // sale sin haber tocado su historial.
+        if (error && (error.code === '23503' || String(error.message || '').includes('foreign key'))) {
+            decir('Desligándolo de lo ajeno…');
+            await desligarDeLoAjeno();
+            decir('Eliminando…');
+            ({ data: filas, error } = await sb.from('employees')
+                .delete().eq('id', emp.id).select('id'));
+        }
+
+        if (error) throw error;
+        if (!filas || filas.length === 0) {
+            throw new Error("La base no borró la ficha: no se eliminó ninguna fila. Revisa que la tabla employees tenga política de DELETE (RLS).");
+        }
+
+        // De aquí en adelante la ficha ya no existe: lo que falle se queda
+        // huérfano y hay que decirlo, porque no habrá otra ficha desde la que
+        // reintentarlo.
+        decir('Borrando su historial…');
+        await desligarDeLoAjeno();
+        for (const t of (tareas || []).filter(t => t.tipo === 'suyas' && t.cuantos !== 0)) {
+            try { await barrer(t); }
+            catch (e) {
+                console.error('No se pudo borrar el historial en ' + t.rastro.tabla + ':', e);
+                fallos.push('no se pudieron borrar sus ' + t.rastro.que);
+            }
+        }
+
+        let hecho = `🗑️ Se eliminó a ${emp.name}.`;
+        if (borrado.length) hecho += "\n\nHistorial borrado:\n· " + borrado.join("\n· ");
+        if (desligado.length) hecho += "\n\nDesligado de lo ajeno:\n· " + desligado.join("\n· ");
+        if (fallos.length) {
+            hecho += "\n\n⚠️ Quedó pendiente, y ya no hay ficha desde la que reintentarlo:\n· " +
+                fallos.join("\n· ") + "\n\nHay que limpiarlo desde el editor SQL de Supabase.";
+        }
+        alert(hecho);
+        return true;
+    } catch (e) {
+        console.error("Error al eliminar empleado:", e);
+        let mensaje;
+        // 23503 es la violación de una llave foránea: alguna tabla lo tiene
+        // declarado y la base se niega a dejar el registro huérfano. Ahí la baja
+        // es la única salida sin tocar la base.
+        if (e && (e.code === '23503' || String(e.message || '').includes('foreign key'))) {
+            mensaje = "No se puede eliminar: hay registros en la base que dependen de esta ficha y no se pudieron desligar. Dale de baja desmarcando la casilla «Activo» para conservar su historial.";
+        } else {
+            mensaje = "No se pudo eliminar el empleado: " + (e.message || JSON.stringify(e));
+        }
+        // La ficha sigue en pie y su historial intacto —se borra después, y nunca
+        // se llegó ahí—. Lo único que pudo cambiar es el intento de desligarlo de
+        // lo ajeno, y eso se dice.
+        if (desligado.length) {
+            mensaje += "\n\nSí se le desligó de: " + desligado.join(', ') + ".";
+        }
+        alert(mensaje);
+        return false;
+    } finally {
+        decir('');
+    }
 };
 
 // --- ESTADO DE LA APLICACIÓN ---

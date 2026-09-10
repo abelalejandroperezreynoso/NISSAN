@@ -37,6 +37,7 @@ Los mensajes de commit van en español.
 | `5-objetivos.js` … `9-estadisticas.js` | Objetivos, calendario, pendientes, hallazgos, estadísticas |
 | `10-refacciones.js` | Solo inyecta el botón; la pantalla vive aparte |
 | `12-almacenamiento.js` | Consumo de Supabase: archivos por bucket y peso de la base |
+| `13-gestion.js` | Gestionar información: personal, departamentos, puestos, encargos, áreas, plantas y líneas, y la cadena de mando |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -959,8 +960,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   puede dejar actualizar y no borrar.
 - **Eliminar un empleado borra también su historial.** La baja —desmarcar
   «Activo»— es el camino normal y lo conserva todo; el bote de basura del
-  encabezado de «Editar empleado», en `10-refacciones.html`, borra la ficha y
-  todo lo que esa persona dejó registrado, sin papelera ni vuelta atrás.
+  encabezado de la ficha —la de «Gestionar información» del panel y la de
+  «Editar empleado» de `10-refacciones.html`, que son la misma cosa desde dos
+  pantallas— borra la ficha y todo lo que esa persona dejó registrado, sin
+  papelera ni vuelta atrás.
 
   La base no lo hace sola. Las firmas, las respuestas de encuestas, los
   objetivos, los hallazgos, las encuestas programadas y las solicitudes de
@@ -969,8 +972,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   registro— y esas columnas no son llaves foráneas: borrar la ficha no borra
   en cascada ni se queja, dejaba el registro apuntando a alguien que ya no
   existe y un alta futura con ese mismo número lo heredaba. El barrido lo hace
-  `window.eliminarEmpleado()`, tabla por tabla, según la lista
-  `window.RASTROS_DEL_EMPLEADO`.
+  `window.eliminarEmpleadoConHistorial(emp, avisar)`, tabla por tabla, según la
+  lista `window.RASTROS_DEL_EMPLEADO`. **Las dos viven en `1-config.js`**, que
+  es lo único que comparten los dos documentos que borran gente: dos copias de
+  esa lista dejarían historial sin dueño en cuanto una se quedara atrás. Lo que
+  pone cada pantalla es sólo a quién se está editando, cómo cuenta en qué va
+  —`avisar`, que le escribe el subtítulo de su encabezado— y qué recargar
+  después.
 
   Esa lista separa **lo suyo de lo ajeno**, que no es lo mismo: las columnas
   `suyas` dicen que la fila ES suya —la solicitud que pidió, la encuesta que
@@ -2201,6 +2209,85 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `.ios-boton-icono[hidden]` de `estilos.css`—. La lista de un bucket enseña los
   **cincuenta más pesados**: de ahí para abajo lo que queda no mueve la aguja, y
   dibujar mil doscientas filas sí se nota.
+
+- **Toda la información de la plantilla se gestiona desde el panel.** El
+  personal, los departamentos, los puestos, los encargos, las áreas, las plantas
+  con sus líneas y la cadena de mando: todo eso decide a quién le toca una
+  encuesta, quién la califica y quién firma un registro, y hasta ahora sólo se
+  editaba —cuando se podía— desde el panel de refacciones, que es otro
+  documento. Un departamento mal escrito partía en dos las estadísticas y la
+  única salida era el editor SQL de Supabase. Se entra por **«👥 Gestionar
+  información»** del panel de administración y vive en `13-gestion.js`, en la
+  hoja `#modal-gestion`.
+
+  ```js
+  window.gestionDatos        // { empleados, areas, plantas, lineas }, se lee sin consultar
+  window.rutaGestion         // la pila de pantallas; la última es la que se ve
+  window.PANTALLAS_GESTION   // { menu, personal, ficha, catalogo, valor, areas, area,
+                             //   lineas, planta, linea, supervisores, equipo }
+  window.irAGestion(p)  window.volverEnGestion()  window.pintarGestion(html)
+  window.escribirGestion(consulta, queEs)   // cuenta las filas del .select()
+  window.hacerEnGestion(queEs, trabajo)     // apaga botones, recarga y vuelve
+  ```
+
+  **Son once pantallas en un solo overlay**, como la hoja de evaluaciones y la
+  de consumo: apilar hojas dejaría dos tiradores a la vista. Todas se dibujan en
+  `#cuerpo-gestion` con `innerHTML`, así que los ids de dentro existen sólo
+  mientras la que los usa está a la vista. Por dónde se pasó lo lleva la pila
+  `rutaGestion`, y de ahí sale la flecha de volver del encabezado; una pantalla
+  nueva se añade a `PANTALLAS_GESTION` y devuelve `{ titulo, subtitulo, html,
+  buscar, contador, mas, guardar, borrar }` —los tres últimos son los botones
+  del encabezado, que se enganchan desde JavaScript porque cambian con la
+  pantalla—.
+
+  Siete cosas que hay que mantener:
+
+  - **Lo compartido con refacciones vive en `1-config.js`.** Aquella pantalla
+    tuvo la primera ficha de empleado y ésta es otro documento, así que
+    `consultarEmpleados`, `COLUMNAS_OPCIONALES_EMPLEADO`, `normalizarIdsLineas`,
+    `RASTROS_DEL_EMPLEADO` y el borrado entero
+    (`window.eliminarEmpleadoConHistorial(emp, avisar)`) se mudaron allí. Dos
+    copias de esa lista de rastros es lo que dejaría historial sin dueño en
+    cuanto una se quedara atrás: **toda tabla nueva que guarde a una persona por
+    su número se añade a la de `1-config.js` y a ninguna otra**.
+  - **Toda escritura cuenta las filas del `.select()`**, con
+    `window.escribirGestion`: PostgREST responde con éxito a un update o un
+    delete que las políticas de RLS rechazan —afecta a cero filas— y sin ese
+    conteo la pantalla diría «guardado» mientras el cambio nunca llegó.
+  - **Los chips se repintan solos, no la ficha entera.** Los encargos y las
+    líneas son listas y viven en `window.fichaGestion` mientras la ficha está a
+    la vista (`pintarEncargosFicha`, `pintarLineasFicha`): rehacer el formulario
+    a cada toque se llevaría por delante lo escrito y sin guardar. Y a una ficha
+    se puede volver desde más adentro —su equipo, y de ahí la ficha de otro—,
+    así que `pintarGestion` repone ese estado si es de otra persona.
+  - **El buscador vive fuera del cuerpo que se repinta**, como el de la pantalla
+    de certificación y por lo mismo: dentro, cada letra se llevaría el foco por
+    delante.
+  - **Los catálogos de texto libre no tienen tabla detrás.** El departamento, el
+    puesto y el encargo viajan en la ficha de cada persona, así que renombrar
+    uno es reescribir todas las que lo llevan —los encargos, uno a uno, que son
+    una lista dentro de la fila— y sólo salen los que alguien lleva puestos. La
+    aplicación los compara **letra por letra**, así que al renombrar se avisa de
+    los dos casos: si el nombre nuevo ya existe clavado, los dos quedan
+    fusionados; si sólo se escribe **casi** igual —«PRODUCCION» y «Producción»—,
+    quedarán como dos, que es justo lo que parte en dos las estadísticas.
+  - **Lo que tiene tabla se apaga antes que borrarse.** Un área con gente dentro
+    no ofrece el bote de basura —se apaga, y así deja de ofrecerse sin tocar de
+    dónde salió cada respuesta—; una planta con líneas y una línea con gente,
+    tampoco. Lo que no lleva a nadie sí se borra.
+  - **La cadena de mando no se muerde la cola.** `supervisor_id` guarda el
+    `employee_id` de texto, y al guardar la ficha se comprueba que el jefe
+    elegido no dependa ya de esa persona: media aplicación recorre esa cadena.
+    La pantalla de supervisores avisa además de lo que ya está torcido —ciclos,
+    jefes de baja con gente a cargo y fichas que apuntan a un número que no está
+    en la plantilla—.
+
+  El área que se escribe a mano en una ficha **se da de alta antes de guardarla**:
+  la columna guarda su id y no su nombre. Y al terminar cualquier escritura se
+  rehace la caché del panel de detrás (`cargarDatosEmpleados`,
+  `invalidarCacheDashboard` y `empleadosLoginCache` vacío): la plantilla decide
+  quién ve qué, y dejarla vieja es enseñar el organigrama de antes hasta la
+  próxima recarga.
 
 - **Ya no se relanza ninguna encuesta, pero lo relanzado sigue contando como se
   relanzó.** Hubo una hoja —«Relanzar encuesta», en el panel de detalles— que

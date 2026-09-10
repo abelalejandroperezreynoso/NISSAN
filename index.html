@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-10-5">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-10-6">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -784,6 +784,13 @@
                 <div class="admin-hoja-grupo">
                     <div class="hoja-grupo-titulo">Datos</div>
                     <div class="admin-hoja-lista">
+                        <!-- El personal, los departamentos, los puestos, los
+                             encargos, las áreas, las plantas con sus líneas y la
+                             cadena de mando. Todo eso decide a quién le toca una
+                             encuesta y quién la califica, y hasta ahora sólo se
+                             editaba desde el panel de refacciones. -->
+                        <button class="admin-btn" onclick="window.cerrarPanelAdmin(); window.abrirGestionDatos();" style="border-color: #0f766e; color: #0f766e;"><span aria-hidden="true">👥</span><span data-texto>Gestionar información</span></button>
+
                         <!-- El estado lo escribe window.actualizarBotonAhorroVisual
                              en el <span data-texto>, así que el emoji se queda
                              donde está. Ver window.textoBoton en 1-config.js. -->
@@ -805,6 +812,52 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- GESTIONAR INFORMACIÓN
+         El personal y todo lo que la aplicación da por sabido de él: los
+         departamentos, los puestos, los encargos, las áreas, las plantas con
+         sus líneas y la cadena de mando. Se entra desde el panel de
+         administración, así que va por encima de él.
+
+         Es **una hoja con muchas pantallas**, no muchas hojas: todas se dibujan
+         en `#cuerpo-gestion` con `innerHTML` y el encabezado dice en cuál se
+         está, como la hoja de evaluaciones y la de consumo. Los ids de dentro
+         existen sólo mientras la pantalla que los usa está a la vista.
+
+         El buscador va **fuera** del cuerpo que se repinta: dentro, cada letra
+         se llevaría el foco por delante. -->
+    <div id="modal-gestion" class="hoja-overlay" style="z-index:2200;">
+        <div class="hoja-contenido" style="max-width: 560px; overflow: hidden; padding: 12px 0 0;">
+            <div class="hoja-encabezado-lista">
+                <div style="min-width:0;">
+                    <h2 id="titulo-gestion" class="hoja-titulo">Gestionar información</h2>
+                    <div id="subtitulo-gestion" class="hoja-subtitulo"></div>
+                </div>
+                <div class="hoja-acciones">
+                    <button id="btn-volver-gestion" class="ios-boton-icono" hidden title="Volver" aria-label="Volver">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
+                    <button id="btn-borrar-gestion" class="ios-boton-icono ios-boton-icono--destructivo" hidden title="Eliminar" aria-label="Eliminar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7"/><path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7"/></svg>
+                    </button>
+                    <button id="btn-mas-gestion" class="ios-boton-icono" hidden title="Agregar" aria-label="Agregar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    </button>
+                    <button id="btn-guardar-gestion" class="ios-boton-icono" hidden title="Guardar" aria-label="Guardar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                    </button>
+                    <button id="btn-cerrar-gestion" onclick="window.cerrarGestionDatos()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                </div>
+            </div>
+
+            <div id="buscador-gestion" class="gestion-buscador" hidden>
+                <input type="text" id="inp-busqueda-gestion" placeholder="Buscar…" autocomplete="off" oninput="window.filtrarGestion(this.value)">
+                <span id="contador-gestion"></span>
+            </div>
+
+            <div id="cuerpo-gestion" class="hoja-cuerpo-formulario"></div>
         </div>
     </div>
 
@@ -991,21 +1044,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-10-5"></script>
-    <script src="2a-core-nav.js?v=2026-09-10-5"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-10-5"></script>
-    <script src="3-incidentes.js?v=2026-09-10-5"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-10-5"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-10-5"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-10-5"></script>
-    <script src="5-objetivos.js?v=2026-09-10-5"></script>
-    <script src="6-calendario.js?v=2026-09-10-5"></script>
-    <script src="7-pendientes.js?v=2026-09-10-5"></script>
-    <script src="8-hallazgos.js?v=2026-09-10-5"></script>
-    <script src="9-estadisticas.js?v=2026-09-10-5"></script>
+    <script src="1-config.js?v=2026-09-10-6"></script>
+    <script src="2a-core-nav.js?v=2026-09-10-6"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-10-6"></script>
+    <script src="3-incidentes.js?v=2026-09-10-6"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-10-6"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-10-6"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-10-6"></script>
+    <script src="5-objetivos.js?v=2026-09-10-6"></script>
+    <script src="6-calendario.js?v=2026-09-10-6"></script>
+    <script src="7-pendientes.js?v=2026-09-10-6"></script>
+    <script src="8-hallazgos.js?v=2026-09-10-6"></script>
+    <script src="9-estadisticas.js?v=2026-09-10-6"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-09-10-5"></script>
-    <script src="10-refacciones.js?v=2026-09-10-5"></script> 
+    <script src="12-almacenamiento.js?v=2026-09-10-6"></script>
+    <script src="13-gestion.js?v=2026-09-10-6"></script>
+    <script src="10-refacciones.js?v=2026-09-10-6"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

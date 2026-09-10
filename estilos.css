@@ -4978,3 +4978,339 @@ html.fondo-anclado body {
 }
 
 .area-eval-estado[hidden] { display: none; }
+
+/* =========================================================
+   GESTIONAR INFORMACIÓN  (#modal-gestion, 13-gestion.js)
+   =========================================================
+   Una hoja con muchas pantallas —el personal, los catálogos de texto libre,
+   las áreas, las plantas con sus líneas y la cadena de mando—, todas dibujadas
+   en el mismo cuerpo. Lo que se repite de una a otra vive aquí y no en un
+   atributo `style`: una fila que lleva a algún sitio, la tarjeta que las
+   agrupa, los chips de lo que se marca y las notas que explican. */
+
+/* El subtítulo del encabezado se escribe siempre, aunque sea para vaciarlo
+   —es del título que tiene encima—, y vacío no se dibuja: su margen separaría
+   el título de la línea del encabezado sin decir nada. */
+#subtitulo-gestion:empty { display: none; }
+
+/* El título es el nombre de quien se está editando y el encabezado de esta hoja
+   lleva hasta cuatro botones: sin recortarlo, «Pérez Reynoso Abel Alejandro» se
+   parte en dos renglones y deja el encabezado más alto que la primera tarjeta.
+   Lo que no cabe se lee en la propia ficha. */
+#titulo-gestion {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* El buscador va fuera del cuerpo que se repinta, así que se esconde con
+   `hidden` y necesita su propia regla: es un flex y un `display` de autor le
+   gana al `[hidden]` de la hoja del navegador. Es la trampa de
+   `.tipos-pregunta`. */
+.gestion-buscador {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+}
+
+.gestion-buscador[hidden] { display: none; }
+
+/* 16px clavados: por debajo de eso, Safari en iOS hace zoom al enfocar. */
+.gestion-buscador input {
+    flex: 1;
+    min-width: 0;
+    padding: 9px 12px;
+    border: none;
+    border-radius: 10px;
+    background: #f2f2f7;
+    outline: none;
+    font-family: inherit;
+    font-size: 16px;
+    color: #1c1c1e;
+}
+
+.gestion-buscador span {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    color: rgba(60, 60, 67, 0.6);
+}
+
+/* La tarjeta blanca que agrupa filas, con su línea fina entre una y otra: es
+   la lista de ajustes de iOS, que es de donde el dedo espera que se entre. */
+.gestion-lista {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.gestion-lista + .hoja-grupo-titulo { margin-top: 20px; }
+
+.gestion-fila {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid #f1f5f9;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gestion-fila:last-child { border-bottom: none; }
+.gestion-fila:active { background: #f8fafc; }
+.gestion-fila.esta-apagado { opacity: 0.55; }
+
+.gestion-fila-icono {
+    flex-shrink: 0;
+    width: 34px;
+    text-align: center;
+    font-size: 1.15rem;
+    color: #94a3b8;
+}
+
+/* Sin `min-width: 0` la columna del texto no encoge por debajo de su palabra
+   más larga y empuja el chevron fuera de la tarjeta. */
+.gestion-fila-texto {
+    flex: 1;
+    min-width: 0;
+    display: block;
+}
+
+.gestion-fila-titulo {
+    display: block;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #1c1c1e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gestion-fila-detalle {
+    display: block;
+    margin-top: 1px;
+    font-size: 0.78rem;
+    color: rgba(60, 60, 67, 0.6);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.gestion-fila-chevron {
+    flex-shrink: 0;
+    font-size: 1.1rem;
+    color: #c7c7cc;   /* el gris de los chevrons de iOS */
+}
+
+.gestion-avatar {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #f2f2f7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #007aff;
+}
+
+.gestion-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.gestion-avatar.esta-de-baja { filter: grayscale(1); }
+
+.gestion-chapa {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 2px 8px;
+    border-radius: 8px;
+}
+
+.gestion-chapa--baja { color: #ff3b30; background: #ffe5e5; }
+
+/* Lo que explica en vez de reclamar: qué se va a cambiar en cuántas fichas,
+   por qué una fila no se puede borrar, qué script de sql/ falta. */
+.gestion-nota {
+    margin: 10px 4px 0;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: #64748b;
+}
+
+.gestion-nota--aviso {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+}
+
+.gestion-vacio {
+    padding: 22px 14px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: rgba(60, 60, 67, 0.6);
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+}
+
+.gestion-cargando {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px 20px;
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+/* Un desplegable con su botón de crear al lado. El campo de texto que ese
+   botón enseña va debajo, a lo ancho. */
+.gestion-campo-doble {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.gestion-campo-doble select,
+.gestion-campo-doble input {
+    flex: 1;
+    min-width: 0;   /* un <select> dentro de un flex se niega a encoger sin esto */
+    background: white;
+}
+
+.gestion-btn-mas {
+    flex-shrink: 0;
+    width: 44px;    /* los 44px que pide iOS para que el dedo lo acierte */
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: white;
+    color: #007aff;
+    font-size: 1.3rem;
+    font-family: inherit;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.gestion-btn-mas:active { background: #f2f2f7; }
+
+.gestion-nuevo {
+    margin-top: 8px;
+    background: white;
+}
+
+/* Lleva `display` de autor por la regla de arriba, así que necesita la suya
+   para el `[hidden]`. La trampa de `.tipos-pregunta`, otra vez. */
+.gestion-nuevo[hidden] { display: none; }
+
+/* Lo que se marca y se desmarca: los encargos de alguien y sus líneas. */
+.gestion-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.gestion-chip {
+    padding: 6px 11px;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+    background: white;
+    color: #475569;
+    font-family: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.gestion-chip.esta-puesto {
+    border-color: #007aff;
+    background: #007aff;
+    color: white;
+}
+
+.gestion-grupo-chips { width: 100%; }
+
+.gestion-grupo-chips-titulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+    margin: 6px 0 4px;
+}
+
+.gestion-grupo-chips > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* El rótulo de una planta es además su botón de editar, así que se dibuja como
+   el `.hoja-grupo-titulo` que sustituye y no como un botón. */
+.gestion-grupo-titulo {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 0 4px 8px;
+    margin-top: 20px;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    text-align: left;
+    cursor: pointer;
+}
+
+.gestion-grupo-editar {
+    flex-shrink: 0;
+    color: #007aff;
+    letter-spacing: 0;
+    text-transform: none;
+    font-weight: 600;
+}
+
+.gestion-acciones {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+/* Los botones son los del panel de administración, sólo que aquí van a todo el
+   ancho como en su hoja: en línea se quedaban en dos pastillas pequeñas en la
+   esquina, que es un blanco difícil para el dedo. */
+.gestion-acciones .admin-btn {
+    width: 100%;
+    box-sizing: border-box;
+    justify-content: flex-start;
+    padding: 12px 16px;
+    font-size: 0.92rem;
+    margin: 0;
+}
+
+.gestion-acciones .admin-btn:hover { transform: none; }
+
+.gestion-pie {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.75rem;
+    color: rgba(60, 60, 67, 0.6);
+}
