@@ -777,15 +777,26 @@ window.abrirVisor = async (incidentId) => {
     });
 };
 
-// El visor de arriba busca las imágenes de un incidente; a veces sólo hay una
-// url y nada que consultar —la foto del área de una evaluación—.
-window.abrirVisorImagen = (url) => {
+// El visor de arriba busca las imágenes de un incidente; a veces la lista ya se
+// tiene y no hay nada que consultar —las páginas del material de una encuesta,
+// que se leen una debajo de otra como se lee un documento—.
+window.abrirVisorImagenes = (urls) => {
     const modal = document.getElementById('modal-visor');
     const content = document.getElementById('visor-content');
-    if (!modal || !content || !url) return;
+    const lista = (Array.isArray(urls) ? urls : [urls]).filter(Boolean);
+    if (!modal || !content || lista.length === 0) return;
+
     modal.style.display = 'block';
-    content.innerHTML = `<div class="visor-image-wrapper"><img src="${url}" class="visor-img-item"></div>`;
+    content.innerHTML = lista.map(u =>
+        `<div class="visor-image-wrapper"><img src="${u}" class="visor-img-item" loading="lazy"></div>`
+    ).join('');
+    // Se entra por la primera página aunque se haya salido del visor a media
+    // lectura la vez anterior.
+    content.scrollTop = 0;
 };
+
+// Una sola, que es el caso de la foto del área de una evaluación.
+window.abrirVisorImagen = (url) => window.abrirVisorImagenes([url]);
 
 document.getElementById('txt-cerrar').onclick = () => document.getElementById('modal-visor').style.display = 'none';
 if(document.getElementById('btn-mas')) document.getElementById('btn-mas').onclick = () => window.cargarIncidentes();

@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-10-13';
+window.VERSION_APP = '2026-09-10-14';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -341,72 +341,91 @@ window.esSupervisorDirectoDe = (empleadoId, supervisorId) => {
 // WebP primero, que pesa la mitad; si el navegador no lo da —iOS viejo— cae a
 // JPEG. Si aun a calidad mínima no cabe, falla en vez de subir un archivo
 // enorme a espaldas de quien lo mandó.
-window.optimizarImagen = async (file, opciones) => {
+// El encogido de verdad, que no sabe de dónde salió el dibujo: lo mismo
+// comprime la `<img>` de una foto que el `<canvas>` donde se acaba de pintar la
+// página de un PDF o la diapositiva de una presentación. Las dos cosas se
+// dibujan igual con `drawImage` y las dos dicen su ancho y su alto, así que el
+// motor es uno solo y no hay dos maneras de comprimir en la aplicación.
+//
+// **Cada intento se dibuja desde el original**, no desde el intento anterior:
+// encoger lo ya encogido acumula pérdida, y en el texto pequeño de una
+// diapositiva eso se lee.
+window.comprimirDibujo = async (fuente, opciones) => {
     const { maxLado = 800, maxBytes = 1048576 } = opciones || {};
 
-    return new Promise((resolve, reject) => {
+    const anchoOriginal = fuente.width || fuente.naturalWidth;
+    const altoOriginal = fuente.height || fuente.naturalHeight;
+    if (!anchoOriginal || !altoOriginal) throw new Error("El formato del archivo no es soportado.");
+
+    let escala = 1;
+    if (anchoOriginal > maxLado || altoOriginal > maxLado) {
+        escala = maxLado / Math.max(anchoOriginal, altoOriginal);
+    }
+
+    let ancho = anchoOriginal * escala;
+    let alto = altoOriginal * escala;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    let calidad = 0.7;
+
+    const intentarCompresion = (w, h, q, formato) => new Promise(res => {
+        canvas.width = Math.max(1, Math.round(w));
+        canvas.height = Math.max(1, Math.round(h));
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Blanco debajo: la página de un PDF y una diapositiva pueden venir
+        // transparentes, y eso en JPEG sale negro.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(fuente, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(b => res(b), formato, q);
+    });
+
+    let formato = 'image/webp';
+    let blob = await intentarCompresion(ancho, alto, calidad, formato);
+
+    // Fallback a JPEG si WebP falla en iOS
+    if (!blob) {
+        formato = 'image/jpeg';
+        blob = await intentarCompresion(ancho, alto, calidad, formato);
+    }
+
+    if (!blob) throw new Error("Tu navegador no permitió procesar la imagen.");
+
+    // Si no cabe, se baja calidad y medidas a la vez.
+    while (blob.size > maxBytes && calidad > 0.1) {
+        calidad = Math.max(0.1, calidad - 0.15);
+        ancho *= 0.8;
+        alto *= 0.8;
+        blob = await intentarCompresion(ancho, alto, calidad, formato);
+    }
+
+    if (blob.size > maxBytes) {
+        throw new Error(`No se pudo comprimir lo suficiente. Tamaño final: ${(blob.size / 1024).toFixed(0)} KB.`);
+    }
+
+    // Con qué extensión hay que guardarlo, que la decide el formato al que se
+    // pudo comprimir y no quien llama.
+    blob.extensionSugerida = (formato === 'image/webp') ? 'webp' : 'jpg';
+    return blob;
+};
+
+window.optimizarImagen = async (file, opciones) => {
+    const dataUrl = await new Promise((resolve, reject) => {
         const reader = new FileReader();
-
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
-                // Se limita el lado más largo, sea el ancho o el alto.
-                let escala = 1;
-                if (img.width > maxLado || img.height > maxLado) {
-                    escala = maxLado / Math.max(img.width, img.height);
-                }
-
-                let ancho = img.width * escala;
-                let alto = img.height * escala;
-
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                let calidad = 0.7;
-
-                const intentarCompresion = (w, h, q, formato) => new Promise(res => {
-                    canvas.width = w;
-                    canvas.height = h;
-                    ctx.clearRect(0, 0, w, h);
-                    ctx.drawImage(img, 0, 0, w, h);
-                    canvas.toBlob(b => res(b), formato, q);
-                });
-
-                const procesar = async () => {
-                    let formato = 'image/webp';
-                    let blob = await intentarCompresion(ancho, alto, calidad, formato);
-
-                    // Fallback a JPEG si WebP falla en iOS
-                    if (!blob) {
-                        formato = 'image/jpeg';
-                        blob = await intentarCompresion(ancho, alto, calidad, formato);
-                    }
-
-                    if (!blob) return reject(new Error("Tu navegador no permitió procesar la imagen."));
-
-                    // Si no cabe, se baja calidad y medidas a la vez.
-                    while (blob.size > maxBytes && calidad > 0.1) {
-                        calidad = Math.max(0.1, calidad - 0.15);
-                        ancho *= 0.8;
-                        alto *= 0.8;
-                        blob = await intentarCompresion(ancho, alto, calidad, formato);
-                    }
-
-                    if (blob.size > maxBytes) {
-                        return reject(new Error(`No se pudo comprimir lo suficiente. Tamaño final: ${(blob.size / 1024).toFixed(0)} KB.`));
-                    }
-
-                    resolve(blob);
-                };
-
-                procesar();
-            };
-            img.onerror = () => reject(new Error("El formato del archivo no es soportado."));
-            img.src = e.target.result;
-        };
-
+        reader.onload = (e) => resolve(e.target.result);
         reader.onerror = () => reject(new Error("Hubo un problema al leer el archivo en tu dispositivo."));
         reader.readAsDataURL(file);
     });
+
+    const img = await new Promise((resolve, reject) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => reject(new Error("El formato del archivo no es soportado."));
+        el.src = dataUrl;
+    });
+
+    return window.comprimirDibujo(img, opciones);
 };
 
 // La foto del área que se evaluaba. Viajaba donde los motivos, dentro de
@@ -845,34 +864,62 @@ window.subirFotoEvaluacion = async (blob, prefijo) => {
 // EL MATERIAL DE UNA ENCUESTA
 // ==========================================
 // Una encuesta que imparte una capacitación no se entiende sola: quien la
-// contesta necesita antes la presentación que se dio, el formato en Excel o el
-// procedimiento en PDF. Es de la encuesta entera y no de una pregunta, y son
-// varios archivos, así que viven en su propia tabla —`materiales_encuesta`,
-// script en `sql/`— y los archivos en su bucket.
+// contesta necesita antes la presentación que se dio o el procedimiento en PDF.
+// Es de la encuesta entera y no de una pregunta, así que vive en su propia
+// tabla —`materiales_encuesta`, script en `sql/`— y sus archivos en su bucket.
 //
-// **No se encogen ni se tocan**, al revés que las fotos: un PowerPoint
-// comprimido deja de ser un PowerPoint. Lo único que hay es un tope, porque la
-// cuenta de Supabase es gratuita y una presentación con fotos se va a decenas
-// de MB sin darse cuenta.
+// **Un archivo es un documento y un documento son sus páginas**: una fila por
+// página, todas con el nombre del documento del que salieron y guardadas en una
+// carpeta suya dentro del bucket. De ahí sale la agrupación, sin ninguna
+// columna nueva que añadir a la tabla.
+//
+// **Todo acaba siendo imágenes comprimidas.** No se guarda ningún PDF ni
+// ninguna presentación: se convierten en el teléfono, página a página, y lo que
+// sube son imágenes que han pasado por el mismo encogido que las fotos. La
+// cuenta de Supabase es gratuita —1 GB para toda la aplicación— y una sola
+// presentación con fotos se lleva decenas de MB; convertida, un documento de
+// doce páginas no llega a 1 MB.
+//
+// De paso se lee mejor donde se lee: un `.pptx` en un iPhone abre otra
+// aplicación —y sólo si está instalada—, mientras que unas imágenes se ven
+// dentro de la encuesta, sin salir de ella.
+//
+// Son tres puertas y un solo camino:
+//
+//   - **Imágenes**, que ya son lo que se guarda: se comprimen y ya.
+//   - **PDF**, que se abre con pdf.js y se pinta página por página.
+//   - **PowerPoint**, que se dibuja con pptx-preview y se rasteriza diapositiva
+//     por diapositiva.
+//
+// Las dos librerías se piden al CDN **sólo cuando hace falta** —quien nunca
+// sube un PDF no las descarga— y van sin `?v=`, como todo lo de un CDN.
 window.BUCKET_MATERIALES = 'materiales-evaluaciones';
+
+// Lo que se admite leer del teléfono. No es lo que se guarda —eso son las
+// imágenes de después— sino hasta dónde se le pide al navegador que lea un
+// archivo sin quedarse sin memoria.
 window.MAX_MB_MATERIAL = 25;
 
-// Qué se puede subir. La lista es la del `accept` del campo y la que decide el
-// icono, así que un tipo nuevo se agrega en un solo sitio. `ext` va en
-// minúsculas y sin punto.
+// Y lo que se guarda de cada página. 1400px por el lado largo es lo que hace
+// que un texto de diapositiva se siga leyendo al ampliarlo con los dedos; con
+// 400 KB de tope, un documento de doce páginas ronda 1 MB.
+window.MAX_LADO_MATERIAL = 1400;
+window.MAX_BYTES_MATERIAL = 400 * 1024;
+
+// Un tope de páginas por documento, que es la otra manera de llenar el bucket
+// sin darse cuenta: el manual de 300 páginas no es material de una encuesta.
+window.MAX_PAGINAS_MATERIAL = 60;
+
+// Por qué puerta entra cada extensión. `via` es lo único que decide cómo se
+// convierte, así que una extensión nueva se agrega aquí y en ningún otro sitio.
 window.TIPOS_DE_MATERIAL = [
-    { ext: 'pdf',  icono: '📕', nombre: 'PDF' },
-    { ext: 'ppt',  icono: '📊', nombre: 'Presentación' },
-    { ext: 'pptx', icono: '📊', nombre: 'Presentación' },
-    { ext: 'xls',  icono: '📗', nombre: 'Hoja de cálculo' },
-    { ext: 'xlsx', icono: '📗', nombre: 'Hoja de cálculo' },
-    { ext: 'csv',  icono: '📗', nombre: 'Hoja de cálculo' },
-    { ext: 'doc',  icono: '📘', nombre: 'Documento' },
-    { ext: 'docx', icono: '📘', nombre: 'Documento' },
-    { ext: 'jpg',  icono: '🖼️', nombre: 'Imagen' },
-    { ext: 'jpeg', icono: '🖼️', nombre: 'Imagen' },
-    { ext: 'png',  icono: '🖼️', nombre: 'Imagen' },
-    { ext: 'mp4',  icono: '🎬', nombre: 'Video' }
+    { ext: 'jpg',  icono: '🖼️', nombre: 'Imagen',        via: 'imagen' },
+    { ext: 'jpeg', icono: '🖼️', nombre: 'Imagen',        via: 'imagen' },
+    { ext: 'png',  icono: '🖼️', nombre: 'Imagen',        via: 'imagen' },
+    { ext: 'webp', icono: '🖼️', nombre: 'Imagen',        via: 'imagen' },
+    { ext: 'heic', icono: '🖼️', nombre: 'Imagen',        via: 'imagen' },
+    { ext: 'pdf',  icono: '📕', nombre: 'PDF',           via: 'pdf' },
+    { ext: 'pptx', icono: '📊', nombre: 'Presentación',  via: 'presentacion' }
 ];
 
 window.extensionDeArchivo = (nombre) => {
@@ -888,8 +935,16 @@ window.iconoDeMaterial = (nombre) => {
     return tipo ? tipo.icono : '📎';
 };
 
+// Por qué puerta entra este archivo, o '' si no entra por ninguna.
+window.puertaDeMaterial = (nombre) => {
+    const tipo = window.tipoDeMaterial(nombre);
+    return tipo ? tipo.via : '';
+};
+
+// El `accept` del campo. `image/*` va delante para que el teléfono ofrezca la
+// cámara y el carrete además del explorador de archivos.
 window.aceptaDeMaterial = () =>
-    window.TIPOS_DE_MATERIAL.map(t => '.' + t.ext).join(',');
+    ['image/*'].concat(window.TIPOS_DE_MATERIAL.map(t => '.' + t.ext)).join(',');
 
 // El peso, en lo que se lee de un vistazo: KB por debajo de un mega, MB por
 // debajo de un giga y GB de ahí en adelante. Cero devuelve cadena vacía, que es
@@ -927,30 +982,237 @@ window.BUCKETS_DE_LA_APP = [
 window.CUOTA_ARCHIVOS = 1024 * 1024 * 1024;
 window.CUOTA_BASE = 500 * 1024 * 1024;
 
-// El nombre con el que se guarda en el bucket. El original se conserva en la
-// tabla y es el que se enseña; aquí hace falta uno que no choque y que no lleve
-// acentos ni espacios, que en una ruta de Storage dan problemas.
-window.rutaDeMaterial = (evaluationId, nombre) => {
-    const ext = window.extensionDeArchivo(nombre);
-    const base = String(nombre || 'archivo')
+// --- LAS LIBRERÍAS DE CONVERSIÓN, PEDIDAS CUANDO HACEN FALTA ---
+//
+// Son 1.5 MB entre las dos, así que no van en el `<head>` de las tres
+// pantallas: se piden la primera vez que alguien sube un PDF o una
+// presentación, y quien no suba ninguna no las descarga nunca. Van **sin
+// `?v=`**, como todo lo que viene de un CDN.
+//
+// Se guarda la **promesa** y no el resultado, que es lo mismo que hacen las
+// cachés de esta aplicación: dos archivos elegidos a la vez no piden el mismo
+// script dos veces.
+window.LIBRERIAS_CONVERSION = {
+    // pdf.js en su versión `legacy`, que es la que trae UMD —se cuelga de
+    // `window.pdfjsLib`— y aguanta los Safari viejos. De la 4 en adelante sólo
+    // hay módulos ES, que aquí no se pueden cargar sin un paso de compilación.
+    pdf: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js',
+    pdfTrabajador: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js',
+    // El dibujante de presentaciones y el que convierte ese dibujo en imagen.
+    presentacion: 'https://cdn.jsdelivr.net/npm/pptx-preview@1.0.7/dist/pptx-preview.umd.js',
+    lienzo: 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'
+};
+
+window.__libreriasPedidas = {};
+
+window.cargarLibreria = (url) => {
+    if (window.__libreriasPedidas[url]) return window.__libreriasPedidas[url];
+
+    window.__libreriasPedidas[url] = new Promise((resolve, reject) => {
+        const et = document.createElement('script');
+        et.src = url;
+        et.async = true;
+        et.onload = () => resolve(true);
+        et.onerror = () => {
+            // Un fallo no se guarda: sin red la primera vez, la segunda puede
+            // funcionar, y dejar la promesa rota condenaría a la sesión entera.
+            delete window.__libreriasPedidas[url];
+            reject(new Error('No se pudo descargar el convertidor. Revisa la conexión e inténtalo de nuevo.'));
+        };
+        document.body.appendChild(et);
+    });
+
+    return window.__libreriasPedidas[url];
+};
+
+// --- DE UN ARCHIVO A SUS PÁGINAS ---
+//
+// La única puerta: devuelve las páginas ya comprimidas, en orden, sin haber
+// subido nada. `avisar` es opcional y recibe en qué va la cosa, que en un
+// documento de veinte páginas es la diferencia entre esperar y creer que se
+// colgó.
+window.paginasDeArchivo = async (file, avisar) => {
+    const decir = (t) => { if (typeof avisar === 'function') avisar(t); };
+    const via = window.puertaDeMaterial(file.name);
+
+    if (via === 'imagen') {
+        decir('Comprimiendo la imagen…');
+        return [await window.optimizarImagen(file, {
+            maxLado: window.MAX_LADO_MATERIAL, maxBytes: window.MAX_BYTES_MATERIAL
+        })];
+    }
+    if (via === 'pdf') return window.paginasDePdf(file, decir);
+    if (via === 'presentacion') return window.paginasDePresentacion(file, decir);
+
+    // `.ppt` y `.doc` son formatos binarios de hace veinte años que ninguna
+    // librería del navegador lee; lo demás no es material de una encuesta.
+    const ext = window.extensionDeArchivo(file.name);
+    if (ext === 'ppt') throw new Error('Ese PowerPoint es del formato antiguo (.ppt). Ábrelo y guárdalo como .pptx, o expórtalo a PDF.');
+    throw new Error('Sólo se pueden subir imágenes, PDF y presentaciones .pptx. Un Excel o un Word se exportan a PDF y se suben así.');
+};
+
+// Un PDF, página por página. Se pinta al doble de lo que se va a guardar y el
+// encogido hace el resto: rasterizar justo al tamaño final deja el texto
+// pequeño sucio, y pintar más grande sólo cuesta memoria un instante.
+window.paginasDePdf = async (file, decir) => {
+    await window.cargarLibreria(window.LIBRERIAS_CONVERSION.pdf);
+    const pdfjs = window.pdfjsLib;
+    if (!pdfjs) throw new Error('El convertidor de PDF no quedó disponible. Recarga la aplicación e inténtalo de nuevo.');
+    pdfjs.GlobalWorkerOptions.workerSrc = window.LIBRERIAS_CONVERSION.pdfTrabajador;
+
+    const datos = await file.arrayBuffer();
+    let documento;
+    try {
+        documento = await pdfjs.getDocument({ data: datos }).promise;
+    } catch (e) {
+        console.error(e);
+        throw new Error('No se pudo abrir el PDF. Si está protegido con contraseña, quítasela y vuelve a subirlo.');
+    }
+
+    const total = Math.min(documento.numPages, window.MAX_PAGINAS_MATERIAL);
+    const paginas = [];
+    try {
+        for (let n = 1; n <= total; n++) {
+            decir(`Convirtiendo la página ${n} de ${total}…`);
+            const pagina = await documento.getPage(n);
+            const base = pagina.getViewport({ scale: 1 });
+            const escala = (window.MAX_LADO_MATERIAL * 2) / Math.max(base.width, base.height);
+            const vista = pagina.getViewport({ scale: Math.min(escala, 4) });
+
+            const lienzo = document.createElement('canvas');
+            lienzo.width = Math.round(vista.width);
+            lienzo.height = Math.round(vista.height);
+            const ctx = lienzo.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+            await pagina.render({ canvasContext: ctx, viewport: vista }).promise;
+
+            paginas.push(await window.comprimirDibujo(lienzo, {
+                maxLado: window.MAX_LADO_MATERIAL, maxBytes: window.MAX_BYTES_MATERIAL
+            }));
+            // El lienzo de una página grande son varios MB: se suelta antes de
+            // pintar la siguiente, o un PDF largo tumba el navegador del
+            // teléfono a media conversión.
+            lienzo.width = lienzo.height = 0;
+            if (pagina.cleanup) pagina.cleanup();
+        }
+    } finally {
+        if (documento.destroy) documento.destroy();
+    }
+
+    if (paginas.length === 0) throw new Error('Ese PDF no tiene ninguna página que convertir.');
+    paginas.recorte = documento.numPages > total ? documento.numPages : 0;
+    return paginas;
+};
+
+// Una presentación, diapositiva por diapositiva. Se dibuja en HTML fuera de la
+// pantalla y se rasteriza con html2canvas.
+//
+// **Esto es una aproximación y hay que decirlo donde se usa**: la librería
+// coloca el texto y las imágenes, pero no es PowerPoint —las fuentes de la
+// empresa se sustituyen, las tablas pierden sus líneas y un gráfico o un
+// SmartArt pueden salir a medias—. Por eso lo convertido se enseña antes de
+// guardarlo, para que quien lo sube lo vea y decida; y por eso el aviso manda a
+// exportar a PDF, que es el camino que sale exacto.
+window.paginasDePresentacion = async (file, decir) => {
+    decir('Abriendo la presentación…');
+    await window.cargarLibreria(window.LIBRERIAS_CONVERSION.presentacion);
+    await window.cargarLibreria(window.LIBRERIAS_CONVERSION.lienzo);
+    if (!window.pptxPreview || !window.html2canvas) {
+        throw new Error('El convertidor de presentaciones no quedó disponible. Recarga la aplicación, o exporta la presentación a PDF y súbela así.');
+    }
+
+    // Fuera de la vista pero dentro del documento: html2canvas mide lo que hay
+    // en la maqueta, así que no vale `display:none`.
+    const taller = document.createElement('div');
+    taller.setAttribute('aria-hidden', 'true');
+    taller.style.cssText = 'position:fixed; left:-20000px; top:0; width:1280px; pointer-events:none; opacity:0;';
+    document.body.appendChild(taller);
+
+    const paginas = [];
+    let visor = null;
+    try {
+        visor = window.pptxPreview.init(taller, { width: 1280, height: 720, mode: 'list' });
+        try {
+            await visor.preview(await file.arrayBuffer());
+        } catch (e) {
+            console.error(e);
+            throw new Error('No se pudo leer la presentación. Compruébala en PowerPoint, o expórtala a PDF y súbela así.');
+        }
+
+        // La librería termina de colocar sus imágenes un instante después de
+        // resolver: sin esta espera, las primeras diapositivas salen sin ellas.
+        await new Promise(r => setTimeout(r, 400));
+
+        const laminas = Array.from(taller.querySelectorAll('.pptx-preview-slide-wrapper'));
+        if (laminas.length === 0) throw new Error('Esa presentación no tiene ninguna diapositiva que convertir.');
+
+        const total = Math.min(laminas.length, window.MAX_PAGINAS_MATERIAL);
+        for (let i = 0; i < total; i++) {
+            decir(`Convirtiendo la diapositiva ${i + 1} de ${total}…`);
+            const lienzo = await window.html2canvas(laminas[i], {
+                backgroundColor: '#ffffff', scale: 1.5, logging: false, useCORS: true
+            });
+            paginas.push(await window.comprimirDibujo(lienzo, {
+                maxLado: window.MAX_LADO_MATERIAL, maxBytes: window.MAX_BYTES_MATERIAL
+            }));
+            lienzo.width = lienzo.height = 0;
+        }
+        paginas.recorte = laminas.length > total ? laminas.length : 0;
+    } finally {
+        try { if (visor && visor.destroy) visor.destroy(); } catch (e) { console.error(e); }
+        taller.remove();
+    }
+
+    return paginas;
+};
+
+// --- DÓNDE VIVE CADA PÁGINA ---
+//
+// Un documento es una carpeta dentro del bucket y cada página un archivo
+// numerado dentro de ella: `12/junta-de-seguridad-1757…/001.webp`. De ahí sale
+// la agrupación de la pantalla —las filas de una misma carpeta son un
+// documento— sin ninguna columna nueva en la tabla, que es lo que evita otro
+// script que correr a mano.
+//
+// El número va con ceros delante para que el orden alfabético sea el orden de
+// lectura, que es como llegan de la base y como se listan en el bucket.
+window.carpetaDeMaterial = (evaluationId, nombre) => {
+    const base = String(nombre || 'documento')
         .replace(/\.[^.]*$/, '')
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
         .replace(/[^A-Za-z0-9._-]+/g, '-')
         .replace(/^-+|-+$/g, '')
-        .slice(0, 60) || 'archivo';
-    return `${evaluationId}/${base}-${Date.now()}${ext ? '.' + ext : ''}`;
+        .slice(0, 60) || 'documento';
+    return `${evaluationId}/${base}-${Date.now()}`;
 };
 
-window.subirMaterialEncuesta = async (file, evaluationId) => {
-    const ruta = window.rutaDeMaterial(evaluationId, file.name);
+window.rutaDePagina = (carpeta, indice, extension) =>
+    `${carpeta}/${String(indice + 1).padStart(3, '0')}.${extension || 'webp'}`;
 
+// La carpeta de una página, que es la llave con la que se agrupan las filas de
+// un documento. Lo subido antes de esto son archivos sueltos —`12/manual.pdf`,
+// dos tramos— y ahí no hay carpeta que devolver: cada uno es su propio
+// documento y se sigue enseñando como el enlace que era.
+window.documentoDeRuta = (archivo) => {
+    const tramos = String(archivo || '').split('/');
+    return tramos.length >= 3 ? tramos.slice(0, -1).join('/') : '';
+};
+
+window.numeroDePagina = (archivo) => {
+    const ultimo = String(archivo || '').split('/').pop() || '';
+    const n = parseInt(ultimo, 10);
+    return isNaN(n) ? 0 : n;
+};
+
+window.subirPaginaMaterial = async (blob, ruta) => {
     const { error } = await sb.storage
         .from(window.BUCKET_MATERIALES)
-        .upload(ruta, file, { contentType: file.type || 'application/octet-stream', upsert: false });
+        .upload(ruta, blob, { contentType: blob.type || 'image/webp', upsert: false });
 
     if (error) {
         console.error('Error al subir el material:', error);
-        throw new Error(`No se pudo subir el archivo. Si el problema sigue, revisa que exista el bucket '${window.BUCKET_MATERIALES}' en Supabase (script sql/materiales-encuesta.sql).`);
+        throw new Error(`No se pudo subir la página. Si el problema sigue, revisa que exista el bucket '${window.BUCKET_MATERIALES}' en Supabase (script sql/materiales-encuesta.sql).`);
     }
 
     const { data } = sb.storage.from(window.BUCKET_MATERIALES).getPublicUrl(ruta);

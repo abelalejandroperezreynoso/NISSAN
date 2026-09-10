@@ -459,6 +459,13 @@ window.materialesEncuesta = null;
 // Se piden al abrir la hoja. Una tabla que todavía no existe no revienta nada:
 // se deja en `null` y el recuadro no sale.
 window.cargarMaterialesEncuesta = async (evaluationId) => {
+    // Lo que se estuviera convirtiendo era de la encuesta anterior: se descarta
+    // aquí y no al cerrar la hoja, que a ésta se llega por varios caminos. Si
+    // no, sus miniaturas —y sus blobs— aparecerían en el recuadro de otra.
+    if (window.materialPorGuardar && window.materialPorGuardar.evalId !== String(evaluationId)) {
+        window.descartarMaterialPendiente();
+    }
+
     const { data, error } = await sb.from('materiales_encuesta')
         .select('*').eq('evaluation_id', String(evaluationId))
         .order('subido_en', { ascending: true });
@@ -466,6 +473,57 @@ window.cargarMaterialesEncuesta = async (evaluationId) => {
     window.materialesEncuesta = error ? null : (data || []);
     return window.materialesEncuesta;
 };
+
+// --- DE FILAS A DOCUMENTOS ---
+//
+// La tabla guarda una fila por página y la pantalla enseña documentos: las
+// páginas de una misma carpeta del bucket son un documento, y ésa es toda la
+// agrupación —no hace falta ninguna columna nueva—.
+//
+// Lo subido antes de que el material se convirtiera en imágenes son archivos
+// sueltos, sin carpeta: cada uno es su propio documento y se sigue enseñando
+// como el enlace que era. Ni se convierten solos ni se borran: quien quiera
+// bajarlos de peso los vuelve a subir y quita el viejo.
+window.documentosDeMaterial = (materiales) => {
+    const porClave = new Map();
+
+    (materiales || []).forEach(m => {
+        const carpeta = window.documentoDeRuta(m.archivo);
+        const clave = carpeta || ('suelto-' + m.id);
+        if (!porClave.has(clave)) {
+            porClave.set(clave, {
+                clave,
+                nombre: m.nombre,
+                esArchivo: !carpeta,
+                subido_por: m.subido_por,
+                subido_en: m.subido_en,
+                paginas: [],
+                bytes: 0
+            });
+        }
+        const doc = porClave.get(clave);
+        doc.paginas.push(m);
+        doc.bytes += Number(m.bytes) || 0;
+    });
+
+    const documentos = Array.from(porClave.values());
+    documentos.forEach(d => d.paginas.sort((a, b) =>
+        (window.numeroDePagina(a.archivo) - window.numeroDePagina(b.archivo)) || (a.id - b.id)));
+    return documentos;
+};
+
+// Lo que dice el renglón de un documento debajo de su nombre.
+window.detalleDeDocumento = (doc) => {
+    const quien = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(doc.subido_por));
+    const paginas = doc.esArchivo
+        ? ''
+        : (doc.paginas.length === 1 ? '1 página' : `${doc.paginas.length} páginas`);
+    return [paginas, window.pesoLegible(doc.bytes), quien && quien.name ? quien.name.split(' ')[0] : '']
+        .filter(Boolean).join(' · ');
+};
+
+window.notaDeMaterial = () =>
+    `Imágenes, PDF o PowerPoint. Se guardan como imágenes comprimidas: un documento de doce páginas no llega a 1 MB.`;
 
 // El recuadro. Va debajo de los botones y encima del pase de lista: se mira
 // antes de contestar, pero la acción de la hoja sigue siendo el botón azul.
@@ -476,58 +534,159 @@ window.cargarMaterialesEncuesta = async (evaluationId) => {
 window.bloqueDeMaterial = (evalId, puedeSubir) => {
     const materiales = window.materialesEncuesta;
     if (materiales === null) return '';
-    if (materiales.length === 0 && !puedeSubir) return '';
+    const pendiente = window.materialPorGuardar;
+    if (materiales.length === 0 && !puedeSubir && !pendiente) return '';
 
-    const filas = materiales.map(m => {
-        const quien = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(m.subido_por));
-        const detalle = [window.pesoLegible(m.bytes), quien && quien.name ? quien.name.split(' ')[0] : '']
-            .filter(Boolean).join(' · ');
+    const filas = window.documentosDeMaterial(materiales).map(doc => {
+        const detalle = window.detalleDeDocumento(doc);
         const borrar = puedeSubir
-            ? `<button type="button" class="material-quitar" onclick="window.quitarMaterial('${m.id}')"
-                       title="Quitar este material" aria-label="Quitar este material">✕</button>`
+            ? `<button type="button" class="material-quitar" onclick="window.quitarMaterial('${window.sanitizeForHTML(doc.clave)}')"
+                       title="Quitar este material" aria-label="Quitar «${window.sanitizeForHTML(doc.nombre)}»">✕</button>`
             : '';
-        // Un `target="_blank"` y no una descarga: iOS enseña el PDF y ofrece
-        // abrir la presentación con la app que toque, que es lo que se espera
-        // de un enlace a un documento.
-        return `
-            <div class="material-fila">
-                <a class="material-enlace" href="${window.sanitizeForHTML(m.url)}" target="_blank" rel="noopener">
-                    <span class="material-icono" aria-hidden="true">${window.iconoDeMaterial(m.nombre)}</span>
-                    <span class="material-texto">
-                        <span class="material-nombre">${window.sanitizeForHTML(m.nombre)}</span>
-                        ${detalle ? `<span class="material-detalle">${window.sanitizeForHTML(detalle)}</span>` : ''}
-                    </span>
-                    <span class="material-flecha" aria-hidden="true">&rsaquo;</span>
-                </a>
-                ${borrar}
-            </div>`;
+
+        const texto = `
+            <span class="material-texto">
+                <span class="material-nombre">${window.sanitizeForHTML(doc.nombre)}</span>
+                ${detalle ? `<span class="material-detalle">${window.sanitizeForHTML(detalle)}</span>` : ''}
+            </span>
+            <span class="material-flecha" aria-hidden="true">&rsaquo;</span>`;
+
+        // Lo convertido son imágenes y se leen dentro de la aplicación, con la
+        // primera página de portada. Lo que se subió antes de esto es un
+        // archivo y sigue siendo un enlace con `target="_blank"`: iOS enseña el
+        // PDF y ofrece abrir la presentación con la app que toque, que es lo
+        // que se espera de un enlace a un documento.
+        const cuerpo = doc.esArchivo
+            ? `<a class="material-enlace" href="${window.sanitizeForHTML(doc.paginas[0].url)}" target="_blank" rel="noopener">
+                   <span class="material-icono" aria-hidden="true">${window.iconoDeMaterial(doc.nombre)}</span>
+                   ${texto}
+               </a>`
+            : `<button type="button" class="material-enlace" onclick="window.abrirDocumentoMaterial('${window.sanitizeForHTML(doc.clave)}')">
+                   <img class="material-portada" src="${window.sanitizeForHTML(doc.paginas[0].url)}" alt="" loading="lazy"
+                        onerror="window.portadaRota(this)">
+                   ${texto}
+               </button>`;
+
+        return `<div class="material-fila">${cuerpo}${borrar}</div>`;
     }).join('');
 
     // El campo se abre con un `<label for>` y no con un `.click()` sobre el
     // input escondido: en iOS ese click programático es indistinguible del
     // toque fantasma que sintetizan las ruedas al cerrarse.
-    const subirHtml = puedeSubir ? `
+    //
+    // Con algo esperando a que se guarde, la puerta se cierra: dos documentos a
+    // medio convertir a la vez no cabrían en un solo `materialPorGuardar`, y la
+    // conversión es lo bastante lenta como para que dé tiempo a tocar otra vez.
+    const subirHtml = (puedeSubir && !pendiente) ? `
         <input type="file" id="inp-material-eval" accept="${window.aceptaDeMaterial()}"
                style="display:none;" onchange="window.agregarMaterial(this, '${evalId}')">
         <label for="inp-material-eval" id="btn-material-eval" class="material-agregar">
             Agregar material
         </label>
-        <div class="material-nota" id="nota-material">Presentaciones, hojas de cálculo y PDF, hasta ${window.MAX_MB_MATERIAL} MB.</div>` : '';
+        <div class="material-nota" id="nota-material">${window.notaDeMaterial()}</div>` : '';
 
-    const vacio = materiales.length === 0
+    const vacio = (materiales.length === 0 && !pendiente)
         ? `<div class="material-vacio">Todavía no hay material.</div>` : '';
 
     return `
         <div class="material-tarjeta">
             <div class="material-rotulo">Material</div>
-            ${filas}${vacio}${subirHtml}
+            ${filas}${vacio}${window.bloqueDeConversion()}${subirHtml}
         </div>`;
 };
 
-// Sube el archivo y guarda su ficha. El orden importa: **primero el archivo y
-// después la fila**. Al revés, una fila cuya subida falle apuntaría a un
-// archivo que no existe; así, lo peor que puede pasar es un archivo en el
-// bucket sin nadie que lo nombre, que no le miente a nadie.
+// Sin red, o con el archivo borrado desde Storage, la portada deja el icono de
+// imagen rota del navegador en medio del renglón. Se cambia por el emoji de
+// siempre, que es lo que había antes de que hubiera portadas.
+window.portadaRota = (img) => {
+    const icono = document.createElement('span');
+    icono.className = 'material-icono';
+    icono.setAttribute('aria-hidden', 'true');
+    icono.textContent = '🖼️';
+    img.replaceWith(icono);
+};
+
+// Las páginas de un documento, una debajo de otra y a pantalla completa. Es el
+// visor de imágenes de siempre, que es lo único de esta aplicación que va a
+// pantalla completa a propósito.
+window.abrirDocumentoMaterial = (clave) => {
+    const doc = window.documentosDeMaterial(window.materialesEncuesta)
+        .find(d => d.clave === clave);
+    if (!doc) return;
+    window.abrirVisorImagenes(doc.paginas.map(p => p.url));
+};
+
+// ==========================================
+// LO CONVERTIDO, ANTES DE GUARDARLO
+// ==========================================
+// Entre elegir el archivo y guardar las páginas hay un paso, y no es un adorno:
+//
+//   - Una presentación se dibuja **de manera aproximada** —ver
+//     `paginasDePresentacion`—, así que quien la sube tiene que poder ver cómo
+//     quedó antes de que sea lo que lea la plantilla entera.
+//   - Un PDF de veinte páginas son veinte imágenes y su peso: aquí se dice
+//     cuánto va a ocupar antes de ocuparlo, que es de lo que iba todo esto.
+//   - Y se puede quitar la portada en blanco, la última diapositiva de
+//     «Gracias» o la página que no venía al caso.
+//
+// Vive en memoria y en el propio recuadro, no en otra hoja: apilar una hoja
+// sobre la de la encuesta dejaría dos tiradores a la vista. Las miniaturas son
+// `URL.createObjectURL` de los blobs ya comprimidos —lo que se ve es
+// exactamente lo que se va a subir— y se sueltan al guardar o al descartar.
+window.materialPorGuardar = null;
+
+window.bloqueDeConversion = () => {
+    const p = window.materialPorGuardar;
+    if (!p) return '';
+
+    if (p.convirtiendo) {
+        // Con «Cancelar» a la vista, que un documento largo tarda: son decenas
+        // de páginas dibujadas una por una en el teléfono.
+        return `
+            <div class="material-previa">
+                <div class="material-previa-titulo">${window.sanitizeForHTML(p.nombre)}</div>
+                <div class="material-nota" id="nota-conversion">${window.sanitizeForHTML(p.aviso || 'Convirtiendo…')}</div>
+                <div class="material-acciones">
+                    <button type="button" class="material-descartar" onclick="window.descartarMaterialPendiente()">Cancelar</button>
+                </div>
+            </div>`;
+    }
+
+    const hojas = p.paginas.map((pag, i) => `
+        <div class="material-hoja">
+            <img src="${pag.vista}" alt="Página ${i + 1}" loading="lazy">
+            <span class="material-hoja-numero">${i + 1}</span>
+            <button type="button" class="material-hoja-quitar" onclick="window.quitarPaginaPendiente(${i})"
+                    title="Quitar la página ${i + 1}" aria-label="Quitar la página ${i + 1}">✕</button>
+        </div>`).join('');
+
+    const bytes = p.paginas.reduce((t, pag) => t + pag.blob.size, 0);
+    const cuantas = p.paginas.length === 1 ? '1 página' : `${p.paginas.length} páginas`;
+    const recorte = p.recorte
+        ? `<div class="material-nota">Sólo se convirtieron las primeras ${window.MAX_PAGINAS_MATERIAL} de ${p.recorte} páginas.</div>`
+        : '';
+    // Una presentación se dibuja aproximada y hay que decirlo justo aquí, que
+    // es donde se está mirando lo que salió.
+    const aviso = p.via === 'presentacion'
+        ? `<div class="material-nota material-nota--ojo">Una presentación se convierte de forma aproximada: las fuentes y algunas tablas o gráficos pueden cambiar. Si algo no se ve bien, expórtala a PDF desde PowerPoint y súbela así.</div>`
+        : '';
+
+    return `
+        <div class="material-previa">
+            <div class="material-previa-titulo">${window.sanitizeForHTML(p.nombre)}</div>
+            <div class="material-previa-detalle">${cuantas} · ${window.pesoLegible(bytes) || '0 KB'} · todavía sin guardar</div>
+            <div class="material-hojas">${hojas}</div>
+            ${recorte}${aviso}
+            <div class="material-acciones">
+                <button type="button" class="material-descartar" onclick="window.descartarMaterialPendiente()">Descartar</button>
+                <button type="button" class="material-guardar" id="btn-guardar-material" onclick="window.guardarMaterialPendiente()">Guardar ${cuantas}</button>
+            </div>
+        </div>`;
+};
+
+// Convierte el archivo elegido y lo deja esperando. **No sube nada todavía**:
+// hasta que no se pulsa «Guardar» no se toca ni el bucket ni la tabla, así que
+// arrepentirse no deja basura en ningún sitio.
 window.agregarMaterial = async (input, evalId) => {
     const file = input.files && input.files[0];
     input.value = '';
@@ -535,64 +694,170 @@ window.agregarMaterial = async (input, evalId) => {
 
     const tope = window.MAX_MB_MATERIAL * 1024 * 1024;
     if (file.size > tope) {
-        alert(`«${file.name}» pesa ${window.pesoLegible(file.size)} y el tope son ${window.MAX_MB_MATERIAL} MB.\n\nUna presentación se baja de peso guardándola como PDF o comprimiendo sus imágenes.`);
+        alert(`«${file.name}» pesa ${window.pesoLegible(file.size)} y el tope para convertir son ${window.MAX_MB_MATERIAL} MB.\n\nUna presentación con muchas fotos se baja de peso exportándola a PDF, o subiendo sólo las diapositivas que hagan falta.`);
         return;
     }
 
-    const user = JSON.parse(localStorage.getItem("usuarioLogueado") || 'null');
-    const btn = document.getElementById('btn-material-eval');
-    const nota = document.getElementById('nota-material');
-    if (btn) btn.classList.add('esta-subiendo');
-    // El estado va en la nota de debajo y no en el rótulo del botón: éste es un
-    // `<label>` y escribirle dentro se llevaría por delante su `for`… y de paso
-    // el nombre, que es lo que lo hace pulsable.
-    if (nota) nota.innerText = `Subiendo «${file.name}»…`;
+    const via = window.puertaDeMaterial(file.name);
+    if (!via) {
+        const ext = window.extensionDeArchivo(file.name);
+        alert(ext === 'ppt'
+            ? `«${file.name}» es del formato antiguo de PowerPoint (.ppt), que el navegador no sabe abrir.\n\nÁbrela y guárdala como .pptx, o expórtala a PDF.`
+            : `«${file.name}» no se puede convertir a imágenes.\n\nSe pueden subir imágenes, PDF y presentaciones .pptx; un Excel o un Word se exportan a PDF y se suben así.`);
+        return;
+    }
+
+    // La marca identifica **esta** conversión y no el archivo: cancelar y volver
+    // a elegir el mismo se distingue igual, que por el nombre serían la misma y
+    // la primera acabaría metiendo sus páginas en la segunda.
+    const marca = Date.now() + '-' + Math.random();
+    window.materialPorGuardar = {
+        marca, evalId: String(evalId), nombre: file.name, via,
+        convirtiendo: true, aviso: 'Preparando…', paginas: [], recorte: 0
+    };
+    window.pintarMaterialEncuesta();
+
+    // El aviso se escribe en su renglón y no repintando el recuadro entero:
+    // veinte repintados seguidos en un teléfono se ven como un parpadeo.
+    //
+    // Y es además por donde se cancela: quien pulsa «Cancelar» deja el
+    // pendiente en null, y este aviso —que la conversión llama antes de cada
+    // página— revienta a propósito para que el bucle no siga dibujando páginas
+    // que ya no quiere nadie. Es la única manera de pararlo sin meterle una
+    // bandera a cada conversor.
+    const avisar = (texto) => {
+        const p = window.materialPorGuardar;
+        if (!p || p.marca !== marca) {
+            const corte = new Error('Conversión cancelada');
+            corte.cancelada = true;
+            throw corte;
+        }
+        p.aviso = texto;
+        const nota = document.getElementById('nota-conversion');
+        if (nota) nota.innerText = texto;
+    };
 
     try {
-        const { archivo, url } = await window.subirMaterialEncuesta(file, evalId);
+        const blobs = await window.paginasDeArchivo(file, avisar);
+        // Se pudo descartar mientras convertía, o haberse abierto otra
+        // encuesta: lo convertido ya no es de nadie. Un archivo de una sola
+        // página no llega a pasar por `avisar` más de una vez, así que aquí es
+        // donde de verdad se comprueba.
+        if (!window.materialPorGuardar || window.materialPorGuardar.marca !== marca) return;
+
+        window.materialPorGuardar.convirtiendo = false;
+        window.materialPorGuardar.recorte = blobs.recorte || 0;
+        window.materialPorGuardar.paginas = blobs.map(b => ({ blob: b, vista: URL.createObjectURL(b) }));
+        window.pintarMaterialEncuesta();
+    } catch (e) {
+        // Cancelar no es un fallo: el recuadro ya se repintó al pulsarlo y no
+        // hay nada que contarle a nadie.
+        if (e && e.cancelada) return;
+        console.error(e);
+        window.materialPorGuardar = null;
+        window.pintarMaterialEncuesta();
+        alert('No se pudo convertir el archivo: ' + (e.message || e));
+    }
+};
+
+window.quitarPaginaPendiente = (indice) => {
+    const p = window.materialPorGuardar;
+    if (!p || p.guardando || !p.paginas[indice]) return;
+    URL.revokeObjectURL(p.paginas[indice].vista);
+    p.paginas.splice(indice, 1);
+    if (p.paginas.length === 0) return window.descartarMaterialPendiente();
+    window.pintarMaterialEncuesta();
+};
+
+// Descartar no vale a mitad del guardado: esas páginas se están subiendo, y
+// soltar sus miniaturas dejaría el recuadro contando una historia distinta de
+// la que está pasando. El botón se apaga, pero la puerta se cierra aquí.
+window.descartarMaterialPendiente = () => {
+    const p = window.materialPorGuardar;
+    if (p && p.guardando) return;
+    if (p) p.paginas.forEach(pag => URL.revokeObjectURL(pag.vista));
+    window.materialPorGuardar = null;
+    window.pintarMaterialEncuesta();
+};
+
+// Sube las páginas y guarda sus fichas. El orden importa: **primero los
+// archivos y después las filas**. Al revés, una fila cuya subida falle
+// apuntaría a un archivo que no existe; así, lo peor que puede pasar es un
+// archivo en el bucket sin nadie que lo nombre, que no le miente a nadie —y que
+// además se retira desde «Consumo», que sabe reconocer a los huérfanos de este
+// bucket—.
+window.guardarMaterialPendiente = async () => {
+    const p = window.materialPorGuardar;
+    if (!p || p.convirtiendo || p.paginas.length === 0) return;
+
+    const user = JSON.parse(localStorage.getItem("usuarioLogueado") || 'null');
+    const btn = document.getElementById('btn-guardar-material');
+    p.guardando = true;
+    if (btn) { btn.disabled = true; btn.innerText = 'Guardando…'; }
+    const descartar = document.querySelector('.material-descartar');
+    if (descartar) descartar.disabled = true;
+
+    try {
+        const carpeta = window.carpetaDeMaterial(p.evalId, p.nombre);
+        const fichas = [];
+
+        for (let i = 0; i < p.paginas.length; i++) {
+            if (btn) btn.innerText = `Guardando ${i + 1} de ${p.paginas.length}…`;
+            const blob = p.paginas[i].blob;
+            const ruta = window.rutaDePagina(carpeta, i, blob.extensionSugerida);
+            const { archivo, url } = await window.subirPaginaMaterial(blob, ruta);
+            fichas.push({
+                evaluation_id: p.evalId,
+                nombre: p.nombre,
+                archivo: archivo,
+                url: url,
+                tipo: blob.type || 'image/webp',
+                bytes: blob.size,
+                subido_por: user ? String(user.id) : null
+            });
+        }
 
         // Contar las filas del `.select()`: aquí escribe alguien que no es
         // administrador y una política de RLS que lo rechace no da error, sólo
         // afecta a cero filas.
-        const { data, error } = await sb.from('materiales_encuesta').insert({
-            evaluation_id: String(evalId),
-            nombre: file.name,
-            archivo: archivo,
-            url: url,
-            tipo: file.type || null,
-            bytes: file.size,
-            subido_por: user ? String(user.id) : null
-        }).select();
-
+        const { data, error } = await sb.from('materiales_encuesta').insert(fichas).select();
         if (error) throw error;
         if (!data || data.length === 0) {
-            alert("El archivo se subió, pero la base no aceptó su ficha: no se guardó ninguna fila. Pide a un administrador que revise los permisos de `materiales_encuesta`.");
+            alert("Las páginas se subieron, pero la base no aceptó sus fichas: no se guardó ninguna fila. Pide a un administrador que revise los permisos de `materiales_encuesta`.");
             return;
         }
-        (window.materialesEncuesta = window.materialesEncuesta || []).push(data[0]);
-        window.pintarMaterialEncuesta();
+
+        window.materialesEncuesta = (window.materialesEncuesta || []).concat(data);
+        p.guardando = false;
+        window.descartarMaterialPendiente();
     } catch (e) {
         console.error(e);
-        alert("No se pudo agregar el material: " + (e.message || e));
-    } finally {
-        if (btn) btn.classList.remove('esta-subiendo');
-        const n = document.getElementById('nota-material');
-        if (n) n.innerText = `Presentaciones, hojas de cálculo y PDF, hasta ${window.MAX_MB_MATERIAL} MB.`;
+        p.guardando = false;
+        alert("No se pudo guardar el material: " + (e.message || e));
+        // Se repinta entero: el botón dice otra vez lo que hace y el de
+        // descartar vuelve a estar vivo, que puede ser justo lo que se quiera
+        // hacer después de un fallo.
+        window.pintarMaterialEncuesta();
     }
 };
 
-// **Primero la ficha y después el archivo**, que es el orden de lo que no tiene
-// vuelta atrás: si la base rechaza el borrado no se ha perdido nada; al revés,
-// el archivo se habría ido dejando en pie una fila que apunta al vacío. Un
-// archivo que se quede en el bucket sin ficha no lo ve nadie, y se avisa para
-// que se pueda limpiar desde el panel de Storage.
-window.quitarMaterial = async (id) => {
-    const ficha = (window.materialesEncuesta || []).find(m => String(m.id) === String(id));
-    if (!ficha) return;
-    if (!confirm(`¿Quitar «${ficha.nombre}» del material de esta encuesta?`)) return;
+// **Primero las fichas y después los archivos**, que es el orden de lo que no
+// tiene vuelta atrás: si la base rechaza el borrado no se ha perdido nada; al
+// revés, los archivos se habrían ido dejando en pie unas filas que apuntan al
+// vacío. Un archivo que se quede en el bucket sin ficha no lo ve nadie, y se
+// avisa para poder limpiarlo desde «Consumo».
+window.quitarMaterial = async (clave) => {
+    const doc = window.documentosDeMaterial(window.materialesEncuesta)
+        .find(d => d.clave === clave);
+    if (!doc) return;
 
+    const cuantas = doc.esArchivo ? '' :
+        (doc.paginas.length === 1 ? ' (1 página)' : ` (${doc.paginas.length} páginas)`);
+    if (!confirm(`¿Quitar «${doc.nombre}»${cuantas} del material de esta encuesta?`)) return;
+
+    const ids = doc.paginas.map(m => m.id);
     const { data, error } = await sb.from('materiales_encuesta')
-        .delete().eq('id', ficha.id).select();
+        .delete().in('id', ids).select();
 
     if (error || !data || data.length === 0) {
         alert("La base no aceptó el borrado: no se quitó ninguna fila. Pide a un administrador que revise los permisos de `materiales_encuesta`.");
@@ -600,13 +865,14 @@ window.quitarMaterial = async (id) => {
     }
 
     const { error: errArchivo } = await sb.storage
-        .from(window.BUCKET_MATERIALES).remove([ficha.archivo]);
+        .from(window.BUCKET_MATERIALES).remove(doc.paginas.map(m => m.archivo));
     if (errArchivo) {
         console.error(errArchivo);
-        alert(`Se quitó «${ficha.nombre}» de la encuesta, pero el archivo sigue en el bucket '${window.BUCKET_MATERIALES}': hay que borrarlo a mano desde Storage.`);
+        alert(`Se quitó «${doc.nombre}» de la encuesta, pero sus archivos siguen en el bucket '${window.BUCKET_MATERIALES}': se retiran desde «Consumo», que los reconoce como huérfanos.`);
     }
 
-    window.materialesEncuesta = (window.materialesEncuesta || []).filter(m => String(m.id) !== String(id));
+    const borrados = new Set(ids.map(String));
+    window.materialesEncuesta = (window.materialesEncuesta || []).filter(m => !borrados.has(String(m.id)));
     window.pintarMaterialEncuesta();
 };
 

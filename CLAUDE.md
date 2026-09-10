@@ -1479,7 +1479,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   cuenta de Supabase es gratuita y una foto de teléfono son varios MB, así que
   **ninguna se sube tal cual**: `window.optimizarImagen(file, { maxLado,
   maxBytes })` en `1-config.js` la reescala por su lado más largo y la comprime
-  —WebP, y JPEG si el navegador no lo da— hasta caber. Las de evaluación van a
+  —WebP, y JPEG si el navegador no lo da— hasta caber. Por dentro es
+  `window.comprimirDibujo`, que es el mismo motor con el que se comprimen las
+  páginas del material de una encuesta (más abajo): ahí se cuenta. Las de evaluación van a
   `window.MAX_LADO_FOTO_EVAL` (600px) y 300 KB de tope; medido con una imagen
   de ruido de 2400×1800 y 4.2 MB, que es el peor caso posible para comprimir,
   salen 600×450 y 66 KB. El ayudante estaba en `10-refacciones.html` y se mudó
@@ -1996,84 +1998,167 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   añade un script de `sql/`: `window.camposConColumna(campos, tabla, columna)`
   y un envoltorio con nombre. Sin la columna todo se comporta como antes, la
   casilla se queda apagada y la hoja dice qué script falta.
-- **Una encuesta puede llevar material: la presentación, el Excel, el PDF.** Una
-  que imparte una capacitación —un dojo de mantenimiento, una junta de
-  seguridad— no se entiende sola: quien la contesta necesita antes lo que se
-  dio. Eso viajaba por WhatsApp y no quedaba pegado a la encuesta, así que quien
-  la abría un mes después no tenía de dónde sacarlo.
+- **Una encuesta puede llevar material, y el material son imágenes.** Una que
+  imparte una capacitación —un dojo de mantenimiento, una junta de seguridad— no
+  se entiende sola: quien la contesta necesita antes lo que se dio. Eso viajaba
+  por WhatsApp y no quedaba pegado a la encuesta, así que quien la abría un mes
+  después no tenía de dónde sacarlo.
 
   Va en un recuadro de la hoja de la encuesta, entre los botones y el pase de
   lista: se mira antes de contestar, pero la acción sigue siendo el botón azul.
 
+  **Nada se guarda como PDF ni como presentación.** Se guardó un tiempo —el
+  archivo tal cual, hasta 25 MB— y eso se llevaba el bucket por delante: la
+  cuenta de Supabase es gratuita y da **1 GB para toda la aplicación**, así que
+  tres presentaciones con fotos y un par de manuales escaneados y ya no cabe la
+  siguiente firma. Hoy el archivo se convierte **en el teléfono, página a
+  página**, y lo que sube son imágenes que han pasado por el mismo encogido que
+  las fotos: el mismo manual que ocupaba 8 MB ocupa 300 KB.
+
+  De paso se lee mejor donde se lee: un `.pptx` en un iPhone abre otra
+  aplicación —y sólo si está instalada—, mientras que unas imágenes se ven
+  dentro de la encuesta, en el visor a pantalla completa y una debajo de otra,
+  sin salir de ella.
+
+  **Son tres puertas y un solo camino** (`window.paginasDeArchivo`):
+
+  - **Imágenes**, que ya son lo que se guarda: se comprimen y ya.
+  - **PDF**, que se abre con **pdf.js** y se pinta página por página.
+  - **PowerPoint `.pptx`**, que se dibuja con **pptx-preview** y se rasteriza
+    con **html2canvas**, diapositiva por diapositiva.
+
   ```js
   window.BUCKET_MATERIALES      // 'materiales-evaluaciones'
-  window.MAX_MB_MATERIAL        // 25
-  window.TIPOS_DE_MATERIAL      // [{ ext, icono, nombre }, …]
-  window.iconoDeMaterial(nombre)  window.aceptaDeMaterial()  window.pesoLegible(bytes)
-  window.rutaDeMaterial(evaluationId, nombre)
-  window.subirMaterialEncuesta(file, evaluationId)   // → { archivo, url }
+  window.MAX_MB_MATERIAL        // 25, lo que se admite LEER del teléfono
+  window.MAX_LADO_MATERIAL      // 1400px, y MAX_BYTES_MATERIAL 400 KB por página
+  window.MAX_PAGINAS_MATERIAL   // 60
+  window.TIPOS_DE_MATERIAL      // [{ ext, icono, nombre, via }, …]
+  window.puertaDeMaterial(nombre)   // 'imagen' | 'pdf' | 'presentacion' | ''
 
-  window.cargarMaterialesEncuesta(evaluationId)      // llena window.materialesEncuesta
-  window.bloqueDeMaterial(evalId, puedeSubir)
-  window.pintarMaterialEncuesta()
-  window.agregarMaterial(input, evalId)  window.quitarMaterial(id)
+  window.cargarLibreria(url)                  // el CDN, una sola vez y cuando hace falta
+  window.paginasDeArchivo(file, avisar)       // → [blob, …] ya comprimidos
+  window.paginasDePdf(file, decir)  window.paginasDePresentacion(file, decir)
+
+  window.carpetaDeMaterial(evaluationId, nombre)   window.rutaDePagina(carpeta, i, ext)
+  window.documentoDeRuta(archivo)  window.numeroDePagina(archivo)
+  window.subirPaginaMaterial(blob, ruta)      // → { archivo, url }
+
+  window.documentosDeMaterial(materiales)     // las filas, agrupadas en documentos
+  window.materialPorGuardar                   // lo convertido y todavía sin subir
+  window.bloqueDeConversion()  window.guardarMaterialPendiente()
+  window.descartarMaterialPendiente()  window.quitarPaginaPendiente(i)
+  window.abrirDocumentoMaterial(clave)  window.quitarMaterial(clave)
   ```
 
-  Es **de la encuesta entera y no de una pregunta**, y son varios archivos, así
-  que va en su propia tabla —`materiales_encuesta`, con
-  `sql/materiales-encuesta.sql`— en lugar de una columna: quitar uno no
-  reescribe los demás, y cada uno guarda de dónde salió y quién lo subió. Los
-  archivos viven en el bucket `materiales-evaluaciones`, que el mismo script
-  crea. **Sin correrlo el recuadro no se dibuja** y quien intente subir algo se
-  entera de qué falta; el resto de la hoja no se entera —por eso el material se
-  pide con su propio `await` y no en paralelo con lo demás—.
+  **Una fila de `materiales_encuesta` es una página, no un archivo**, y las
+  páginas de un mismo documento se agrupan **por su carpeta en el bucket**
+  (`<encuesta>/<documento-y-la-hora>/001.webp`). De ahí sale la agrupación de la
+  pantalla, así que **no hizo falta ninguna columna nueva** ni volver a correr
+  ningún script: el número va con ceros delante para que el orden alfabético sea
+  el orden de lectura. La tabla y el bucket siguen siendo los de
+  `sql/materiales-encuesta.sql`, y sin correrlo el recuadro no se dibuja.
+
+  **Lo que se subió antes de esto se queda como estaba**: son archivos sueltos,
+  sin carpeta, y `documentoDeRuta` los reconoce por eso —dos tramos en la ruta y
+  no tres—. Cada uno es su propio documento y se sigue enseñando como el enlace
+  con `target="_blank"` que era; ni se convierten solos ni se borran solos. Ahí
+  se ve de un vistazo de qué iba todo esto: «Manual de la prensa.pdf · 8.0 MB»
+  encima de «procedimiento.pdf · 3 páginas · 30 KB».
 
   **Subir y quitar es de quien la imparte** —el administrador y quien la revisa,
   el mismo `puedeEditarDestinatarios` que decide los nombres del pase de lista—;
   **leerlo lo puede cualquiera** que abra la encuesta, que es para lo que está.
-  Sin material y sin permiso para subirlo el recuadro no se dibuja: un recuadro
-  vacío que dice «no hay material» ocupa lo mismo que uno lleno y no cuenta
-  nada.
 
-  Seis cosas que hay que mantener:
+  **Y entre elegir el archivo y guardarlo hay un paso**, que no es un adorno:
+  lo convertido se enseña en el propio recuadro —las páginas en miniatura, con
+  su número y su peso total— y no se sube nada hasta que se pulsa «Guardar». Son
+  tres razones y las tres pasan:
 
-  - **No se encogen ni se tocan**, al revés que las fotos: un PowerPoint
-    comprimido deja de ser un PowerPoint. Lo único que hay es el tope de
-    `MAX_MB_MATERIAL`, porque la cuenta de Supabase es gratuita y una
-    presentación con fotos se va a decenas de MB sin darse cuenta. El aviso dice
-    cuánto pesa y cómo bajarlo.
-  - **Se guardan la ruta y la URL.** `archivo` es la ruta dentro del bucket y es
-    lo único que sirve para borrarlo; `url` es su `publicUrl`, que es lo que
-    abre el enlace. De la URL pública no se puede volver a la ruta con
-    seguridad, así que van las dos.
-  - **El nombre del archivo en el bucket no es el original.** `rutaDeMaterial`
-    le quita acentos y espacios y le pega la hora, que en una ruta de Storage
-    dan problemas y dos archivos con el mismo nombre chocarían; el original se
-    guarda en la tabla y es el que se enseña.
-  - **Al subir va primero el archivo y después la fila.** Al revés, una fila
-    cuya subida falle apuntaría a un archivo que no existe; así lo peor que
-    puede pasar es un archivo en el bucket sin nadie que lo nombre, que no le
-    miente a nadie.
-  - **Al quitar va primero la fila y después el archivo**, que es el orden de lo
-    que no tiene vuelta atrás —el mismo de `eliminarEmpleado`—: si la base
-    rechaza el borrado no se ha perdido nada. Si el archivo no se deja borrar se
-    avisa para limpiarlo desde Storage. Las tres escrituras cuentan las filas
-    del `.select()`, que aquí escribe alguien que no es administrador.
+  - Una presentación se dibuja **de manera aproximada** (ver más abajo), así que
+    quien la sube tiene que ver cómo quedó antes de que sea lo que lea la
+    plantilla entera.
+  - Un PDF de veinte páginas son veinte imágenes: aquí se dice cuánto va a
+    ocupar **antes** de ocuparlo, que es de lo que iba todo esto.
+  - Y se puede quitar la portada en blanco, la diapositiva de «Gracias» o la
+    página que no venía al caso.
+
+  Va **dentro del recuadro y no en otra hoja**, que apilar una hoja sobre la de
+  la encuesta dejaría dos tiradores a la vista. Las miniaturas son
+  `URL.createObjectURL` de los blobs ya comprimidos —lo que se ve es exactamente
+  lo que se va a subir— y se sueltan con `revokeObjectURL` al guardar, al
+  descartar y al abrir otra encuesta (`cargarMaterialesEncuesta`, que es por
+  donde se pasa siempre).
+
+  Ocho cosas que hay que mantener:
+
+  - **El encogido es uno solo.** `window.comprimirDibujo(fuente, { maxLado,
+    maxBytes })` en `1-config.js` comprime lo mismo la `<img>` de una foto que
+    el `<canvas>` donde se acaba de pintar una página: las dos se dibujan con
+    `drawImage` y las dos dicen su ancho y su alto. `optimizarImagen` es hoy
+    leer el archivo a una `<img>` y llamarlo, así que **no hay dos maneras de
+    comprimir en la aplicación** y lo que se ajuste aquí vale para las fotos de
+    evaluación, las de refacciones y el material. Cada intento se dibuja **desde
+    el original**: encoger lo ya encogido acumula pérdida, y en el texto pequeño
+    de una diapositiva eso se lee.
+  - **Las librerías se piden cuando hacen falta.** Son 1.5 MB entre las dos, así
+    que no van en el `<head>`: `cargarLibreria` las cuelga del `<body>` la
+    primera vez que alguien sube un PDF o una presentación, guardando **la
+    promesa** —dos archivos seguidos no la piden dos veces— y **sin `?v=`**,
+    como todo lo de un CDN. Un fallo **no** se guarda: sin red la primera vez,
+    la segunda puede funcionar. De pdf.js va la versión **`legacy`**, que es la
+    que trae UMD (`window.pdfjsLib`) y aguanta los Safari viejos; de la 4 en
+    adelante sólo hay módulos ES, que aquí no se pueden cargar sin un paso de
+    compilación.
+  - **El PDF se pinta al doble y se encoge después.** Rasterizar justo al tamaño
+    final deja el texto pequeño sucio; pintar al doble sólo cuesta memoria un
+    instante. Y el lienzo de cada página **se suelta** (`width = height = 0`)
+    antes de pintar la siguiente, o un PDF largo tumba el navegador del teléfono
+    a media conversión.
+  - **Una presentación queda aproximada, y se dice donde se está mirando.** La
+    librería coloca el texto y las imágenes, pero no es PowerPoint: las fuentes
+    de la empresa se sustituyen, las tablas pierden sus líneas y un gráfico o un
+    SmartArt pueden salir a medias. El recuadro de revisión lo avisa en ámbar y
+    manda a **exportar a PDF desde PowerPoint**, que es el camino que sale
+    exacto. El `.ppt` de hace veinte años no lo lee ninguna librería del
+    navegador y su aviso lo dice aparte.
+  - **La presentación se dibuja fuera de la pantalla, pero dentro del
+    documento.** html2canvas mide lo que hay en la maqueta, así que no vale
+    `display:none`: el taller va en un `position:fixed` a −20000px que se quita
+    en el `finally`. Y hay una espera de 400 ms antes de rasterizar, porque la
+    librería termina de colocar sus imágenes un instante después de resolver.
+  - **Se puede cancelar a media conversión, y se cancela por el avisador.** El
+    botón deja `materialPorGuardar` en null, y la función que escribe «página 3
+    de 20» —que la conversión llama antes de cada página— revienta a propósito
+    con un error marcado `cancelada`, que el `catch` se traga sin decir nada. Es
+    la única manera de parar el bucle sin meterle una bandera a cada conversor.
+  - **Al subir van primero los archivos y después las filas**; al quitar,
+    primero las filas y después los archivos, que es el orden de lo que no tiene
+    vuelta atrás —el mismo de `eliminarEmpleado`—. Se quita el **documento
+    entero**: todas las filas de su carpeta y todos sus archivos. Las escrituras
+    cuentan las filas del `.select()`, que aquí escribe alguien que no es
+    administrador. Un archivo que se quede sin ficha se retira desde
+    **«Consumo»**, que reconoce a los huérfanos de este bucket comparando rutas
+    completas.
   - **El campo se abre con un `<label for>`**, nunca con un `.click()` sobre el
     input escondido: en iOS ese click programático es indistinguible del toque
-    fantasma de las ruedas. Y el estado de la subida va en la nota de debajo y
+    fantasma de las ruedas. El estado de la conversión va en la nota de debajo y
     no en el rótulo del `<label>`: escribirle dentro se llevaría por delante su
-    `for`, que es lo que lo hace pulsable —es la misma trampa del `innerText`
-    sobre un botón con `<svg>`—.
+    `for`, que es lo que lo hace pulsable. Y con algo esperando a guardarse la
+    puerta se cierra —un solo `materialPorGuardar` no puede con dos documentos a
+    la vez, y convertir es lento—.
 
-  El enlace lleva `target="_blank"` y no una descarga: iOS enseña el PDF y
-  ofrece abrir la presentación con la app que toque, que es lo que se espera de
-  un enlace a un documento. El archivo vive en supabase.co, fuera del `scope`
-  del manifiesto, así que se abre en Safari y no dentro de la app instalada, que
-  es lo correcto —un `.pptx` no se dibuja en una página—.
+  El renglón de un documento lleva **su primera página de portada**, y si esa
+  imagen no carga —sin red, o borrada desde Storage— `window.portadaRota` la
+  cambia por el emoji de siempre, que es lo que había antes de que hubiera
+  portadas. Tocarlo abre el visor (`window.abrirVisorImagenes`, en
+  `3-incidentes.js`, que es el de los incidentes generalizado a una lista de
+  urls): las páginas una debajo de otra, a pantalla completa, que es como se lee
+  un documento y lo único de esta aplicación que va a pantalla completa a
+  propósito.
 
-  Un tipo nuevo se agrega a `TIPOS_DE_MATERIAL` y aparece solo en el `accept`
-  del campo y en el icono de su fila; lo que no esté en la lista lleva 📎.
+  Un formato nuevo se agrega a `TIPOS_DE_MATERIAL` con su `via`, que es lo único
+  que decide por qué puerta entra. Un Excel o un Word no entran por ninguna: se
+  exportan a PDF y se suben así, y el aviso lo dice con esas palabras.
 
 - **Cuánto ocupa todo esto en Supabase.** La cuenta es gratuita y tiene un tope
   —1 GB de archivos y 500 MB de base—, y hasta ahora no había manera de saber
@@ -2280,7 +2365,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **Es de consulta, con una sola excepción: los huérfanos del material.** Un
   huérfano es un archivo que está en `materiales-evaluaciones` y que ninguna fila
   de `materiales_encuesta` nombra —los deja el camino de error de la subida, que
-  sube el archivo antes de guardar la ficha a propósito—, así que no lo enseña
+  sube las páginas antes de guardar sus fichas a propósito—, así que no lo enseña
   ninguna encuesta y sólo ocupa sitio. Ésos sí se retiran desde aquí.
 
   Todo lo demás **no se borra desde esta pantalla**, y no por timidez: una foto

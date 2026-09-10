@@ -2851,9 +2851,12 @@ textarea:focus {
 /* =========================================
    EL MATERIAL DE UNA ENCUESTA
    =========================================
-   La presentación, el formato en Excel, el procedimiento en PDF: lo que hay
-   que leer antes de contestarla. Un recuadro en la hoja de la encuesta, con la
-   misma forma que el del pase de lista. */
+   La presentación que se dio o el procedimiento en PDF: lo que hay que leer
+   antes de contestarla. Un recuadro en la hoja de la encuesta, con la misma
+   forma que el del pase de lista.
+
+   Todo se guarda como imágenes, así que un documento se enseña con su primera
+   página de portada y se lee en el visor a pantalla completa. */
 .material-tarjeta {
     background: white;
     border: 1px solid #e2e8f0;
@@ -2881,6 +2884,9 @@ textarea:focus {
     margin-bottom: 4px;
 }
 
+/* Vale para el `<a>` de lo que se subió antes como archivo y para el `<button>`
+   de un documento convertido, que es lo que hay desde que todo son imágenes: un
+   botón trae borde, fuente y alineación propios y hay que quitárselos. */
 .material-enlace {
     display: flex;
     align-items: center;
@@ -2889,9 +2895,26 @@ textarea:focus {
     min-width: 0;
     box-sizing: border-box;
     padding: 10px;
+    border: none;
     border-radius: 10px;
     background: #f8fafc;
     text-decoration: none;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+/* La primera página, de portada. Va con medida fija —una página apaisada y una
+   vertical tienen que dejar el renglón a la misma altura— y recortada, que es
+   lo que hace que se lea como una miniatura y no como una imagen estirada. */
+.material-portada {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: #e2e8f0;
+    border: 1px solid #e2e8f0;
 }
 
 .material-icono {
@@ -2980,6 +3003,133 @@ textarea:focus {
     padding: 4px 2px 2px;
     font-size: 0.8rem;
     color: #94a3b8;
+}
+
+/* --- LO CONVERTIDO, ANTES DE GUARDARLO ---
+   Entre elegir el archivo y guardarlo hay un paso: se ve lo que salió, lo que
+   va a ocupar y se puede quitar la página que sobra. Va dentro del propio
+   recuadro y no en otra hoja, que apilar hojas deja dos tiradores a la vista. */
+.material-previa {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    background: #f8fafc;
+}
+
+.material-previa-titulo {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.material-previa-detalle {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+/* Las páginas caben de tres en tres en un teléfono de 375, y la rejilla las
+   deja del mismo alto sin que importe si son verticales o apaisadas. */
+.material-hojas {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(84px, 30%), 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.material-hoja {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+    border: 1px solid #e2e8f0;
+}
+
+.material-hoja img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.material-hoja-numero {
+    position: absolute;
+    left: 4px;
+    bottom: 4px;
+    padding: 1px 5px;
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.65);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 600;
+}
+
+.material-hoja-quitar {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.65);
+    color: white;
+    font-family: inherit;
+    font-size: 0.7rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.material-acciones {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.material-acciones button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 11px;
+    border-radius: 10px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.material-descartar {
+    flex-grow: 0 !important;
+    flex-basis: 110px !important;
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: #64748b;
+}
+
+.material-guardar {
+    border: none;
+    background: #2563eb;
+    color: white;
+}
+
+.material-guardar:disabled {
+    background: #cbd5e1;
+    cursor: default;
+}
+
+/* Lo que hay que leer de verdad antes de guardar: que una presentación se
+   convierte aproximada. Va en ámbar y alineado a la izquierda, que es una
+   advertencia y no un pie de foto. */
+.material-nota--ojo {
+    text-align: left;
+    color: #b45309;
+    background: #fffbeb;
+    border-radius: 8px;
+    padding: 8px 10px;
 }
 
 /* =========================================
