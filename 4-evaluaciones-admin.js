@@ -3791,6 +3791,13 @@ window.prepararEncabezadoEval = (editando, soloDestinatarios = false) => {
     // autor le gana al `[hidden]` del navegador.
     const borrar = document.getElementById('btn-borrar-eval');
     if (borrar) borrar.hidden = !(editando && !soloDestinatarios && window.modoAdminActivo);
+
+    // La vista previa sí sale al crear y al copiar —es cuando más falta hace—,
+    // pero no en el modo restringido del revisor: ahí el cuestionario ni se le
+    // pide a la base, así que no hay preguntas que enseñar. Mismo `hidden` y
+    // misma regla `.ios-boton-icono[hidden]` de estilos.css.
+    const previa = document.getElementById('btn-vista-previa-eval');
+    if (previa) previa.hidden = soloDestinatarios;
     // La escala arranca plegada; quien la necesite la abre, y al editar la
     // abre window.editarEvaluacion si la encuesta ya trae etiquetas.
     if (escala) escala.open = false;
@@ -3803,6 +3810,89 @@ window.prepararEncabezadoEval = (editando, soloDestinatarios = false) => {
         if (dest) dest.open = true;
     }
     window.pintarResumenGrupos();
+};
+
+// --- VER LA ENCUESTA COMO LA VERÁ QUIEN LA CONTESTE ---
+//
+// Una encuesta se escribe en una hoja de campos y se contesta en otra pantalla
+// muy distinta, y hasta publicarla no había manera de saber cómo iba a quedar:
+// si la guía de la escala se lee, si el enunciado de una evidencia dice qué
+// fotografiar, si una pregunta pide comentario. Enterarse después es corregirla
+// cuando ya la contestó alguien, y editarla parte su historial en dos.
+//
+// Sale de la hoja y no de la base: lo que se quiere ver es lo que se acaba de
+// escribir, todavía sin guardar. Por eso el cuestionario lo lee
+// `window.preguntasDeLaHoja`, la misma lectura con la que se guarda —dos
+// lecturas distintas dejarían la previa enseñando una encuesta que no es la que
+// se va a publicar— y el resto de los campos se leen aquí al lado.
+//
+// Las preguntas nuevas no tienen id, así que se les pone uno de mentira: la
+// pantalla de contestar lo usa para el `name` de cada grupo de opciones y para
+// el id de cada tarjeta, y sin él dos preguntas nuevas compartirían controles.
+// Nunca llegan a la base: la previa no escribe nada.
+window.vistaPreviaEncuesta = () => {
+    const preguntas = window.preguntasDeLaHoja();
+    if (preguntas.length === 0) {
+        window.abrirGrupoEval('grupo-preguntas');
+        alert("Escribe al menos una pregunta para verla en la vista previa.");
+        return;
+    }
+
+    const inpTitulo = document.getElementById('eval-title-input');
+    const titulo = (inpTitulo ? inpTitulo.value.trim() : '') || 'Encuesta sin título';
+    const inpDesc = document.getElementById('eval-desc-input');
+    const desc = inpDesc ? inpDesc.value.trim() : '';
+    const inpFreq = document.getElementById('eval-frequency-input');
+    const freq = inpFreq ? inpFreq.value : 'once';
+    const chkArea = document.getElementById('chk-eval-por-area');
+    const evaluaArea = chkArea ? chkArea.checked : false;
+
+    // Las etiquetas de la escala, como las lee el guardado: son de la encuesta
+    // entera y van debajo de cada círculo.
+    const inpMax = document.getElementById('eval-max-scale');
+    const maxEscala = (inpMax && parseInt(inpMax.value)) || 5;
+    const etiquetas = {};
+    for (let i = 0; i <= maxEscala; i++) {
+        const el = document.getElementById(`lbl-range-${i}`);
+        if (el && el.value.trim()) etiquetas[i] = el.value.trim();
+    }
+
+    // La hoja de edición se aparta en vez de quedarse debajo: dos hojas
+    // apiladas dejan dos tiradores a la vista, que es lo que esta aplicación no
+    // hace en ningún sitio. Se guarda por dónde iba su cuerpo, o volver de la
+    // previa dejaría el formulario arriba del todo.
+    const hoja = document.getElementById('modal-crear-eval');
+    const cuerpo = hoja ? hoja.querySelector('.hoja-cuerpo-formulario') : null;
+    window.desplazamientoHojaEval = cuerpo ? cuerpo.scrollTop : 0;
+    if (hoja) hoja.style.display = 'none';
+
+    window.preguntasCacheActual = preguntas.map((q, i) =>
+        Object.assign({}, q, { id: `previa-${i}` }));
+
+    window.prepararRespuesta(null, titulo, etiquetas, desc, freq, evaluaArea, [],
+        { vistaPrevia: true });
+};
+
+// El cierre lo comparten la cruz, el botón del pie y el gesto de deslizar hacia
+// abajo, que pulsa esa misma cruz. No pasa por `cancelarRespuesta`: aquélla
+// devuelve el panel de encuestas, y de aquí se vino de la hoja de edición.
+window.cerrarVistaPrevia = () => {
+    const modal = document.getElementById('modal-responder-eval');
+    if (modal) { modal.style.display = 'none'; modal.innerHTML = ''; }
+    document.body.style.overflow = '';
+
+    // La previa dejó puesto un cuestionario de mentira, con ids que no existen
+    // en la base: no puede sobrevivirle.
+    window.preguntasCacheActual = [];
+    window.evalIdRespondiendo = null;
+    window.fotosPreguntaListas = {};
+
+    const hoja = document.getElementById('modal-crear-eval');
+    if (hoja) {
+        hoja.style.display = 'flex';
+        const cuerpo = hoja.querySelector('.hoja-cuerpo-formulario');
+        if (cuerpo) cuerpo.scrollTop = window.desplazamientoHojaEval || 0;
+    }
 };
 
 // La misma hoja sirve para configurar la encuesta entera y para que un revisor
@@ -5410,6 +5500,94 @@ window.guardarDestinatariosEncuesta = async () => {
     }
 };
 
+// --- EL CUESTIONARIO QUE SE ESTÁ ESCRIBIENDO ---
+//
+// Las tarjetas de la hoja, leídas en el orden del documento y con la misma
+// forma que tienen las filas de `evaluation_questions`: es lo que escribe
+// `guardarNuevaEvaluacion` y lo que dibuja la vista previa. Una sola lectura
+// para las dos y no dos copias, que es lo que acabaría enseñando en la vista
+// previa una encuesta distinta de la que se guarda —justo lo contrario de para
+// lo que está—.
+//
+// Cada pregunta lleva el `id` que ya tiene en la base, o null si es nueva: de
+// eso depende insertar o actualizar. Las que se quedaron sin enunciado no
+// salen, como no salían antes.
+window.preguntasDeLaHoja = () => {
+    const inpMax = document.getElementById('eval-max-scale');
+    const maxEscala = (inpMax && parseInt(inpMax.value)) || 5;
+    const chkHalf = document.getElementById('eval-half-points');
+    const paso = (chkHalf && chkHalf.checked) ? 0.5 : 1;
+
+    const preguntas = [];
+    document.querySelectorAll('.pregunta-wrapper').forEach((d, i) => {
+        const campoTexto = d.querySelector('.inp-pregunta');
+        const campoTipo = d.querySelector('.inp-tipo');
+        if (!campoTexto || !campoTipo) return;
+        const txt = campoTexto.value.trim();
+        const tp = campoTipo.value;
+        let corr = "", ops = [];
+
+        if (tp === 'multiple' || tp === 'checklist') {
+            // `correct_answer_text` guardaba aquí el arreglo con TODAS las
+            // opciones, que no decía nada. Ahora guarda las que dan por buena
+            // la respuesta, y como objeto: así lo viejo —un arreglo— se
+            // distingue de «se marcaron éstas» y no se lee como que todas eran
+            // correctas. Sin ninguna marcada, la califica quien revise, igual
+            // que hasta ahora.
+            const correctas = [];
+            d.querySelectorAll('.inp-opt-val').forEach(r => {
+                const texto = r.value.trim();
+                if (!texto) return;
+                ops.push(texto);
+                const marca = r.parentElement.querySelector('.chk-opt-ok');
+                if (marca && marca.checked) correctas.push(texto);
+            });
+            corr = JSON.stringify({ [window.LLAVE_OPCIONES_CORRECTAS]: correctas });
+        } else if (tp === 'list_match') {
+            const items = [];
+            d.querySelectorAll('.inp-opt-val').forEach(r => { if (r.value.trim()) items.push(r.value.trim()); });
+            corr = JSON.stringify(items);
+            ops = [];
+        } else if (tp === window.TIPO_PREGUNTA_ASISTENCIA) {
+            // Lo único que se configura es cuándo es el evento, y va en la
+            // primera posición de `options`. El campo de «Respuesta Modelo»
+            // sigue en el marcado aunque esté escondido: sin vaciarlo se
+            // guardaría lo que hubiera quedado escrito antes de cambiar el tipo
+            // de la pregunta.
+            corr = "";
+            ops = [];
+            const campoFecha = d.querySelector('.inp-fecha-evento');
+            const cuando = campoFecha ? campoFecha.value.trim() : '';
+            if (cuando) {
+                // El `datetime-local` da hora local sin zona; se guarda en ISO
+                // para que el teléfono de quien la contesta lea el mismo
+                // instante aunque esté en otro huso.
+                const fecha = new Date(cuando);
+                if (!isNaN(fecha.getTime())) ops[window.PLAZA_FECHA_EVENTO] = fecha.toISOString();
+            }
+        } else if (tp === 'range') {
+            ops = [0, maxEscala, paso];
+            const guia = window.guiaDeLaPregunta(d);
+            if (guia) ops[window.PLAZA_GUIA_ESCALA] = guia;
+            corr = "";
+        } else {
+            const campoCorrecta = d.querySelector('.inp-respuesta-correcta-text');
+            corr = campoCorrecta ? campoCorrecta.value.trim() : '';
+        }
+
+        if (!txt) return;
+        preguntas.push({
+            id: d.getAttribute('data-id') || null,
+            question_text: txt,
+            correct_answer_text: corr,
+            question_type: tp,
+            options: ops,
+            order_index: i
+        });
+    });
+    return preguntas;
+};
+
 window.guardarNuevaEvaluacion = async () => {
     // La hoja restringida del revisor guarda por su cuenta: aquí abajo se leen
     // campos que ella ni siquiera enseña.
@@ -5531,64 +5709,12 @@ window.guardarNuevaEvaluacion = async () => {
         }
         
         const ups=[], ins=[];
-        wr.forEach((d,i)=>{
-            const txt=d.querySelector('.inp-pregunta').value.trim();
-            const tp=d.querySelector('.inp-tipo').value;
-            const exId=d.getAttribute('data-id');
-            let corr="", ops=[];
-            
-            if(tp==='multiple' || tp==='checklist'){
-                // `correct_answer_text` guardaba aquí el arreglo con TODAS las
-                // opciones, que no decía nada. Ahora guarda las que dan por
-                // buena la respuesta, y como objeto: así lo viejo —un arreglo—
-                // se distingue de «se marcaron éstas» y no se lee como que
-                // todas eran correctas. Sin ninguna marcada, la califica quien
-                // revise, igual que hasta ahora.
-                const correctas = [];
-                d.querySelectorAll('.inp-opt-val').forEach(r=>{
-                    const texto = r.value.trim();
-                    if(!texto) return;
-                    ops.push(texto);
-                    const marca = r.parentElement.querySelector('.chk-opt-ok');
-                    if(marca && marca.checked) correctas.push(texto);
-                });
-                corr=JSON.stringify({ [window.LLAVE_OPCIONES_CORRECTAS]: correctas });
-            } else if (tp === 'list_match') {
-                const items = [];
-                d.querySelectorAll('.inp-opt-val').forEach(r=>{if(r.value.trim())items.push(r.value.trim());});
-                corr = JSON.stringify(items);
-                ops = [];
-            } else if (tp === window.TIPO_PREGUNTA_ASISTENCIA) {
-                // Lo único que se configura es cuándo es el evento, y va en la
-                // primera posición de `options`. El campo de «Respuesta Modelo»
-                // sigue en el marcado aunque esté escondido: sin vaciarlo se
-                // guardaría lo que hubiera quedado escrito antes de cambiar el
-                // tipo de la pregunta.
-                corr = "";
-                ops = [];
-                const campoFecha = d.querySelector('.inp-fecha-evento');
-                const cuando = campoFecha ? campoFecha.value.trim() : '';
-                if (cuando) {
-                    // El `datetime-local` da hora local sin zona; se guarda en
-                    // ISO para que el teléfono de quien la contesta lea el
-                    // mismo instante aunque esté en otro huso.
-                    const fecha = new Date(cuando);
-                    if (!isNaN(fecha.getTime())) ops[window.PLAZA_FECHA_EVENTO] = fecha.toISOString();
-                }
-            } else if (tp==='range') {
-                const chkHalf = document.getElementById('eval-half-points');
-                const step = (chkHalf && chkHalf.checked) ? 0.5 : 1;
-                ops = [0, globalMaxVal, step];
-                const guia = window.guiaDeLaPregunta(d);
-                if (guia) ops[window.PLAZA_GUIA_ESCALA] = guia;
-                corr = "";
-            } else {
-                corr=d.querySelector('.inp-respuesta-correcta-text').value.trim();
-            }
-            if(txt){
-                const p={evaluation_id:eid,question_text:txt,correct_answer_text:corr,question_type:tp,options:ops,order_index:i};
-                if(exId){ p.id=exId; ups.push(p); } else { ins.push(p); }
-            }
+        // El cuestionario se lee en un solo sitio, que es el mismo del que sale
+        // la vista previa: ver `window.preguntasDeLaHoja`.
+        window.preguntasDeLaHoja().forEach(q => {
+            const { id: exId, ...campos } = q;
+            const p = { evaluation_id: eid, ...campos };
+            if (exId) { p.id = exId; ups.push(p); } else { ins.push(p); }
         });
         
         if(ins.length) await sb.from('evaluation_questions').insert(ins);

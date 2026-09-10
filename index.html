@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-10-12">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-10-13">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -370,6 +370,14 @@
                     <div class="hoja-subtitulo" id="subtitulo-crear-eval">Define el cuestionario y a quién le toca</div>
                 </div>
                 <div class="hoja-acciones">
+                    <!-- Ver la encuesta como la verá quien la conteste. Sale de
+                         los campos de esta hoja y no de la base, así que enseña
+                         también lo que todavía no se ha guardado; lo esconde
+                         `prepararEncabezadoEval` en el modo restringido del
+                         revisor, que no tiene cuestionario delante. -->
+                    <button id="btn-vista-previa-eval" onclick="window.vistaPreviaEncuesta()" class="ios-boton-icono" title="Vista previa de la encuesta" aria-label="Vista previa de la encuesta">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
                     <!-- Eliminar la encuesta vive aquí, y no en su renglón de la
                          lista: se lleva por delante lo que contestó todo el
                          mundo, así que no puede estar a un toque de distancia
@@ -1055,22 +1063,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-10-12"></script>
-    <script src="2a-core-nav.js?v=2026-09-10-12"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-10-12"></script>
-    <script src="3-incidentes.js?v=2026-09-10-12"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-10-12"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-10-12"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-10-12"></script>
-    <script src="5-objetivos.js?v=2026-09-10-12"></script>
-    <script src="6-calendario.js?v=2026-09-10-12"></script>
-    <script src="7-pendientes.js?v=2026-09-10-12"></script>
-    <script src="8-hallazgos.js?v=2026-09-10-12"></script>
-    <script src="9-estadisticas.js?v=2026-09-10-12"></script>
+    <script src="1-config.js?v=2026-09-10-13"></script>
+    <script src="2a-core-nav.js?v=2026-09-10-13"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-10-13"></script>
+    <script src="3-incidentes.js?v=2026-09-10-13"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-10-13"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-10-13"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-10-13"></script>
+    <script src="5-objetivos.js?v=2026-09-10-13"></script>
+    <script src="6-calendario.js?v=2026-09-10-13"></script>
+    <script src="7-pendientes.js?v=2026-09-10-13"></script>
+    <script src="8-hallazgos.js?v=2026-09-10-13"></script>
+    <script src="9-estadisticas.js?v=2026-09-10-13"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-09-10-12"></script>
-    <script src="13-gestion.js?v=2026-09-10-12"></script>
-    <script src="10-refacciones.js?v=2026-09-10-12"></script> 
+    <script src="12-almacenamiento.js?v=2026-09-10-13"></script>
+    <script src="13-gestion.js?v=2026-09-10-13"></script>
+    <script src="10-refacciones.js?v=2026-09-10-13"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

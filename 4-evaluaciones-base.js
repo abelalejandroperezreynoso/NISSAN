@@ -1111,7 +1111,17 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
     }
 };
 
-window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc = null, explicitFreq = null, explicitEvaluatesArea = false, listaAreasOficiales = []) => {
+// El octavo argumento la abre **como vista previa**: el mismo cuestionario y la
+// misma hoja, pero sin nada que enviar. Es lo que enseña el ojo del encabezado
+// de la hoja de edición, y va por aquí y no por un dibujo propio porque una
+// vista previa que no sea exactamente la pantalla de contestar no sirve para lo
+// que está —diría que la escala se ve de una manera cuando se ve de otra—.
+//
+// Lo que cambia es sólo lo que en una previa no puede pasar: no hay botón de
+// enviar, el área no se guarda —sería escribirle el área a alguien desde una
+// previa— y la cruz devuelve a la hoja de edición en lugar de al panel.
+window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc = null, explicitFreq = null, explicitEvaluatesArea = false, listaAreasOficiales = [], opciones = {}) => {
+    const vistaPrevia = opciones && opciones.vistaPrevia === true;
     window.evalIdRespondiendo = evalId;
     window.evalTituloRespondiendo = title;
 
@@ -1162,7 +1172,23 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
 
     let areaBadgeHtml = '';
     window.fotosPreguntaListas = {};
-    if (evaluatesArea) {
+    if (evaluatesArea && vistaPrevia) {
+        // La misma fila, sin el desplegable: elegir aquí escribiría el área de
+        // quien esté mirando, y una previa no cambia nada de nadie. Lo que se
+        // viene a ver es que la fila sale y qué dice.
+        const valorArea = (!currentAreaName || currentAreaName === 'Sin Área')
+            ? 'Selecciona un área' : currentAreaName;
+        areaBadgeHtml = `
+                <div class="area-eval">
+                    <div class="area-eval-fila">
+                        <span class="area-eval-rotulo">Área a evaluar</span>
+                        <span class="area-eval-valor">${window.sanitizeForHTML(valorArea)}</span>
+                        <svg class="area-eval-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+                    </div>
+                </div>`;
+    } else if (evaluatesArea) {
         window.areaConfirmadaParaEstaSesion = false;
         
         let optionsHtml = '<option value="">-- Seleccionar --</option>';
@@ -1206,8 +1232,12 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         document.body.style.overflow = 'hidden';
         
         // 👇 OCULTAMOS TEMPORALMENTE EL PANEL DE ENCUESTAS PARA NO ESTORBAR
-        const panelEvaluaciones = document.getElementById('modal-evaluaciones-flotante');
-        if (panelEvaluaciones) panelEvaluaciones.style.display = 'none';
+        // En una previa no: se viene de la hoja de edición, que es la que se
+        // apartó y la que hay que devolver al cerrar.
+        if (!vistaPrevia) {
+            const panelEvaluaciones = document.getElementById('modal-evaluaciones-flotante');
+            if (panelEvaluaciones) panelEvaluaciones.style.display = 'none';
+        }
 
         // El contenedor ya trae la clase .hoja-overlay desde index.html; aquí
         // sólo se enciende. Nada de cssText a pantalla completa: el aspecto lo
@@ -1225,7 +1255,9 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
     let subTitle = currentDesc || '';
     let headerStyle = "color:#1e293b;";
 
-    if (window.targetUserForEval) {
+    // En una previa nadie está evaluando a nadie, aunque hubiera quedado puesto
+    // a quién se evaluaba: lo que se enseña es la encuesta.
+    if (!vistaPrevia && window.targetUserForEval) {
         headerTitle = `Evaluando a: <span style="color:#be185d;">${window.targetUserForEval.name}</span>`;
         subTitle = currentDesc ? `<b>Instrucciones:</b> ${currentDesc}` : `Encuesta: <b>${title}</b>. Los resultados se guardarán en el perfil del colaborador.`;
         headerStyle = "color:#334155; border-left: 4px solid #be185d; padding-left: 10px;";
@@ -1241,6 +1273,21 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
            </div>`
         : '';
 
+    // En una previa el subtítulo lo dice desde el encabezado, que es lo único
+    // que se queda a la vista al desplazar las preguntas: quien la abre para
+    // revisar una escala no puede acabar creyendo que está contestando.
+    const subEncabezado = vistaPrevia ? `Vista previa · ${freqText}` : freqText;
+
+    // Y abajo no hay nada que enviar. El botón se queda —el hueco de la acción
+    // principal es parte de lo que se viene a ver— pero apagado y diciendo lo
+    // que hará de verdad; debajo va el que cierra, que es lo único que aquí sí
+    // se puede pulsar.
+    const accionHtml = vistaPrevia
+        ? `<button disabled style="width:100%; background:#cbd5e1; color:#f8fafc; padding:15px; border:none; border-radius:12px; font-size:1.1rem; font-weight:bold; margin-top:20px;">Enviar Respuestas</button>
+           <div style="text-align:center; color:#94a3b8; font-size:0.8rem; margin-top:8px;">Aquí no se envía nada: es la encuesta tal y como la verá quien la conteste.</div>
+           <button onclick="window.cerrarVistaPrevia()" style="width:100%; background:#fff; color:#334155; padding:14px; border:1px solid #cbd5e1; border-radius:12px; font-size:1rem; font-weight:600; cursor:pointer; margin-top:14px;">Volver a la edición</button>`
+        : `<button id="btn-enviar-respuestas" onclick="enviarRespuestasEval()" style="width:100%; background:#2563eb; color:white; padding:15px; border:none; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px -1px rgba(37, 99, 235, 0.3); margin-top:20px; transition: transform 0.1s;">Enviar Respuestas</button>`;
+
     // El fondo gris de la hoja deja que las tarjetas blancas de cada pregunta
     // se sigan leyendo como tarjetas.
     modal.innerHTML = `
@@ -1248,14 +1295,14 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         <div class="hoja-encabezado-lista">
             <div style="min-width:0;">
                 <h2 class="hoja-titulo">${headerTitle}</h2>
-                <div class="hoja-subtitulo">${freqText}</div>
+                <div class="hoja-subtitulo">${subEncabezado}</div>
             </div>
-            <button onclick="cancelarRespuesta('main')" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+            <button onclick="${vistaPrevia ? 'window.cerrarVistaPrevia()' : "cancelarRespuesta('main')"}" class="ios-boton-icono ios-boton-cerrar" title="${vistaPrevia ? 'Cerrar la vista previa' : 'Cerrar'}" aria-label="${vistaPrevia ? 'Cerrar la vista previa' : 'Cerrar'}"></button>
         </div>
         <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
             ${introHtml}
             <div id="dynamic-questions-root"></div>
-            <button id="btn-enviar-respuestas" onclick="enviarRespuestasEval()" style="width:100%; background:#2563eb; color:white; padding:15px; border:none; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px -1px rgba(37, 99, 235, 0.3); margin-top:20px; transition: transform 0.1s;">Enviar Respuestas</button>
+            ${accionHtml}
         </div>
         </div>
     `;

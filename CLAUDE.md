@@ -2950,6 +2950,63 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   heredan los revisores—; el renglón del grupo «Datos» sí se rehace solo,
   porque el `click` del botón burbuja hasta el oyente de la hoja.
 
+- **La hoja de edición enseña la encuesta antes de publicarla.** Una encuesta se
+  escribe en una hoja de campos y se contesta en una pantalla que no se parece
+  en nada, así que hasta publicarla no había manera de saber si la guía de la
+  escala se lee, si el enunciado de una evidencia dice qué fotografiar o si una
+  pregunta pide comentario. Enterarse después es corregirla cuando ya la
+  contestó alguien, y **editarla parte su historial en dos** (justo aquí abajo).
+  El ojo del encabezado (`#btn-vista-previa-eval`) la abre tal y como la verá
+  quien la conteste.
+
+  ```js
+  window.preguntasDeLaHoja()      // el cuestionario que se está escribiendo
+  window.vistaPreviaEncuesta()    // el ojo del encabezado
+  window.cerrarVistaPrevia()      // la cruz, el botón del pie y el gesto
+  ```
+
+  **Sale de los campos de la hoja y no de la base**, que es lo único que sirve:
+  lo que se quiere ver es lo que se acaba de escribir y todavía no se ha
+  guardado —una encuesta nueva ni siquiera es una fila—. Por eso el cuestionario
+  lo lee **`window.preguntasDeLaHoja`**, que es la **misma** lectura con la que
+  guarda `guardarNuevaEvaluacion` —se extrajo de ahí, no se copió—: dos lecturas
+  distintas dejarían la previa enseñando una encuesta que no es la que se va a
+  publicar, que es justo lo contrario de para lo que está.
+
+  **Y se dibuja con `prepararRespuesta`, la pantalla de contestar de verdad**,
+  que gana un octavo argumento (`{ vistaPrevia: true }`). Un dibujo propio se
+  quedaría atrás en cuanto se tocara un tipo de pregunta, y entonces la previa
+  diría que la escala se ve de una manera cuando se ve de otra.
+
+  Cinco cosas que hay que mantener:
+
+  - **La hoja de edición se aparta, no se queda debajo.** Dos hojas apiladas
+    dejan dos tiradores a la vista, que es lo que esta aplicación no hace en
+    ningún sitio. Se esconde con `display:none` —los campos siguen en el
+    documento con lo escrito— y `cerrarVistaPrevia` la devuelve; por dónde iba
+    su cuerpo se guarda en `window.desplazamientoHojaEval`, o volver de la
+    previa dejaría el formulario arriba del todo.
+  - **En la previa no hay nada que enviar.** El botón se queda —el hueco de la
+    acción principal es parte de lo que se viene a ver— pero apagado, con su
+    renglón diciéndolo y el de volver debajo. No es sólo cosmética: sin botón,
+    `enviarRespuestasEval` no tiene desde dónde dispararse.
+  - **El área no se guarda.** Una encuesta `evaluates_area` enseña su fila, pero
+    sin el desplegable: `guardarAreaEnEvaluacion` le escribiría el área a quien
+    esté mirando, y una previa no cambia nada de nadie.
+  - **Las preguntas nuevas llevan un id de mentira** (`previa-0`, `previa-1`…).
+    La pantalla de contestar usa el id para el `name` de cada grupo de opciones
+    y para el id de cada tarjeta, así que sin él dos preguntas nuevas
+    compartirían controles. Nunca llegan a la base, y `cerrarVistaPrevia` vacía
+    `preguntasCacheActual` para que ese cuestionario no le sobreviva.
+  - **La cruz no es `cancelarRespuesta`**, que devuelve el panel de encuestas: de
+    aquí se vino de la hoja de edición. El gesto de deslizar hacia abajo pulsa
+    esa misma cruz, así que cierra igual.
+
+  El ojo sale al crear, al editar y al copiar —al crear es cuando más falta
+  hace— y **no en el modo restringido del revisor**, donde el cuestionario ni se
+  le pide a la base y no habría preguntas que enseñar. Se esconde con `hidden`,
+  así que depende de la regla `.ios-boton-icono[hidden]` de siempre.
+
 - **Editar una encuesta parte su historial en dos.** `answers_json` y
   `grades_json` guardan cada respuesta bajo el **id de la pregunta**
   (`evaluation_questions.id`). Editar el enunciado conserva el id, así que la
