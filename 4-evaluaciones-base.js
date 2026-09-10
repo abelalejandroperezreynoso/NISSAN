@@ -321,6 +321,65 @@ window.montarHojaEvaluaciones = () => {
     return document.getElementById('contenido-modal-evaluaciones');
 };
 
+// Qué estado enseña cada renglón de la lista de encuestas, que no es el de la
+// tarjeta del panel de inicio: ahí todas las encuestas son de quien mira, y
+// aquí la lista trae además las que sólo revisa —y, en modo administrador, las
+// de todo el mundo—. Lo suyo es únicamente elegir cuál de las dos reglas habla,
+// que ninguna de las dos se escribe aquí:
+//
+//   - si la encuesta le toca, su pendiente (`esEvaluacionPendiente`, contado
+//     con `estadoDeAsignada`), que es lo mismo que dice el badge del panel;
+//   - si no le toca pero la revisa, lo que le queda por calificar
+//     (`estadoDeRevision`);
+//   - y si no es ninguna de las dos cosas, el estado neutro: la encuesta de
+//     otra persona que el administrador está mirando. Ahí una palomita verde
+//     mentiría —no está «al día» de nada— y un círculo rojo, más.
+//
+// Devuelve además el `peso` con el que se ordena —lo vencido primero, lo neutro
+// al final— y si cuenta como pendiente de quien mira, que es lo que suma el pie
+// de la clasificación.
+window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalificar }) => {
+    // Una encuesta apagada no le pide nada a nadie —sólo llega hasta aquí en
+    // modo administrador—, así que va con el estado neutro y al final de su
+    // clasificación: pintarle «Sin contestar» en rojo sería reclamar una
+    // respuesta que ya no se puede dar. Que está apagada lo dice su etiqueta.
+    if (!window.encuestaActiva(ev)) {
+        return {
+            estado: { texto: 'Inactiva: sólo la ves en modo administrador', neutro: true, color: '#94a3b8' },
+            pendiente: false,
+            peso: 4
+        };
+    }
+
+    if (leToca) {
+        // En modo jefe la contesta el supervisor y no quien la recibe: es el
+        // sexto argumento, y de él depende que no se le pida al evaluado
+        // reponer una respuesta que no puede tocar.
+        const contestaQuienMira = (ev.mode || 'self') !== 'boss';
+        const v = window.esEvaluacionPendiente(
+            respuestas, ev.id, ev.frequency, ev.created_at, ev, contestaQuienMira);
+        return {
+            estado: window.estadoDeAsignada(v),
+            pendiente: !!(v && v.mostrar),
+            peso: !(v && v.mostrar) ? 2 : (v.vencida ? 0 : 1)
+        };
+    }
+
+    if (porCalificar > 0) {
+        return { estado: window.estadoDeRevision(porCalificar), pendiente: false, peso: 1.5 };
+    }
+
+    if (revisor) {
+        return { estado: window.estadoDeRevision(0), pendiente: false, peso: 2 };
+    }
+
+    return {
+        estado: { texto: 'No te toca contestarla', neutro: true, color: '#94a3b8', fondo: '#f8fafc', borde: '#e2e8f0' },
+        pendiente: false,
+        peso: 3
+    };
+};
+
 // --- 1. CARGAR LISTA PRINCIPAL ---
 window.cargarVistaEvaluaciones = async () => {
     // Se entró por la lista, así que las encuestas que se abran desde aquí sí
@@ -347,6 +406,12 @@ window.cargarVistaEvaluaciones = async () => {
     // Y quién revisa cada clasificación, por lo mismo: de eso depende que a un
     // revisor nombrado por clasificación le salga la encuesta en su lista.
     await window.cargarRevisoresDeClasificaciones();
+
+    // Y las ventanas de las encuestas que pasan lista, que es lo que pide el
+    // panel de pendientes antes de decidir nada: cada renglón dice ahora en qué
+    // estado está, y `esEvaluacionPendiente` consulta esa ventana sin poder
+    // esperar. Sin ella no hay ventana y todo se comporta como antes.
+    if (window.cargarVentanasDeAsistencia) await window.cargarVentanasDeAsistencia();
 
     const misDirectos = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id));
     const tengoEquipo = misDirectos.length > 0;
@@ -452,15 +517,6 @@ window.cargarVistaEvaluaciones = async () => {
         return;
     }
 
-    const groups = {};
-    evalsListables.forEach(ev => {
-        const cat = ev.category || "General";
-        if (!groups[cat]) groups[cat] = [];
-        groups[cat].push(ev);
-    });
-
-    const sortedKeys = Object.keys(groups).sort();
-
     // A quién le toca una encuesta vive en `1-config.js`: la pantalla que
     // certifica por clasificación tiene que preguntar lo mismo de otras
     // personas, y dos copias de la regla acabarían discrepando. Antes estaba
@@ -476,134 +532,251 @@ window.cargarVistaEvaluaciones = async () => {
     // sigue contando sólo las que le tocan, que es de lo que habla.
     const laReviso = (ev) => window.revisoresDeEncuesta(ev).includes(String(user.id));
 
-    sortedKeys.forEach(catName => {
-        const evalsVisibles = window.modoAdminActivo
-            ? groups[catName]
-            : groups[catName].filter(ev => leTocaEstaEncuesta(ev) || laReviso(ev));
+    // La lista va como la del panel de inicio: una clasificación por renglón,
+    // plegada, con el estado a la izquierda y sus encuestas dentro. Antes era
+    // una rejilla de iconos de 64px con el título debajo recortado a dos
+    // renglones, así que cada encuesta se leía por un cuadro gris idéntico al
+    // de al lado y lo único que la distinguía era un texto de tres palabras:
+    // ni cómo va, ni qué sacó, ni qué le falta. Un renglón lo dice todo en el
+    // mismo sitio, y las clasificaciones —que es la unidad en la que se
+    // certifica— dejan de ser un rótulo suelto entre dos rejillas.
+    //
+    // La clave del grupo es la clasificación **normalizada**, que es quien
+    // decide si dos nombres son el mismo: agrupando por el texto crudo,
+    // «Seguridad» y «seguridad » se dibujaban como dos clasificaciones
+    // distintas, cada una con su propia insignia de certificación.
+    const grupos = [];
+    const porClave = {};
+    evalsListables.forEach(ev => {
+        const clave = window.normalizarClasificacion(ev.category);
+        if (!porClave[clave]) {
+            porClave[clave] = { nombre: String(ev.category || 'General').trim() || 'General', encuestas: [] };
+            grupos.push(porClave[clave]);
+        }
+        porClave[clave].encuestas.push(ev);
+    });
 
-        if (evalsVisibles.length === 0) return;
+    const ahora = new Date();
+
+    // El promedio de un puñado de filas, igual que en el panel de inicio y por
+    // lo mismo: sin nada calificado no hay promedio, que un 0% ahí se leería
+    // como haberlo hecho mal en vez de no haber empezado.
+    const promedioDe = (unasFilas) => {
+        const puntajes = unasFilas.map(f => f.puntaje).filter(p => p !== null && p !== undefined);
+        if (puntajes.length === 0) return null;
+        return Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length);
+    };
+
+    // Lo que espera calificación, con la misma cuenta que llevaba el globo rojo
+    // de la rejilla. Va a la derecha —del renglón de la encuesta y del de su
+    // clasificación—, que es donde no le quita ancho al título ni alarga el pie
+    // a un segundo renglón.
+    const globoDeCalificar = (cuantas, quePasa) => cuantas > 0
+        ? `<div class="globo-por-calificar" title="${cuantas} ${quePasa}">${cuantas}</div>`
+        : '';
+
+    grupos.forEach(g => {
+        const visibles = window.modoAdminActivo
+            ? g.encuestas
+            : g.encuestas.filter(ev => leTocaEstaEncuesta(ev) || laReviso(ev));
+
+        g.filas = visibles.map(ev => {
+            const leToca = leTocaEstaEncuesta(ev);
+            const porCalificar = pendingMap[ev.id] || 0;
+            const lectura = window.estadoDeEncuestaEnLista(ev, {
+                leToca, revisor: laReviso(ev), respuestas: misRespuestas, porCalificar
+            });
+            // El puntaje del periodo, como en la tarjeta del panel: es la misma
+            // pregunta y la respuesta ya está en `misRespuestas`.
+            const resp = leToca ? window.respuestaDelPeriodo(ev, misRespuestas, ahora) : null;
+            return Object.assign({ ev, porCalificar, leToca, puntaje: window.puntajeDeRespuesta(resp) }, lectura);
+        });
+
+        // Dentro del grupo manda lo que urge; entre grupos, el que peor está.
+        // Con el mismo estado, por título —o la lista bailaría de una carga a
+        // otra—.
+        g.filas.sort((a, b) => (a.peso - b.peso)
+            || String(a.ev.title || '').localeCompare(String(b.ev.title || ''), 'es'));
+
+        g.pendientes = g.filas.filter(f => f.pendiente).length;
+        g.porCalificar = g.filas.reduce((suma, f) => suma + f.porCalificar, 0);
+        g.mias = g.filas.filter(f => f.leToca);
+        g.promedio = promedioDe(g.mias);
+        g.peso = g.filas.length > 0 ? g.filas[0].peso : 9;
+    });
+
+    const gruposVisibles = grupos.filter(g => g.filas.length > 0);
+    gruposVisibles.sort((a, b) => (a.peso - b.peso) || a.nombre.localeCompare(b.nombre, 'es'));
+
+    if (gruposVisibles.length === 0) {
+        container.insertAdjacentHTML('beforeend', `<div style="text-align:center; padding:40px; color:#64748b;">No hay evaluaciones disponibles.</div>`);
+        return;
+    }
+
+    const bloques = gruposVisibles.map(g => {
+        const renglones = g.filas.map(({ ev, estado, porCalificar, puntaje }) => {
+            const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+            const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
+            const estaActiva = window.encuestaActiva(ev);
+            const color = (puntaje !== null && typeof window.getColorScore === 'function')
+                ? window.getColorScore(puntaje) : '#64748b';
+
+            // El puntaje en las contestadas; en las que faltan, lo que falta
+            // —que ahí no hay puntaje que enseñar y el renglón se quedaría con
+            // la frecuencia sola—. Lo neutro no dice nada: es una encuesta que
+            // no es de quien mira, y el icono ya lo cuenta.
+            const resultado = puntaje !== null
+                ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
+                : ((estado.listo || estado.neutro) ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
+
+            // Quién la contesta se decía con el emoji del cuadro de la rejilla
+            // —👥 contra 📋—, y sin cuadro hay que decirlo: en modo jefe la
+            // llena el supervisor y no quien la recibe.
+            const quienLaLlena = (ev.mode || 'self') === 'boss' ? ' · La contesta el jefe' : '';
+
+            const etiquetaInactiva = estaActiva ? '' :
+                `<span style="margin-left:6px; background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; border-radius:6px; font-size:0.6rem; font-weight:bold; padding:1px 5px; letter-spacing:0.5px;">INACTIVA</span>`;
+
+            const globoPendientes = globoDeCalificar(porCalificar, 'requieren revisión');
+
+            // Los botones del administrador —y el del revisor, que sólo puede
+            // corregir a quién va dirigida— van en el propio renglón y cortan
+            // la propagación: el resto de la fila abre la encuesta.
+            // Los botones del administrador —y el del revisor, que sólo puede
+            // corregir a quién va dirigida— van en el propio renglón y cortan
+            // la propagación: el resto de la fila abre la encuesta.
+            const botonIcono = (fondo, colorTexto, onclick, titulo, icono) => `
+                <button class="encuesta-boton" style="background:${fondo}; color:${colorTexto};"
+                        onclick="event.stopPropagation(); ${onclick}"
+                        title="${titulo}" aria-label="${titulo}">${icono}</button>`;
+
+            let acciones = '';
+            if (window.modoAdminActivo) {
+                acciones = botonIcono('#e2e8f0', '#475569',
+                        `window.cerrarModalEvaluaciones(); window.editarEvaluacion('${ev.id}')`,
+                        'Editar Evaluación', '✏️')
+                    + botonIcono(estaActiva ? '#e0f2fe' : '#dcfce7', estaActiva ? '#0369a1' : '#15803d',
+                        `window.alternarEncuestaActiva('${ev.id}', ${estaActiva ? 'false' : 'true'})`,
+                        estaActiva ? 'Desactivar (sólo la verá el administrador)' : 'Activar (volverá a verla todo el mundo)',
+                        estaActiva ? '🚫' : '✅')
+                    + botonIcono('#fee2e2', '#ef4444',
+                        `window.borrarEvaluacion('${ev.id}')`, 'Eliminar Evaluación', '🗑️');
+            } else if (laReviso(ev)) {
+                // Quien revisa la encuesta puede corregir a quién va dirigida
+                // sin ser administrador: es quien sabe a quién le falta
+                // tomarla. La hoja se abre restringida a ese bloque; el resto
+                // de la configuración no se le enseña.
+                acciones = botonIcono('#f3e8ff', '#7e22ce',
+                    `window.cerrarModalEvaluaciones(); window.editarDestinatariosEncuesta('${ev.id}')`,
+                    'Editar a quién va dirigida', '✏️');
+            }
+            if (acciones) acciones = `<div class="encuesta-acciones">${acciones}</div>`;
+
+            return `
+                <div class="encuesta-fila${estaActiva ? '' : ' encuesta-fila--inactiva'}"
+                     onclick="window.abrirHistorialEvaluacion('${ev.id}', '${safeTitle}')"
+                     title="${estado.texto}">
+                    ${window.iconoDeAsignada(estado)}
+                    <div class="encuesta-fila-texto">
+                        <div class="encuesta-titulo">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
+                        <div class="encuesta-meta">${window.sanitizeForHTML(ritmo)}${quienLaLlena}${resultado}${etiquetaInactiva}</div>
+                    </div>
+                    ${globoPendientes}
+                    ${acciones}
+                </div>`;
+        }).join('');
 
         // La insignia habla de lo que le toca a quien mira, y de su periodo en
         // curso. Antes se calculaba con la última respuesta calificada que
         // hubiera, sin mirar fechas: la certificada de julio tapaba la de
         // agosto sin revisar, y una anulada reciente ni siquiera la tumbaba.
         const resumenCert = window.estadoCertificacion(
-            groups[catName].filter(leTocaEstaEncuesta),
+            g.encuestas.filter(leTocaEstaEncuesta),
             misRespuestas
         );
         const insignia = window.insigniaCertificacion(resumenCert);
-
-        const bordeCat = insignia ? `3px solid ${insignia.borde}` : '3px solid #cbd5e1';
-        const colorCat = insignia ? insignia.color : '#64748b';
-        const badgeCatHtml = insignia
-            ? `<span title="${resumenCert.contestadas} de ${resumenCert.total} contestadas en ${resumenCert.periodo}"
-                     style="margin-left: 10px; background: ${insignia.fondo}; color: ${insignia.color}; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: bold; border: 1px solid ${insignia.borde}; vertical-align: middle; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">${insignia.texto}</span>`
+        // Va en su propio renglón y no al lado del nombre: «📉 1 por debajo de
+        // 80%» no cabe en lo que queda del ancho de un teléfono y partiría el
+        // renglón del resumen en dos.
+        const chapaCert = insignia
+            ? `<div><span class="grupo-eval-chapa"
+                     title="${resumenCert.contestadas} de ${resumenCert.total} contestadas en ${resumenCert.periodo}"
+                     style="background:${insignia.fondo}; color:${insignia.color}; border:1px solid ${insignia.borde};">${insignia.texto}</span></div>`
             : '';
 
-        // Título de Categoría
-        container.insertAdjacentHTML('beforeend', `
-            <div style="display:flex; align-items:center; margin-top:25px; margin-bottom:15px; padding-left:5px; border-left:${bordeCat}; line-height:1; flex-wrap:wrap; gap:6px 0;">
-                <h3 style="color:${colorCat}; font-size:0.9rem; text-transform:uppercase; letter-spacing:1px; margin:0;">${catName}</h3>
-                ${badgeCatHtml}
-            </div>
-        `);
+        // El renglón de la clasificación dice lo suyo sin abrirla: su icono es
+        // el de la encuesta que peor está —basta una para que la clasificación
+        // no esté al día, y por eso se toma del primero de sus renglones, que
+        // vienen ordenados por lo que urge— y su pie, cuántas hay, cuántas
+        // faltan, cuántas esperan calificación y el promedio de lo calificado.
+        const estadoGrupo = g.filas[0].estado;
+        const colorGrupo = (g.promedio !== null && typeof window.getColorScore === 'function')
+            ? window.getColorScore(g.promedio) : '#64748b';
 
-        // INICIO DEL CONTENEDOR GRID TIPO MENÚ DE APLICACIONES iOS (Íconos pequeños)
-        let gridHtml = `<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); gap: 20px 10px; margin-bottom: 25px; padding: 10px 5px; justify-items: center;">`;
+        const cuenta = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
+        // Lo que espera calificación no va aquí sino en el globo rojo de la
+        // derecha: con cuatro trozos, el pie se partía en dos renglones y el
+        // encabezado de la clasificación quedaba más alto que sus encuestas.
+        const pie = [
+            g.pendientes > 0
+                ? `${cuenta} · ${g.pendientes} pendiente${g.pendientes === 1 ? '' : 's'}`
+                : (g.mias.length > 0 ? `${cuenta} al día` : cuenta),
+            g.promedio === null ? null
+                : `<span style="color:${colorGrupo}; font-weight:700;">${g.promedio}%</span>`
+        ].filter(Boolean).join(' · ');
 
-        evalsVisibles.forEach(ev => {
-            const respuestasDeEstaEval = misRespuestas.filter(r => r.evaluation_id === ev.id);
-            const ultimaRevisada = respuestasDeEstaEval.find(r => r.review_status === 'Revisado' || r.review_status === 'Certificada');
-            const ultimaCualquiera = respuestasDeEstaEval.length > 0 ? respuestasDeEstaEval[0] : null;
-            const mode = ev.mode || 'self';
-            
-            const safeTitle = ev.title.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+        // Un <details> y no una función colgada de `window`: abrir y cerrar lo
+        // hace el navegador solo, como en la tarjeta del panel de inicio y en
+        // los plegables de las hojas. Aquí el renglón entero pliega y despliega
+        // —no hay una hoja de detalle que abrir, que ésta ya es la hoja—, así
+        // que la flecha es un adorno y no un botón: la pulsa quien la mire, y
+        // el <summary> de debajo hace el trabajo.
+        //
+        // Nace abierta si hay algo esperando a quien mira, como la lista de
+        // respuestas de una encuesta y por lo mismo. En modo administrador no:
+        // ahí se listan las encuestas de todo el mundo y casi todas tienen algo
+        // pendiente de alguien, así que abrirlas todas es no plegar nada.
+        const abrir = g.pendientes > 0 || (g.porCalificar > 0 && !window.modoAdminActivo);
 
-            // Una inactiva sólo llega hasta aquí en modo administrador: se
-            // dibuja apagada para no confundirla con las que sí ve la gente.
-            const estaActiva = window.encuestaActiva(ev);
+        return `
+            <details class="grupo-asignadas"${abrir ? ' open' : ''}>
+                <summary>
+                    ${window.iconoDeAsignada(estadoGrupo)}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
+                        <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
+                        ${chapaCert}
+                    </div>
+                    ${globoDeCalificar(g.porCalificar, 'esperan tu calificación en esta clasificación')}
+                    <span class="grupo-asignadas-boton" aria-hidden="true">
+                        <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                             stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                    </span>
+                </summary>
+                ${renglones}
+            </details>`;
+    }).join('');
 
-            // Variables de Estilo iOS
-                        let iconHtml = mode === 'boss' ? "👥" : "📋";
-                        let bgStyle = "background: linear-gradient(135deg, #64748b 0%, #334155 100%);"; // Gradiente Gris Pizarra Elegante
-                        let estiloApagado = "";
-                        let etiquetaInactiva = "";
-                        if (!estaActiva) {
-                            estiloApagado = "filter: grayscale(1); opacity:0.45;";
-                            etiquetaInactiva = `<div style="margin-top:3px; background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; border-radius:6px; font-size:0.6rem; font-weight:bold; padding:1px 6px; letter-spacing:0.5px;">INACTIVA</div>`;
-                        }
-                        let notificationBadge = "";
+    // El renglón del resumen, que es lo que la tarjeta tiene en vez de título:
+    // lo que es se ve —clasificaciones con sus encuestas—.
+    const todasLasFilas = gruposVisibles.reduce((acc, g) => acc.concat(g.filas), []);
+    const pendientesTotal = todasLasFilas.filter(f => f.pendiente).length;
+    const porCalificarTotal = todasLasFilas.reduce((suma, f) => suma + f.porCalificar, 0);
+    const promedioTotal = promedioDe(todasLasFilas.filter(f => f.leToca));
+    const resumen = [
+        `${todasLasFilas.length} encuesta${todasLasFilas.length === 1 ? '' : 's'}`,
+        pendientesTotal > 0 ? `${pendientesTotal} pendiente${pendientesTotal === 1 ? '' : 's'}` : null,
+        porCalificarTotal > 0 ? `${porCalificarTotal} por calificar` : null,
+        promedioTotal === null ? null : `promedio ${promedioTotal}%`
+    ].filter(Boolean).join(' · ');
 
-                        // NOTIFICACIÓN DE PENDIENTES / MAL REVISADAS
-                        const pendientesDeEstaEval = pendingMap[ev.id] || 0;
-                        if (pendientesDeEstaEval > 0) {
-                            notificationBadge = `<div style="position:absolute; top:-6px; right:-6px; background:#ef4444; color:white; font-size:0.75rem; font-weight:bold; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius:50%; border:2px solid #f8fafc; box-shadow: 0 2px 4px rgba(0,0,0,0.2); z-index:10;" title="${pendientesDeEstaEval} requieren revisión">${pendientesDeEstaEval}</div>`;
-                        }
-
-                        // Botones de Admin
-                        let adminBtn = '';
-                        if (window.modoAdminActivo) {
-                            adminBtn = `
-                            <div style="display:flex; gap:5px; margin-top:6px; justify-content:center; position:relative; z-index:100;">
-                                <button onclick="event.stopPropagation(); window.cerrarModalEvaluaciones(); window.editarEvaluacion('${ev.id}')"
-                                        style="border:none; background:#e2e8f0; color:#475569; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:0.7rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;" 
-                                        onmouseover="this.style.background='#cbd5e1'" onmouseout="this.style.background='#e2e8f0'"
-                                        title="Editar Evaluación">✏️</button>
-                                
-                                <button onclick="event.stopPropagation(); window.alternarEncuestaActiva('${ev.id}', ${estaActiva ? 'false' : 'true'})"
-                                        style="border:none; background:${estaActiva ? '#e0f2fe' : '#dcfce7'}; color:${estaActiva ? '#0369a1' : '#15803d'}; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:0.7rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;"
-                                        title="${estaActiva ? 'Desactivar (sólo la verá el administrador)' : 'Activar (volverá a verla todo el mundo)'}">${estaActiva ? '🚫' : '✅'}</button>
-
-                                <button onclick="event.stopPropagation(); window.borrarEvaluacion('${ev.id}')"
-                                        style="border:none; background:#fee2e2; color:#ef4444; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:0.7rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;"
-                                        onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'"
-                                        title="Eliminar Evaluación">🗑️</button>
-                            </div>`;
-                        } else if (laReviso(ev)) {
-                            // Quien revisa la encuesta puede corregir a quién va
-                            // dirigida sin ser administrador: es quien sabe a
-                            // quién le falta tomarla. La hoja se abre
-                            // restringida a ese bloque; el resto de la
-                            // configuración no se le enseña.
-                            adminBtn = `
-                            <div style="display:flex; gap:5px; margin-top:6px; justify-content:center; position:relative; z-index:100;">
-                                <button onclick="event.stopPropagation(); window.cerrarModalEvaluaciones(); window.editarDestinatariosEncuesta('${ev.id}')"
-                                        style="border:none; background:#f3e8ff; color:#7e22ce; border-radius:50%; width:24px; height:24px; cursor:pointer; font-size:0.7rem; display:flex; align-items:center; justify-content:center; transition: background 0.2s;"
-                                        onmouseover="this.style.background='#e9d5ff'" onmouseout="this.style.background='#f3e8ff'"
-                                        title="Editar a quién va dirigida" aria-label="Editar a quién va dirigida">✏️</button>
-                            </div>`;
-                        }
-
-                        // TARJETA ESTRUCTURADA COMO APP DE iOS
-                        const cardHtml = `
-                        <div style="display:flex; flex-direction:column; align-items:center; width: 100%; max-width: 85px; cursor:default; transition:transform 0.1s ease-in-out;">
-                            
-                            <div onclick="window.abrirHistorialEvaluacion('${ev.id}', '${safeTitle}')"
-                                 style="position:relative; ${bgStyle} ${estiloApagado} width: 64px; height: 64px; border-radius: 16px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.15); margin-bottom: 6px; cursor:pointer; transition: transform 0.1s;"
-                                 onmouseover="this.style.transform='scale(0.95)'" onmouseout="this.style.transform='scale(1)'">
-                                
-                                ${notificationBadge} <!-- Globo de Pendientes/Mal Revisadas -->
-                                
-                                <div style="font-size:2.2rem; line-height:1; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">${iconHtml}</div>
-                            </div>
-                            
-                            <div style="font-size:0.75rem; font-weight:500; color:${estaActiva ? '#1e293b' : '#94a3b8'}; text-align:center; width:100%; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.2; padding: 0 2px;">
-                                ${ev.title}
-                            </div>
-
-                            ${etiquetaInactiva}
-
-                            ${adminBtn}
-                            
-                        </div>`;
-                        
-                        gridHtml += cardHtml;
-        });
-
-        // CERRAR CONTENEDOR GRID E INYECTAR TODO DE GOLPE
-        gridHtml += `</div>`;
-        container.insertAdjacentHTML('beforeend', gridHtml);
-    });
+    container.insertAdjacentHTML('beforeend', `
+        <div style="background:white; border-radius:16px; padding:15px 15px 5px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
+            <div style="font-size:0.8rem; color:#475569; font-weight:600; margin-bottom:4px;">${resumen}</div>
+            ${bloques}
+        </div>
+    `);
 };
 
 window.abrirSeleccionSubordinado = (evalId, title, mode) => {

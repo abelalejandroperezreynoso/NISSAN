@@ -1167,6 +1167,17 @@ window.estadoDeAsignada = (v) => {
 window.iconoDeAsignada = (estado) => {
     const comun = 'width="20" height="20" viewBox="0 0 24 24" style="flex-shrink:0; display:block;" aria-hidden="true"';
 
+    // Lo neutro va antes que nada: es la encuesta que no es de quien mira —la
+    // de otra persona, en la lista del administrador—, y ahí ni la palomita ni
+    // el círculo abierto dicen la verdad. El trazo a rayas se distingue por la
+    // forma de los otros dos y no sólo por el gris.
+    if (estado.neutro) {
+        return `<svg ${comun}>
+            <circle cx="12" cy="12" r="9.6" fill="none" stroke="${estado.color}" stroke-width="2"
+                    stroke-dasharray="3.2 3.2"></circle>
+        </svg>`;
+    }
+
     if (estado.listo) {
         return `<svg ${comun}>
             <circle cx="12" cy="12" r="10" fill="${estado.color}"></circle>

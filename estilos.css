@@ -4777,3 +4777,103 @@ html.fondo-anclado body {
     stroke-width: 0.8;
     stroke-linejoin: round;
 }
+
+/* =========================================
+   LA LISTA DE ENCUESTAS DE LA HOJA
+   =========================================
+   Un renglón por encuesta dentro de su clasificación, igual que la tarjeta de
+   encuestas asignadas del panel de inicio (`.grupo-asignadas`, más arriba).
+   Antes era una rejilla de cuadros de 64px con el título recortado debajo:
+   todas las encuestas se veían idénticas y no decían ni cómo va la propia, ni
+   qué sacó, ni cuántas respuestas esperan calificación. */
+.encuesta-fila {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* Sangrada respecto al renglón de su clasificación: es lo que dice que va
+       dentro de ella. */
+    padding: 9px 8px 9px 26px;
+    border-top: 1px solid #f1f5f9;
+    cursor: pointer;
+    flex-wrap: wrap;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Sin `min-width: 0` la columna del texto no encoge por debajo de su palabra
+   más larga y empuja los botones fuera del renglón. Es la trampa de
+   `.card-info` en el panel de pendientes. */
+.encuesta-fila-texto { flex: 1 1 0%; min-width: 0; }
+
+.encuesta-titulo {
+    font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.2;
+    color: #1e293b;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Una encuesta inactiva sólo la ve el administrador, y se dibuja apagada para
+   no confundirla con las que sí ve la gente. */
+.encuesta-fila--inactiva .encuesta-titulo { color: #94a3b8; }
+
+.encuesta-meta { font-size: 0.72rem; color: #94a3b8; }
+
+.encuesta-acciones { display: flex; gap: 5px; flex-shrink: 0; }
+
+.encuesta-boton {
+    border: none;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: filter 0.2s;
+}
+
+.encuesta-boton:hover { filter: brightness(0.94); }
+
+/* Cuántas respuestas esperan calificación, que es lo que llevaba el globo rojo
+   sobre el cuadro de la rejilla. Va a la derecha: en el renglón de la encuesta
+   y en el de su clasificación. */
+.globo-por-calificar {
+    flex-shrink: 0;
+    background: #ef4444;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: bold;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+}
+
+/* La insignia de certificación de la clasificación, en su propio renglón del
+   encabezado: «📉 1 por debajo de 80%» no cabe al lado del nombre en un
+   teléfono y partiría el pie en dos. */
+.grupo-eval-chapa {
+    display: inline-block;
+    margin-top: 3px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.66rem;
+    font-weight: bold;
+}
+
+/* En un teléfono los tres botones del administrador se llevan la mitad del
+   ancho y dejan el título en una columna de dos palabras. Se van a su propio
+   renglón —es lo que hace el botón de una tarjeta de pendiente y por lo
+   mismo—, donde además son un blanco mucho más fácil para el dedo. */
+@media (max-width: 600px) {
+    .encuesta-fila { padding-left: 18px; }
+    .encuesta-acciones { flex: 1 1 100%; justify-content: flex-end; }
+}

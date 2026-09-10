@@ -708,6 +708,85 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `.hoja-plegable-resumen`, que es un flex con `gap`: cada nodo suelto del
   `<summary>` cuenta como elemento, así que el rótulo y su contador van
   envueltos en un solo `<span>` o el «(3)» se separa del texto.
+- **La lista de encuestas de la hoja va como la tarjeta del panel de inicio:
+  una clasificación por renglón, plegada, y sus encuestas dentro.** Era una
+  rejilla de cuadros de 64px con el título recortado a dos renglones debajo
+  —un menú de aplicaciones de iOS—, y ahí cada encuesta se veía por un cuadro
+  gris idéntico al de al lado: lo único que la distinguía eran tres palabras
+  de título, y no decía **ni cómo va la propia, ni qué sacó, ni qué le falta**.
+  Eso vivía dos toques más adentro, en la pantalla de cada encuesta, mientras
+  el panel de inicio ya lo enseñaba de un vistazo en el mismo teléfono.
+
+  Comparte con esa tarjeta todo lo que se puede compartir: el
+  `<details class="grupo-asignadas">` con su `<summary>`, el icono de estado
+  (`iconoDeAsignada`), el pie con la cuenta y el promedio, y la sangría de los
+  renglones de dentro. Lo que cambia es de qué habla, porque esta lista **no
+  es sólo de quien mira**: trae también las encuestas que sólo revisa y, en
+  modo administrador, las de todo el mundo.
+
+  ```js
+  window.estadoDeEncuestaEnLista(ev, { leToca, revisor, respuestas, porCalificar })
+  // → { estado, pendiente, peso }
+  ```
+
+  Ese ayudante **no decide nada**: sólo elige cuál de las dos reglas de siempre
+  habla de cada renglón —`esEvaluacionPendiente` contado con
+  `estadoDeAsignada` si la encuesta le toca, `estadoDeRevision` si no le toca
+  pero la revisa— y devuelve además el `peso` con el que se ordena. Así la
+  lista no puede discrepar del badge del panel ni del panel de pendientes, que
+  es lo mismo que promete la tarjeta del inicio.
+
+  Sus dos estados propios son los que allí no existen, y los dos son el
+  **neutro** —un círculo a rayas, que se distingue por la forma y no sólo por
+  el gris—:
+
+  - **La encuesta que no es de quien mira**, que es lo que ve el administrador
+    de casi todas: una palomita verde diría que está «al día» de algo que no le
+    toca, y un círculo rojo, peor. Va al final de su clasificación.
+  - **La encuesta apagada**, que sólo llega hasta ahí en modo administrador:
+    `esEvaluacionPendiente` no sabe de `active` —lo filtran quienes la llaman—,
+    así que sin esto una encuesta retirada pedía «Sin contestar» en rojo, o sea
+    reclamaba una respuesta que ya no se puede dar. Que está apagada lo sigue
+    diciendo su etiqueta «INACTIVA», y su renglón se va al final del grupo.
+
+  Cinco cosas que hay que mantener:
+
+  - **Se piden antes las ventanas de asistencia.** Cada renglón dice ahora en
+    qué estado está, y `esEvaluacionPendiente` consulta la ventana de las
+    encuestas que pasan lista **sin poder esperar**: por eso
+    `cargarVistaEvaluaciones` llama a `cargarVentanasDeAsistencia()` con las
+    otras dos cachés. Sin ella no hay ventana y todo se comporta como antes.
+  - **El grupo se agrupa por la clasificación normalizada**
+    (`normalizarClasificacion`), que es quien decide si dos nombres son el
+    mismo: por el texto crudo, «Seguridad» y «seguridad » se dibujaban como dos
+    clasificaciones, cada una con su propia insignia de certificación.
+  - **Lo que espera calificación va en el globo rojo de la derecha, no en el
+    pie.** Es la misma cuenta que llevaba el globo sobre el cuadro de la
+    rejilla, y ahora está en los dos renglones —el de la encuesta y el de su
+    clasificación—. En el pie era un cuarto trozo y lo partía en dos líneas,
+    dejando el encabezado de la clasificación más alto que sus encuestas.
+  - **La insignia de certificación va en su propio renglón** del encabezado
+    (`.grupo-eval-chapa`) y no al lado del nombre: «📉 1 por debajo de 80%» no
+    cabe en lo que queda del ancho de un teléfono.
+  - **Los tres botones del administrador se van a su propio renglón en un
+    teléfono** (`.encuesta-acciones` con `flex: 1 1 100%` bajo
+    `@media (max-width:600px)`), que es lo que hace el botón de una tarjeta de
+    pendiente y por lo mismo: en línea se llevaban la mitad del ancho y dejaban
+    el título en una columna de dos palabras. `.encuesta-fila-texto` necesita
+    `min-width: 0` o no encoge por debajo de su palabra más larga y los empuja
+    fuera del renglón.
+
+  El grupo **nace abierto si hay algo esperando a quien mira** —lo suyo
+  pendiente, o algo que le toque calificar—, como la lista de respuestas de una
+  encuesta y por lo mismo. En modo administrador no: ahí se listan las
+  encuestas de todo el mundo y casi todas tienen algo pendiente de alguien, así
+  que abrirlas todas es no plegar nada.
+
+  Y a diferencia de la tarjeta del inicio, **aquí el renglón de la
+  clasificación sólo pliega y despliega**: no hay hoja de detalle que abrir,
+  que ésta ya es la hoja. Por eso el `<summary>` hace el trabajo del navegador
+  —sin `preventDefault`— y la flecha es un `<span>` con la clase del botón, no
+  un botón: no tiene nada suyo que hacer.
 - **El `id_interno` identifica al equipo y el nombre va pegado a él.** La
   misma máquina suele estar dada de alta varias veces en `equipos`, una fila
   por línea, todas con el mismo `id_interno`. La base no tiene restricción de
