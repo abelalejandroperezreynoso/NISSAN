@@ -250,7 +250,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
                 ? ` &middot; ${window.sanitizeForHTML(periodo.nombre || '')}` : '';
 
             ultimoResultadoHtml = `
-                <div title="Quien no contestó cuenta como 0.${resumen.promedioContestadas !== null ? ` ${resumen.promedioContestadas}% entre quienes la contestaron.` : ''}"
+                <div title="Quien no contestó cuenta como 0.${resumen.promedioContestadas !== null ? ` ${resumen.promedioContestadas}% entre quienes la contestaron.` : ''}${resumen.ajenos > 0 ? ` ${resumen.ajenos} de las respuestas son de gente que ya no está en la lista de hoy y cuentan aparte.` : ''}"
                      style="display:flex; align-items:center; gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:15px;">
                     <div style="text-align:center; min-width:52px;">
                         ${cifraHtml}

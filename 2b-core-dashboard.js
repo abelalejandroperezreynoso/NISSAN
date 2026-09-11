@@ -1014,23 +1014,26 @@ window.promedioSobrePadron = (suma, calificadas, padron) => {
 // se promedian los promedios. Una encuesta de cuarenta personas y otra de tres
 // no pesan igual, y promediar sus dos cifras las iguala.
 window.totalDeEncuestasAdmin = (filas) => {
-    let suma = 0, calificadas = 0, padron = 0, contestaron = 0;
+    let suma = 0, calificadas = 0, total = 0, contestaron = 0, ajenos = 0;
     (filas || []).forEach(f => {
         if (!f.resumen) return;
         suma += f.resumen.suma;
         calificadas += f.resumen.calificadas;
-        padron += f.resumen.padron;
+        total += f.resumen.total;
+        ajenos += f.resumen.ajenos;
         contestaron += f.resumen.contestaron;
     });
-    return { contestaron, padron, calificadas,
-             promedio: window.promedioSobrePadron(suma, calificadas, padron) };
+    return { contestaron, total, ajenos, calificadas,
+             promedio: window.promedioSobrePadron(suma, calificadas, total) };
 };
 
-// «23/40 respuestas», o sólo cuántas hay si no se pudo saber el padrón.
+// «23/40 respuestas», o sólo cuántas hay si no se pudo saber el padrón. El
+// divisor es `total` —el padrón de hoy más quien contestó y ya no está en él—,
+// que es lo único que no puede dar una fracción mayor que uno.
 window.textoDeRespuestasAdmin = (resumen) => {
     const n = resumen.contestaron;
-    return resumen.padron > 0
-        ? `${n}/${resumen.padron} respuestas`
+    return resumen.total > 0
+        ? `${n}/${resumen.total} respuestas`
         : `${n} respuesta${n === 1 ? '' : 's'}`;
 };
 
@@ -1040,7 +1043,9 @@ window.textoDeRespuestasAdmin = (resumen) => {
 // **Cuenta gente, no respuestas**, igual que el pase de lista: quien contestó
 // dos veces cuenta una, y su puntaje es el de la última —promediar las dos la
 // pondera el doble—.
-window.resumenDeEncuestaAdmin = (ev, respuestas, ahora) => {
+// `padronDado` evita recalcularlo: `padronDeLaEncuesta` recorre la plantilla
+// entera y la gráfica de periodos pregunta doce veces por la misma encuesta.
+window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
     const periodo = window.periodoDeEncuesta(ev, ahora);
     const ultimaDeCadaUno = {};
 
@@ -1062,13 +1067,23 @@ window.resumenDeEncuestaAdmin = (ev, respuestas, ahora) => {
     const suma = puntajes.reduce((a, b) => a + b, 0);
     // Sin las columnas de destinatarios `padronDeLaEncuesta` no da padrón, y un
     // «de 0» se leería como que no le toca a nadie: ahí no se dice.
-    const padron = window.padronDeLaEncuesta(ev).length;
+    const padron = padronDado || window.padronDeLaEncuesta(ev);
+    const enPadron = new Set(padron.map(e => String(e.id)));
+
+    // **Quien contestó y hoy ya no está en el padrón se suma al divisor**, que
+    // es lo mismo que hace el pase de lista y por lo mismo: contestó, y
+    // borrarlo del acta sería falsearla, pero dejarlo sólo arriba daba «126/95
+    // respuestas · 104%». El padrón es el de hoy —quien se dio de baja o cambió
+    // de puesto ya no está en él— y una de «única vez» cuenta las respuestas de
+    // todos los años, así que ese desfase es lo normal y no la excepción.
+    const ajenos = Object.keys(ultimaDeCadaUno).filter(id => !enPadron.has(id)).length;
+    const total = padron.length + ajenos;
 
     return {
         contestaron: suyas.length,
         calificadas: puntajes.length,
-        padron, suma,
-        promedio: window.promedioSobrePadron(suma, puntajes.length, padron),
+        padron: padron.length, ajenos, total, suma,
+        promedio: window.promedioSobrePadron(suma, puntajes.length, total),
         // Lo que sacaron quienes sí la contestaron. No se dibuja: va en el globo
         // del renglón, que es donde cabe explicar de dónde sale el otro.
         promedioContestadas: puntajes.length === 0 ? null
@@ -1765,7 +1780,9 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
             <div style="min-width:0;">
                 <div style="font-size:0.8rem; color:#334155; font-weight:700;">${ultimo ? 'Resultado del último periodo' : 'Todavía sin resultados'}</div>
                 <div style="font-size:0.75rem; color:#94a3b8;">${ultimo
-                    ? `${window.sanitizeForHTML(ultimo.etiqueta)} · ${ultimo.calificadas} de ${ultimo.total} calificada${ultimo.calificadas === 1 ? '' : 's'}`
+                    ? (window.modoAdminActivo
+                        ? `${window.sanitizeForHTML(ultimo.etiqueta)} · ${ultimo.total}/${ultimo.divisor} respuestas`
+                        : `${window.sanitizeForHTML(ultimo.etiqueta)} · ${ultimo.calificadas} de ${ultimo.total} calificada${ultimo.calificadas === 1 ? '' : 's'}`)
                     : 'Ninguna de sus encuestas se ha calificado'}</div>
             </div>
         </div>
@@ -1941,24 +1958,39 @@ window.historialDeRevision = (grupo, respuestas, sobrePadron) => {
     // vez por encuesta y no una vez por encuesta y periodo.
     const padrones = {};
     if (sobrePadron) encuestas.forEach(ev => {
-        padrones[ev.id] = window.padronDeLaEncuesta(ev).length;
+        padrones[ev.id] = window.padronDeLaEncuesta(ev);
     });
 
     return periodos.slice().reverse().map(p => {
         const puntajes = [];
         let entregadas = 0;
-        let padron = 0;
+        let suma = 0, calificadas = 0, divisor = 0, contestaron = 0;
 
         encuestas.forEach(ev => {
             const periodo = window.periodoDeEncuesta(ev, p.referencia);
-            // Una encuesta que todavía no existía no vale cero en aquel
-            // periodo: sin esto, la de hace tres meses dibujaría nueve puntos
-            // clavados en el 0 antes de su primer resultado. Sin padrón el
-            // periodo se queda sin promedio y la gráfica se lo salta, que es lo
-            // que ya hacía cuando no había nada calificado.
-            const alta = ev.created_at ? new Date(ev.created_at) : null;
-            const existia = !alta || isNaN(alta) || !periodo.fin || alta < periodo.fin;
-            if (existia) padron += padrones[ev.id] || 0;
+
+            if (sobrePadron) {
+                // Una encuesta que todavía no existía no vale cero en aquel
+                // periodo: sin esto, la de hace tres meses dibujaría nueve
+                // puntos clavados en el 0 antes de su primer resultado. Sin
+                // divisor el periodo se queda sin promedio y la gráfica se lo
+                // salta, que es lo que ya hacía cuando no había nada calificado.
+                const alta = ev.created_at ? new Date(ev.created_at) : null;
+                if (alta && !isNaN(alta) && periodo.fin && alta >= periodo.fin) return;
+
+                // Por la **misma** función que la tarjeta del panel y la hoja de
+                // una encuesta: cuenta gente y no respuestas, y suma al divisor
+                // a quien contestó y hoy ya no está en el padrón. Calcularlo
+                // aquí aparte es lo que dejaría al punto de este periodo
+                // discrepando del número que se lee arriba.
+                const r = window.resumenDeEncuestaAdmin(ev, respuestas, p.referencia, padrones[ev.id]);
+                suma += r.suma;
+                calificadas += r.calificadas;
+                divisor += r.total;
+                contestaron += r.contestaron;
+                return;
+            }
+
             (respuestas || []).forEach(r => {
                 if (String(r.evaluation_id) !== String(ev.id)) return;
                 const enviada = new Date(r.submitted_at);
@@ -1978,12 +2010,13 @@ window.historialDeRevision = (grupo, respuestas, sobrePadron) => {
             corta: rotulos.corta,
             minima: rotulos.minima,
             actual: !!p.actual,
-            calificadas: puntajes.length,
-            total: entregadas,
-            padron,
+            calificadas: sobrePadron ? calificadas : puntajes.length,
+            // Sin `sobrePadron` son respuestas entregadas; con él, gente que
+            // contestó, que es lo que cuenta `resumenDeEncuestaAdmin`.
+            total: sobrePadron ? contestaron : entregadas,
+            divisor,
             promedio: sobrePadron
-                ? window.promedioSobrePadron(
-                    puntajes.reduce((a, b) => a + b, 0), puntajes.length, padron)
+                ? window.promedioSobrePadron(suma, calificadas, divisor)
                 : (puntajes.length === 0 ? null
                     : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length))
         };

@@ -699,8 +699,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - El recuadro de arriba dice **«Resultado de la empresa»**, con la misma cifra
     de la tarjeta del panel y sacada de la misma función
     (`resumenDeEncuestaAdmin`), que si no las dos pantallas discreparían: el
-    promedio repartido sobre el padrón y, debajo, «23/40 respuestas · este
-    mes». Una de «única vez» no lleva esa última palabra —`periodoDeEncuesta` la
+    promedio repartido sobre el padrón —**más quien contestó y ya no está en
+    él**, que es lo que impide un «126/95 respuestas · 104%»— y, debajo, «23/40
+    respuestas · este mes». Una de «única vez» no lleva esa última palabra —`periodoDeEncuesta` la
     resuelve como «alguna vez», que ahí no se lee, y el subtítulo del encabezado
     ya lo dice—. No es pulsable: la lista de respuestas está justo debajo.
   - **El botón de responder se decide con la regla de siempre.** Al
@@ -4047,11 +4048,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - **Cuenta gente, no respuestas**, como el pase de lista: quien contestó dos
     veces cuenta una, y su puntaje es el de la **última** —promediar las dos la
     pondera el doble—.
-  - **El denominador es `padronDeLaEncuesta`**, que sale de `leTocaEstaEncuesta`
-    y de los empleados activos: así el «de 40» no puede discrepar de lo que cada
-    quien ve en su panel. Sin las columnas de destinatarios no hay padrón, y
-    entonces se dice sólo cuántas respuestas hay y se promedia lo calificado,
-    que es lo de antes —un «de 0» se leería como que no le toca a nadie—.
+  - **El denominador es `padronDeLaEncuesta` más quien contestó y ya no está en
+    él.** El padrón sale de `leTocaEstaEncuesta` y de los empleados activos, así
+    que el «de 40» no puede discrepar de lo que cada quien ve en su panel; pero
+    es el de **hoy**, y las respuestas pueden ser de gente que se dio de baja o
+    que cambió de puesto —y una de «única vez» cuenta las de todos los años, así
+    que ahí ese desfase es lo normal—. Sumándolos sólo arriba, la pantalla decía
+    **«126/95 respuestas · 104%»**. Se suman también al divisor
+    (`resumen.ajenos`, `resumen.total`), que es exactamente lo que hace
+    `pasoDeLista` y por lo mismo: contestó, y borrarlo del acta sería falsearla.
+    Con eso la fracción no puede pasar de uno ni el promedio de 100.
+
+    Sin las columnas de destinatarios no hay padrón, y entonces se dice sólo
+    cuántas respuestas hay y se promedia lo calificado, que es lo de antes —un
+    «de 0» se leería como que no le toca a nadie—.
+  - **El periodo lo pone `periodoDeEncuesta`, y una de «única vez» no tiene.**
+    La mensual habla de septiembre y la semanal de esta semana; la de «única
+    vez» se resuelve como «alguna vez» —desde el origen del tiempo—, así que ahí
+    se cuentan **todas** las respuestas que ha tenido nunca. Es lo correcto —esa
+    encuesta se contesta una vez y ya— y es de donde salía el «126/95».
   - **Un grupo suma puntajes y padrones; no promedia promedios.** Una encuesta
     de cuarenta personas y otra de tres no pesan igual, y promediar sus dos
     cifras las iguala. Lo hace `totalDeEncuestasAdmin`, que es por donde pasan
@@ -4080,16 +4095,24 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   de revisión sigue llamándolo **sin** ese argumento: ahí se habla de la gente a
   la que uno califica y el padrón es otra pregunta.
 
-  Dos cosas de esa gráfica:
+  Tres cosas de esa gráfica:
 
+  - **Cada periodo pasa por `resumenDeEncuestaAdmin`**, la misma función que la
+    tarjeta y la hoja de una encuesta, con el padrón ya calculado en su cuarto
+    argumento —`padronDeLaEncuesta` recorre la plantilla entera y aquí se
+    preguntaría doce veces por encuesta—. Calcularlo aquí aparte es lo que
+    dejaría el punto del periodo que corre discrepando del número que se lee
+    arriba: así cuenta gente y no respuestas y suma los ajenos al divisor sin
+    tener que acordarse de hacerlo. De ahí salen `total` —que sin `sobrePadron`
+    son respuestas entregadas y con él, gente que contestó— y `divisor`.
   - **Una encuesta que todavía no existía no vale cero en aquel periodo.** Sin
     la guarda de `created_at`, una creada hace tres meses dibujaría nueve puntos
     clavados en el 0 antes de su primer resultado. Un periodo que se queda sin
-    padrón no tiene promedio y la gráfica se lo salta, que es lo que ya hacía
+    divisor no tiene promedio y la gráfica se lo salta, que es lo que ya hacía
     cuando no había nada calificado.
   - **El padrón es el de hoy también para los periodos de atrás**, que es lo
-    único que sabe `padronDeLaEncuesta`: quien se dio de baja desde entonces ya
-    no cuenta en su propio periodo.
+    único que sabe `padronDeLaEncuesta`: quien se dio de baja desde entonces
+    entra como ajeno en su propio periodo en vez de como destinatario.
 
 - **El panel del usuario se pliega, y de entrada está contraído.** Contraído
   se ve sólo quién es —la foto y el nombre—, que es lo que se mira de pasada; el
