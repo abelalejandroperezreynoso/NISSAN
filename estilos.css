@@ -5645,3 +5645,132 @@ html.fondo-anclado body {
     font-size: 0.75rem;
     color: rgba(60, 60, 67, 0.6);
 }
+
+/* ==========================================================================
+   LA HOJA DE UNA ENCUESTA
+   ========================================================================== */
+
+/* El resultado va pegado al título, no en un recuadro del cuerpo: era una
+   tarjeta de 60px de alto con una cifra, su rótulo y su fecha, justo encima del
+   botón que es a lo que se entra. La cifra se lee igual aquí arriba; el rótulo
+   se fue al `title` y la fecha, al subtítulo detrás de la frecuencia.
+
+   El título encoge y se recorta —lleva `min-width:0` de su propia regla— y la
+   cifra no: al revés, un nombre largo la echaría fuera de la hoja. */
+.hoja-titulo-fila {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.hoja-titulo-fila .hoja-titulo {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Es un flex, así que necesita su propia regla para el atributo `hidden`: un
+   `display` de autor le gana al de la hoja del navegador. Es la trampa de
+   `.tipos-pregunta` y la misma de `.ios-boton-icono[hidden]`. */
+.hoja-resultado {
+    display: inline-flex;
+    flex-shrink: 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+}
+
+.hoja-resultado[hidden] { display: none; }
+
+/* El resultado propio lleva a su respuesta; el de la empresa no va a ningún
+   sitio, que la lista de respuestas está justo debajo. */
+.hoja-resultado.es-pulsable { cursor: pointer; }
+
+/* Los botones van sueltos sobre el fondo de la hoja y no dentro de una tarjeta
+   blanca: un recuadro con borde y sombra alrededor de un bloque de color a todo
+   lo ancho es un marco por encima de lo más visible de la pantalla. Lo único
+   que hace falta entre ellos es el hueco. */
+.eval-acciones {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 25px;
+}
+
+.eval-accion {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 12px;
+    color: white;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.eval-accion--responder {
+    background: #2563eb;
+    box-shadow: 0 4px 6px rgba(37, 99, 235, 0.25);
+}
+
+.eval-accion--jefe {
+    background: #be185d;
+    box-shadow: 0 4px 6px rgba(190, 24, 93, 0.25);
+}
+
+/* Corregir a quién va dirigida es lo secundario de esta pantalla: aquí se viene
+   a responder. */
+.eval-accion-secundaria {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    background: white;
+    color: #7e22ce;
+    border: 1px solid #d8b4fe;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.eval-aviso-revisar {
+    text-align: center;
+    color: #7e22ce;
+    font-size: 0.9rem;
+    background: #faf5ff;
+    border: 1px solid #e9d5ff;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+/* La gráfica sí conserva su recuadro: es un dibujo y necesita un fondo blanco
+   detrás, al revés que los botones. */
+.eval-grafica {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 15px;
+}
+
+/* En la hoja de editar la encuesta el material va dentro de una sección
+   plegable que ya es la tarjeta y ya pone el rótulo: sin esto sería una tarjeta
+   blanca dentro de otra. */
+.material-tarjeta--desnuda {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
+    box-shadow: none;
+}

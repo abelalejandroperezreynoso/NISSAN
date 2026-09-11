@@ -490,7 +490,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   se quedó como estaba y sólo ganó su resumen.
 
   ```js
-  window.RESUMEN_DE_GRUPO        // { datos, destinatarios, revisores, opciones, escala, preguntas }
+  window.RESUMEN_DE_GRUPO        // { datos, destinatarios, revisores, opciones, escala, material, preguntas }
   window.pintarResumenGrupos()   // los rellena todos
   window.abrirGrupoEval(id)      // abre uno y lo lleva a la vista
   window.plegarGruposEval(editando)
@@ -598,9 +598,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   revisión por empleado, el expediente y la certificación por
   clasificación—, así que el
   título de la hoja no puede ser fijo: se pone con
-  `window.encabezadoHojaEvaluaciones(titulo, alVolver, idEncuesta, subtitulo)`,
+  `window.encabezadoHojaEvaluaciones(titulo, alVolver, idEncuesta, subtitulo,
+  resultado)`,
   en `4-evaluaciones-base.js`. Sin argumentos vuelve a «Evaluaciones y
-  encuestas» con la cruz, sin subtítulo y sin lápiz. **Toda pantalla que repinte ese contenedor tiene que llamarlo**,
+  encuestas» con la cruz, sin subtítulo, sin lápiz y sin resultado. **Toda pantalla que repinte ese contenedor tiene que llamarlo**,
   o se queda con el título de la anterior.
 
   Al abrir una encuesta el botón del encabezado deja de ser la cruz y pasa a
@@ -669,6 +670,39 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   (`#subtitulo-hoja-evaluaciones:empty`), que si no su margen separaría el
   título de la línea del encabezado sin decir nada.
 
+  **Y a la derecha del título va el resultado** —**quinto** argumento,
+  `{ texto, color, etiqueta, alTocar }`—, que es la cifra que antes encabezaba
+  el cuerpo en un recuadro de 60px con su rótulo y su fecha, justo encima del
+  botón que es a lo que se entra. La cifra se lee igual arriba; **el rótulo se
+  fue al `title` y al `aria-label`** —lo que le queda a un número sin renglón,
+  como a un botón de icono— y **la fecha al subtítulo, detrás de la
+  frecuencia**: «Anual · 18/04/2026», y administrando «Anual · 23/40 respuestas
+  · este mes». Con eso la hoja empieza en el botón.
+
+  Se escribe siempre, aunque sea para esconderlo, igual que el lápiz y por lo
+  mismo: sólo lo tiene la pantalla de una encuesta, y sin vaciarlo se quedaría
+  el de la anterior. Se esconde con `hidden`, así que depende de la regla
+  `.hoja-resultado[hidden]` de `estilos.css` —es un flex y un `display` de autor
+  le gana al del navegador, la trampa de `.tipos-pregunta`—. **Pulsable sólo el
+  propio**, que lleva a su respuesta (`alTocar`); el de la empresa no va a
+  ningún sitio, que la lista de respuestas está justo debajo. Y el título encoge
+  y se recorta con «…» mientras la cifra no: al revés, un nombre largo la echaría
+  fuera de la hoja.
+
+  **Y los tres botones van sueltos, sin tarjeta.** La acción principal
+  —«Responder Encuesta», «Volver a Responder», «Evaluar a un Colaborador…»—, el
+  aviso de «Te toca revisar esta encuesta» y «Editar a quién va dirigida» vivían
+  dentro de un recuadro blanco con borde y sombra, que es un marco alrededor de
+  un bloque de color a todo lo ancho: el elemento más visible de la pantalla
+  enmarcado por el que menos dice. Hoy lo único que hay entre ellos es el hueco
+  de `.eval-acciones`, y sus estilos están en `estilos.css` (`.eval-accion`,
+  `.eval-accion--responder`, `.eval-accion--jefe`, `.eval-accion-secundaria`,
+  `.eval-aviso-revisar`) y no en atributos `style`.
+
+  **La gráfica sí conserva el suyo** (`.eval-grafica`): es un dibujo y necesita
+  un fondo blanco detrás, al revés que los botones. Sin gráfica y sin botones no
+  se escribe ningún contenedor, que uno vacío deja su margen.
+
   **La pantalla de una encuesta va sin emoji y sin adornos**, y eso se fue
   quitando a propósito:
 
@@ -696,21 +730,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `window.modoAdminActivo ||` delante de `leTocaEstaEncuesta`—, o sea invitaba a
   contestar por alguien a quien no le tocaba. Con el modo encendido:
 
-  - El recuadro de arriba dice **«Resultado de la empresa»**, con la misma cifra
-    de la tarjeta del panel y sacada de la misma función
+  - La cifra del encabezado es la **de la empresa** —lo dice su `title`—, con el
+    mismo número de la tarjeta del panel y sacado de la misma función
     (`resumenDeEncuestaAdmin`), que si no las dos pantallas discreparían: el
     promedio repartido sobre el padrón —**más quien contestó y ya no está en
-    él**, que es lo que impide un «126/95 respuestas · 104%»— y, debajo, «23/40
-    respuestas · este mes». Una de «única vez» no lleva esa última palabra —`periodoDeEncuesta` la
-    resuelve como «alguna vez», que ahí no se lee, y el subtítulo del encabezado
-    ya lo dice—. No es pulsable: la lista de respuestas está justo debajo.
+    él**, que es lo que impide un «126/95 respuestas · 104%»—; y el subtítulo
+    lleva detrás de la frecuencia «23/40 respuestas · este mes». Una de «única
+    vez» no lleva esa última palabra —`periodoDeEncuesta` la resuelve como
+    «alguna vez», que ahí no se lee, y la frecuencia ya lo dice—. No es
+    pulsable: la lista de respuestas está justo debajo.
   - **El botón de responder se decide con la regla de siempre.** Al
     administrador al que la encuesta sí le toca le sale igual; al que no, ya no.
 
-  Sin la ficha de la encuesta (`evalData` en null) el recuadro **no se dibuja**
-  en lugar de caer al resultado personal, que es lo que se vino a quitar.
+  Sin la ficha de la encuesta (`evalData` en null) no se escribe **ninguna
+  cifra** en lugar de caer al resultado personal, que es lo que se vino a quitar.
 
-  **Y debajo del recuadro va la línea de cómo se ha comportado.** El recuadro
+  **Y debajo va la línea de cómo se ha comportado.** La cifra de arriba
   dice dónde está hoy y la gráfica, si va a mejor: es la misma `graficaDeLinea`
   de la tarjeta del panel con el mismo `historialDeRevision` que la alimenta
   —`{ filas: [{ ev }] }` y `{ sobrePadron: true }`—, así que el último punto es,
@@ -2083,8 +2118,45 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   por WhatsApp y no quedaba pegado a la encuesta, así que quien la abría un mes
   después no tenía de dónde sacarlo.
 
-  Va en un recuadro de la hoja de la encuesta, entre los botones y el pase de
-  lista: se mira antes de contestar, pero la acción sigue siendo el botón azul.
+  **Se agrega y se quita desde la hoja de editar la encuesta**, en su sección
+  «Material» (`#grupo-material`, el hueco `#material-edicion`); en la hoja de la
+  encuesta **sólo se lee**. Subir un documento es escribir la encuesta —como sus
+  preguntas o a quién va dirigida—, no contestarla, y en la hoja de la encuesta
+  ese recuadro se llevaba media pantalla por encima del pase de lista para
+  enseñarle a quien sólo lee la misma portada que ya tiene arriba.
+
+  ```js
+  window.materialEnEdicion              // { id } mientras la hoja de edición está a la vista
+  window.prepararMaterialEnEdicion(id)  // la llena; con null, la deja vacía y diciendo por qué
+  ```
+
+  **Sólo sale al editar una que ya existe.** Un archivo cuelga de su encuesta
+  —la carpeta del bucket lleva su id y cada fila la nombra—, así que sin fila no
+  hay a qué colgarlo: al crear y al copiar la sección se queda vacía y dice que
+  hay que publicarla primero. Esconderla entera dejaría a quien la busca sin
+  saber que existe. Una copia tampoco hereda el material de la original, igual
+  que no hereda su fecha de vigencia y por lo mismo: es la vuelta de este mes.
+
+  Ahí el recuadro va **desnudo** (`opciones.desnudo`, la clase
+  `.material-tarjeta--desnuda`): sin su tarjeta blanca ni su rótulo «Material»,
+  que los pone la sección plegable que lo envuelve, y una tarjeta dentro de otra
+  no se lee como nada.
+
+  **Y son dos huecos, así que `pintarMaterialEncuesta` repinta los dos**:
+  `cerrarModalEvaluaciones` sólo esconde la hoja de la encuesta, de modo que su
+  `#material-encuesta` sigue en el documento mientras se edita. Con un solo id,
+  `getElementById` habría devuelto el de la hoja escondida y lo recién subido no
+  se vería en la que está delante. El de la hoja de la encuesta **no se repinta
+  mientras hay una edición delante** (`materialEnEdicion`): ahí
+  `hayPortadaEnLaHoja` está en false para que el recuadro de edición los enseñe
+  todos, y con eso puesto se le metería a la hoja escondida el documento que ya
+  tiene de portada. Se rehace entero al volver a abrirla, que es por donde se
+  pasa siempre.
+
+  Y **lo que está a medio convertir no sale en el recuadro de sólo lectura**: es
+  de quien lo subió, y sin eso una conversión dejada a medias en la hoja de
+  edición le sacaba a quien sólo lee unas miniaturas con sus botones de guardar
+  y descartar.
 
   **Nada se guarda como PDF ni como presentación.** Se guardó un tiempo —el
   archivo tal cual, hasta 25 MB— y eso se llevaba el bucket por delante: la
@@ -2145,8 +2217,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   encima de «procedimiento.pdf · 3 páginas · 30 KB».
 
   **Subir y quitar es de quien la imparte** —el administrador y quien la revisa,
-  el mismo `puedeEditarDestinatarios` que decide los nombres del pase de lista—;
-  **leerlo lo puede cualquiera** que abra la encuesta, que es para lo que está.
+  el mismo `puedeEditarDestinatarios` que decide los nombres del pase de lista,
+  que son los dos que abren la hoja de edición—; **leerlo lo puede cualquiera**
+  que abra la encuesta, que es para lo que está.
 
   **Y entre elegir el archivo y guardarlo hay un paso**, que no es un adorno:
   lo convertido se enseña en el propio recuadro —las páginas en miniatura, con
@@ -2270,16 +2343,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     que la regla lleva `!important`: sin él quedarían 12px de blanco entre el
     borde y la imagen, que es justo lo que se vino a quitar.
   - **Si la portada no carga, `portadaDeLaHojaRota` rehace además el recuadro de
-    abajo.** Sin ese segundo paso, quien sólo lee se quedaría sin portada y sin
-    recuadro, o sea sin ninguna manera de abrir el material.
+    abajo** —con `pintarMaterialEncuesta`, que ya sabe cuál es cada hueco—. Sin
+    ese segundo paso, quien sólo lee se quedaría sin portada y sin recuadro, o
+    sea sin ninguna manera de abrir el material.
 
-  **Y abajo no se repite lo que ya está arriba.** A quien sólo lee le sobra el
-  recuadro entero —la portada abre el visor con todo—, así que ahí sólo le quedan
-  los archivos sueltos, que no entran en el visor. A quien puede subirlos no: ése
-  es el sitio donde se agregan y se quitan, y ahí hacen falta todos —sólo que el
-  que está de portada **baja a renglón compacto**, porque a tamaño de tarjeta
-  sería la misma imagen dos veces en la misma pantalla y eso se lee como un
-  fallo—.
+  **Y abajo no se repite lo que ya está arriba.** La portada abre el visor con
+  todo lo convertido, así que en la hoja de la encuesta el recuadro se queda con
+  los **archivos sueltos** y nada más, que ésos no entran en el visor; sin
+  ninguno no se dibuja. Donde hacen falta todos es en la hoja de edición, que es
+  donde se agregan y se quitan: ahí no hay portada de la que sea copia ninguno.
 
   **Los demás documentos sí son una tarjeta con su portada a todo lo ancho y el
   pie debajo**, que es como se enseña un documento compartido en cualquier

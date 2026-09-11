@@ -215,9 +215,13 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     const mode = evalData ? (evalData.mode || 'self') : 'self';
     const safeTitle = title.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
     
+    // Los tres van **sueltos**, sin la tarjeta blanca que los envolvía: era un
+    // recuadro con borde y sombra alrededor de un botón que ya es un bloque de
+    // color a todo lo ancho, o sea un marco por encima del elemento más visible
+    // de la pantalla. Lo que los separa hoy es el hueco de `.eval-acciones`.
     let actionButtonHtml = '';
     if (mode === 'boss') {
-        actionButtonHtml = `<button onclick="window.abrirSeleccionSubordinado('${evalId}', '${safeTitle}', 'boss')" style="width: 100%; padding:12px 20px; background:#be185d; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(190, 24, 93, 0.25); transition: transform 0.1s;">Evaluar a un Colaborador...</button>`;
+        actionButtonHtml = `<button onclick="window.abrirSeleccionSubordinado('${evalId}', '${safeTitle}', 'boss')" class="eval-accion eval-accion--jefe">Evaluar a un Colaborador...</button>`;
     } else if (window.leTocaEstaEncuesta(evalData, user, window.tieneEquipoDirecto(user.id))) {
         // Sin `modoAdminActivo ||` a propósito: administrando no se está
         // mirando la encuesta de nadie en particular, y ese «||» le ofrecía
@@ -226,11 +230,11 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // le tocaba. Si de verdad le toca, la regla de siempre se lo da igual.
         const misRespuestas = responses.filter(r => String(r.employee_id) === String(user.id));
         const btnText = misRespuestas.length > 0 ? "Volver a Responder" : "Responder Encuesta";
-        actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" style="width: 100%; padding:12px 20px; background:#2563eb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(37,99,235,0.25); transition: transform 0.1s;">${btnText}</button>`;
+        actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" class="eval-accion eval-accion--responder">${btnText}</button>`;
     } else if (window.revisoresDeEncuesta(evalData).includes(String(user.id))) {
         // Se está aquí para calificarla, no para contestarla: la encuesta no va
         // dirigida a esta persona y el botón de responder sobra.
-        actionButtonHtml = `<div style="text-align:center; color:#7e22ce; font-size:0.9rem; background:#faf5ff; border:1px solid #e9d5ff; border-radius:10px; padding:12px;">Te toca revisar esta encuesta.</div>`;
+        actionButtonHtml = `<div class="eval-aviso-revisar">Te toca revisar esta encuesta.</div>`;
     }
 
     // Corregir a quién va dirigida no depende de cuál de los botones de arriba
@@ -245,7 +249,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     if (evalData && (window.modoAdminActivo || window.puedeEditarDestinatarios(evalData, user.id))) {
         destinatariosBtnHtml = `
             <button onclick="window.cerrarModalEvaluaciones(); window.editarDestinatariosEncuesta('${evalId}')"
-                    style="width:100%; margin-top:10px; padding:10px 16px; background:white; color:#7e22ce; border:1px solid #d8b4fe; border-radius:10px; cursor:pointer; font-weight:600; font-size:0.9rem; display:flex; align-items:center; justify-content:center; gap:8px;">
+                    class="eval-accion-secundaria">
                 Editar a quién va dirigida
             </button>`;
     }
@@ -262,7 +266,12 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // repartido sobre el padrón, con quien no contestó en cero— y sale de la
     // misma función, que si no las dos pantallas discreparían.
     const miUltima = responses.find(r => String(r.employee_id) === String(user.id));
-    let ultimoResultadoHtml = '';
+    // La cifra se va al encabezado, pegada al título, y su fecha al subtítulo,
+    // detrás de la frecuencia: era un recuadro de 60px con un número, un rótulo
+    // y una fecha, justo encima del botón que es a lo que se entra. Lo que no
+    // cabe en una cifra —el rótulo y lo que explicaba su `title`— va al `title`
+    // y al `aria-label` del propio número.
+    let resultadoHoja = null;
     let graficaHtml = '';
 
     if (window.modoAdminActivo) {
@@ -307,31 +316,27 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         if (resumen) {
             const colorScore = resumen.promedio === null ? '#94a3b8' : window.getColorScore(resumen.promedio);
 
+            // Una encuesta de «única vez» no tiene periodo —`periodoDeEncuesta`
+            // la resuelve como «alguna vez»— y ahí no se dice: eso ya lo cuenta
+            // la frecuencia del subtítulo, y «23/40 respuestas · alguna vez» no
+            // se lee.
+            const cuando = periodo && periodo.fin ? (periodo.nombre || '') : '';
+
             // Sin padrón no hay sobre qué repartir y la cifra sería la de lo
             // entregado, que no es lo que promete el rótulo: ahí se dice «—»,
             // como en una respuesta sin calificar.
-            const cifraHtml = resumen.promedio === null
-                ? `<div style="font-size:1rem; font-weight:700; color:#94a3b8; line-height:1;">&mdash;</div>`
-                : `<div style="font-size:1.6rem; font-weight:800; color:${colorScore}; line-height:1;">${resumen.promedio}%</div>`;
+            resultadoHoja = {
+                texto: resumen.promedio === null ? '—' : `${resumen.promedio}%`,
+                color: colorScore,
+                etiqueta: `Resultado de la empresa. Quien no contestó cuenta como 0.${resumen.promedioContestadas !== null ? ` ${resumen.promedioContestadas}% entre quienes la contestaron.` : ''}${resumen.ajenos > 0 ? ` ${resumen.ajenos} de las respuestas son de gente que ya no está en la lista de hoy y cuentan aparte.` : ''}`
+            };
 
-            // Una encuesta de «única vez» no tiene periodo —`periodoDeEncuesta`
-            // la resuelve como «alguna vez»— y ahí el renglón no lo dice: eso
-            // ya lo cuenta el subtítulo del encabezado, y «23/40 respuestas ·
-            // alguna vez» no se lee.
-            const cuando = periodo && periodo.fin
-                ? ` &middot; ${window.sanitizeForHTML(periodo.nombre || '')}` : '';
-
-            ultimoResultadoHtml = `
-                <div title="Quien no contestó cuenta como 0.${resumen.promedioContestadas !== null ? ` ${resumen.promedioContestadas}% entre quienes la contestaron.` : ''}${resumen.ajenos > 0 ? ` ${resumen.ajenos} de las respuestas son de gente que ya no está en la lista de hoy y cuentan aparte.` : ''}"
-                     style="display:flex; align-items:center; gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:15px;">
-                    <div style="text-align:center; min-width:52px;">
-                        ${cifraHtml}
-                    </div>
-                    <div style="min-width:0; flex:1;">
-                        <div style="font-size:0.8rem; color:#64748b; font-weight:600;">Resultado de la empresa</div>
-                        <div style="font-size:0.75rem; color:#94a3b8;">${window.textoDeRespuestasAdmin(resumen)}${cuando}</div>
-                    </div>
-                </div>`;
+            // Y lo que decía el renglón de debajo de la cifra —cuánta gente
+            // contestó y de qué periodo— se va al subtítulo, detrás de la
+            // frecuencia: son datos cortos y ahí se leen del tirón. Una de
+            // «única vez» no lleva periodo, que eso ya lo dice la frecuencia.
+            subtituloHoja = [subtituloHoja, window.textoDeRespuestasAdmin(resumen), cuando]
+                .map(x => String(x || '').trim()).filter(Boolean).join(' · ');
         }
     } else if (miUltima) {
         const calificada = ['Revisado', 'Certificada'].includes(miUltima.review_status);
@@ -339,36 +344,31 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         const colorScore = calificada ? window.getColorScore(score) : '#94a3b8';
         const fecha = new Date(miUltima.submitted_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-        // Sin calificar todavía no hay cifra que enseñar: un 0% se leería como
-        // que la falló entera.
-        const cifraHtml = calificada
-            ? `<div style="font-size:1.6rem; font-weight:800; color:${colorScore}; line-height:1;">${score}%</div>`
-            : `<div style="font-size:1rem; font-weight:700; color:#94a3b8; line-height:1;">—</div>`;
+        // Va al encabezado y sigue llevando a su respuesta: el enganche es una
+        // función y no un `onclick` escrito en el marcado, así que aquí ya no
+        // hay nada que escapar.
+        resultadoHoja = {
+            texto: calificada ? `${score}%` : '—',
+            color: colorScore,
+            etiqueta: calificada
+                ? `Tu último resultado, del ${fecha}`
+                : `Tu última respuesta, del ${fecha}: todavía sin calificar`,
+            alTocar: () => window.verDetalleRespuesta(miUltima)
+        };
 
-        // El mismo escapado que las tarjetas de la lista, que van con el atributo
-        // entre comillas simples.
-        const jsonUltima = JSON.stringify(miUltima).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-
-        ultimoResultadoHtml = `
-            <div onclick='verDetalleRespuesta(${jsonUltima})' style="display:flex; align-items:center; gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:15px; cursor:pointer;">
-                <div style="text-align:center; min-width:52px;">
-                    ${cifraHtml}
-                </div>
-                <div style="min-width:0; flex:1;">
-                    <div style="font-size:0.8rem; color:#64748b; font-weight:600;">Tu último resultado</div>
-                    <div style="font-size:0.75rem; color:#94a3b8;">${fecha}</div>
-                </div>
-                <div style="color:#cbd5e1; font-size:1.4rem; line-height:1;">&rsaquo;</div>
-            </div>`;
+        // Y la fecha, detrás de la frecuencia. Es lo que decía el renglón de
+        // debajo de la cifra, y ahí no gasta ningún recuadro.
+        subtituloHoja = [subtituloHoja, fecha]
+            .map(x => String(x || '').trim()).filter(Boolean).join(' · ');
     }
 
+    // La gráfica se queda con su recuadro —es un dibujo y necesita fondo—; los
+    // botones no, que ya son bloques de color a todo lo ancho. Sin ninguno de
+    // los dos no se escribe nada: un contenedor vacío deja su margen.
     const bannerHtml = `
-        <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-            ${ultimoResultadoHtml}
-            ${graficaHtml}
-            ${actionButtonHtml}
-            ${destinatariosBtnHtml}
-        </div>
+        ${graficaHtml ? `<div class="eval-grafica">${graficaHtml}</div>` : ''}
+        ${(actionButtonHtml || destinatariosBtnHtml)
+            ? `<div class="eval-acciones">${actionButtonHtml}${destinatariosBtnHtml}</div>` : ''}
     `;
 
     // El nombre de la encuesta manda en el encabezado de la hoja. La cruz se
@@ -379,7 +379,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // de qué encuesta se trata.
     window.encabezadoHojaEvaluaciones(title, window.volverALaListaDeEncuestas
         ? window.volverALaListaDeEncuestas() : () => window.cargarVistaEvaluaciones(),
-        evalId, subtituloHoja);
+        evalId, subtituloHoja, resultadoHoja);
 
     // La lista arranca plegada: quien abre su encuesta viene a ver lo suyo y a
     // responder, no las respuestas de los demás. Se despliega sola cuando hay
@@ -402,16 +402,20 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // El estado se deja puesto para la hoja de pasar lista, que dibuja lo mismo
     // desde los mismos datos: así marcar a alguien no obliga a volver a
     // consultar nada.
-    // Subir y quitar material es de quien la imparte, como los nombres del pase
-    // de lista y por lo mismo: el administrador y quien la revisa. Cualquiera
-    // que abra la encuesta lo puede leer, que es para lo que está.
+    // Quién ve los nombres del pase de lista: el administrador y quien la
+    // revisa, que son quienes la imparten.
     const imparte = window.modoAdminActivo || (evalData && window.puedeEditarDestinatarios(evalData, user.id));
-    window.materialDeLaHoja = { id: evalId, puedeSubir: imparte };
+
+    // **Aquí el material sólo se lee.** Agregarlo y quitarlo se hace en la hoja
+    // de editar la encuesta, que es donde se escribe todo lo demás de ella; en
+    // ésta quedan la portada de arriba —que abre el visor con todo lo
+    // convertido— y, abajo, los archivos sueltos, que no entran en el visor.
+    window.materialDeLaHoja = { id: evalId };
     // Se decide **antes** de armar el recuadro, que es quien la mira para no
     // repetir arriba y abajo el mismo documento. La portada se monta después,
     // cuando ya hay encabezado en el documento donde insertarla.
     window.hayPortadaEnLaHoja = window.documentosConPortada(window.materialesEncuesta).length > 0;
-    const materialHtml = `<div id="material-encuesta">${window.bloqueDeMaterial(evalId, imparte)}</div>`;
+    const materialHtml = `<div id="material-encuesta">${window.bloqueDeMaterial(evalId, false)}</div>`;
 
     window.paseDeLista = {
         ev: evalData,
@@ -655,16 +659,35 @@ window.detalleDeDocumento = (doc) => {
 window.notaDeMaterial = () =>
     `Imágenes, PDF o PowerPoint. Se guardan como imágenes comprimidas: un documento de doce páginas no llega a 1 MB.`;
 
-// El recuadro. Va debajo de los botones y encima del pase de lista: se mira
-// antes de contestar, pero la acción de la hoja sigue siendo el botón azul.
+// El recuadro. Se dibuja en dos sitios y no en uno, y cada uno enseña una
+// mitad:
+//
+//   - **En la hoja de la encuesta, sólo de lectura** (`puedeSubir` en false):
+//     la portada de arriba abre el visor con todo lo convertido, así que ahí
+//     abajo quedan sólo los archivos sueltos, que no entran en el visor. Sin
+//     ninguno no se dibuja nada.
+//   - **En la hoja de editar la encuesta, con sus botones**: agregar, revisar
+//     lo convertido antes de guardarlo y quitar es parte de escribir la
+//     encuesta —como sus preguntas o a quién va dirigida—, no de contestarla, y
+//     en la hoja de la encuesta se llevaba media pantalla por encima del pase
+//     de lista para enseñarle a quien sólo lee la misma portada que ya tiene
+//     arriba.
+//
+// Ahí va **desnudo** (`opciones.desnudo`): sin la tarjeta blanca ni el rótulo
+// «Material», que los pone la sección plegable que lo envuelve, y una tarjeta
+// dentro de otra no se lee como nada.
 //
 // **Sin material y sin permiso para subirlo no se dibuja nada**: un recuadro
 // vacío que dice «no hay material» ocupa lo mismo que uno lleno y no cuenta
 // nada. Quien lo puede subir sí ve el recuadro vacío, que es su puerta.
-window.bloqueDeMaterial = (evalId, puedeSubir) => {
+window.bloqueDeMaterial = (evalId, puedeSubir, opciones = {}) => {
     const materiales = window.materialesEncuesta;
     if (materiales === null) return '';
-    const pendiente = window.materialPorGuardar;
+    // Lo que está a medio convertir es de quien lo subió: en el recuadro de
+    // sólo lectura no pinta nada, y sin esto una conversión dejada a medias en
+    // la hoja de edición le sacaba a quien sólo lee sus miniaturas con los
+    // botones de guardar y descartar.
+    const pendiente = puedeSubir ? window.materialPorGuardar : null;
     if (materiales.length === 0 && !puedeSubir && !pendiente) return '';
 
     // Lo que ya está arriba no se repite aquí. A quien sólo lee le sobra: la
@@ -743,10 +766,11 @@ window.bloqueDeMaterial = (evalId, puedeSubir) => {
     const vacio = (materiales.length === 0 && !pendiente)
         ? `<div class="material-vacio">Todavía no hay material.</div>` : '';
 
+    const desnudo = !!opciones.desnudo;
     return `
-        <div class="material-tarjeta">
-            <div class="material-rotulo">Material</div>
-            ${filas}${vacio}${window.bloqueDeConversion()}${subirHtml}
+        <div class="material-tarjeta${desnudo ? ' material-tarjeta--desnuda' : ''}">
+            ${desnudo ? '' : '<div class="material-rotulo">Material</div>'}
+            ${filas}${vacio}${pendiente ? window.bloqueDeConversion() : ''}${subirHtml}
         </div>`;
 };
 
@@ -818,9 +842,7 @@ window.pintarPortadaDeLaHoja = () => {
 // quedaría sin portada y sin recuadro, o sea sin manera de abrir el material.
 window.portadaDeLaHojaRota = () => {
     window.quitarPortadaDeLaHoja();
-    const caja = document.getElementById('material-encuesta');
-    const m = window.materialDeLaHoja;
-    if (caja && m) caja.innerHTML = window.bloqueDeMaterial(m.id, m.puedeSubir);
+    window.pintarMaterialEncuesta();
 };
 
 // Sin red, o con el archivo borrado desde Storage, la portada deja el icono de
@@ -1110,10 +1132,29 @@ window.quitarMaterial = async (clave) => {
 
 // El recuadro se repinta solo, sin rehacer la hoja entera: subir un archivo no
 // cambia nada de lo que hay alrededor.
+//
+// **Son dos huecos y se repintan los dos.** La hoja de la encuesta no se vacía
+// al cerrarse —`cerrarModalEvaluaciones` sólo la esconde—, así que su
+// `#material-encuesta` sigue en el documento mientras se edita la encuesta: con
+// un solo id, `getElementById` habría devuelto el de la hoja escondida y lo que
+// se acaba de subir no se vería en la que está delante. Cada uno se dibuja con
+// lo suyo: el de la encuesta sin botones, el de la edición con ellos.
 window.pintarMaterialEncuesta = () => {
-    const hueco = document.getElementById('material-encuesta');
-    if (!hueco || !window.materialDeLaHoja) return;
-    hueco.innerHTML = window.bloqueDeMaterial(window.materialDeLaHoja.id, window.materialDeLaHoja.puedeSubir);
+    // El de la hoja de la encuesta sólo mientras no haya una edición delante:
+    // las dos hojas no se ven a la vez —quien abre la de edición cierra ésta—,
+    // y ahí `hayPortadaEnLaHoja` está en false para que el recuadro de edición
+    // los enseñe todos, así que repintarlo con eso puesto le metería a la hoja
+    // escondida el mismo documento que ya tiene de portada. Se rehace entero al
+    // volver a abrirla, que es por donde se pasa siempre.
+    const hoja = document.getElementById('material-encuesta');
+    if (hoja && window.materialDeLaHoja && !window.materialEnEdicion) {
+        hoja.innerHTML = window.bloqueDeMaterial(window.materialDeLaHoja.id, false);
+    }
+    const edicion = document.getElementById('material-edicion');
+    if (edicion && window.materialEnEdicion) {
+        edicion.innerHTML = window.bloqueDeMaterial(
+            window.materialEnEdicion.id, true, { desnudo: true });
+    }
 };
 
 // ==========================================
@@ -4214,6 +4255,17 @@ window.RESUMEN_DE_GRUPO = {
     preguntas: () => {
         const n = document.querySelectorAll('#questions-container .pregunta-wrapper').length;
         return n === 0 ? 'Ninguna todavía' : `${n} pregunta${n === 1 ? '' : 's'}`;
+    },
+
+    // Sale de lo que hay cargado en la hoja, no de otra consulta: lo llena
+    // `prepararMaterialEnEdicion` al abrirla y lo rehacen el guardado y el
+    // quitado, que es justo cuando cambia.
+    material: () => {
+        if (!window.materialEnEdicion) return 'Al publicarla';
+        const docs = window.documentosDeMaterial(window.materialesEncuesta);
+        if (window.materialesEncuesta === null) return '';
+        return docs.length === 0
+            ? 'Ninguno' : `${docs.length} documento${docs.length === 1 ? '' : 's'}`;
     }
 };
 
@@ -4244,7 +4296,7 @@ window.abrirGrupoEval = (id) => {
 // dónde se empieza.
 window.plegarGruposEval = (editando) => {
     ['grupo-datos', 'grupo-destinatarios', 'grupo-revisores',
-     'grupo-opciones', 'grupo-preguntas'].forEach(id => {
+     'grupo-opciones', 'grupo-material', 'grupo-preguntas'].forEach(id => {
         const grupo = document.getElementById(id);
         if (!grupo) return;
         grupo.open = !editando && (id === 'grupo-datos' || id === 'grupo-preguntas');
@@ -4263,6 +4315,43 @@ window.plegarGruposEval = (editando) => {
     ['input', 'change', 'click'].forEach(evento =>
         hoja.addEventListener(evento, () => window.pintarResumenGrupos()));
 })();
+
+// ==========================================
+// EL MATERIAL, EN LA HOJA DE EDICIÓN
+// ==========================================
+// Agregar material y quitarlo es escribir la encuesta —como sus preguntas o a
+// quién va dirigida—, así que vive en la hoja donde se escribe todo lo demás de
+// ella. En la hoja de la encuesta se quedan la portada, que es por donde se
+// lee, y los archivos sueltos, que no entran en el visor.
+//
+// **Sólo sale al editar una que ya existe.** Un archivo cuelga de su encuesta
+// —la carpeta del bucket lleva su id y cada fila la nombra—, así que sin fila
+// no hay a qué colgarlo: al crear y al copiar la sección se esconde y dice qué
+// falta. Una copia tampoco hereda el material de la original, igual que no
+// hereda su fecha de vigencia y por lo mismo: es la vuelta de este mes.
+window.materialEnEdicion = null;
+
+window.prepararMaterialEnEdicion = async (id) => {
+    const grupo = document.getElementById('grupo-material');
+    const hueco = document.getElementById('material-edicion');
+    const aviso = document.getElementById('aviso-material-sin-guardar');
+
+    window.materialEnEdicion = id ? { id: String(id) } : null;
+    if (hueco) hueco.innerHTML = '';
+    if (aviso) aviso.style.display = id ? 'none' : 'block';
+    if (!grupo) return;
+
+    // Sin encuesta todavía la sección se queda, pero vacía y diciendo por qué:
+    // esconderla entera dejaría a quien la busca sin saber que existe.
+    if (!id) { window.pintarResumenGrupos(); return; }
+
+    // Aquí no hay portada que evitar repetir: el recuadro de esta hoja los
+    // enseña todos, que es su consola.
+    window.hayPortadaEnLaHoja = false;
+    await window.cargarMaterialesEncuesta(id);
+    window.pintarMaterialEncuesta();
+    window.pintarResumenGrupos();
+};
 
 window.prepararEncabezadoEval = (editando, soloDestinatarios = false) => {
     const titulo = document.getElementById('titulo-crear-eval');
@@ -4409,6 +4498,7 @@ window.SECCIONES_FUERA_DE_DESTINATARIOS = [
     'grupo-datos', 'grupo-datos-cuerpo',
     'grupo-revisores', 'grupo-revisores-cuerpo',
     'grupo-opciones', 'grupo-opciones-cuerpo',
+    'grupo-material', 'grupo-material-cuerpo',
     'div-rango-labels',
     'grupo-preguntas', 'questions-container', 'btn-agregar-pregunta'
 ];
@@ -4943,6 +5033,9 @@ window.abrirModalCrearEval = async (categoria) => {
     if(modeInput) { modeInput.value = 'self'; modeInput.onchange = window.verificarRestriccionesModo; }
     document.getElementById('questions-container').innerHTML = '';
     window.agregarCampoPregunta();
+    // Todavía no hay encuesta a la que colgarle un archivo: la sección se queda
+    // vacía diciendo que hay que publicarla primero.
+    window.prepararMaterialEnEdicion(null);
     window.prepararEncabezadoEval(false);
     window.pintarResumenGrupos();
     document.getElementById('modal-crear-eval').style.display = 'flex';
@@ -5010,6 +5103,13 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     // Antes de tocar la escala: prepararEncabezadoEval la deja plegada y el
     // bloque de range_labels de más abajo la vuelve a abrir si hay etiquetas.
     window.prepararEncabezadoEval(!comoCopia, soloDestinatarios);
+
+    // El material es de la encuesta que ya existe: una copia todavía no es
+    // ninguna fila y el revisor que corrige a quién va dirigida tiene la
+    // sección escondida, así que en los dos casos se limpia. Va sin `await`
+    // —consulta la tabla y repinta su hueco cuando llega— para no retrasar el
+    // resto de la hoja.
+    window.prepararMaterialEnEdicion((!comoCopia && !soloDestinatarios) ? id : null);
     // Una copia nace con el nombre marcado: dos encuestas con el mismo título
     // en la misma clasificación no hay quien las distinga en ninguna lista.
     document.getElementById('eval-title-input').value = comoCopia

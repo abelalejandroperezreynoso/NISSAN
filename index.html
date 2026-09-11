@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-11-23">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-11-24">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -615,6 +615,24 @@
                     </div>
                 </details>
 
+                <!-- El material de apoyo se agrega y se quita aquí, no en la
+                     hoja de la encuesta: es parte de escribirla, como sus
+                     preguntas, y allí se llevaba media pantalla por encima del
+                     pase de lista para enseñarle a quien sólo lee la misma
+                     portada que ya tiene arriba. Lo llena
+                     window.pintarMaterialEncuesta() y lo esconde
+                     window.prepararMaterialEnEdicion() mientras la encuesta no
+                     exista todavía —sin fila no hay a qué colgar un archivo—. -->
+                <details id="grupo-material" class="hoja-plegable grupo-eval">
+                    <summary class="hoja-plegable-resumen">
+                        <span class="grupo-eval-titulo">Material<span class="grupo-eval-valor" data-resumen="material"></span></span>
+                    </summary>
+                    <div id="grupo-material-cuerpo" class="hoja-grupo">
+                        <div id="material-edicion"></div>
+                        <p id="aviso-material-sin-guardar" class="form-ayuda" style="display:none;">Publica la encuesta y vuelve a abrirla para agregarle material.</p>
+                    </div>
+                </details>
+
                 <details id="grupo-preguntas" class="hoja-plegable grupo-eval">
                     <summary class="hoja-plegable-resumen">
                         <span class="grupo-eval-titulo">Preguntas<span class="grupo-eval-valor" data-resumen="preguntas"></span></span>
@@ -1072,22 +1090,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-11-23"></script>
-    <script src="2a-core-nav.js?v=2026-09-11-23"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-11-23"></script>
-    <script src="3-incidentes.js?v=2026-09-11-23"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-11-23"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-11-23"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-11-23"></script>
-    <script src="5-objetivos.js?v=2026-09-11-23"></script>
-    <script src="6-calendario.js?v=2026-09-11-23"></script>
-    <script src="7-pendientes.js?v=2026-09-11-23"></script>
-    <script src="8-hallazgos.js?v=2026-09-11-23"></script>
-    <script src="9-estadisticas.js?v=2026-09-11-23"></script>
+    <script src="1-config.js?v=2026-09-11-24"></script>
+    <script src="2a-core-nav.js?v=2026-09-11-24"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-11-24"></script>
+    <script src="3-incidentes.js?v=2026-09-11-24"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-11-24"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-11-24"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-11-24"></script>
+    <script src="5-objetivos.js?v=2026-09-11-24"></script>
+    <script src="6-calendario.js?v=2026-09-11-24"></script>
+    <script src="7-pendientes.js?v=2026-09-11-24"></script>
+    <script src="8-hallazgos.js?v=2026-09-11-24"></script>
+    <script src="9-estadisticas.js?v=2026-09-11-24"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-09-11-23"></script>
-    <script src="13-gestion.js?v=2026-09-11-23"></script>
-    <script src="10-refacciones.js?v=2026-09-11-23"></script> 
+    <script src="12-almacenamiento.js?v=2026-09-11-24"></script>
+    <script src="13-gestion.js?v=2026-09-11-24"></script>
+    <script src="10-refacciones.js?v=2026-09-11-24"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

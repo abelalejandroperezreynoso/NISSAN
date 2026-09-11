@@ -310,11 +310,44 @@ window.quitarPortadaDeLaHoja = () => {
     window.hayPortadaEnLaHoja = false;
 };
 
-window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta, subtitulo) => {
+// El **quinto** argumento es el resultado que se enseña al lado del título, y
+// va aquí por lo mismo que el lápiz: sólo lo tiene la pantalla de una encuesta
+// —«Tu último resultado», o el de la empresa en modo administrador—, así que
+// las otras seis llaman sin él y ahí se esconde, que es lo que evita que se
+// quede el de la encuesta anterior.
+//
+//   { texto: '100%', color: '#16a34a', etiqueta: '…', alTocar: () => … }
+//
+// Era un recuadro del cuerpo con la cifra, su rótulo y su fecha, encima del
+// botón de responder: media pantalla de un teléfono para decir un número. La
+// fecha se fue al subtítulo, junto a la frecuencia, y el rótulo al `title` y al
+// `aria-label`, que es lo que le queda a una cifra sin renglón —la misma regla
+// de los botones de icono—.
+window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta, subtitulo, resultado) => {
     window.quitarPortadaDeLaHoja();
     const h = document.getElementById('titulo-hoja-evaluaciones');
     const btn = document.getElementById('btn-hoja-evaluaciones');
     if (h) h.innerText = titulo || 'Evaluaciones y encuestas';
+
+    // Se escribe siempre, aunque sea para esconderlo. Se esconde con `hidden`,
+    // así que depende de la regla `.hoja-resultado[hidden]` de estilos.css: es
+    // un flex y un `display` de autor le gana al `[hidden]` del navegador, que
+    // es la trampa de `.tipos-pregunta` de siempre.
+    const res = document.getElementById('resultado-hoja-evaluaciones');
+    if (res) {
+        const r = (resultado && resultado.texto) ? resultado : null;
+        res.hidden = !r;
+        res.innerText = r ? r.texto : '';
+        res.style.color = r ? (r.color || '#1c1c1e') : '';
+        res.title = r ? (r.etiqueta || '') : '';
+        if (r) res.setAttribute('aria-label', r.etiqueta || r.texto);
+        else res.removeAttribute('aria-label');
+        // Pulsable sólo cuando hay algo que abrir: el resultado propio lleva a
+        // su respuesta, y el de la empresa no va a ningún sitio —la lista de
+        // respuestas está justo debajo—.
+        res.classList.toggle('es-pulsable', !!(r && r.alTocar));
+        res.onclick = (r && r.alTocar) ? r.alTocar : null;
+    }
 
     // El subtítulo se escribe siempre, aunque sea para vaciarlo: es del título
     // que hay debajo, y dejar el de la pantalla anterior sería peor que no
@@ -376,7 +409,16 @@ window.montarHojaEvaluaciones = () => {
             <div class="form-content hoja-contenido" style="max-width: 800px; background: #f8fafc; overflow: hidden; padding: 12px 0 0;">
                 <div class="hoja-encabezado-lista">
                     <div style="min-width:0;">
-                        <h2 id="titulo-hoja-evaluaciones" class="hoja-titulo">Evaluaciones y encuestas</h2>
+                        <!-- El resultado va pegado al titulo y no en un recuadro
+                             del cuerpo: es una cifra, y ahi se lee sin gastar
+                             una tarjeta entera por encima del boton de
+                             responder. Lo escribe encabezadoHojaEvaluaciones,
+                             que lo esconde en las demas pantallas de la hoja
+                             igual que al lapiz y por lo mismo. -->
+                        <div class="hoja-titulo-fila">
+                            <h2 id="titulo-hoja-evaluaciones" class="hoja-titulo">Evaluaciones y encuestas</h2>
+                            <span id="resultado-hoja-evaluaciones" class="hoja-resultado" hidden></span>
+                        </div>
                         <div id="subtitulo-hoja-evaluaciones" class="hoja-subtitulo"></div>
                     </div>
                     <div class="hoja-acciones">
