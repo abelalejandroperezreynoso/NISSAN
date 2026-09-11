@@ -755,6 +755,7 @@ window.borrar = async (id) => {
 window.abrirVisor = async (incidentId) => {
     const modal = document.getElementById('modal-visor');
     const content = document.getElementById('visor-content');
+    if (window.reiniciarZoomVisor) window.reiniciarZoomVisor();
     modal.style.display = 'block';
     content.innerHTML = '<div style="color:white; margin-top:50px; text-align:center;">Cargando...</div>';
     const { data: images } = await sb.from('incident_gallery').select('*').eq('incident_id', incidentId).order('position', { ascending: true }).order('id', { ascending: true });
@@ -786,6 +787,7 @@ window.abrirVisorImagenes = (urls) => {
     const lista = (Array.isArray(urls) ? urls : [urls]).filter(Boolean);
     if (!modal || !content || lista.length === 0) return;
 
+    if (window.reiniciarZoomVisor) window.reiniciarZoomVisor();
     modal.style.display = 'block';
     content.innerHTML = lista.map(u =>
         `<div class="visor-image-wrapper"><img src="${u}" class="visor-img-item" loading="lazy"></div>`
@@ -798,7 +800,306 @@ window.abrirVisorImagenes = (urls) => {
 // Una sola, que es el caso de la foto del área de una evaluación.
 window.abrirVisorImagen = (url) => window.abrirVisorImagenes([url]);
 
-document.getElementById('txt-cerrar').onclick = () => document.getElementById('modal-visor').style.display = 'none';
+// ==========================================
+// EL ZOOM DEL VISOR
+// ==========================================
+// El visor es lo único de esta aplicación que va a pantalla completa a
+// propósito, y desde que el material de una encuesta son imágenes es donde se
+// lee un documento: una diapositiva de 16:9 en un teléfono de 375 deja la letra
+// del cuerpo en 6px, así que **sin zoom no se puede leer lo que se vino a
+// leer**. Lo trae puesto, así que vale igual para las fotos de un incidente.
+//
+// No se delega en el zoom del navegador: `user-scalable=no` y la aplicación
+// instalada en la pantalla de inicio lo dejan fuera, y aunque no lo hicieran,
+// ampliar el documento entero movería también el botón de cerrar y el
+// desplazamiento entre páginas.
+//
+//   - **Con dos dedos**, que es el gesto que espera el dedo en iOS.
+//   - **Doble toque**, que amplía de golpe donde se tocó y vuelve al tamaño.
+//   - **En un escritorio**, ctrl (o ⌘) con la rueda —que es también el pellizco
+//     del trackpad—, doble click, arrastrar para moverse y los dos botones de
+//     la esquina, que son lo único de todo esto que se ve.
+//
+// La rueda a secas se queda para pasar de página, que es de lo que vive un
+// documento de veinte; con el zoom puesto pasa a mover la imagen, que ahí ya no
+// hay páginas que recorrer.
+window.MAX_ZOOM_VISOR = 6;
+window.ZOOM_DE_UN_TOQUE = 2.5;
+
+// La imagen ampliada y por dónde va. `img` es la que se está mirando: el zoom
+// es de una página y no del visor entero, y cambiar de página lo suelta.
+window.zoomVisor = { img: null, escala: 1, x: 0, y: 0 };
+
+// Por dónde iba la lista antes de ampliar: mientras hay zoom el contenedor va
+// con `overflow:hidden` —el dedo mueve la imagen, no la lista—, y devolverlo
+// sin esto dejaría el documento en la primera página.
+window.desplazamientoVisor = null;
+
+// La que se está mirando es la del contenedor cuyo centro cae más cerca del
+// centro de la pantalla: el pellizco puede empezar sobre el fondo gris de al
+// lado, así que no vale preguntarle al elemento que recibió el toque.
+window.imagenActualDelVisor = () => {
+    const content = document.getElementById('visor-content');
+    if (!content) return null;
+    const medio = window.innerHeight / 2;
+    let mejor = null, cerca = Infinity;
+    content.querySelectorAll('.visor-image-wrapper').forEach(marco => {
+        const caja = marco.getBoundingClientRect();
+        const d = Math.abs((caja.top + caja.bottom) / 2 - medio);
+        if (d < cerca) { cerca = d; mejor = marco.querySelector('img'); }
+    });
+    return mejor;
+};
+
+// La imagen no se sale de su marco: ampliada 2× sólo puede moverse la mitad de
+// lo que le sobra por cada lado. Sin esto se pierde de vista y no hay manera de
+// traerla de vuelta. `offsetWidth` es la medida de maqueta, o sea la de antes
+// de escalar, que es con la que hay que contar.
+window.acotarZoomVisor = () => {
+    const z = window.zoomVisor;
+    if (!z.img) return;
+    if (z.escala <= 1.01) { z.escala = 1; z.x = 0; z.y = 0; return; }
+    const marco = z.img.parentElement.getBoundingClientRect();
+    const sobraX = Math.max(0, (z.img.offsetWidth * z.escala - marco.width) / 2);
+    const sobraY = Math.max(0, (z.img.offsetHeight * z.escala - marco.height) / 2);
+    z.x = Math.min(sobraX, Math.max(-sobraX, z.x));
+    z.y = Math.min(sobraY, Math.max(-sobraY, z.y));
+};
+
+window.aplicarZoomVisor = (conTransicion) => {
+    const z = window.zoomVisor;
+    const modal = document.getElementById('modal-visor');
+    const content = document.getElementById('visor-content');
+    if (z.img) {
+        // Los botones y el doble toque sí se animan; el pellizco no, que ahí la
+        // imagen tiene que ir pegada a los dedos.
+        z.img.style.transition = conTransicion ? 'transform 0.18s ease-out' : 'none';
+        z.img.style.transform = `translate(${z.x}px, ${z.y}px) scale(${z.escala})`;
+    }
+
+    const ampliado = z.escala > 1.01;
+    if (modal) modal.classList.toggle('esta-ampliado', ampliado);
+    if (!content) return;
+
+    // El desplazamiento se apaga y se enciende con el zoom, guardando por dónde
+    // iba: con `overflow:hidden` el gesto de un dedo es para mover la imagen.
+    if (ampliado && window.desplazamientoVisor === null) {
+        window.desplazamientoVisor = content.scrollTop;
+    } else if (!ampliado && window.desplazamientoVisor !== null) {
+        const volver = window.desplazamientoVisor;
+        window.desplazamientoVisor = null;
+        content.scrollTop = volver;
+    }
+};
+
+// El punto que se tiene debajo del dedo —o del cursor— se queda donde está: es
+// lo que hace que ampliar sobre una palabra la deje debajo del dedo en vez de
+// llevarse la vista al centro de la página.
+window.ponerZoomVisor = (escala, punto, conTransicion) => {
+    const z = window.zoomVisor;
+    // Sin zoom puesto se vuelve a preguntar cuál se está mirando: lo apuntado
+    // es de la última vez y entre medias se pudo pasar de página, así que
+    // ampliar en la segunda ampliaba la primera —fuera de la pantalla, o sea
+    // sin que pasara nada—. Con el zoom puesto no hay que preguntar: la lista
+    // está quieta y la imagen es la que se está moviendo.
+    const img = (z.escala > 1.01 && z.img) ? z.img : window.imagenActualDelVisor();
+    if (!img || !img.parentElement) return;
+    // Otra página: el zoom es de la que se está mirando, así que se empieza de
+    // cero y se suelta la anterior.
+    if (img !== z.img) {
+        if (z.img) { z.img.style.transition = 'none'; z.img.style.transform = ''; }
+        z.img = img; z.escala = 1; z.x = 0; z.y = 0;
+    }
+
+    const nueva = Math.min(window.MAX_ZOOM_VISOR, Math.max(1, escala));
+    const marco = img.parentElement.getBoundingClientRect();
+    const cx = marco.left + marco.width / 2;
+    const cy = marco.top + marco.height / 2;
+    const q = punto || { x: cx, y: cy };
+    const razon = nueva / (z.escala || 1);
+
+    z.x = q.x - cx - razon * (q.x - cx - z.x);
+    z.y = q.y - cy - razon * (q.y - cy - z.y);
+    z.escala = nueva;
+    window.acotarZoomVisor();
+    window.aplicarZoomVisor(conTransicion);
+};
+
+// Los dos botones de la esquina, que es lo único del zoom que se ve. Amplían
+// sobre el centro de la pantalla, que es lo que se está mirando.
+window.ampliarVisor = (factor) => {
+    const z = window.zoomVisor;
+    window.ponerZoomVisor((z.escala || 1) * factor, null, true);
+};
+
+// El doble toque: amplía donde se tocó, y si ya estaba ampliada la devuelve a
+// su tamaño. Un solo gesto para las dos cosas, que es lo que se espera de él.
+window.alternarZoomVisor = (punto) => {
+    const z = window.zoomVisor;
+    if (z.escala > 1.01) window.ponerZoomVisor(1, null, true);
+    else window.ponerZoomVisor(window.ZOOM_DE_UN_TOQUE, punto, true);
+};
+
+// Al abrir y al cerrar el visor. El transform se quita del todo: la imagen
+// puede seguir en el documento si sólo se cerró la capa.
+window.reiniciarZoomVisor = () => {
+    const z = window.zoomVisor;
+    if (z.img) { z.img.style.transition = 'none'; z.img.style.transform = ''; }
+    z.img = null; z.escala = 1; z.x = 0; z.y = 0;
+    window.desplazamientoVisor = null;
+    const modal = document.getElementById('modal-visor');
+    if (modal) modal.classList.remove('esta-ampliado');
+};
+
+// Los gestos. Se enganchan una sola vez, al cargar, sobre el contenedor que
+// siempre está en el documento —lo que cambia son las imágenes de dentro—.
+(() => {
+    const content = document.getElementById('visor-content');
+    if (!content) return;
+
+    let pellizco = null;   // { distancia, escala }
+    let arrastre = null;   // { x, y, ox, oy }
+    let huboGesto = false; // para no confundir un arrastre con un toque
+    let ultimoToque = 0, dondeElUltimo = null;
+
+    const separacion = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const entreLosDos = (t) => ({ x: (t[0].clientX + t[1].clientX) / 2, y: (t[0].clientY + t[1].clientY) / 2 });
+
+    content.addEventListener('touchstart', (e) => {
+        const z = window.zoomVisor;
+        if (e.touches.length === 2) {
+            const img = window.imagenActualDelVisor();
+            if (!img) return;
+            if (img !== z.img) { window.ponerZoomVisor(1, null, false); }
+            pellizco = { distancia: separacion(e.touches) || 1, escala: window.zoomVisor.escala };
+            arrastre = null;
+            huboGesto = true;
+        } else if (e.touches.length === 1 && z.escala > 1.01) {
+            arrastre = { x: e.touches[0].clientX, y: e.touches[0].clientY, ox: z.x, oy: z.y };
+        }
+    }, { passive: false });
+
+    // No pasivo a propósito: cancelar el desplazamiento del navegador sólo se
+    // puede desde aquí. Es la misma razón por la que el gesto de las hojas va
+    // con eventos de toque y no de puntero.
+    content.addEventListener('touchmove', (e) => {
+        const z = window.zoomVisor;
+        if (pellizco && e.touches.length === 2) {
+            e.preventDefault();
+            huboGesto = true;
+            window.ponerZoomVisor(
+                pellizco.escala * (separacion(e.touches) / pellizco.distancia),
+                entreLosDos(e.touches), false);
+        } else if (arrastre && e.touches.length === 1 && z.escala > 1.01) {
+            e.preventDefault();
+            const dx = e.touches[0].clientX - arrastre.x;
+            const dy = e.touches[0].clientY - arrastre.y;
+            if (Math.hypot(dx, dy) > 6) huboGesto = true;
+            z.x = arrastre.ox + dx;
+            z.y = arrastre.oy + dy;
+            window.acotarZoomVisor();
+            window.aplicarZoomVisor(false);
+        }
+    }, { passive: false });
+
+    content.addEventListener('touchend', (e) => {
+        const z = window.zoomVisor;
+        pellizco = null;
+
+        // Levantar un dedo de dos no acaba el gesto: el que queda pasa a mover
+        // la imagen sin dar un salto.
+        if (e.touches.length === 1 && z.escala > 1.01) {
+            arrastre = { x: e.touches[0].clientX, y: e.touches[0].clientY, ox: z.x, oy: z.y };
+            return;
+        }
+        if (e.touches.length > 0) return;
+        arrastre = null;
+
+        // Soltando el pellizco por debajo de 1 se vuelve al tamaño, animado:
+        // dejarlo en 1 a secas corta el gesto en seco.
+        const t = e.changedTouches[0];
+        if (huboGesto) { huboGesto = false; window.ultimoToqueVisor = Date.now(); return; }
+        window.ultimoToqueVisor = Date.now();
+
+        const ahora = Date.now();
+        const cerca = dondeElUltimo && t &&
+            Math.hypot(t.clientX - dondeElUltimo.x, t.clientY - dondeElUltimo.y) < 40;
+        if (t && cerca && ahora - ultimoToque < 320) {
+            // Y se le quita al navegador su propio doble toque, que ampliaría
+            // el documento entero por debajo del nuestro.
+            e.preventDefault();
+            window.alternarZoomVisor({ x: t.clientX, y: t.clientY });
+            ultimoToque = 0; dondeElUltimo = null;
+        } else if (t) {
+            ultimoToque = ahora; dondeElUltimo = { x: t.clientX, y: t.clientY };
+        }
+    }, { passive: false });
+
+    content.addEventListener('touchcancel', () => { pellizco = null; arrastre = null; huboGesto = false; });
+
+    // Rueda: con ctrl —o ⌘, o el pellizco del trackpad, que llega así— amplía;
+    // a secas pasa de página, salvo con el zoom puesto, donde mueve la imagen.
+    content.addEventListener('wheel', (e) => {
+        const z = window.zoomVisor;
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            const paso = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+            window.ponerZoomVisor((z.escala || 1) * Math.exp(-paso * 0.01),
+                { x: e.clientX, y: e.clientY }, false);
+        } else if (z.escala > 1.01) {
+            e.preventDefault();
+            z.x -= e.deltaX;
+            z.y -= e.deltaY;
+            window.acotarZoomVisor();
+            window.aplicarZoomVisor(false);
+        }
+    }, { passive: false });
+
+    // Doble click en un escritorio. El doble toque de un teléfono sintetiza uno
+    // detrás, así que se descarta el que llega pegado a un toque: si no,
+    // ampliaría y volvería a reducir en el mismo gesto.
+    content.addEventListener('dblclick', (e) => {
+        if (Date.now() - (window.ultimoToqueVisor || 0) < 600) return;
+        window.alternarZoomVisor({ x: e.clientX, y: e.clientY });
+    });
+
+    // Arrastrar con el ratón, que con el zoom puesto es lo que se espera. El
+    // movimiento y el soltar van en `window`: el cursor se sale de la imagen.
+    let raton = null;
+    content.addEventListener('mousedown', (e) => {
+        if (window.zoomVisor.escala <= 1.01) return;
+        e.preventDefault();
+        raton = { x: e.clientX, y: e.clientY, ox: window.zoomVisor.x, oy: window.zoomVisor.y };
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!raton) return;
+        const z = window.zoomVisor;
+        z.x = raton.ox + (e.clientX - raton.x);
+        z.y = raton.oy + (e.clientY - raton.y);
+        window.acotarZoomVisor();
+        window.aplicarZoomVisor(false);
+    });
+    window.addEventListener('mouseup', () => { raton = null; });
+
+    // Arrastrar una imagen es el gesto de moverla, no el de llevársela a otra
+    // ventana: el navegador la ofrece como archivo y deja el fantasma pegado al
+    // cursor a media panorámica.
+    content.addEventListener('dragstart', (e) => e.preventDefault());
+
+    // Al girar el teléfono la imagen cabe de otra manera, así que lo que se
+    // había movido puede quedarse fuera de sus topes.
+    window.addEventListener('resize', () => {
+        if (window.zoomVisor.escala > 1.01) {
+            window.acotarZoomVisor();
+            window.aplicarZoomVisor(false);
+        }
+    });
+})();
+
+document.getElementById('txt-cerrar').onclick = () => {
+    window.reiniciarZoomVisor();
+    document.getElementById('modal-visor').style.display = 'none';
+};
 if(document.getElementById('btn-mas')) document.getElementById('btn-mas').onclick = () => window.cargarIncidentes();
 
 console.log("✅ Incidentes v16: Texto actualizado.");

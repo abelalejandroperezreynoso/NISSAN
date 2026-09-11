@@ -555,6 +555,77 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `position:fixed`). Ya no sirve para atenuar nada —las hojas no atenúan—,
   pero sigue disponible si una pantalla necesita teñir esa franja: es lo que
   hace `10-refacciones.html`, cuyo fondo no es el del panel principal.
+- **El visor de imágenes se lee sobre gris y se amplía con los dedos.** Desde
+  que el material de una encuesta son imágenes, el visor (`#modal-visor`, en
+  `3-incidentes.js`) dejó de ser el sitio donde se mira una foto de un
+  incidente para ser **donde se lee un documento**, y eso pedía dos cosas:
+
+  - **El fondo es `#f0f2f5`, el del panel, y no blanco.** Casi todo lo que se
+    lee ahí es blanco —diapositivas, páginas escaneadas—, y sobre blanco no se
+    sabía dónde acaba la página: una diapositiva de 16:9 en un teléfono deja
+    media pantalla de blanco arriba y abajo que se lee como parte del
+    documento. Sobre el gris la página se recorta sola, y además es el color
+    con el que `html.modal-abierto` pinta la franja de la barra de estado, así
+    que instalada en la pantalla de inicio no queda costura arriba. La sombra
+    de `.visor-img-item` es lo que la separa cuando la imagen llega justo a los
+    bordes.
+  - **Y se puede ampliar**, que una diapositiva en 375px deja la letra del
+    cuerpo en 6px. No se delega en el zoom del navegador: `user-scalable=no` y
+    la aplicación instalada lo dejan fuera, y aunque no lo hicieran, ampliar el
+    documento entero movería también el botón de cerrar y el desplazamiento
+    entre páginas.
+
+  ```js
+  window.zoomVisor                 // { img, escala, x, y }: la página ampliada y por dónde va
+  window.ponerZoomVisor(escala, punto, conTransicion)
+  window.alternarZoomVisor(punto)  // el doble toque y el doble click
+  window.ampliarVisor(factor)      // los dos botones de la esquina
+  window.acotarZoomVisor()  window.aplicarZoomVisor(conTransicion)
+  window.reiniciarZoomVisor()      // al abrir y al cerrar
+  window.imagenActualDelVisor()    // la del contenedor más cerca del centro
+  ```
+
+  Se amplía con **dos dedos**, con **doble toque** —que amplía donde se tocó y
+  vuelve al tamaño—, y en un escritorio con **ctrl (o ⌘) y la rueda** —que es
+  también el pellizco del trackpad—, **doble click**, **arrastrando** y con los
+  **dos botones de la esquina**, que son lo único de todo esto que se ve: los
+  gestos no se anuncian solos y en un escritorio sin trackpad no hay otra
+  manera. La rueda a secas se queda para pasar de página, que es de lo que vive
+  un documento de veinte.
+
+  Seis cosas que hay que mantener:
+
+  - **El zoom es de una página, no del visor.** Sin zoom puesto,
+    `ponerZoomVisor` vuelve a preguntar cuál se está mirando: lo apuntado es de
+    la última vez y entre medias se pudo pasar de página, así que ampliar en la
+    segunda ampliaba la primera —fuera de la pantalla, o sea sin que pasara
+    nada—. Con el zoom puesto no hay que preguntar: la lista está quieta.
+  - **Con el zoom puesto se apaga el desplazamiento** (`.esta-ampliado` pone
+    `overflow:hidden` y `touch-action:none` en `#visor-content`): ahí el dedo
+    mueve la imagen. `aplicarZoomVisor` guarda por dónde iba la lista y lo
+    devuelve al volver al tamaño, o cerrar el zoom dejaría el documento en la
+    primera página.
+  - **La imagen no se sale de su marco** (`acotarZoomVisor`): ampliada 2× sólo
+    puede moverse la mitad de lo que le sobra por cada lado. Sin eso se pierde
+    de vista y no hay manera de traerla de vuelta. Se cuenta con `offsetWidth`,
+    que es la medida de maqueta, o sea la de antes de escalar.
+  - **El punto que se tiene debajo del dedo se queda donde está**, que es lo que
+    hace que ampliar sobre una palabra la deje debajo del dedo en vez de
+    llevarse la vista al centro. La cuenta supone `transform-origin: center`, de
+    ahí esa regla en `.visor-img-item`.
+  - **Van eventos de toque y no de puntero**, y el `touchmove` es no pasivo: es
+    la única manera de cancelar el desplazamiento del navegador a media
+    pellizcada. Es la misma razón que en el gesto de las hojas. El doble click
+    se descarta si llega pegado a un toque: el doble toque de un teléfono
+    sintetiza uno detrás y ampliaría y reduciría en el mismo gesto.
+  - **El visor está excluido del relleno de los overlays.** La regla
+    `[id^="modal-"]…` le pone 20px arriba y abajo con `!important` para apartar
+    de la barra de estado el contenido de un modal a pantalla completa; aquí el
+    contenido **es** la página que se está leyendo, y con `content-box` eso
+    dejaba el visor 40px más alto que la ventana: la imagen se dibujaba 20px
+    por debajo del centro, la última página no llegaba a su tope y los botones
+    del zoom se salían por abajo. Lo que se aparta con `env()` son sus dos
+    controles, cada uno por su cuenta.
 - **La contraseña de administrador se pide con una hoja, nunca con `prompt()`.**
   En iOS, `prompt()` capitaliza la primera letra —y la contraseña va en
   minúsculas—, no deja ocultar lo tecleado y se dibuja como un aviso del

@@ -897,6 +897,13 @@ button.btn-login:disabled {
    este archivo. Aquí quedan sólo el visor de imágenes, que sí ocupa la
    pantalla completa, y las cajas de contenido. */
 
+/* El fondo es el gris del panel y no blanco. Casi todo lo que se lee aquí es
+   material de una encuesta —diapositivas y páginas escaneadas, que son blancas—,
+   y sobre blanco no se sabía dónde acaba la página: una diapositiva 16:9 en un
+   teléfono deja media pantalla de blanco arriba y abajo que se lee como parte
+   del documento. Sobre el gris, la página se recorta sola. Es además el color
+   con el que `html.modal-abierto` pinta la franja de la barra de estado, así
+   que instalada en la pantalla de inicio no queda costura arriba. */
 #modal-visor {
     display: none;
     position: fixed;
@@ -905,7 +912,7 @@ button.btn-login:disabled {
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: white;
+    background-color: #f0f2f5;
     align-items: unset;
     justify-content: unset;
 }
@@ -1059,7 +1066,19 @@ textarea:focus {
     overflow-y: scroll;
     scroll-snap-type: y mandatory;
     padding: 0;
-    background: white;
+    background: #f0f2f5;
+    /* El desplazamiento vertical se queda en manos del navegador mientras no
+       haya zoom; el pellizco lo cancela desde su `touchmove` no pasivo. */
+    touch-action: pan-y;
+}
+
+/* Con el zoom puesto el dedo mueve la imagen, no la lista: el desplazamiento
+   entre páginas se apaga —`aplicarZoomVisor` guarda por dónde iba y lo
+   devuelve— y los gestos pasan a ser todos nuestros. */
+#modal-visor.esta-ampliado #visor-content {
+    overflow: hidden;
+    scroll-snap-type: none;
+    touch-action: none;
 }
 
 .visor-image-wrapper {
@@ -1072,18 +1091,77 @@ textarea:focus {
     position: relative;
 }
 
+/* Sobre el gris, la página se dibuja como lo que es: una hoja apoyada encima.
+   La sombra es lo que separa el blanco del documento del fondo cuando la imagen
+   llega justo a los bordes. */
 .visor-img-item {
     max-width: 100%;
     max-height: 100%;
     width: auto;
     height: auto;
     object-fit: contain;
+    box-shadow: 0 6px 24px rgba(15, 23, 42, 0.12);
+    /* El zoom se aplica aquí, así que la transformación tiene que salir del
+       centro: es lo que suponen las cuentas de `ponerZoomVisor`. */
+    transform-origin: center center;
+    will-change: transform;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
+}
+
+#modal-visor.esta-ampliado .visor-img-item {
+    cursor: grab;
     box-shadow: none;
+}
+
+#modal-visor.esta-ampliado .visor-img-item:active {
+    cursor: grabbing;
+}
+
+/* Los dos botones del zoom, en la esquina de enfrente de la cruz. Son lo único
+   que se ve de todo esto: el pellizco, el doble toque y ctrl con la rueda no se
+   anuncian solos, y en un escritorio sin trackpad no hay otra manera. Apartados
+   del indicador de inicio del iPhone. */
+.visor-zoom {
+    position: absolute;
+    right: 25px;
+    bottom: max(25px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 3010;
+}
+
+.visor-zoom-boton {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: white;
+    border: 1px solid #94a3b8;
+    color: #475569;
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+    transition: transform 0.2s;
+}
+
+.visor-zoom-boton:hover {
+    transform: scale(1.1);
+    background: #f8fafc;
+    color: #1e293b;
 }
 
 #txt-cerrar {
     position: absolute;
-    top: 25px;
+    top: max(25px, env(safe-area-inset-top));
     right: 25px;
     width: 32px;
     height: 32px;
@@ -3941,8 +4019,16 @@ textarea:focus {
    Se excluyen modal-cal-title y modal-cal-content que, pese al prefijo, son
    elementos internos del modal de calendario (6-calendario.js) y no
    overlays. Si se crean nuevos elementos internos, conviene no nombrarlos
-   con el prefijo modal-. */
-[id^="modal-"]:not(#modal-cal-title):not(#modal-cal-content):not(.hoja-overlay) {
+   con el prefijo modal-.
+
+   Y se excluye el visor de imágenes, donde el contenido **es** la pantalla
+   completa: su contenido no es un formulario que apartar de la barra de
+   estado sino la página que se está leyendo, y lo que se aparta con env() son
+   sus dos controles, que ya lo hacen por su cuenta. Con el relleno puesto
+   —y `content-box`, que es lo que hay— el visor medía 40px más que la
+   ventana: la imagen se dibujaba 20px por debajo del centro, la última página
+   no llegaba a su tope y los botones del zoom se salían por abajo. */
+[id^="modal-"]:not(#modal-cal-title):not(#modal-cal-content):not(#modal-visor):not(.hoja-overlay) {
     padding-top: calc(20px + env(safe-area-inset-top)) !important;
     padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
 }
