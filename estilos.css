@@ -5832,3 +5832,47 @@ html.fondo-anclado body {
     margin-bottom: 0;
     box-shadow: none;
 }
+
+/* =========================================
+   LA HOJA DE PENDIENTES
+   =========================================
+   Cuántos hay se dice en un círculo al lado del título, como el que lleva la
+   foto del panel. Eran tres chapas debajo del título —«Total», «Vencidos /
+   Urgentes» y «Anticipados»— para repartir un número que casi siempre cae
+   entero en la segunda, y se llevaban un renglón y medio de la hoja para decir
+   lo que cada tarjeta ya dice con su etiqueta y su color. */
+.pendientes-titulo-fila {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.pendientes-titulo-fila .hoja-titulo {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* El color lo pone la hoja según de quién sean los pendientes. Crece con las
+   cifras de tres dígitos en lugar de recortarlas: es un globo, no un cuadrado.
+   Y como es un flex, necesita su propia regla para `hidden` —en cero no se
+   dibuja—, que es la trampa de `.tipos-pregunta` de siempre. */
+.pendientes-cuenta {
+    flex-shrink: 0;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 8px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: #ea580c;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 700;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pendientes-cuenta[hidden] { display: none; }

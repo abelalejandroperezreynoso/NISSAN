@@ -250,8 +250,8 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         const quien = persona ? window.sanitizeForHTML(String(persona).trim()) : '';
 
         const titulo = quien
-            ? `🔁 Se reactivó por la baja puntuación de ${quien}`
-            : '🔁 Se reactivó por tu baja puntuación';
+            ? `Se reactivó por la baja puntuación de ${quien}`
+            : 'Se reactivó por tu baja puntuación';
 
         let cuando;
         if (quien) {
@@ -286,7 +286,7 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
                 <div class="pendiente-nota-texto">
                     ${cuando} y se pide al menos <strong>${minimo}%</strong>. ${plazo}
                 </div>
-                <div class="pendiente-nota-accion">🛠️ ${accion}</div>
+                <div class="pendiente-nota-accion">${accion}</div>
             </div>`;
     };
 
@@ -460,19 +460,27 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
 
     const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
     
+    // El color del círculo de la cuenta, que es lo único que distingue de un
+    // vistazo la hoja de los pendientes propios de la del equipo. El fondo y el
+    // borde claros que lo acompañaban eran de las tres chapas que se quitaron.
     const colorTheme = modo === 'EQUIPO' ? '#7c3aed' : '#ea580c';
-        const bgTheme = modo === 'EQUIPO' ? '#f3e8ff' : '#fff7ed';
-        const borderTheme = modo === 'EQUIPO' ? '#e9d5ff' : '#ffedd5';
-        const tituloTexto = modo === 'EQUIPO' ? '👥 Pendientes de mi Equipo' : '⚠️ Mis Pendientes';
+        const tituloTexto = modo === 'EQUIPO' ? 'Pendientes de mi Equipo' : 'Mis Pendientes';
 
+        // Cuántos hay se dice **en un círculo al lado del título**, como el que
+        // lleva la foto del panel, y no en tres chapas debajo. Eran «Total»,
+        // «Vencidos / Urgentes» y «Anticipados», tres renglones de color para
+        // repartir un número que casi siempre cae entero en el segundo —14 de
+        // 14 en un teléfono cualquiera—, y lo que hace falta saber al abrir la
+        // hoja es cuánto queda: en qué estado está cada uno lo dice su tarjeta,
+        // con su etiqueta y su color.
+        //
+        // Nace escondido y sale con la cuenta ya hecha: un círculo con «...»
+        // dentro no se lee, y en cero tampoco se dibuja —ahí lo que se lee es
+        // el «Todo al día» del cuerpo—.
         tituloContenedor.innerHTML = `
-            <div style="display:flex; flex-direction:column; gap:10px; width: 100%;">
+            <div class="pendientes-titulo-fila">
                 <h2 class="hoja-titulo">${tituloTexto}</h2>
-                <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:0.85rem;">
-                    <span id="badge-total" style="background:${bgTheme}; color:${colorTheme}; padding: 4px 12px; border-radius: 12px; font-weight: 700; border: 1px solid ${borderTheme};">Total: ...</span>
-                    <span id="badge-vencidos" style="background:#fee2e2; color:#b91c1c; padding: 4px 12px; border-radius: 12px; font-weight: 700; border: 1px solid #fecaca; display:none;">Vencidos / Urgentes: ...</span>
-                    <span id="badge-anticipados" style="background:#fef9c3; color:#a16207; padding: 4px 12px; border-radius: 12px; font-weight: 700; border: 1px solid #fef08a; display:none;">Anticipados: ...</span>
-                </div>
+                <span id="badge-total" class="pendientes-cuenta" style="background:${colorTheme};" hidden></span>
             </div>
         `;
 
@@ -650,7 +658,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     if (!window.leTocaRevisar(porId[String(e.evaluation_id)], e.employee_id, user.id)) return;
 
                     yaAgregados.add(String(e.id));
-                    const prefijo = e.review_status === 'Mal Revisada' ? '⚠️ Corregir:' : 'Revisión:';
+                    const prefijo = e.review_status === 'Mal Revisada' ? 'Corregir:' : 'Revisión:';
                     items.push({
                         id: e.id, title: `${prefijo} ${e.evaluations?.title || 'Evaluación'}`, date: e.submitted_at.split('T')[0],
                         tipo: 'Evaluación', grado: e.review_status, employee_id: e.employee_id,
@@ -873,18 +881,10 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
         container.innerHTML = '';
 
         if (items.length === 0) {
-                    const badgeTotal = document.getElementById('badge-total');
-                    const badgeVencidos = document.getElementById('badge-vencidos');
-                    const badgeAnticipados = document.getElementById('badge-anticipados');
-                    
-                    if (badgeTotal) badgeTotal.innerText = "Total: 0";
-                    if (badgeVencidos) { badgeVencidos.innerText = "Vencidos: 0"; badgeVencidos.style.display = 'inline-flex'; }
-                    if (badgeAnticipados) { badgeAnticipados.innerText = "Anticipados: 0"; badgeAnticipados.style.display = 'inline-flex'; }
-
+                    window.pintarCuentaPendientes(0);
                     container.insertAdjacentHTML('beforeend', `
                         <div style="text-align:center; padding:40px; color:#64748b;">
-                            <div style="font-size:3rem; margin-bottom:10px;">🎉</div>
-                            <p style="margin:0; font-weight:bold;">¡Todo al día!</p>
+                            <p style="margin:0; font-weight:bold;">Todo al día</p>
                         </div>
                     `);
                     return;
@@ -896,7 +896,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
             
            // 🔥 SE CALCULA Y GENERA LA ETIQUETA DE TIEMPO TRANSCURRIDO 🔥
             const textoTiempo = obtenerTiempoTranscurrido(item.date);
-            let badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">⏳ ${textoTiempo}</span>`;
+            let badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">${textoTiempo}</span>`;
             
             // Racha de periodos que cerraron sin respuesta. Se muestra aparte del
             // estado para que el atraso acumulado quede a la vista.
@@ -907,7 +907,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
             if (item.vencimiento && item.vencimiento.periodosOmitidos > 0) {
                 const textoRacha = window.textoOmisiones(item.vencimiento.frecuencia, item.vencimiento.periodosOmitidos);
                 if (textoRacha) {
-                    badgeOmisionesHtml = `<span style="background:#fef2f2; color:#991b1b; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #fca5a5;">📉 ${textoRacha}</span>`;
+                    badgeOmisionesHtml = `<span style="background:#fef2f2; color:#991b1b; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #fca5a5;">${textoRacha}</span>`;
                 }
             }
 
@@ -925,7 +925,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                     // El puntaje no va en la etiqueta: ahí sólo cabe el plazo, y
                     // la cifra se explica entera en el bloque de abajo.
-                    badgeTiempoHtml = `<span style="background:${fondo}; color:${color}; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid ${borde};">🔁 Repetir ${plazo}</span>`;
+                    badgeTiempoHtml = `<span style="background:${fondo}; color:${color}; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid ${borde};">Repetir ${plazo}</span>`;
                     bloqueEstadoHtml = window.bloqueDeReintento(r, item.vencimiento.vencida);
                 } else if (item.vencimiento.tipoAviso === 'relanzada') {
                     // La contestó y relanzaron la encuesta, así que toca otra
@@ -941,9 +941,9 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     badgeTiempoHtml = '';
                 } else if (item.vencimiento.vencida) {
                     const etiquetaVencida = item.vencimiento.tipoAviso === 'nunca' ? 'Nunca contestada' : 'Vencida';
-                    badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">🚨 ${etiquetaVencida}</span>`;
+                    badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">${etiquetaVencida}</span>`;
                 } else if (item.vencimiento.tipoAviso === 'falta_periodo') {
-                    badgeTiempoHtml = `<span style="background:#e0f2fe; color:#0369a1; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #bae6fd;">📅 Falta ${item.vencimiento.nombrePeriodo}</span>`;
+                    badgeTiempoHtml = `<span style="background:#e0f2fe; color:#0369a1; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #bae6fd;">Falta ${item.vencimiento.nombrePeriodo}</span>`;
                 } else {
                     const d = item.vencimiento.diasFaltantes;
                     let txt = '';
@@ -952,7 +952,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     else if (d < 30) txt = `en ${Math.floor(d / 7)} sem.`;
                     else txt = `en ${Math.floor(d / 30)} mes${Math.floor(d / 30)>1?'es':''}`;
                     
-                    badgeTiempoHtml = `<span style="background:#fef9c3; color:#a16207; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fef08a;">⏳ Vence ${txt}</span>`;
+                    badgeTiempoHtml = `<span style="background:#fef9c3; color:#a16207; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fef08a;">Vence ${txt}</span>`;
                 }
             }
 
@@ -973,7 +973,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 // valor crudo de la base. Sin frecuencia también es de única
                 // vez, que es lo que da por hecho el resto de la aplicación.
                 const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
-                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">⏱️ ${freqText}</span>`;
+                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">${freqText}</span>`;
                 
                 return `
                 <div class="incident-card" style="border-left: 5px solid #ef4444;">
@@ -990,12 +990,12 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                             
                             <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
                                 <div style="display:flex; align-items:center; gap:6px; font-size:0.85rem; color:#334155;">
-                                    <span style="font-weight:bold;">👤 ${item.sub_name}</span>
+                                    <span style="font-weight:bold;">${item.sub_name}</span>
                                     <span style="color:#94a3b8;">|</span>
                                     <span>${item.sub_puesto}</span>
                                 </div>
                                 <div style="font-size:0.75rem; color:#64748b; display:flex; align-items:center; gap:4px;">
-                                    <span>🔄</span> <span style="font-weight:600;">${textoUltima}</span>
+                                    <span style="font-weight:600;">${textoUltima}</span>
                                 </div>
                             </div>
                         </div>
@@ -1030,7 +1030,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                 // Cómo se llama cada frecuencia lo dice `1-config.js`.
                 const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
-                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">⏱️ ${freqText}</span>`;
+                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">${freqText}</span>`;
 
                 return `
                 <div class="incident-card" style="border-left: 5px solid #be185d;">
@@ -1048,10 +1048,10 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                             
                             <div style="background:#fdf2f8; border:1px solid #fce7f3; border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
                                 <div style="font-size:0.85rem; color:#831843; font-weight:700;">
-                                    📝 ${item.description}
+                                    ${item.description}
                                 </div>
                                 <div style="font-size:0.75rem; color:#9d174d; display:flex; align-items:center; gap:4px;">
-                                    <span>🔄</span> <span style="font-weight:600;">${textoUltima}</span>
+                                    <span style="font-weight:600;">${textoUltima}</span>
                                 </div>
                             </div>
                         </div>
@@ -1118,7 +1118,7 @@ if (item.virtual_type === 'waiting_boss') {
                 const bgColor = isMalRev ? '#f3e8ff' : '#f3e8ff';
                 const iconColor = isMalRev ? '#d8b4fe' : '#d8b4fe';
                 const badgeColor = isMalRev ? '#a855f7' : '#8b5cf6';
-                const subtitle = isMalRev ? '⚠️ Corrige tu calificación' : 'Requiere tu calificación';
+                const subtitle = isMalRev ? 'Corrige tu calificación' : 'Requiere tu calificación';
 
                 return `
                 <div class="incident-card" style="border-left: 5px solid ${borderColor};">
@@ -1127,13 +1127,13 @@ if (item.virtual_type === 'waiting_boss') {
                             <h3 class="card-title">${item.title}</h3>
                             <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:4px;">
                                 <span class="badge-type" style="background-color:${badgeColor}">${isMalRev ? 'Mal Revisada' : 'Evaluación'}</span>
-                                <span>👤 ${nombreEmp}</span>
+                                <span>${nombreEmp}</span>
                                 ${badgeTiempoHtml}
                             </div>
                             <div style="font-size:0.75rem; color:#6b7280; margin-top:5px; font-weight:${isMalRev ? 'bold' : 'normal'};">${subtitle}</div>
                         </div>
                         <div class="card-actions">
-                            <button class="btn-firmar" onclick='window.verDetalleRespuesta(${jsonString})' style="color:${borderColor}; border-color:${borderColor};">🔍 Revisar</button>
+                            <button class="btn-firmar" onclick='window.verDetalleRespuesta(${jsonString})' style="color:${borderColor}; border-color:${borderColor};">Revisar</button>
                         </div>
                     </div>
                 </div>`;
@@ -1169,7 +1169,7 @@ if (item.virtual_type === 'waiting_boss') {
 
                 // Cómo se llama cada frecuencia lo dice `1-config.js`.
                 const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
-                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">⏱️ ${freqText}</span>`;
+                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">${freqText}</span>`;
 
                 return `
                 <div class="incident-card" style="border-left: 5px solid #2563eb;">
@@ -1186,10 +1186,10 @@ if (item.virtual_type === 'waiting_boss') {
                             ${bloqueEstadoHtml ? '' : `
                             <div style="background:#eff6ff; border:1px solid #dbeafe; border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
                                 <div style="font-size:0.85rem; color:#1e40af; font-weight:700;">
-                                    📅 ${textoPeriodo}
+                                    ${textoPeriodo}
                                 </div>
                                 <div style="font-size:0.75rem; color:#1e3a8a; display:flex; align-items:center; gap:4px;">
-                                    <span>🔄</span> <span style="font-weight:600;">${textoUltima}</span>
+                                    <span style="font-weight:600;">${textoUltima}</span>
                                 </div>
                             </div>`}
                         </div>
@@ -1224,8 +1224,8 @@ if (item.virtual_type === 'waiting_boss') {
             }
 
             let btnHtml = isSigned
-                            ? `<button class="btn-firmar btn-firmado" disabled>✅ Enterado</button>`
-                            : `<button class="btn-firmar" id="btn-sign-${item.id}" onclick="window.abrirDetalleIndependiente('${item.id}')" style="background:#f0fdf4; color:#166534; border-color:#4ade80; font-weight:bold;">👁️ Ver y Firmar</button>`;
+                            ? `<button class="btn-firmar btn-firmado" disabled>Enterado</button>`
+                            : `<button class="btn-firmar" id="btn-sign-${item.id}" onclick="window.abrirDetalleIndependiente('${item.id}')" style="background:#f0fdf4; color:#166534; border-color:#4ade80; font-weight:bold;">Ver y Firmar</button>`;
 
                         let progressHtml = '';
                         if (modo === 'EQUIPO') {
@@ -1268,51 +1268,28 @@ if (item.virtual_type === 'waiting_boss') {
                     });
 
         const cards = await Promise.all(htmlPromises);
-                            
-                            let total = 0;
-                            let vencidos = 0;
-                            let anticipados = 0;
 
-                            const validCards = cards.filter((c, index) => {
-                                if (c !== null) {
-                                    total++;
-                                    const item = items[index];
-                                    
-                                    // Lógica para clasificar contadores:
-                                    // Si tiene "vencida: false" es un aviso anticipado o de cambio de periodo.
-                                    if (item.vencimiento && item.vencimiento.vencida === false) {
-                                        anticipados++;
-                                    } else {
-                                        // Las firmas de enterado de incidentes, encuestas vencidas matemáticamente y mal revisadas,
-                                        // se agrupan en Vencidos / Urgentes porque requieren acción obligatoria e inmediata.
-                                        vencidos++;
-                                    }
-                                    return true;
-                                }
-                                return false;
-                            });
-                            
+                            // Una tarjeta en null es un pendiente que ya no lo
+                            // es —una firma puesta desde otra pantalla—, así que
+                            // la cuenta sale de las que de verdad se dibujan.
+                            const validCards = cards.filter(c => c !== null);
                             container.insertAdjacentHTML('beforeend', validCards.join(''));
-                            
-                            const badgeTotal = document.getElementById('badge-total');
-                            const badgeVencidos = document.getElementById('badge-vencidos');
-                            const badgeAnticipados = document.getElementById('badge-anticipados');
-
-                            if (badgeTotal) badgeTotal.innerText = `Total: ${total}`;
-                            
-                            if (badgeVencidos) {
-                                badgeVencidos.innerText = `Vencidos / Urgentes: ${vencidos}`;
-                                badgeVencidos.style.display = 'inline-flex';
-                            }
-                            if (badgeAnticipados) {
-                                badgeAnticipados.innerText = `Anticipados: ${anticipados}`;
-                                badgeAnticipados.style.display = 'inline-flex';
-                            }
+                            window.pintarCuentaPendientes(validCards.length);
 
                         } catch (e) {
                     console.error(e);
                     container.innerHTML = `<div style="text-align:center; padding:20px; color:#ef4444;">Error al cargar pendientes: ${e.message}</div>`;
                 }
+};
+
+// El círculo del encabezado. En cero no se dibuja: ahí lo que se lee es el
+// «Todo al día» del cuerpo, y un 0 dentro de un globo de color se lee como un
+// pendiente más.
+window.pintarCuentaPendientes = (cuantos) => {
+    const globo = document.getElementById('badge-total');
+    if (!globo) return;
+    globo.innerText = cuantos > 0 ? String(cuantos) : '';
+    globo.hidden = !(cuantos > 0);
 };
 
 window.cerrarModalPendientes = () => {

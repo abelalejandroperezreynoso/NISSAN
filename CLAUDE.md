@@ -2822,7 +2822,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   haciendo dos cosas. A quien ya la había contestado no le dice «Nunca
   contestada» —sería mentirle: la contestó, y la racha de periodos omitidos no
   es suya— y le apaga la etiqueta roja de «cuándo apareció el pendiente», que
-  diría «⌛ Hoy» en el rojo de lo urgente. No puede desaparecer aunque haga tan
+  diría «Hoy» en el rojo de lo urgente. No puede desaparecer aunque haga tan
   poco: sin ella el pendiente cae al `else` que anuncia el vencimiento, y una
   encuesta de «única vez» no tiene periodo, así que diría «Vence en 0 días».
 
@@ -2897,7 +2897,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **Y cuánto tiempo hay para reponerla** lo dice `retry_days`, en días. En 0
   —el valor por defecto— no pasa nada. Con un número, una respuesta ya
   calificada por debajo del mínimo vuelve a salir en los pendientes de quien la
-  contestó, con la insignia «🔁 Repetir en 3 días»:
+  contestó, con la insignia «Repetir en 3 días»:
 
   ```js
   window.reintentoDeRespuesta(ev, resp, fecha)   // null si no hay nada que reponer
@@ -3277,6 +3277,42 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - **Sin la columna, el campo se queda vacío y apagado** diciendo qué script
     falta (`avisarSiFaltaColumnaVigencia`), y todo se comporta como antes: manda
     `created_at`. Es el mismo molde que el umbral y los revisores.
+- **La hoja de pendientes va sin emojis y con la cuenta en un círculo.**
+  El encabezado llevaba tres chapas debajo del título —«Total: 14», «Vencidos /
+  Urgentes: 14» y «Anticipados: 0»— que se comían renglón y medio para repartir
+  un número que casi siempre cae entero en la segunda: lo normal es que todo lo
+  que hay ahí esté vencido, así que las tres decían lo mismo tres veces. Hoy es
+  **un círculo con la cifra al lado del título**, como el que lleva la foto del
+  panel, del color de la hoja —naranja los propios, morado los del equipo, que
+  es lo único que las distingue de un vistazo—.
+
+  ```js
+  window.pintarCuentaPendientes(cuantos)   // el círculo; en cero no se dibuja
+  ```
+
+  En cero **no se dibuja**: ahí lo que se lee es el «Todo al día» del cuerpo, y
+  un 0 dentro de un globo de color se lee como un pendiente más. Nace escondido
+  y sale con la cuenta ya hecha, que un círculo con «...» dentro no dice nada.
+  Las clases están en `estilos.css` (`.pendientes-titulo-fila`,
+  `.pendientes-cuenta`) y el globo necesita su regla `[hidden]`, que es un flex
+  —la trampa de `.tipos-pregunta` de siempre—.
+
+  **Y no queda un solo emoji en la hoja**, que es lo que la separaba del resto
+  de la aplicación: ni en el título («⚠️ Mis Pendientes», «👥 Pendientes de mi
+  Equipo»), ni en las etiquetas de estado —«⏳ Hace 19 días», «🚨 Vencida», «📅
+  Falta este mes», «📉 6 meses sin contestar», «🔁 Repetir en 3 días», «⏱️
+  Mensual»—, ni en los botones —«👁️ Ver y Firmar», «🔍 Revisar», «✅
+  Enterado»—, ni en los renglones de quién y de cuándo («👤», «🔄», «📝»,
+  «📅»), ni en el bloque de reintento («🔁 Se reactivó…», «🛠️ Genera las
+  contramedidas…»), ni en el 🎉 de tres cuartos de pulgada del «Todo al día».
+  Cada etiqueta se sigue leyendo por su texto y su color, que es lo que de
+  verdad la distinguía; el dibujo de delante sólo la hacía más ancha en una
+  columna que en un teléfono anda a 233px. Es lo mismo que ya se hizo en la
+  pantalla de una encuesta.
+
+  Los emojis que quedan en `7-pendientes.js` no son de esta hoja: son de la de
+  **detalle de un registro** (`abrirDetalleIndependiente`), que es otra pantalla.
+
 - **La tarjeta de un pendiente se parte en filas en el teléfono.** El
   `.card-header` reparte el ancho en tres columnas —el icono, el texto y el
   botón—, y en un iPhone 12 mini la tarjeta mide 329px: descontando los 60 del
@@ -3300,7 +3336,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   Y `.card-info` lleva `min-width: 0` —con `flex-shrink: 0` en
   `.card-actions`—: sin eso la columna del texto no encogía por debajo de su
-  insignia más ancha («📉 6 meses sin contestar», 150px) y empujaba el botón
+  insignia más ancha («6 meses sin contestar», 150px con su emoji de entonces) y empujaba el botón
   fuera del borde de la tarjeta, cortado por la mitad y sin que el dedo
   llegara.
 
