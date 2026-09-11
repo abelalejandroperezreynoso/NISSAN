@@ -72,9 +72,9 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     // `description` y `evaluates_area` son del recuadro gris de esa misma
     // pantalla: sin pedirlas, una encuesta con descripción no la enseñaba y
     // una que mide por área no lo decía.
-    const campos = await window.camposConRelanzamiento(await window.camposConRevisores(
+    const campos = await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConRevisores(
         'id, title, mode, category, frequency, created_at, description, evaluates_area, '
-        + 'is_obligatory, target_employees, target_positions, target_departments'));
+        + 'is_obligatory, target_employees, target_positions, target_departments')));
     const { data } = await sb.from('evaluations').select(campos).eq('id', evaluationId).single();
     if (data) window.cacheEncuestasRevision[String(evaluationId)] = data;
     return data || null;
@@ -4087,6 +4087,10 @@ window.RESUMEN_DE_GRUPO = {
         const dias = parseInt((document.getElementById('eval-retry-days') || {}).value, 10);
         if (dias > 0) partes.push(`Repetir en ${dias} día${dias === 1 ? '' : 's'}`);
         if (!marcada('chk-eval-activa')) partes.push('Inactiva');
+        // La fecha desde la que aplica sólo se dice si se puso: vacía es «desde
+        // que se creó», que es lo de siempre y no hay que contarlo.
+        const desde = window.fechaDeVigenciaDeLaHoja();
+        if (desde) partes.push(`Desde ${window.fechaCortaDeVigencia(desde)}`);
         return partes.join(' · ');
     },
 
@@ -4399,6 +4403,39 @@ window.avisarSiFaltaColumnaCertificacion = async () => {
         if (!hay) inpReintento.value = 0;
     }
     if (filaReintento) filaReintento.style.opacity = hay ? '1' : '0.45';
+};
+
+// Lo que hay escrito en el campo «Aplica desde», como Date de medianoche local,
+// o null si está vacío. `fechaDeRegistro` lo arma a mano porque
+// `new Date('2026-03-01')` se lee en UTC y la zona horaria lo corre un día.
+window.fechaDeVigenciaDeLaHoja = () => {
+    const inp = document.getElementById('eval-vigente-desde');
+    const valor = inp ? String(inp.value || '').trim() : '';
+    if (!valor) return null;
+    const fecha = window.fechaDeRegistro(valor);
+    return (fecha && !isNaN(fecha)) ? fecha : null;
+};
+
+// Como se escribe en el renglón plegado del grupo: corta, que ahí compite con
+// «Obligatoria · Exige 80% · Repetir en 3 días».
+window.fechaCortaDeVigencia = (fecha) =>
+    fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+// Sin la columna en la base no se puede cambiar la fecha: se deja vacía y se
+// dice qué script falta, igual que con los revisores y el umbral. Mientras
+// tanto manda `created_at`, que es lo de siempre.
+window.avisarSiFaltaColumnaVigencia = async () => {
+    const hay = await window.hayColumnaVigencia();
+    const aviso = document.getElementById('aviso-vigencia-no-disponible');
+    if (aviso) aviso.style.display = hay ? 'none' : 'block';
+
+    const inp = document.getElementById('eval-vigente-desde');
+    if (inp) {
+        inp.disabled = !hay;
+        if (!hay) inp.value = '';
+    }
+    const fila = document.getElementById('fila-vigencia');
+    if (fila) fila.style.opacity = hay ? '1' : '0.45';
 };
 
 window.verificarRestriccionesModo = () => {
@@ -4778,7 +4815,10 @@ window.abrirModalCrearEval = async (categoria) => {
     if(chkUmbral) chkUmbral.checked = true;
     const inpReintento = document.getElementById('eval-retry-days');
     if(inpReintento) inpReintento.value = 0;
+    const inpVigencia = document.getElementById('eval-vigente-desde');
+    if(inpVigencia) inpVigencia.value = '';
     await window.avisarSiFaltaColumnaCertificacion();
+    await window.avisarSiFaltaColumnaVigencia();
 
     window.encuestaEnEdicion = null;
     window.asignacionesEnEdicion = {};
@@ -4943,7 +4983,18 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     if(chkUmbral) { chkUmbral.checked = window.exigeMinimo(evaluacion); }
     const inpReintento = document.getElementById('eval-retry-days');
     if(inpReintento) { inpReintento.value = window.diasDeReintento(evaluacion); }
+    // **Una copia no hereda la fecha de vigencia**, y es lo mismo que hace con
+    // el título: la copia es la vuelta de este mes, no la del año pasado, así
+    // que arrastrarle aquella fecha la metería en periodos que no son suyos.
+    // Vacía vuelve a significar «desde que se cree», que para una copia es hoy.
+    const inpVigencia = document.getElementById('eval-vigente-desde');
+    if(inpVigencia) {
+        const desde = (!comoCopia && evaluacion.vigente_desde) ? new Date(evaluacion.vigente_desde) : null;
+        inpVigencia.value = (desde && !isNaN(desde))
+            ? window.valorLocalDeFecha(desde).split('T')[0] : '';
+    }
     await window.avisarSiFaltaColumnaCertificacion();
+    await window.avisarSiFaltaColumnaVigencia();
 
     await window.prepararInputCategorias(evaluacion.category || 'General');
 
@@ -6084,6 +6135,16 @@ window.guardarNuevaEvaluacion = async () => {
                 if (await window.hayColumna('evaluations', 'retry_days')) {
                     const dias = inpReintento ? parseInt(inpReintento.value, 10) : 0;
                     payload.retry_days = (Number.isFinite(dias) && dias > 0) ? dias : 0;
+                }
+
+                // Desde cuándo cuenta la encuesta. Se guarda en ISO y no como el
+                // 'YYYY-MM-DD' del campo, que la columna es `timestamptz`: así
+                // el teléfono de quien la mire lee el mismo instante aunque esté
+                // en otro huso. Vaciar el campo la devuelve a null, que es
+                // volver a mandar `created_at`.
+                if (await window.hayColumnaVigencia()) {
+                    const desde = window.fechaDeVigenciaDeLaHoja();
+                    payload.vigente_desde = desde ? desde.toISOString() : null;
                 }
 
                 if(eid) {

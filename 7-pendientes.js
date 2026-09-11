@@ -290,8 +290,10 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             </div>`;
     };
 
-    // 'fechaAlta' (el created_at de la encuesta) sirve de origen para contar la
-    // racha cuando el empleado no la ha contestado nunca.
+    // 'fechaAlta' es desde cuándo cuenta la encuesta —`window.inicioDeEncuesta`,
+    // que prefiere la fecha puesta a mano a la de alta— y hace dos cosas: es el
+    // origen de la racha cuando el empleado no la ha contestado nunca, y si cae
+    // por delante de hoy la encuesta todavía no se pide.
     //
     // 'contestaQuienMira' dice si el pendiente es de quien está mirando la
     // pantalla, y sólo lo usa el plazo de reintento: reponer una respuesta que
@@ -324,6 +326,16 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         if (window.asistenciaFueraDeHora && window.asistenciaFueraDeHora(evalId, now)) {
             return { mostrar: false };
         }
+
+        // Todavía no aplica. `fechaAlta` es desde cuándo cuenta la encuesta
+        // —`window.inicioDeEncuesta`, que prefiere la fecha puesta a mano a la
+        // de alta—, así que esto sólo puede pasar con una encuesta que se
+        // preparó para empezar más adelante: un `created_at` nunca está por
+        // delante. Es la misma idea que la ventana de una asistencia: antes de
+        // que llegue el día no hay nada que contestar, y pedirla desde ya sólo
+        // la deja envejecer en el panel.
+        const desdeCuando = fechaAlta ? new Date(fechaAlta) : null;
+        if (desdeCuando && !isNaN(desdeCuando) && desdeCuando > now) return { mostrar: false };
         const periodo = AVISO_CIERRE.hasOwnProperty(frecuencia) ? window.periodoVigente(frecuencia, now) : null;
 
         if (resps.length === 0) {
@@ -512,8 +524,8 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             // llena, el pendiente de revisión volvería al jefe inmediato.
             await window.cargarRevisoresDeClasificaciones();
 
-            const camposEvals = await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-                'id, title, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))));
+            const camposEvals = await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+                'id, title, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))));
             const { data: activeEvalsDb } = await sb.from('evaluations')
                         .select(camposEvals)
                         .eq('active', true);
@@ -565,13 +577,13 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                 // Solo agregamos la encuesta si hace match
                                                 if (esObligatoria && esParaMi) {
-                                                    const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, ev.created_at, ev, (ev.mode || 'self') !== 'boss');
+                                                    const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss');
                                     if (requiereRespuesta.mostrar) {
     if (ev.mode === 'boss') {
         // Generamos un item especial para indicar que el usuario está esperando a su jefe
         items.push({
             id: `waiting_boss_${ev.id}`, title: `Esperando evaluación: ${ev.title}`,
-            date: ev.created_at ? ev.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            date: window.diaDeInicioDeEncuesta(ev),
             tipo: 'Aviso', grado: 'Pendiente Jefe', original_data: ev, virtual_type: 'waiting_boss',
             vencimiento: requiereRespuesta
         });
@@ -579,7 +591,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
         // Comportamiento normal para las encuestas que el usuario sí debe contestar ('self')
         items.push({
             id: ev.id, title: ev.title,
-            date: ev.created_at ? ev.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            date: window.diaDeInicioDeEncuesta(ev),
             tipo: 'Encuesta', grado: 'Por realizar', original_data: ev, virtual_type: 'survey',
             vencimiento: requiereRespuesta
         });
@@ -700,14 +712,14 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                                    if (aplicaSub) {
                                                     const subResps = teamResponsesEvals ? teamResponsesEvals.filter(r => String(r.employee_id) === String(sub.id)) : [];
-                                                                       const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at, ev, (ev.mode || 'self') === 'boss');
+                                                                       const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') === 'boss');
                                                     
                                                     if (requiresResponse.mostrar) {
                                                         if (ev.mode === 'boss') {
                                                             items.push({
                                                                 id: `boss_${ev.id}_${sub.id}`, real_eval_id: ev.id,
                                                                 title: `Evaluar a ${sub.name.split(' ')[0]}`, description: ev.title,
-                                                                date: ev.created_at ? ev.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+                                                                date: window.diaDeInicioDeEncuesta(ev),
                                                                 tipo: 'Evaluación de Líder',
                                                                 grado: 'Pendiente', sub_id: sub.id, sub_name: sub.name,
                                                                 original_data: ev, virtual_type: 'boss_eval',
@@ -716,7 +728,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                                         } else {
                                                             items.push({
                                                                 id: `missing_survey_${ev.id}_${sub.id}`, title: ev.title,
-                                                                date: ev.created_at ? ev.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+                                                                date: window.diaDeInicioDeEncuesta(ev),
                                                                 tipo: 'Encuesta Atrasada',
                                                                 grado: 'Atrasada', sub_name: sub.name, sub_puesto: sub.puesto || 'Colaborador',
                                                                 virtual_type: 'team_missing_survey',
@@ -838,13 +850,13 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                                                 if (aplicaSub) {
                                                             const subResps = teamResponses ? teamResponses.filter(r => String(r.employee_id) === String(sub.id)) : [];
-                                                                                    const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at, ev, false);
+                                                                                    const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, false);
                                                             
                                                             if (requiresResponse.mostrar) {
                                                                 items.push({
                                                                     id: `hierarchy_missing_${ev.id}_${sub.id}`,
                                                                     title: ev.title,
-                                                                    date: ev.created_at ? ev.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+                                                                    date: window.diaDeInicioDeEncuesta(ev),
                                                                     tipo: 'Encuesta Atrasada', grado: 'Atrasada', sub_name: sub.name,
                                                                     sub_puesto: sub.puesto || 'Colaborador', virtual_type: 'team_missing_survey',
                                                                     vencimiento: requiresResponse

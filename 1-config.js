@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-11-19';
+window.VERSION_APP = '2026-09-11-20';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1882,6 +1882,58 @@ window.hayColumnaRelanzamiento = () => window.hayColumna('evaluations', 'relaunc
 
 window.camposConRelanzamiento = (campos) =>
     window.camposConColumna(campos, 'evaluations', 'relaunched_at');
+
+// ==========================================
+// DESDE CUÁNDO APLICA UNA ENCUESTA
+// ==========================================
+// Una encuesta empieza a contar el día que se dio de alta, y eso no siempre es
+// verdad. La auditoría de septiembre se crea **copiando** la de agosto, así que
+// su `created_at` es de hoy aunque la auditoría lleve un año haciéndose: la
+// gráfica del panel la desvanece en todos los periodos de atrás —«todavía no
+// existía»— y el resumen la deja fuera, cuando lo que pasó es que se dio de
+// alta tarde. Al revés pasa lo mismo: una encuesta que se prepara en septiembre
+// para empezar en octubre ya se está pidiendo el día que se guarda.
+//
+// `vigente_desde` es esa fecha a mano y **manda sobre `created_at`** en los
+// cuatro sitios donde la aplicación pregunta desde cuándo cuenta la encuesta:
+//
+//   - `encuestaExistiaEn`, que es lo que decide si un periodo de atrás le cobra
+//     su padrón o la desvanece —la gráfica y el resumen de la tarjeta—;
+//   - la racha de «N periodos sin contestar» de un pendiente nunca contestado;
+//   - los días que se tardó en contestarla (`origenDelPendiente`);
+//   - la fecha con la que sale su tarjeta en el panel de pendientes.
+//
+// Y una fecha **en el futuro** hace además lo que dice: hasta que llegue, la
+// encuesta no le sale a nadie como pendiente. Es la misma idea que la ventana
+// de una pregunta de asistencia —antes del evento no hay nada que confirmar—, y
+// sólo puede pasar poniéndola a mano: un `created_at` nunca está por delante.
+//
+// Sin fecha puesta se cae en `created_at`, que es lo de siempre; sin ninguna de
+// las dos, la encuesta se da por existente desde siempre, que es lo que ya
+// hacía `encuestaExistiaEn` sin alta.
+window.inicioDeEncuesta = (ev) => {
+    if (!ev) return null;
+    const puesta = ev.vigente_desde ? new Date(ev.vigente_desde) : null;
+    if (puesta && !isNaN(puesta)) return puesta;
+    const alta = ev.created_at ? new Date(ev.created_at) : null;
+    return (alta && !isNaN(alta)) ? alta : null;
+};
+
+// Lo mismo en 'YYYY-MM-DD', que es como el panel de pendientes fecha sus
+// tarjetas. Sin ninguna de las dos, hoy: esa fecha es de ordenar una lista y no
+// puede quedarse vacía.
+window.diaDeInicioDeEncuesta = (ev) => {
+    const crudo = (ev && (ev.vigente_desde || ev.created_at)) || new Date().toISOString();
+    return String(crudo).split('T')[0];
+};
+
+// La columna es nueva y su script (`sql/vigencia-de-encuesta.sql`) se corre a
+// mano: sin ella todo se comporta como antes —manda `created_at`— y el campo de
+// la hoja se queda apagado diciendo qué falta.
+window.hayColumnaVigencia = () => window.hayColumna('evaluations', 'vigente_desde');
+
+window.camposConVigencia = (campos) =>
+    window.camposConColumna(campos, 'evaluations', 'vigente_desde');
 
 // ==========================================
 // QUÉ CLASIFICACIONES SE CERTIFICAN

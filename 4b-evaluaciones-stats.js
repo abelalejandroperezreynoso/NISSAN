@@ -732,7 +732,11 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             is_obligatory: e.is_obligatory !== false,
             evaluates_area: e.evaluates_area === true,
             frequency: f,
-            alta: e.created_at || null
+            // Desde cuándo cuenta la encuesta, que es el origen desde el que se
+            // miden los días que se tardó en contestarla. Manda la fecha puesta
+            // a mano sobre la de alta: una copia nace hoy y sin esto los días
+            // de una respuesta anterior saldrían negativos.
+            alta: window.inicioDeEncuesta(e)
         };
     });
 

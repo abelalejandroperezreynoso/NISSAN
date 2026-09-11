@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-11-19">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-11-20">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -577,6 +577,15 @@
                             <span class="eval-opcion-ayuda">Inactiva: sólo la ve el administrador y no genera pendientes.</span>
                         </span>
                     </label>
+                    <!-- Desde cuándo cuenta la encuesta. Manda sobre la fecha de
+                         alta, que es la que usa la aplicación cuando esto va
+                         vacío: ver `window.inicioDeEncuesta` en 1-config.js. -->
+                    <div class="eval-escala-fila" id="fila-vigencia" style="padding:10px 0 0;">
+                        <label for="eval-vigente-desde" style="margin:0;">Aplica desde</label>
+                        <input type="date" id="eval-vigente-desde">
+                    </div>
+                    <p class="form-ayuda" style="margin-top:2px;">Vacío: desde el día que se creó. Atrás, para una que se dio de alta tarde —una copia nace hoy aunque lleve meses aplicándose— y así los periodos anteriores la cuentan. Por delante, no se pide hasta que llegue.</p>
+                    <p id="aviso-vigencia-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/vigencia-de-encuesta.sql</code> en Supabase para poder cambiarla.</p>
                 </div>
 
                 <!-- Plegable y cerrada: son campos opcionales que ocupaban casi
@@ -1063,22 +1072,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-11-19"></script>
-    <script src="2a-core-nav.js?v=2026-09-11-19"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-11-19"></script>
-    <script src="3-incidentes.js?v=2026-09-11-19"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-11-19"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-11-19"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-11-19"></script>
-    <script src="5-objetivos.js?v=2026-09-11-19"></script>
-    <script src="6-calendario.js?v=2026-09-11-19"></script>
-    <script src="7-pendientes.js?v=2026-09-11-19"></script>
-    <script src="8-hallazgos.js?v=2026-09-11-19"></script>
-    <script src="9-estadisticas.js?v=2026-09-11-19"></script>
+    <script src="1-config.js?v=2026-09-11-20"></script>
+    <script src="2a-core-nav.js?v=2026-09-11-20"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-11-20"></script>
+    <script src="3-incidentes.js?v=2026-09-11-20"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-11-20"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-11-20"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-11-20"></script>
+    <script src="5-objetivos.js?v=2026-09-11-20"></script>
+    <script src="6-calendario.js?v=2026-09-11-20"></script>
+    <script src="7-pendientes.js?v=2026-09-11-20"></script>
+    <script src="8-hallazgos.js?v=2026-09-11-20"></script>
+    <script src="9-estadisticas.js?v=2026-09-11-20"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-09-11-19"></script>
-    <script src="13-gestion.js?v=2026-09-11-19"></script>
-    <script src="10-refacciones.js?v=2026-09-11-19"></script> 
+    <script src="12-almacenamiento.js?v=2026-09-11-20"></script>
+    <script src="13-gestion.js?v=2026-09-11-20"></script>
+    <script src="10-refacciones.js?v=2026-09-11-20"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

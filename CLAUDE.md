@@ -2980,6 +2980,67 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   persona concreta en `scheduled_evaluations` sigue apareciendo en su día
   aunque después se apague la encuesta. Esa programación es una asignación
   explícita y se cancela desde el propio calendario.
+- **Desde cuándo aplica una encuesta se puede corregir a mano.** La aplicación
+  la hacía empezar el día que se dio de alta, y eso no siempre es verdad. La
+  auditoría de septiembre se crea **copiando** la de agosto, así que su
+  `created_at` es de hoy aunque la auditoría lleve un año haciéndose: la gráfica
+  del panel la desvanecía en todos los periodos de atrás —«Todavía no existía»—
+  y el resumen la dejaba fuera, cuando lo que había pasado es que se dio de alta
+  tarde. Al revés pasa lo mismo: una encuesta que se prepara en septiembre para
+  empezar en octubre ya se está pidiendo el día que se guarda.
+
+  Es el campo **«Aplica desde»** del grupo «Opciones» de la hoja de crear y
+  editar, y la columna es `evaluations.vigente_desde`, cuyo script
+  (`sql/vigencia-de-encuesta.sql`) se corre a mano.
+
+  ```js
+  window.inicioDeEncuesta(ev)        // desde cuándo cuenta: la puesta, o el alta
+  window.diaDeInicioDeEncuesta(ev)   // lo mismo en 'YYYY-MM-DD'
+  window.hayColumnaVigencia()  window.camposConVigencia(campos)
+  ```
+
+  **Nadie vuelve a leer `created_at` para preguntar desde cuándo cuenta una
+  encuesta**: se pasa por `inicioDeEncuesta`, que prefiere la fecha puesta a
+  mano y se cae en el alta cuando no la hay. Son cuatro sitios, y los cuatro
+  decían algo distinto de la misma encuesta:
+
+  - **`encuestaExistiaEn`**, que es lo que decide si un periodo de atrás le
+    cobra su padrón o la desvanece —la gráfica de la tarjeta del panel, su
+    resumen y la de la pantalla de una encuesta—. Es a lo que se vino.
+  - **La racha de «N periodos sin contestar»** de un pendiente nunca contestado,
+    que con el alta de una copia empezaba a contar desde cero.
+  - **Los días que se tardó en contestarla** (`origenDelPendiente`), donde una
+    respuesta anterior al alta daba días negativos.
+  - **La fecha con la que sale su tarjeta** en el panel de pendientes.
+
+  **Y una fecha por delante hace lo que dice: hasta que llegue, la encuesta no
+  le sale a nadie como pendiente.** Es la misma idea que la ventana de una
+  pregunta de asistencia —antes del evento no hay nada que confirmar— y el freno
+  vive en `esEvaluacionPendiente`, justo detrás de aquél. Sólo puede saltar con
+  una fecha escrita a mano: un `created_at` nunca está en el futuro, así que
+  para todo lo que ya existe no cambia nada.
+
+  Cuatro cosas que hay que mantener:
+
+  - **Toda consulta que vaya a decidir un pendiente o a dibujar un periodo
+    encadena `camposConVigencia`.** Es la trampa de `requires_min_score` otra
+    vez: una columna que no se pidió llega `undefined`, `inicioDeEncuesta` se
+    cae al alta y la encuesta vuelve a desvanecerse en los periodos de atrás. La
+    encadenan `cargarEncuestasAsignadas` y `calcularPendientesBatch`
+    (`2b-core-dashboard.js`), `cargarVistaPendientes` (`7-pendientes.js`) y
+    `encuestaDeLaRespuesta` (`4-evaluaciones-admin.js`). Las que van con
+    `select('*')` —`evalCache` y las estadísticas— ya la traen.
+  - **Una copia no hereda la fecha.** Es lo mismo que hace con el título: la
+    copia es la vuelta de este mes, no la del año pasado, así que arrastrarle
+    aquella fecha la metería en periodos que no son suyos. Vacía vuelve a
+    significar «desde que se cree», que para una copia es hoy.
+  - **Se guarda en ISO y no como el `'YYYY-MM-DD'` del campo**, que la columna es
+    `timestamptz`: la hoja manda la medianoche local de quien la escribe —con
+    `fechaDeRegistro`, porque `new Date('2026-03-01')` se lee en UTC y la zona
+    horaria lo corre un día— y `valorLocalDeFecha` hace el camino de vuelta.
+  - **Sin la columna, el campo se queda vacío y apagado** diciendo qué script
+    falta (`avisarSiFaltaColumnaVigencia`), y todo se comporta como antes: manda
+    `created_at`. Es el mismo molde que el umbral y los revisores.
 - **La tarjeta de un pendiente se parte en filas en el teléfono.** El
   `.card-header` reparte el ancho en tres columnas —el icono, el texto y el
   botón—, y en un iPhone 12 mini la tarjeta mide 329px: descontando los 60 del
@@ -4358,6 +4419,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Sin `created_at` se cuenta. Y un 0% de una encuesta que sí existía se queda
   como está: ahí el cero significa que no la contestó nadie, que es justo lo que
   hay que ver.
+
+  **Y el alta no es la última palabra.** Desde cuándo cuenta la encuesta lo dice
+  `window.inicioDeEncuesta`, que prefiere la fecha escrita a mano en «Aplica
+  desde» —la copia de una auditoría nace hoy aunque la auditoría lleve un año, y
+  sin corregirlo se desvanece en todos los periodos de atrás—. Se cuenta más
+  arriba, con las trampas de `active`.
 
   Cinco cosas que hay que mantener:
 

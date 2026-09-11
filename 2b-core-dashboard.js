@@ -1078,10 +1078,15 @@ window.TEXTO_SIN_EXISTIR = 'Todavía no existía';
 // no se le cuenta ninguna respuesta posterior a esa fecha, tampoco se le puede
 // cobrar el padrón de antes de existir.
 //
+// **Desde cuándo existe lo dice `inicioDeEncuesta`**, no `created_at` a secas:
+// una encuesta puede llevar puesta a mano la fecha desde la que aplica —el caso
+// de una copia, que nace hoy aunque la auditoría lleve un año— y entonces manda
+// ésa. Sin ella se cae en el alta, que es lo de siempre.
+//
 // Sin fecha de alta se cuenta, que es lo de siempre: ante la duda, la encuesta
 // existía.
 window.encuestaExistiaEn = (ev, referencia) => {
-    const alta = (ev && ev.created_at) ? new Date(ev.created_at) : null;
+    const alta = window.inicioDeEncuesta(ev);
     if (!alta || isNaN(alta)) return true;
     const cuando = referencia || new Date();
     const periodo = window.periodoDeEncuesta(ev, cuando);
@@ -1528,9 +1533,9 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // revisa en la hoja de detalle: sin la columna, `revisoresDeEncuesta`
         // sólo vería los de la clasificación y enseñaría los heredados en una
         // encuesta que nombra a los suyos. Es la trampa de `requires_min_score`.
-        const campos = await window.camposConRevisores(
+        const campos = await window.camposConVigencia(await window.camposConRevisores(
             await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(
-                'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments'))));
+                'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments')))));
 
         // Igual que en el panel de pendientes: las ventanas de las encuestas
         // que pasan lista se piden antes, porque `esEvaluacionPendiente` las
@@ -1590,7 +1595,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
 
             const contestaQuienMira = (ev.mode || 'self') !== 'boss';
             const vencimiento = window.esEvaluacionPendiente(
-                respuestas, ev.id, ev.frequency, ev.created_at, ev, contestaQuienMira);
+                respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, contestaQuienMira);
             // La respuesta del periodo se guarda: de ella salen el puntaje del
             // renglón y la fecha que enseña la hoja de detalle.
             const resp = window.respuestaDelPeriodo(ev, respuestas, ahora);
@@ -3186,8 +3191,8 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
         // llena antes de contar nada.
         await window.cargarRevisoresDeClasificaciones();
 
-        const camposEvals = await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-            'id, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))));
+        const camposEvals = await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+            'id, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))));
         const { data: activeEvalsDb } = await sb.from('evaluations')
             .select(camposEvals)
             .eq('active', true);
@@ -3255,7 +3260,7 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                     countEvals = evalsQueLeTocan.filter(ev => {
                                             if (window.esEvaluacionPendiente) {
                                                 // Usamos la nueva lógica unificada (Retorna un objeto, por lo que leemos .mostrar)
-                                                return window.esEvaluacionPendiente(respuestas, ev.id, ev.frequency, ev.created_at, ev, (ev.mode || 'self') !== 'boss').mostrar;
+                                                return window.esEvaluacionPendiente(respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss').mostrar;
                                             } else {
                                                 // Fallback de seguridad por si el archivo 7-pendientes.js aún no ha cargado
                                                 const resps = respuestas ? respuestas.filter(r => r.evaluation_id === ev.id) : [];
@@ -3392,7 +3397,7 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                                                             
                                                             // Evaluamos usando la lógica global unificada
                                                             if (window.esEvaluacionPendiente) {
-                                                                if (window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, ev.created_at, ev, (ev.mode || 'self') === 'boss').mostrar) {
+                                                                if (window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') === 'boss').mostrar) {
                                                                     countPorCalificar++;
                                                                 }
                                                             } else {

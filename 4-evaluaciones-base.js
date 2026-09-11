@@ -429,7 +429,7 @@ window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalifica
         // reponer una respuesta que no puede tocar.
         const contestaQuienMira = (ev.mode || 'self') !== 'boss';
         const v = window.esEvaluacionPendiente(
-            respuestas, ev.id, ev.frequency, ev.created_at, ev, contestaQuienMira);
+            respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, contestaQuienMira);
         return {
             estado: window.estadoDeAsignada(v),
             // El vencimiento se devuelve entero porque la pantalla de la
