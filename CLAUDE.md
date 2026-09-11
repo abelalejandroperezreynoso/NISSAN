@@ -3680,99 +3680,6 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   la lista se desplaza dentro de su tarjeta (`.stats-plegable-cuerpo`, tope de
   260px) en vez de estirar la fila. Así es la comparativa por áreas, que con
   todo el personal desplegado se llevaba nueve mil píxeles de la pantalla.
-- **Una insignia por clasificación cumplida.** En el panel de información del
-  usuario, debajo del radar, se gana un parche de mérito por cada clasificación
-  cuyas encuestas están **todas** calificadas al mínimo o por encima. Es la
-  misma regla del criterio «80% Líderes» de las estadísticas —no el promedio:
-  un 100 y un 60 promedian 80 y ahí falta una—, mirada por clasificación en
-  lugar de por persona.
-
-  ```js
-  window.insigniasGanadas(encuestas, respuestas, empleado, tieneEquipo)
-  window.dibujarInsigniasClasificacion(insignias)   // en #insignias-clasificacion
-  ```
-
-  Vale de cada encuesta **la última respuesta calificada**, que es la primera
-  que aparece por venir ordenadas de la más reciente. Una encuesta sin
-  contestar, o contestada y aún sin calificar, deja la clasificación sin
-  insignia: no se da por cumplido lo que nadie ha revisado. Y la que no exige
-  mínimo (`requires_min_score` en false) cuenta en cuanto está calificada, que
-  es lo que esa bandera significa.
-
-  **A quién le toca cada encuesta lo decide `leTocaEstaEncuesta`**, no el
-  `target_positions` a mano que mira el radar justo encima. Por eso la consulta
-  de `cargarRadarGeneralDashboard` —de la que cuelgan las dos cosas, para no
-  pedir lo mismo dos veces— se trae además `mode`, `target_departments`,
-  `target_employees` y, con `camposConMinimo`, `requires_min_score`. Las
-  insignias se dibujan **antes** que el radar: si no hay ejes que enseñar, o si
-  Chart falla, ellas salen igual.
-
-  El parche se dibuja entero en SVG (`window.svgInsignia`) y **no hay ninguna
-  imagen que subir**: el aro festoneado son dieciséis círculos, y el color y el
-  símbolo salen del nombre de la clasificación —`matizDeClasificacion` y
-  `simboloDeClasificacion`, ambos sobre la misma semilla estable, así que una
-  clasificación tiene siempre el mismo parche en todos los teléfonos—. Las
-  habituales traen su símbolo en `window.SIMBOLOS_INSIGNIA` (seguridad 🛡️,
-  calidad ⭐, 5S 🧹…) y a cualquier otra le toca uno fijo de
-  `SIMBOLOS_INSIGNIA_SUELTOS`.
-
-  **Debajo de la foto de perfil va una estrella amarilla por insignia**, que es
-  el mismo dato dicho donde se mira primero: el parche dice de qué
-  clasificación y la estrella sólo cuántas van. Las pone
-  `window.dibujarEstrellasInsignias(cuantas)`, a la que llama la propia
-  `dibujarInsigniasClasificacion`, así que las dos cosas no pueden discrepar.
-  La estrella es un `<path>` y **no un emoji**: el emoji lo dibuja cada sistema
-  a su manera —en iOS sale con relieve y borde— y aquí hacen falta cinco
-  iguales en fila del mismo amarillo. Caben cinco en el ancho de la foto y las
-  demás bajan a otro renglón.
-
-  Para que caigan debajo de la foto, **el flotado se mudó de la foto a un
-  envoltorio** que las contiene a las dos; el nombre y el puesto lo rodean
-  igual que rodeaban a la foto sola. Las estrellas son **hermanas** del
-  `#header-user-icon` y no van dentro: ese div se reescribe entero con
-  `innerHTML` cada vez que se carga el avatar o se cambia la foto, y se las
-  llevaría por delante.
-
-  Sin ninguna ganada no se dibuja nada —`#insignias-clasificacion:empty` se
-  esconde y las estrellas se vacían—: un hueco vacío en el panel no dice más
-  que la ausencia del parche.
-
-  **Las mismas estrellas salen junto a cada persona de las listas de gente**:
-  el equipo del panel principal, el reporte de equipo y sus miembros, el
-  expediente de alguien y su equipo a cargo, y el panel de todos los
-  colaboradores. Va como el badge de pendientes: la lista se dibuja con el
-  hueco puesto y el cálculo lo rellena cuando llega.
-
-  ```js
-  window.huecoDeEstrellas(empId, chico)   // el <div data-estrellas> del renglón
-  window.calcularInsigniasBatch(ids)      // calcula lo que falte y pinta
-  window.pintarEstrellasInsignias()       // rellena los huecos con lo ya sabido
-  ```
-
-  Lo calculado se guarda en `window.insigniasPorEmpleado` y **no se vuelve a
-  pedir**: filtrar el panel de todos los colaboradores repinta la lista entera
-  y las estrellas salen de la caché sin tocar la base. Las del propio usuario
-  las deja puestas el panel de su perfil, que ya las tenía. La caché se vacía
-  con `invalidarCacheDashboard`, porque una encuesta recién calificada puede
-  haber ganado —o perdido— una estrella.
-
-  El cálculo va **de cien personas en cien**, pintando lo que va saliendo, y
-  las respuestas se piden **por páginas de mil filas**: PostgREST no devuelve
-  más de mil por consulta y el panel de todos los colaboradores pide las de la
-  plantilla entera. Las encuestas activas se piden una sola vez por sesión
-  (`cargarEncuestasParaInsignias`, que guarda la promesa y no el resultado).
-
-  El hueco de las listas reserva su alto aunque no haya estrellas
-  (`.estrellas-insignias--chico`, `min-height`): sin eso, los nombres de una
-  misma fila quedan a distinta altura según quién tenga insignias.
-
-  **La fila se centra con los márgenes automáticos de la primera y la última,
-  nunca con `justify-content: center`.** Centrando así, en cuanto la fila
-  desborda —y desborda: crece con el catálogo de clasificaciones— el navegador
-  recorta por la **izquierda** y las primeras insignias quedan fuera sin que se
-  pueda llegar a ellas arrastrando. Los márgenes automáticos se van a cero
-  cuando no sobra sitio, de modo que con pocas quedan centradas y con muchas se
-  empieza por la primera.
 - **La pantalla de inicio dice qué encuestas le tocan a esta persona y cómo va
   con ellas**, en la tarjeta que llena `window.cargarEncuestasAsignadas(userId)`
   (`2b-core-dashboard.js`) dentro de `#container-encuestas-asignadas`, justo
@@ -3945,9 +3852,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   arrastra si no caben. Con el nombre completo al lado, cada revisor se llevaba
   un renglón entero y cuatro empujaban la lista de encuestas fuera de la
   pantalla; así el bloque mide lo mismo haya dos o haya seis. Se alinea a la
-  izquierda y **nunca centrada**: en cuanto desborda, el navegador recorta por
-  la izquierda y a los primeros no se llega arrastrando —es la trampa de la fila
-  de insignias—.
+  izquierda y **nunca centrada**: centrando con `justify-content: center`, en
+  cuanto desborda el navegador recorta por la izquierda y a los primeros no se
+  llega arrastrando.
 
   Lo que no cabe se dice en el **`title`**: el nombre completo y de cuántas
   encuestas del grupo es revisor. Quien no las revisa todas lleva además un
@@ -4048,8 +3955,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   encuestas le tocan.
 
 - **El panel del usuario se pliega, y de entrada está contraído.** Contraído
-  se ve sólo quién es —la foto, sus estrellas y el nombre—, que es lo que se
-  mira de pasada; el radar y las insignias salen al tocar la tarjeta. En un
+  se ve sólo quién es —la foto y el nombre—, que es lo que se mira de pasada; el
+  radar sale al tocar la tarjeta. En un
   iPhone 12 mini esa tarjeta medía 413px abiertos contra 128 cerrados, media
   pantalla del panel todos los días para algo que se consulta de vez en cuando
   y que empujaba abajo los pendientes y los accesos directos, que es a lo que
@@ -4062,8 +3969,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   ```
 
   Lo contrae la clase `esta-contraido` en `#main-user-header`, que esconde
-  `.panel-usuario-detalle` —el radar y las insignias— y quita el hueco de
-  debajo del nombre; la flecha de `.panel-usuario-chevron` gira al abrirse. El
+  `.panel-usuario-detalle` —el radar— y quita el hueco de debajo del nombre; la flecha de `.panel-usuario-chevron` gira al abrirse. El
   estado se recuerda en `localStorage.panelUsuarioAbierto`: a quien le guste
   ver su radar no tiene que abrirlo en cada recarga, y con el botón de
   actualizar del encabezado recargar es cosa de todos los días. Un navegador
@@ -4071,9 +3977,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   entrada.
 
   **Chart mide el lienzo al dibujarlo, y contraído mide cero.** El radar se
-  crea al cargar el panel —da igual que esté plegado, porque de esa misma
-  consulta salen las insignias y las estrellas de debajo de la foto, que sí se
-  ven contraídas—, así que nace con 0×0 y al abrirse habría salido en blanco.
+  crea al cargar el panel aunque esté plegado, así que nace con 0×0 y al abrirse
+  habría salido en blanco.
   Por eso `aplicarPanelUsuario` le pide un `resize()` a
   `window.dashboardRadarInstance` cuando abre. Cualquier gráfica nueva que se
   meta ahí dentro necesita lo mismo.
