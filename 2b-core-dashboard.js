@@ -1043,14 +1043,24 @@ window.TEXTO_SIN_EXISTIR = 'Todavía no existía';
 // atrás, también la lista de debajo: sin esto las dos discrepaban, porque el
 // punto de abril se dibujaba sin esas encuestas y el renglón las contaba.
 //
+// **Una de «única vez» no tiene fin de periodo, y ahí manda el instante que se
+// mira.** `periodoDeEncuesta` le da `fin: null` —su periodo es «alguna vez»—,
+// así que mirando el fin no se descartaba nunca: las de DOJO y JUNTAS, creadas
+// en julio, seguían pidiendo «0/9 respuestas · 0%» en abril. Y es el mismo tope
+// con el que `resumenDeEncuestaAdmin` cuenta sus respuestas —nada de lo enviado
+// después del instante que se mira—, así que las dos mitades miran lo mismo: si
+// no se le cuenta ninguna respuesta posterior a esa fecha, tampoco se le puede
+// cobrar el padrón de antes de existir.
+//
 // Sin fecha de alta se cuenta, que es lo de siempre: ante la duda, la encuesta
-// existía. Y una de «única vez» no tiene fin de periodo, así que tampoco se
-// descarta nunca.
+// existía.
 window.encuestaExistiaEn = (ev, referencia) => {
     const alta = (ev && ev.created_at) ? new Date(ev.created_at) : null;
     if (!alta || isNaN(alta)) return true;
-    const periodo = window.periodoDeEncuesta(ev, referencia || new Date());
-    return !(periodo && periodo.fin && alta >= periodo.fin);
+    const cuando = referencia || new Date();
+    const periodo = window.periodoDeEncuesta(ev, cuando);
+    const fin = (periodo && periodo.fin) || cuando;
+    return alta < fin;
 };
 
 // Lo mismo de un grupo de encuestas: se suman los puntajes y los padrones, no

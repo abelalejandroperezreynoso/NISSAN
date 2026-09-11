@@ -4151,10 +4151,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   no las trece de hoy—, que es lo que hace que diga la misma cifra que el punto.
 
   El alta se compara contra el **fin** del periodo: una creada a mitad de agosto
-  existió en agosto. Sin `created_at` se cuenta, y una de «única vez» no tiene
-  fin de periodo, así que tampoco se descarta nunca. Un 0% de una encuesta que
-  sí existía se queda como está: ahí el cero significa que no la contestó nadie,
-  que es justo lo que hay que ver.
+  existió en agosto. Y **una de «única vez» no tiene fin de periodo, así que ahí
+  manda el instante que se mira**: `periodoDeEncuesta` le da `fin: null` —su
+  periodo es «alguna vez»—, de modo que mirando sólo el fin no se descartaba
+  nunca, y las de DOJO y JUNTAS, creadas en julio, seguían pidiendo «0/9
+  respuestas · 0%» en abril mientras la de al lado ya decía «Todavía no
+  existía». Es además el mismo tope con el que `resumenDeEncuestaAdmin` le cuenta
+  las respuestas —nada de lo enviado después de esa fecha—, así que las dos
+  mitades miran lo mismo: si no se le cuenta ninguna respuesta posterior, tampoco
+  se le puede cobrar el padrón de antes de existir.
+
+  Sin `created_at` se cuenta. Y un 0% de una encuesta que sí existía se queda
+  como está: ahí el cero significa que no la contestó nadie, que es justo lo que
+  hay que ver.
 
   Cinco cosas que hay que mantener:
 
