@@ -4025,6 +4025,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.promedioSobrePadron(suma, calificadas, padron)
   window.totalDeEncuestasAdmin(filas)      // el de un grupo, o el de la tarjeta
   window.textoDeRespuestasAdmin(resumen)   // «23/40 respuestas»
+  window.encuestaExistiaEn(ev, referencia) // ¿existía ya en ese periodo?
+  window.TEXTO_SIN_EXISTIR                 // «Todavía no existía»
   ```
 
   **Quien no contestó cuenta como cero**, que es lo que separa «cómo les fue a
@@ -4130,6 +4132,29 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   propio punto** —el instante con el que se dibujó, que por eso lo devuelve
   `historialDeRevision`—, de modo que la lista dice exactamente la cifra del
   globo y no una parecida.
+
+  **Y lo que en aquel periodo todavía no existía no vale cero.** Es la misma
+  regla que la gráfica ya aplicaba a sus puntos (`encuestaExistiaEn`, extraída
+  de ahí para que no haya dos), sólo que la lista no la aplicaba: repartía el
+  padrón entero de una encuesta creada en julio entre gente que en abril no
+  podía contestarla, así que salía en «0/9 respuestas · 0%» —que se lee como que
+  la empresa lo hizo mal, no como que aquello no se preguntaba todavía— y de
+  paso **las dos cifras no cuadraban**: el punto de abril se dibujaba sin esas
+  encuestas y el renglón de debajo las contaba, de modo que el globo decía 65%
+  encima de un resumen que decía 63%.
+
+  Hoy esa encuesta se queda sin resumen y sin puntaje, y lo dice
+  (`TEXTO_SIN_EXISTIR`) en los **tres** sitios que la nombran: su renglón, el
+  pie de su clasificación —cuando ninguna de las suyas existía— y su fila de la
+  hoja de detalle. Se va al final de su grupo, que no tiene nada que decir de
+  aquel periodo, y **el resumen cuenta las que había entonces** —«9 encuestas»,
+  no las trece de hoy—, que es lo que hace que diga la misma cifra que el punto.
+
+  El alta se compara contra el **fin** del periodo: una creada a mitad de agosto
+  existió en agosto. Sin `created_at` se cuenta, y una de «única vez» no tiene
+  fin de periodo, así que tampoco se descarta nunca. Un 0% de una encuesta que
+  sí existía se queda como está: ahí el cero significa que no la contestó nadie,
+  que es justo lo que hay que ver.
 
   Cinco cosas que hay que mantener:
 

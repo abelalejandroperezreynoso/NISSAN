@@ -1025,6 +1025,34 @@ window.promedioSobrePadron = (suma, calificadas, padron) => {
     return calificadas > 0 ? Math.round(suma / calificadas) : null;
 };
 
+// Lo que se dice de una encuesta que en aquel periodo todavía no existía. Va
+// en los tres sitios que la nombran —el renglón de la encuesta, el pie de su
+// clasificación y la fila de la hoja de detalle—, que si no acabarían diciendo
+// lo mismo de tres maneras.
+window.TEXTO_SIN_EXISTIR = 'Todavía no existía';
+
+// ¿Existía ya esta encuesta en el periodo al que cae esa fecha? Se compara su
+// alta contra el **fin del periodo** y no contra la fecha misma: una creada a
+// mitad de agosto existió en agosto, aunque no el día 1.
+//
+// Hace falta porque una encuesta que todavía no existía **no vale cero**: su
+// padrón entero contaría como gente que no la contestó, y el periodo de antes
+// de crearla saldría con un 0% que se lee como que la empresa lo hizo mal en
+// vez de como que aquello no se preguntaba todavía. Lo miran la gráfica de la
+// tarjeta —de donde salió la regla— y, desde que se puede elegir un periodo de
+// atrás, también la lista de debajo: sin esto las dos discrepaban, porque el
+// punto de abril se dibujaba sin esas encuestas y el renglón las contaba.
+//
+// Sin fecha de alta se cuenta, que es lo de siempre: ante la duda, la encuesta
+// existía. Y una de «única vez» no tiene fin de periodo, así que tampoco se
+// descarta nunca.
+window.encuestaExistiaEn = (ev, referencia) => {
+    const alta = (ev && ev.created_at) ? new Date(ev.created_at) : null;
+    if (!alta || isNaN(alta)) return true;
+    const periodo = window.periodoDeEncuesta(ev, referencia || new Date());
+    return !(periodo && periodo.fin && alta >= periodo.fin);
+};
+
 // Lo mismo de un grupo de encuestas: se suman los puntajes y los padrones, no
 // se promedian los promedios. Una encuesta de cuarenta personas y otra de tres
 // no pesan igual, y promediar sus dos cifras las iguala.
@@ -1131,8 +1159,11 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
         return Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length);
     };
 
-    // Lo que falta, arriba; y lo vencido antes que lo que aún tiene plazo.
-    const peso = (f) => (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1));
+    // Lo que falta, arriba; y lo vencido antes que lo que aún tiene plazo. Lo
+    // que en el periodo elegido todavía no existía se va al final: no tiene
+    // nada que decir de aquel periodo y partiría en dos la lista de las que sí.
+    const peso = (f) => (f.existia === false ? 3
+        : (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1)));
 
     const grupos = [];
     const porClave = {};
@@ -1163,7 +1194,7 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
     window.clasificacionesAsignadas = grupos;
 
     const bloques = grupos.map((g, indice) => {
-        const renglones = g.filas.map(({ ev, estado, puntaje, resumen }) => {
+        const renglones = g.filas.map(({ ev, estado, puntaje, resumen, existia }) => {
             const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
             const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
             const color = (puntaje !== null && typeof window.getColorScore === 'function')
@@ -1186,12 +1217,22 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
                 resultado = ` · ${window.textoDeRespuestasAdmin(resumen)}${cifra}`;
             }
 
+            // Mirando un periodo en el que esta encuesta todavía no existía no
+            // hay respuestas que contar ni promedio que repartir: se dice, en
+            // gris, en lugar de enseñar el «0/9 respuestas · 0%» que salía de
+            // repartir su padrón entre gente que no pudo contestarla.
+            if (existia === false) {
+                resultado = ` · <span style="color:#94a3b8;">${window.TEXTO_SIN_EXISTIR}</span>`;
+            }
+
             // El globo dice lo que la cifra no puede: qué sacaron los que
             // sí contestaron, que es de donde sale el promedio de la
             // empresa al repartirlo sobre el padrón.
-            const globo = resumen && resumen.promedioContestadas !== null
-                ? `${resumen.promedioContestadas}% entre quienes la contestaron`
-                : estado.texto;
+            const globo = existia === false
+                ? window.TEXTO_SIN_EXISTIR
+                : (resumen && resumen.promedioContestadas !== null
+                    ? `${resumen.promedioContestadas}% entre quienes la contestaron`
+                    : estado.texto);
 
             return `
                 <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
@@ -1211,6 +1252,11 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
         // promedio de lo ya calificado.
         const pendientesGrupo = g.filas.filter(f => f.vencimiento.mostrar).length;
         const estadoGrupo = g.filas[0].estado;   // ya vienen ordenadas por lo que urge
+        // Las que existían en el periodo que se está mirando, que son las
+        // únicas que suman: `totalDeEncuestasAdmin` ya se salta a las demás
+        // —vienen sin resumen— y aquí hace falta además para no decir «0
+        // respuestas» de una clasificación que entonces no se había creado.
+        const vigentes = g.filas.filter(f => f.existia !== false);
         // Administrando se suman los puntajes y los padrones de sus
         // encuestas, no se promedian sus promedios: una de cuarenta
         // personas y otra de tres no pesan igual.
@@ -1220,7 +1266,7 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             ? window.getColorScore(promedioGrupo) : '#64748b';
 
         const cuantas = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
-        const pie = [
+        const pie = (esAdmin && vigentes.length === 0) ? window.TEXTO_SIN_EXISTIR : [
             esAdmin
                 ? window.textoDeRespuestasAdmin(totalGrupo)
                 : (pendientesGrupo > 0
@@ -1268,13 +1314,18 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
     // sólo sale cuando de verdad se alcanzó: un promedio sacado de una parte
     // de las respuestas no se puede enseñar como si fueran todas.
     const total = esAdmin ? window.totalDeEncuestasAdmin(filas) : null;
+    // Cuántas encuestas había entonces, no cuántas hay hoy: mirando abril, las
+    // cuatro que se crearon en julio no son cuatro encuestas al 0%, es que
+    // todavía no existían. Así el renglón dice la misma cifra que el punto de
+    // la gráfica, que ya las descartaba.
+    const cuantasAdmin = esAdmin ? filas.filter(f => f.existia !== false).length : 0;
     //
     // Va sin la palabra «activas» —que es lo que son: las apagadas no se
     // listan— porque con ella el renglón se parte en dos y deja el
     // porcentaje solo en el segundo. Lo dice su globo, que ahí sí cabe.
     const resumen = esAdmin
         ? [
-            `${filas.length} encuesta${filas.length === 1 ? '' : 's'}`,
+            `${cuantasAdmin} encuesta${cuantasAdmin === 1 ? '' : 's'}`,
             window.textoDeRespuestasAdmin(total),
             total.promedio === null ? null : `${total.promedio}%`,
             topeRespuestas ? 'sobre las respuestas más recientes' : null
@@ -1320,9 +1371,18 @@ window.verPeriodoDeLaTarjeta = (indice) => {
     // —que las lee al abrirse— habla del mismo periodo que la lista, en vez de
     // contradecirla en cuanto se toca un renglón.
     filas.forEach(f => {
-        f.resumen = window.resumenDeEncuestaAdmin(
-            f.ev, window.respuestasAsignadas, referencia, window.padronesDeLaTarjeta[f.ev.id]);
-        f.puntaje = f.resumen.promedio;
+        // Una encuesta que en aquel periodo todavía no existía no se resume:
+        // repartir su padrón entero entre gente que no pudo contestarla da un
+        // 0% que se lee como que se hizo mal. Se queda sin cifras —y lo dice—,
+        // que es exactamente lo que hace la gráfica de arriba con su punto: sin
+        // esto, el renglón contaba trece encuestas donde el punto dibujaba
+        // nueve, y las dos cifras no cuadraban.
+        f.existia = window.encuestaExistiaEn(f.ev, referencia);
+        f.resumen = f.existia
+            ? window.resumenDeEncuestaAdmin(
+                f.ev, window.respuestasAsignadas, referencia, window.padronesDeLaTarjeta[f.ev.id])
+            : null;
+        f.puntaje = f.resumen ? f.resumen.promedio : null;
     });
 
     const { resumen, bloques } = window.cuerpoTarjetaEncuestas(filas, true, false);
@@ -1955,7 +2015,7 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
         </div>
         ${window.graficaDeLinea(historial)}`;
 
-    const renglones = grupo.filas.map(({ ev, estado, puntaje, resp, vencimiento }) => {
+    const renglones = grupo.filas.map(({ ev, estado, puntaje, resp, vencimiento, existia }) => {
         const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
         const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
         const color = (puntaje !== null && typeof window.getColorScore === 'function')
@@ -1967,10 +2027,16 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
         const fecha = cuando
             ? new Date(cuando).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
             : '';
+        // Con un periodo de atrás elegido en la gráfica de la tarjeta, la que
+        // entonces no existía lo dice: `verPeriodoDeLaTarjeta` la dejó sin
+        // puntaje, y sin esto su renglón quedaría con el estado de hoy encima
+        // de unas cifras que son de otro periodo.
         const pie = [
             window.sanitizeForHTML(ritmo),
-            `<span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`,
-            fecha ? `${resp ? 'contestada' : 'última vez'} ${fecha}` : null
+            existia === false
+                ? `<span style="color:#94a3b8;">${window.TEXTO_SIN_EXISTIR}</span>`
+                : `<span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`,
+            (existia !== false && fecha) ? `${resp ? 'contestada' : 'última vez'} ${fecha}` : null
         ].filter(Boolean).join(' · ');
 
         return `
@@ -2164,8 +2230,9 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
                 // puntos clavados en el 0 antes de su primer resultado. Sin
                 // divisor el periodo se queda sin promedio y la gráfica se lo
                 // salta, que es lo que ya hacía cuando no había nada calificado.
-                const alta = ev.created_at ? new Date(ev.created_at) : null;
-                if (alta && !isNaN(alta) && periodo.fin && alta >= periodo.fin) return;
+                // Es la misma regla con la que la lista de la tarjeta descarta
+                // esas encuestas al elegir un periodo de atrás.
+                if (!window.encuestaExistiaEn(ev, referencia)) return;
 
                 // Por la **misma** función que la tarjeta del panel y la hoja de
                 // una encuesta: cuenta gente y no respuestas, y suma al divisor
