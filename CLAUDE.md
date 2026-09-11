@@ -4112,6 +4112,52 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `desde` sería el día 1 de este mes y la línea tendría un solo punto. Es el
   mismo `gte` acotado de `cargarRespuestasQueReviso`.
 
+  **Y cada punto se toca para ver aquel periodo.** El renglón del resumen y los
+  renglones de cada clasificación pasan a decir cuánta gente había contestado
+  entonces y cómo iba la empresa; el globo del punto queda abierto como marca de
+  qué se está mirando.
+
+  ```js
+  window.verPeriodoDeLaTarjeta(indice)   // null, o el último punto, vuelve a hoy
+  window.cuerpoTarjetaEncuestas(filas, esAdmin, topeRespuestas)  // { resumen, bloques }
+  window.periodosDeLaTarjeta  window.filasDeLaTarjeta  window.padronesDeLaTarjeta
+  window.periodoElegidoTarjeta   // el índice elegido, o null
+  ```
+
+  **No consulta nada**: las respuestas de los seis periodos ya vinieron en la
+  misma consulta, así que elegir un periodo es volver a preguntarle a
+  `resumenDeEncuestaAdmin` con otra fecha. Y se le pasa **la `referencia` del
+  propio punto** —el instante con el que se dibujó, que por eso lo devuelve
+  `historialDeRevision`—, de modo que la lista dice exactamente la cifra del
+  globo y no una parecida.
+
+  Cinco cosas que hay que mantener:
+
+  - **El cuerpo de la tarjeta vive fuera de `cargarEncuestasAsignadas`**
+    (`cuerpoTarjetaEncuestas`) porque se repinta sin volver a cargar nada, y
+    **sólo se repintan el resumen y los bloques** —de ahí sus dos ids—: la
+    gráfica es la misma para todos los periodos y redibujarla borraría la marca
+    del punto que se acaba de tocar.
+  - **El último punto es el periodo que corre**, así que elegirlo es volver a
+    hoy: no hay dos maneras de estar al día.
+  - **El globo se fuerza abierto**, no se alterna (`marcarPuntoGrafica(nodo,
+    siempre)`): aquí no es un detalle que se abre y se cierra sino la marca de
+    qué se está mirando, y cerrarlo dejando la lista en junio sería peor que no
+    marcarlo. Quién elige lo dice el segundo argumento de `graficaDeLinea`
+    (`alElegir`, el nombre de la función); sin él —las gráficas de una
+    clasificación— tocar un punto sólo abre su globo, como siempre.
+  - **El periodo elegido va en su propio renglón, encima del resumen**, con el
+    botón «Hoy». Medido a 375px, «jun 2026 · 13 encuestas · 3350/3587 respuestas
+    · 73%» con el botón detrás se parte en dos **siempre**, no sólo en el peor
+    caso, y ahí el periodo y su cifra acaban en líneas distintas. Aparte se lee
+    además como lo que es: un aviso de que no se está mirando hoy.
+  - **Se reescribe sobre las mismas filas** que guarda `clasificacionesAsignadas`,
+    así que la hoja de detalle —que las lee al abrirse— habla del mismo periodo
+    que la lista. Por lo mismo, `cuerpoDetalleClasificacion` toma su titular del
+    punto elegido y no del último: un titular de septiembre encima de unas filas
+    de junio es peor que no tener titular. El eje de su gráfica sigue enseñando
+    los seis, que es lo que es.
+
   Dos topes que hacen falta y no son evidentes:
 
   - **Nada de lo enviado después del instante que se mira.** Con `ahora` en el

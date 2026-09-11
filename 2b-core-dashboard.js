@@ -1114,6 +1114,244 @@ window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
     };
 };
 
+// El cuerpo de la tarjeta de encuestas: el renglón del resumen y los bloques de
+// cada clasificación, a partir de las filas ya calculadas.
+//
+// Vive fuera de `cargarEncuestasAsignadas` porque **se repinta sin volver a
+// cargar nada**: al tocar un punto de la gráfica, la tarjeta pasa a hablar de
+// aquel periodo y lo único que cambia son estas dos piezas —la gráfica se queda
+// como está, que es la misma para todos los periodos—.
+window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
+    // El promedio de un puñado de filas. Sin nada calificado no hay
+    // promedio: un 0% ahí se leería como haberlo hecho mal en vez de no
+    // haber empezado.
+    const promedioDe = (unasFilas) => {
+        const puntajes = unasFilas.map(f => f.puntaje).filter(p => p !== null);
+        if (puntajes.length === 0) return null;
+        return Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length);
+    };
+
+    // Lo que falta, arriba; y lo vencido antes que lo que aún tiene plazo.
+    const peso = (f) => (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1));
+
+    const grupos = [];
+    const porClave = {};
+    filas.forEach(f => {
+        const clave = window.normalizarClasificacion(f.ev.category);
+        if (!porClave[clave]) {
+            porClave[clave] = { nombre: String(f.ev.category || 'General').trim() || 'General', filas: [] };
+            grupos.push(porClave[clave]);
+        }
+        porClave[clave].filas.push(f);
+    });
+
+    // Dentro del grupo manda lo que urge; entre grupos, el que peor está.
+    // Con el mismo estado, por nombre, para que la tarjeta no baile de una
+    // carga a otra.
+    grupos.forEach(g => g.filas.sort((a, b) => peso(a) - peso(b)));
+    grupos.sort((a, b) => (peso(a.filas[0]) - peso(b.filas[0]))
+        || a.nombre.localeCompare(b.nombre, 'es'));
+
+    const pendientes = filas.filter(f => f.vencimiento.mostrar).length;
+
+    // Lo que la hoja de detalle vuelve a leer al abrirse, sin recalcular
+    // nada ni volver a preguntarle a la base. Se pasa por índice y no por
+    // nombre: así no hay que escapar la clasificación en un atributo.
+    //
+    // Las respuestas van enteras y no sólo las del periodo que corre: la
+    // gráfica de la hoja recorre los periodos de atrás.
+    window.clasificacionesAsignadas = grupos;
+
+    const bloques = grupos.map((g, indice) => {
+        const renglones = g.filas.map(({ ev, estado, puntaje, resumen }) => {
+            const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+            const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
+            const color = (puntaje !== null && typeof window.getColorScore === 'function')
+                ? window.getColorScore(puntaje) : '#64748b';
+            // El puntaje en las contestadas; en las que faltan, lo que
+            // falta —que ahí no hay puntaje que enseñar y el renglón
+            // quedaría con la frecuencia sola—.
+            let resultado = puntaje !== null
+                ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
+                : (estado.listo ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
+
+            // Administrando, delante del promedio va cuánta gente la
+            // contestó: el promedio se reparte sobre el padrón, así que sin
+            // esa cuenta no se sabe si un 49% es media plantilla al 100 o
+            // la plantilla entera a la mitad.
+            if (resumen) {
+                const cifra = puntaje !== null
+                    ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
+                    : ' · sin calificar';
+                resultado = ` · ${window.textoDeRespuestasAdmin(resumen)}${cifra}`;
+            }
+
+            // El globo dice lo que la cifra no puede: qué sacaron los que
+            // sí contestaron, que es de donde sale el promedio de la
+            // empresa al repartirlo sobre el padrón.
+            const globo = resumen && resumen.promedioContestadas !== null
+                ? `${resumen.promedioContestadas}% entre quienes la contestaron`
+                : estado.texto;
+
+            return `
+                <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
+                     title="${globo}"
+                     style="display:flex; align-items:center; gap:10px; padding:9px 8px 9px 30px; border-top:1px solid #f1f5f9; cursor:pointer;">
+                    ${window.iconoDeAsignada(estado)}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
+                        <div style="font-size:0.72rem; color:#94a3b8;">${window.sanitizeForHTML(ritmo)}${resultado}</div>
+                    </div>
+                </div>`;
+        }).join('');
+
+        // El renglón de la clasificación dice lo suyo sin abrirla: su
+        // icono es el de la encuesta que peor está —basta una para que la
+        // clasificación no esté al día—, y su pie, cuántas faltan y el
+        // promedio de lo ya calificado.
+        const pendientesGrupo = g.filas.filter(f => f.vencimiento.mostrar).length;
+        const estadoGrupo = g.filas[0].estado;   // ya vienen ordenadas por lo que urge
+        // Administrando se suman los puntajes y los padrones de sus
+        // encuestas, no se promedian sus promedios: una de cuarenta
+        // personas y otra de tres no pesan igual.
+        const totalGrupo = esAdmin ? window.totalDeEncuestasAdmin(g.filas) : null;
+        const promedioGrupo = esAdmin ? totalGrupo.promedio : promedioDe(g.filas);
+        const colorGrupo = (promedioGrupo !== null && typeof window.getColorScore === 'function')
+            ? window.getColorScore(promedioGrupo) : '#64748b';
+
+        const cuantas = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
+        const pie = [
+            esAdmin
+                ? window.textoDeRespuestasAdmin(totalGrupo)
+                : (pendientesGrupo > 0
+                    ? `${pendientesGrupo} pendiente${pendientesGrupo === 1 ? '' : 's'} de ${g.filas.length}`
+                    : `${cuantas} al día`),
+            promedioGrupo === null ? null
+                : `<span style="color:${colorGrupo}; font-weight:700;">${promedioGrupo}%</span>`
+        ].filter(Boolean).join(' · ');
+
+        // Un <details> y no una función colgada de `window`: abrir y cerrar
+        // lo hace el navegador solo, como en los plegables de las hojas y
+        // de estadísticas. Nace cerrado, que es de lo que se trata —lo que
+        // se ve son las clasificaciones—, y quien quiera ver las encuestas
+        // de una toca su renglón.
+        // El renglón abre la hoja de detalle de la clasificación —de ahí el
+        // `preventDefault`, que es lo que evita que el <details> se
+        // despliegue— y la flecha de la derecha, que sí lo despliega, es un
+        // botón suyo. Son dos acciones distintas sobre la misma fila.
+        return `
+            <details class="grupo-asignadas">
+                <summary onclick="event.preventDefault(); window.abrirDetalleClasificacion(${indice})">
+                    ${window.iconoDeAsignada(estadoGrupo)}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
+                        <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
+                    </div>
+                    <span style="color:#cbd5e1; font-size:1.3rem; line-height:1; flex-shrink:0;">&rsaquo;</span>
+                    <button type="button" class="grupo-asignadas-boton" aria-expanded="false"
+                            onclick="window.alternarGrupoAsignadas(this, event)"
+                            title="Ver sus encuestas" aria-label="Ver sus encuestas">
+                        <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                             stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                </summary>
+                ${renglones}
+            </details>`;
+    }).join('');
+
+    const promedio = esAdmin ? null : promedioDe(filas);
+    // Administrando, el renglón habla de la empresa y no de lo que le falta
+    // a quien mira. La participación va aquí también: el promedio se reparte
+    // sobre el padrón, así que un «0%» recién empezado el periodo tiene que
+    // salir al lado del «0/312 respuestas» que lo explica. El aviso del tope
+    // sólo sale cuando de verdad se alcanzó: un promedio sacado de una parte
+    // de las respuestas no se puede enseñar como si fueran todas.
+    const total = esAdmin ? window.totalDeEncuestasAdmin(filas) : null;
+    //
+    // Va sin la palabra «activas» —que es lo que son: las apagadas no se
+    // listan— porque con ella el renglón se parte en dos y deja el
+    // porcentaje solo en el segundo. Lo dice su globo, que ahí sí cabe.
+    const resumen = esAdmin
+        ? [
+            `${filas.length} encuesta${filas.length === 1 ? '' : 's'}`,
+            window.textoDeRespuestasAdmin(total),
+            total.promedio === null ? null : `${total.promedio}%`,
+            topeRespuestas ? 'sobre las respuestas más recientes' : null
+          ].filter(Boolean).join(' · ')
+        : [
+            pendientes === 0
+                ? `Ninguna pendiente de ${filas.length}`
+                : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${filas.length}`,
+            promedio === null ? null : `promedio ${promedio}%`
+          ].filter(Boolean).join(' · ');
+
+    return { resumen, bloques };
+};
+
+// Tocar un punto de la gráfica deja la tarjeta hablando de **aquel periodo**:
+// el renglón del resumen y los renglones de cada clasificación pasan a decir
+// cuánta gente había contestado entonces y cómo iba la empresa.
+//
+// **No consulta nada.** Las respuestas de los seis periodos ya vinieron en la
+// misma consulta —el `gte` de `respuestasDelPeriodoDeTodos` llega al más viejo
+// del eje—, así que elegir un periodo es volver a preguntarle a
+// `resumenDeEncuestaAdmin` con otra fecha. Y se le pasa **la `referencia` del
+// propio punto**, que es el instante con el que se dibujó: por eso la lista dice
+// exactamente la cifra que enseña el globo y no una parecida.
+//
+// Con `indice` fuera de rango —o sin periodos— se vuelve a hoy, que es lo que
+// hace el botón «Hoy» del renglón.
+window.verPeriodoDeLaTarjeta = (indice) => {
+    const puntos = window.periodosDeLaTarjeta || [];
+    const filas = window.filasDeLaTarjeta || [];
+    if (filas.length === 0) return;
+
+    const punto = puntos[indice];
+    // El último punto **es** el periodo que corre, así que elegirlo es volver a
+    // hoy: no hay dos maneras de estar al día.
+    const esHoy = !punto || indice === puntos.length - 1;
+    window.periodoElegidoTarjeta = esHoy ? null : indice;
+
+    const referencia = esHoy ? new Date() : punto.referencia;
+
+    // Se reescribe **sobre las mismas filas**, que son las que guarda
+    // `clasificacionesAsignadas`: así la hoja de detalle de una clasificación
+    // —que las lee al abrirse— habla del mismo periodo que la lista, en vez de
+    // contradecirla en cuanto se toca un renglón.
+    filas.forEach(f => {
+        f.resumen = window.resumenDeEncuestaAdmin(
+            f.ev, window.respuestasAsignadas, referencia, window.padronesDeLaTarjeta[f.ev.id]);
+        f.puntaje = f.resumen.promedio;
+    });
+
+    const { resumen, bloques } = window.cuerpoTarjetaEncuestas(filas, true, false);
+
+    const cajaResumen = document.getElementById('resumen-encuestas-tarjeta');
+    const cajaBloques = document.getElementById('bloques-encuestas-tarjeta');
+    if (cajaBloques) cajaBloques.innerHTML = bloques;
+    if (!cajaResumen) return;
+
+    // Mirando atrás, la tarjeta lo dice y ofrece la vuelta. Sin eso enseñaría
+    // las cifras de junio sin más, que es exactamente lo que no se puede hacer
+    // con un número que se lee y se cree.
+    //
+    // Va en **su propio renglón**, encima del resumen y no dentro: medido a
+    // 375px, «jun 2026 · 13 encuestas · 3350/3587 respuestas · 73%» con el botón
+    // detrás se parte en dos siempre —no sólo en el peor caso—, y un renglón que
+    // se parte deja el periodo y su cifra en líneas distintas. Aparte, además,
+    // se lee como lo que es: un aviso de que no se está mirando hoy.
+    cajaResumen.innerHTML = esHoy ? resumen : `
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
+            <span style="color:#2563eb; font-weight:700;">${window.sanitizeForHTML(punto.etiqueta || '')}</span>
+            <button type="button" onclick="window.verPeriodoDeLaTarjeta(null)"
+                    title="Volver al periodo que corre" aria-label="Volver al periodo que corre"
+                    style="padding:1px 8px; font-size:0.72rem; font-weight:700; color:#2563eb;
+                           background:#eff6ff; border:1px solid #bfdbfe; border-radius:999px; cursor:pointer;">Hoy</button>
+        </div>
+        <div>${resumen}</div>`;
+};
+
 window.cargarEncuestasAsignadas = async (userId) => {
     const cont = document.getElementById('container-encuestas-asignadas');
     if (!cont) return;
@@ -1215,170 +1453,9 @@ window.cargarEncuestasAsignadas = async (userId) => {
             };
         });
 
-        // El promedio de un puñado de filas. Sin nada calificado no hay
-        // promedio: un 0% ahí se leería como haberlo hecho mal en vez de no
-        // haber empezado.
-        const promedioDe = (unasFilas) => {
-            const puntajes = unasFilas.map(f => f.puntaje).filter(p => p !== null);
-            if (puntajes.length === 0) return null;
-            return Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length);
-        };
-
-        // Lo que falta, arriba; y lo vencido antes que lo que aún tiene plazo.
-        const peso = (f) => (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1));
-
-        const grupos = [];
-        const porClave = {};
-        filas.forEach(f => {
-            const clave = window.normalizarClasificacion(f.ev.category);
-            if (!porClave[clave]) {
-                porClave[clave] = { nombre: String(f.ev.category || 'General').trim() || 'General', filas: [] };
-                grupos.push(porClave[clave]);
-            }
-            porClave[clave].filas.push(f);
-        });
-
-        // Dentro del grupo manda lo que urge; entre grupos, el que peor está.
-        // Con el mismo estado, por nombre, para que la tarjeta no baile de una
-        // carga a otra.
-        grupos.forEach(g => g.filas.sort((a, b) => peso(a) - peso(b)));
-        grupos.sort((a, b) => (peso(a.filas[0]) - peso(b.filas[0]))
-            || a.nombre.localeCompare(b.nombre, 'es'));
-
-        const pendientes = filas.filter(f => f.vencimiento.mostrar).length;
-
-        // Lo que la hoja de detalle vuelve a leer al abrirse, sin recalcular
-        // nada ni volver a preguntarle a la base. Se pasa por índice y no por
-        // nombre: así no hay que escapar la clasificación en un atributo.
-        //
-        // Las respuestas van enteras y no sólo las del periodo que corre: la
-        // gráfica de la hoja recorre los periodos de atrás.
-        window.clasificacionesAsignadas = grupos;
         window.respuestasAsignadas = respuestas || [];
 
-        const bloques = grupos.map((g, indice) => {
-            const renglones = g.filas.map(({ ev, estado, puntaje, resumen }) => {
-                const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
-                const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
-                const color = (puntaje !== null && typeof window.getColorScore === 'function')
-                    ? window.getColorScore(puntaje) : '#64748b';
-                // El puntaje en las contestadas; en las que faltan, lo que
-                // falta —que ahí no hay puntaje que enseñar y el renglón
-                // quedaría con la frecuencia sola—.
-                let resultado = puntaje !== null
-                    ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
-                    : (estado.listo ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
-
-                // Administrando, delante del promedio va cuánta gente la
-                // contestó: el promedio se reparte sobre el padrón, así que sin
-                // esa cuenta no se sabe si un 49% es media plantilla al 100 o
-                // la plantilla entera a la mitad.
-                if (resumen) {
-                    const cifra = puntaje !== null
-                        ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
-                        : ' · sin calificar';
-                    resultado = ` · ${window.textoDeRespuestasAdmin(resumen)}${cifra}`;
-                }
-
-                // El globo dice lo que la cifra no puede: qué sacaron los que
-                // sí contestaron, que es de donde sale el promedio de la
-                // empresa al repartirlo sobre el padrón.
-                const globo = resumen && resumen.promedioContestadas !== null
-                    ? `${resumen.promedioContestadas}% entre quienes la contestaron`
-                    : estado.texto;
-
-                return `
-                    <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
-                         title="${globo}"
-                         style="display:flex; align-items:center; gap:10px; padding:9px 8px 9px 30px; border-top:1px solid #f1f5f9; cursor:pointer;">
-                        ${window.iconoDeAsignada(estado)}
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-weight:600; color:#1e293b; font-size:0.9rem; line-height:1.2; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${window.sanitizeForHTML(ev.title || 'Sin título')}</div>
-                            <div style="font-size:0.72rem; color:#94a3b8;">${window.sanitizeForHTML(ritmo)}${resultado}</div>
-                        </div>
-                    </div>`;
-            }).join('');
-
-            // El renglón de la clasificación dice lo suyo sin abrirla: su
-            // icono es el de la encuesta que peor está —basta una para que la
-            // clasificación no esté al día—, y su pie, cuántas faltan y el
-            // promedio de lo ya calificado.
-            const pendientesGrupo = g.filas.filter(f => f.vencimiento.mostrar).length;
-            const estadoGrupo = g.filas[0].estado;   // ya vienen ordenadas por lo que urge
-            // Administrando se suman los puntajes y los padrones de sus
-            // encuestas, no se promedian sus promedios: una de cuarenta
-            // personas y otra de tres no pesan igual.
-            const totalGrupo = esAdmin ? window.totalDeEncuestasAdmin(g.filas) : null;
-            const promedioGrupo = esAdmin ? totalGrupo.promedio : promedioDe(g.filas);
-            const colorGrupo = (promedioGrupo !== null && typeof window.getColorScore === 'function')
-                ? window.getColorScore(promedioGrupo) : '#64748b';
-
-            const cuantas = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
-            const pie = [
-                esAdmin
-                    ? window.textoDeRespuestasAdmin(totalGrupo)
-                    : (pendientesGrupo > 0
-                        ? `${pendientesGrupo} pendiente${pendientesGrupo === 1 ? '' : 's'} de ${g.filas.length}`
-                        : `${cuantas} al día`),
-                promedioGrupo === null ? null
-                    : `<span style="color:${colorGrupo}; font-weight:700;">${promedioGrupo}%</span>`
-            ].filter(Boolean).join(' · ');
-
-            // Un <details> y no una función colgada de `window`: abrir y cerrar
-            // lo hace el navegador solo, como en los plegables de las hojas y
-            // de estadísticas. Nace cerrado, que es de lo que se trata —lo que
-            // se ve son las clasificaciones—, y quien quiera ver las encuestas
-            // de una toca su renglón.
-            // El renglón abre la hoja de detalle de la clasificación —de ahí el
-            // `preventDefault`, que es lo que evita que el <details> se
-            // despliegue— y la flecha de la derecha, que sí lo despliega, es un
-            // botón suyo. Son dos acciones distintas sobre la misma fila.
-            return `
-                <details class="grupo-asignadas">
-                    <summary onclick="event.preventDefault(); window.abrirDetalleClasificacion(${indice})">
-                        ${window.iconoDeAsignada(estadoGrupo)}
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
-                            <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
-                        </div>
-                        <span style="color:#cbd5e1; font-size:1.3rem; line-height:1; flex-shrink:0;">&rsaquo;</span>
-                        <button type="button" class="grupo-asignadas-boton" aria-expanded="false"
-                                onclick="window.alternarGrupoAsignadas(this, event)"
-                                title="Ver sus encuestas" aria-label="Ver sus encuestas">
-                            <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
-                                 fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
-                                 stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-                        </button>
-                    </summary>
-                    ${renglones}
-                </details>`;
-        }).join('');
-
-        const promedio = esAdmin ? null : promedioDe(filas);
-        // Administrando, el renglón habla de la empresa y no de lo que le falta
-        // a quien mira. La participación va aquí también: el promedio se reparte
-        // sobre el padrón, así que un «0%» recién empezado el periodo tiene que
-        // salir al lado del «0/312 respuestas» que lo explica. El aviso del tope
-        // sólo sale cuando de verdad se alcanzó: un promedio sacado de una parte
-        // de las respuestas no se puede enseñar como si fueran todas.
-        const total = esAdmin ? window.totalDeEncuestasAdmin(filas) : null;
-        //
-        // Va sin la palabra «activas» —que es lo que son: las apagadas no se
-        // listan— porque con ella el renglón se parte en dos y deja el
-        // porcentaje solo en el segundo. Lo dice su globo, que ahí sí cabe.
-        const resumen = esAdmin
-            ? [
-                `${filas.length} encuesta${filas.length === 1 ? '' : 's'}`,
-                window.textoDeRespuestasAdmin(total),
-                total.promedio === null ? null : `${total.promedio}%`,
-                topeRespuestas ? 'sobre las respuestas más recientes' : null
-              ].filter(Boolean).join(' · ')
-            : [
-                pendientes === 0
-                    ? `Ninguna pendiente de ${filas.length}`
-                    : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${filas.length}`,
-                promedio === null ? null : `promedio ${promedio}%`
-              ].filter(Boolean).join(' · ');
+        const { resumen, bloques } = window.cuerpoTarjetaEncuestas(filas, esAdmin, topeRespuestas);
 
         // Cómo va la empresa periodo a periodo, debajo del resumen: el renglón
         // dice dónde estamos y la línea, si vamos a mejor. Es la misma
@@ -1394,19 +1471,42 @@ window.cargarEncuestasAsignadas = async (userId) => {
         //
         // Con menos de dos periodos con resultado devuelve '' y no se dibuja
         // nada, que una línea de un punto no es una tendencia.
-        const graficaHtml = (esAdmin && !topeRespuestas)
-            ? window.graficaDeLinea(window.historialDeRevision({ filas }, respuestas,
-                { sobrePadron: true, frecuencia: window.RITMO_GRAFICA_EMPRESA }))
-            : '';
+        //
+        // **Y cada punto se puede tocar para ver aquel periodo** en la lista de
+        // abajo: lo que se dibuja ya lo sabe todo, así que elegirlo no consulta
+        // nada —las respuestas de los seis periodos vinieron en la misma
+        // consulta—. De eso va `verPeriodoDeLaTarjeta`, y por eso los puntos, la
+        // gráfica y las filas se quedan a mano.
+        window.filasDeLaTarjeta = filas;
+        window.periodosDeLaTarjeta = (esAdmin && !topeRespuestas)
+            ? window.historialDeRevision({ filas }, respuestas,
+                { sobrePadron: true, frecuencia: window.RITMO_GRAFICA_EMPRESA })
+            : [];
+        window.periodoElegidoTarjeta = null;
+        // `padronDeLaEncuesta` recorre la plantilla entera: se pregunta una vez
+        // por encuesta y no una vez por encuesta y toque.
+        window.padronesDeLaTarjeta = {};
+        if (esAdmin) filas.forEach(f => {
+            window.padronesDeLaTarjeta[f.ev.id] = window.padronDeLaEncuesta(f.ev);
+        });
+
+        const graficaHtml = window.graficaDeLinea(
+            window.periodosDeLaTarjeta, 'window.verPeriodoDeLaTarjeta');
 
         // Sin título: lo que la tarjeta es se ve —las clasificaciones— y el
         // renglón del resumen dice más en el mismo sitio.
+        //
+        // El resumen y los bloques van en su propio contenedor porque son lo
+        // único que se repinta al elegir un periodo: la gráfica se queda como
+        // está —es la misma para todos— y redibujarla borraría la marca del
+        // punto que se acaba de tocar.
         cont.innerHTML = `
             <div style="background:white; border-radius:16px; padding:15px 15px 5px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
-                <div style="font-size:0.8rem; color:#475569; font-weight:600; margin-bottom:4px;"
+                <div id="resumen-encuestas-tarjeta"
+                     style="font-size:0.8rem; color:#475569; font-weight:600; margin-bottom:4px;"
                      title="${esAdmin ? 'Las encuestas activas de la empresa. El promedio se reparte entre toda la gente a la que le toca: quien no contestó cuenta como 0.' : ''}">${resumen}</div>
                 ${graficaHtml}
-                ${bloques}
+                <div id="bloques-encuestas-tarjeta">${bloques}</div>
             </div>`;
         cont.style.display = 'block';
     } catch (e) {
@@ -1504,7 +1604,13 @@ window.historialDeClasificacion = (grupo, cuantos, respuestas) => {
 // misma trampa del radar del panel plegado. Un SVG con `viewBox` no mide nada
 // —se estira con su contenedor— así que tampoco hay que redibujarlo al girar el
 // teléfono.
-window.graficaDeLinea = (puntos) => {
+//
+// `alElegir` es el nombre de la función a la que se le pasa el índice del punto
+// tocado. Sin él, tocar un punto sólo abre su globo, que es lo que hacen las
+// gráficas de una clasificación; con él, además elige ese periodo —la tarjeta
+// del panel, que pasa a hablar de aquel mes—. Es un identificador escrito aquí
+// dentro y no texto de nadie: no hay nada que escapar.
+window.graficaDeLinea = (puntos, alElegir) => {
     const conDato = puntos.filter(p => p.promedio !== null);
     if (conDato.length < 2) return '';
 
@@ -1534,7 +1640,10 @@ window.graficaDeLinea = (puntos) => {
     const dots = puntos.map((p, i) => {
         if (p.promedio === null) return '';
         const color = typeof window.getColorScore === 'function' ? window.getColorScore(p.promedio) : '#2563eb';
-        return `<g data-punto="${i}" style="cursor:pointer;" onclick="window.marcarPuntoGrafica(this)">
+        const alTocar = alElegir
+            ? `window.marcarPuntoGrafica(this, true); ${alElegir}(${i})`
+            : 'window.marcarPuntoGrafica(this)';
+        return `<g data-punto="${i}" style="cursor:pointer;" onclick="${alTocar}">
                     <title>${window.sanitizeForHTML(p.etiqueta)} · ${p.promedio}%</title>
                     <circle cx="${x(i).toFixed(1)}" cy="${y(p.promedio).toFixed(1)}" r="14" fill="transparent"/>
                     <circle cx="${x(i).toFixed(1)}" cy="${y(p.promedio).toFixed(1)}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/>
@@ -1588,13 +1697,19 @@ window.graficaDeLinea = (puntos) => {
 // Se esconde con `style.display` y no con el atributo `hidden`: ese atributo lo
 // entiende la hoja de estilos del navegador para el marcado HTML, y esto es un
 // SVG.
-window.marcarPuntoGrafica = (nodo) => {
+//
+// Con `siempre` no alterna: lo deja abierto. Es lo que hace falta cuando el
+// toque además **elige** ese periodo —en la tarjeta del panel—, porque ahí el
+// globo no es un detalle que se abre y se cierra sino la marca de qué se está
+// mirando, y cerrarlo dejando la lista en aquel periodo sería peor que no
+// marcarlo.
+window.marcarPuntoGrafica = (nodo, siempre) => {
     const svg = nodo.ownerSVGElement;
     if (!svg) return;
     const globo = svg.querySelector(`[data-globo="${nodo.getAttribute('data-punto')}"]`);
     const abierto = !!globo && globo.style.display !== 'none';
     svg.querySelectorAll('[data-globo]').forEach(g => { g.style.display = 'none'; });
-    if (globo && !abierto) globo.style.display = '';
+    if (globo && (siempre || !abierto)) globo.style.display = '';
 };
 
 // ==========================================
@@ -1812,7 +1927,16 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
         ? window.historialDeRevision(grupo, respuestas || window.respuestasAsignadas || [], { sobrePadron: true })
         : window.historialDeClasificacion(grupo, null, respuestas);
     const conDato = historial.filter(p => p.promedio !== null);
-    const ultimo = conDato.length > 0 ? conDato[conDato.length - 1] : null;
+    // Con un periodo elegido en la gráfica de la tarjeta, la hoja habla de ése y
+    // no del último: sus renglones ya lo hacen —`verPeriodoDeLaTarjeta` les
+    // reescribe el puntaje— y un titular de septiembre encima de unas filas de
+    // junio es peor que no tener titular. El eje de la gráfica sigue enseñando
+    // los seis, que es lo que es.
+    const elegido = window.periodoElegidoTarjeta;
+    const delElegido = (elegido === null || elegido === undefined) ? null
+        : conDato.find(punto => historial.indexOf(punto) === elegido);
+    const ultimo = delElegido
+        || (conDato.length > 0 ? conDato[conDato.length - 1] : null);
 
     const colorUltimo = (ultimo && typeof window.getColorScore === 'function')
         ? window.getColorScore(ultimo.promedio) : '#94a3b8';
@@ -2075,6 +2199,10 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
             corta: rotulos.corta,
             minima: rotulos.minima,
             actual: !!p.actual,
+            // El instante con el que se calculó este punto. Es lo que hace que
+            // volver a preguntar por él —al tocarlo en la gráfica— dé
+            // exactamente la misma cifra que se está viendo dibujada.
+            referencia,
             calificadas: sobrePadron ? calificadas : puntajes.length,
             // Sin `sobrePadron` son respuestas entregadas; con él, gente que
             // contestó, que es lo que cuenta `resumenDeEncuestaAdmin`.
