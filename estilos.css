@@ -1120,73 +1120,45 @@ textarea:focus {
     cursor: grabbing;
 }
 
-/* Los dos botones del zoom, en la esquina de enfrente de la cruz. Son lo único
-   que se ve de todo esto: el pellizco, el doble toque y ctrl con la rueda no se
-   anuncian solos, y en un escritorio sin trackpad no hay otra manera. Apartados
-   del indicador de inicio del iPhone. */
-.visor-zoom {
-    position: absolute;
-    right: 25px;
-    bottom: max(25px, env(safe-area-inset-bottom));
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    z-index: 3010;
-}
+/* El de cerrar es **el mismo botón flotante que lleva la portada de una hoja**
+   —disco oscuro translúcido, desenfoque detrás y la cruz en blanco—, que es
+   como iOS pone un control encima de una imagen: aquí debajo puede haber una
+   diapositiva clara, el gris del fondo o una foto oscura, y el círculo blanco
+   con borde gris que llevaba desaparecía sobre la primera. Era de una versión
+   anterior a que la aplicación tuviera este lenguaje.
 
-.visor-zoom-boton {
-    width: 38px;
-    height: 38px;
-    border-radius: 50%;
-    background: white;
-    border: 1px solid #94a3b8;
-    color: #475569;
-    font-size: 1.3rem;
-    font-weight: 700;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
-    transition: transform 0.2s;
-}
+   La cruz la dibuja `.ios-boton-cerrar` con pseudoelementos, así que el botón
+   va vacío; lo que hace lo cuentan su `title` y su `aria-label`. El tamaño y
+   el redondeo salen de `.ios-boton-icono`, que es de donde salen los de toda
+   la aplicación.
 
-.visor-zoom-boton:hover {
-    transform: scale(1.1);
-    background: #f8fafc;
-    color: #1e293b;
-}
-
+   Y se aparta de la esquina como en iOS: 12px del borde, más la safe area de
+   arriba —en Safari, sin la app instalada, ahí está el reloj—. */
 #txt-cerrar {
     position: absolute;
-    top: max(25px, env(safe-area-inset-top));
-    right: 25px;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: white !important;
-    border: 1px solid #94a3b8 !important;
-    color: #64748b !important;
-    font-size: 1.1rem;
-    font-weight: bold;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    cursor: pointer;
+    top: calc(12px + env(safe-area-inset-top));
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    background: rgba(15, 23, 42, 0.5);
+    color: white;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
     z-index: 3010;
-    transition: transform 0.2s;
+    transition: transform 0.15s, background 0.15s;
     bottom: auto;
     left: auto;
     margin-top: 0;
 }
 
 #txt-cerrar:hover {
-    transform: scale(1.1);
-    background: #f8fafc !important;
-    color: #1e293b !important;
+    background: rgba(15, 23, 42, 0.65);
+}
+
+/* Al toque se encoge, como los botones de iOS, y no crece: crecer debajo del
+   dedo no se ve. */
+#txt-cerrar:active {
+    transform: scale(0.92);
 }
 
 /* =========================================

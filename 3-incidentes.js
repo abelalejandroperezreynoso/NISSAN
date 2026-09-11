@@ -817,8 +817,12 @@ window.abrirVisorImagen = (url) => window.abrirVisorImagenes([url]);
 //   - **Con dos dedos**, que es el gesto que espera el dedo en iOS.
 //   - **Doble toque**, que amplía de golpe donde se tocó y vuelve al tamaño.
 //   - **En un escritorio**, ctrl (o ⌘) con la rueda —que es también el pellizco
-//     del trackpad—, doble click, arrastrar para moverse y los dos botones de
-//     la esquina, que son lo único de todo esto que se ve.
+//     del trackpad—, doble click y arrastrar para moverse.
+//
+// Y sin ningún botón: hubo dos, de más y de menos, en la esquina de enfrente de
+// la cruz, y encima de un documento son dos discos flotando sobre lo que se
+// está leyendo para decir lo que los dedos ya saben hacer. El doble toque —y el
+// doble click— llega a todo lo que llegaban ellos, incluido volver al tamaño.
 //
 // La rueda a secas se queda para pasar de página, que es de lo que vive un
 // documento de veinte; con el zoom puesto pasa a mover la imagen, que ahí ya no
@@ -923,13 +927,6 @@ window.ponerZoomVisor = (escala, punto, conTransicion) => {
     z.escala = nueva;
     window.acotarZoomVisor();
     window.aplicarZoomVisor(conTransicion);
-};
-
-// Los dos botones de la esquina, que es lo único del zoom que se ve. Amplían
-// sobre el centro de la pantalla, que es lo que se está mirando.
-window.ampliarVisor = (factor) => {
-    const z = window.zoomVisor;
-    window.ponerZoomVisor((z.escala || 1) * factor, null, true);
 };
 
 // El doble toque: amplía donde se tocó, y si ya estaba ampliada la devuelve a

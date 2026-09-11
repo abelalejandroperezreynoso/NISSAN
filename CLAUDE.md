@@ -579,7 +579,6 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.zoomVisor                 // { img, escala, x, y }: la página ampliada y por dónde va
   window.ponerZoomVisor(escala, punto, conTransicion)
   window.alternarZoomVisor(punto)  // el doble toque y el doble click
-  window.ampliarVisor(factor)      // los dos botones de la esquina
   window.acotarZoomVisor()  window.aplicarZoomVisor(conTransicion)
   window.reiniciarZoomVisor()      // al abrir y al cerrar
   window.imagenActualDelVisor()    // la del contenedor más cerca del centro
@@ -587,11 +586,23 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   Se amplía con **dos dedos**, con **doble toque** —que amplía donde se tocó y
   vuelve al tamaño—, y en un escritorio con **ctrl (o ⌘) y la rueda** —que es
-  también el pellizco del trackpad—, **doble click**, **arrastrando** y con los
-  **dos botones de la esquina**, que son lo único de todo esto que se ve: los
-  gestos no se anuncian solos y en un escritorio sin trackpad no hay otra
-  manera. La rueda a secas se queda para pasar de página, que es de lo que vive
-  un documento de veinte.
+  también el pellizco del trackpad—, **doble click** y **arrastrando**. La
+  rueda a secas se queda para pasar de página, que es de lo que vive un
+  documento de veinte.
+
+  **Y sin ningún botón.** Hubo dos, de más y de menos, en la esquina de enfrente
+  de la cruz, y encima de un documento son dos discos flotando sobre lo que se
+  está leyendo para decir lo que los dedos ya saben hacer. El doble toque —y el
+  doble click, que un ratón sin rueda de pellizco también tiene— llega a todo lo
+  que llegaban ellos, incluido volver al tamaño.
+
+  **El de cerrar es el mismo botón flotante que lleva la portada de una hoja**:
+  disco oscuro translúcido con desenfoque y la cruz en blanco, apartado 12px de
+  la esquina más la safe area. Debajo puede haber una diapositiva clara, el gris
+  del fondo o una foto oscura, y el círculo blanco con borde gris que llevaba
+  —de antes de que la aplicación tuviera este lenguaje— desaparecía sobre la
+  primera. Va vacío, que la cruz la dibuja `.ios-boton-cerrar`, y lo que hace lo
+  cuentan su `title` y su `aria-label`.
 
   Seis cosas que hay que mantener:
 
