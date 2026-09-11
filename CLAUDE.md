@@ -1342,6 +1342,91 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   respuesta de cualquier otra. **Esta pregunta es la que sustituyó a la foto
   del área** de las encuestas `evaluates_area`, que era un recuadro aparte y
   obligatorio: ver más abajo.
+- **La firma es un tipo de pregunta más, y no puntúa.** Recoge **la firma de
+  quien contesta** trazada con el dedo, que es el mismo gesto con el que se firma
+  de enterado una difusión de incidentes desde siempre; lo que cambia es que
+  aquí va dentro de una encuesta, así que se ordena, se edita y se borra como
+  cualquier otra pregunta. El enunciado dice de qué se deja constancia
+  —«Recibí la capacitación y entendí las reglas»— y debajo sale el renglón donde
+  se firma.
+
+  ```js
+  window.TIPO_PREGUNTA_FIRMA        // 'signature'
+  window.esPreguntaDeFirma(pregunta)
+  window.ANCHO_LIENZO_FIRMA  window.ALTO_LIENZO_FIRMA  window.MAX_BYTES_FIRMA
+  window.TEXTO_PEDIR_FIRMA          // «Escribe tu primer nombre con el dedo»
+
+  window.trazosDeFirma              // { idPregunta: true } mientras la hoja está abierta
+  window.montarFirmasDePreguntas()  // engancha los lienzos ya insertados
+  window.marcarFirmaHecha(qid)  window.limpiarFirmaPregunta(qid)
+  ```
+
+  **No es la firma oficial de nadie: lo que se pide es el primer nombre.** Una
+  rúbrica hecha con el dedo sobre un cristal no se parece a la del documento de
+  identidad y no vale como tal; un nombre escrito a mano sí se lee y se
+  reconoce, que es todo lo que hace falta para dejar constancia de quién estuvo.
+  Lo dice el propio recuadro al firmar y lo repite la hoja de edición, y el
+  texto vive en un solo sitio (`TEXTO_PEDIR_FIRMA`).
+
+  **Y no cuenta para la calificación**, que es la mitad de cada una de las otras
+  dos preguntas que tampoco se contestan escribiendo:
+
+  - **No se le escribe nota** —no entra en `grades_json`—, así que
+    `calcularScoreRespuesta`, que promedia lo que hay ahí dentro, ni la ve. Es
+    lo que ya hacía la evidencia fotográfica en modo jefe.
+  - **Pero cuenta como resuelta** (`autoGradedCount++`), o dejaría un pendiente
+    de revisión donde no hay nada que decidir. Es lo que hace la asistencia,
+    sólo que aquélla sí se pone un «correcto» porque si no una encuesta que sólo
+    pasa lista se quedaría sin puntaje que certificar.
+
+  Por eso **sí entra en `TIPOS_EN_MODO_JEFE`**: esa encuesta se guarda ya
+  calificada y sólo admite lo que se puntúa solo o no puntúa nada.
+
+  Una encuesta hecha **sólo de firmas** se guarda entonces `'Revisado'` con
+  `grades_json` vacío, que es el caso que ya existía con las evidencias en modo
+  jefe: `puntajeDeRespuesta` lo tapa con `tieneCalificaciones` —y desde ahora
+  también la cifra del encabezado de la hoja de una encuesta, que enseñaba un
+  0% donde no había nada calificado—, y el plazo de reintento lo tapa donde
+  siempre.
+
+  Seis cosas que hay que mantener:
+
+  - **La firma se sube al enviar, no al trazarla**, y por el mismo camino que la
+    evidencia: se comprime con `comprimirDibujo` —el único motor de compresión
+    de la aplicación, que además pone el blanco debajo porque el lienzo va
+    transparente y en JPEG eso sale negro— y se sube con `subirFotoEvaluacion`
+    al bucket `fotos-evaluaciones`. **No hay ningún script nuevo que correr**:
+    es una imagen más, y pesa menos de 3 KB. Se sube **después** de validar
+    toda la encuesta, o cada arrepentimiento dejaría un archivo huérfano.
+  - **El lienzo mide siempre 600×240 por dentro y la hoja de estilos lo
+    estira.** Así lo dibujado no depende del ancho de la pantalla ni se pierde
+    al girar el teléfono, y las coordenadas del dedo se llevan a esas unidades
+    con una regla de tres contra el recuadro medido: sin ella la firma sale
+    desplazada en cuanto la pantalla no mide 600px.
+  - **`touch-action: none` y `preventDefault` van juntos.** Sin ellos el dedo
+    desplaza la hoja en lugar de dibujar y el trazo no llega a empezar; los
+    oyentes de toque son no pasivos por lo mismo que el gesto de las hojas.
+  - **Si hay trazo lo dice `trazosDeFirma`, no el dibujo.** El lienzo tiene
+    píxeles igual cuando está vacío, así que no se le puede preguntar. De ahí
+    sale «falta contestar» al enviar: una encuesta se entrega entera, y una
+    firma sin trazar es una pregunta sin contestar.
+  - **Los lienzos se enganchan después de insertar las tarjetas**
+    (`montarFirmasDePreguntas`, al final del dibujo de las preguntas): el
+    marcado entra de una vez con `insertAdjacentHTML` y un `onclick` no sirve
+    para dibujar. El «soltar» del ratón es **uno solo para toda la aplicación**,
+    o cada encuesta que se abriera dejaría los suyos muertos detrás.
+  - **Al calificar se mira y ya**: la insignia dice **FIRMADA** o **SIN
+    FIRMAR** —«PENDIENTE» diría que alguien tiene que hacer algo con ella— y no
+    lleva los botones de correcto e incorrecto que sí tiene la evidencia. Ni en
+    modo administrador se ofrece un campo para editarla: lo que se corregiría es
+    quién firmó, y eso se arregla borrando la respuesta.
+
+  Es un tipo nuevo, así que **cae de lleno en la trampa del teléfono con el
+  JavaScript viejo** (la primera de esta lista): ese código no conoce
+  `signature`, no entra en ninguna rama del `if` que dibuja los controles y
+  enseña el enunciado con nada debajo. Por eso la versión se sube en el mismo
+  cambio.
+
 - **El registro de asistencia no se contesta: se confirma.** Es para pasar
   lista de una junta o una capacitación. La encuesta se dirige a quien tenía
   que ir, el enunciado dice a qué —«Capacitación de seguridad del 4 de

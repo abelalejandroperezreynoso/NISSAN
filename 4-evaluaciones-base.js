@@ -1241,6 +1241,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
 
     let areaBadgeHtml = '';
     window.fotosPreguntaListas = {};
+    window.trazosDeFirma = {};
     if (evaluatesArea && vistaPrevia) {
         // La misma fila, sin el desplegable: elegir aquí escribiría el área de
         // quien esté mirando, y una previa no cambia nada de nadie. Lo que se
@@ -1444,6 +1445,27 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                     </div>
                 </div>`;
         }
+        else if (window.esPreguntaDeFirma(q)) {
+            // El enunciado dice de qué se deja constancia; aquí va el renglón
+            // donde se firma. **Lo que se pide es el primer nombre**, no la
+            // rúbrica de nadie: una firma hecha con el dedo no vale como la del
+            // documento de identidad y un nombre escrito a mano sí se lee.
+            //
+            // El lienzo va a medida fija y la hoja de estilos lo estira: así lo
+            // dibujado no depende del ancho de la pantalla ni se pierde al girar
+            // el teléfono. Los oyentes los engancha `montarFirmasDePreguntas`
+            // cuando las tarjetas ya están en el documento.
+            inputHtml = `
+                <div class="firma-pregunta" id="firma-pregunta-${q.id}">
+                    <canvas class="firma-lienzo" id="firma-lienzo-${q.id}" data-id="${q.id}"
+                            width="${window.ANCHO_LIENZO_FIRMA}" height="${window.ALTO_LIENZO_FIRMA}"
+                            aria-label="Recuadro para firmar"></canvas>
+                    <div class="firma-pie">
+                        <span class="firma-ayuda" id="firma-ayuda-${q.id}">${window.TEXTO_PEDIR_FIRMA}</span>
+                        <button type="button" class="firma-borrar" onclick="window.limpiarFirmaPregunta('${q.id}')">Borrar</button>
+                    </div>
+                </div>`;
+        }
         else if (window.esPreguntaDeAsistencia(q)) {
             // No hay nada que contestar: el enunciado dice a qué se asistió y
             // esto sólo lo confirma. Va como una casilla grande y no como un
@@ -1531,6 +1553,129 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
 
         container.insertAdjacentHTML('beforeend', `<div id="pregunta-card-${q.id}" class="pregunta-card" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${q.question_text}</label>${guiaHtml}${inputHtml}${comentarioHtml}</div>`);
     });
+
+    // Los lienzos de firma se enganchan cuando ya están en el documento: el
+    // marcado se inserta de una vez con `insertAdjacentHTML` y un `onclick` no
+    // sirve para dibujar.
+    window.montarFirmasDePreguntas();
+};
+
+// ==========================================
+// FIRMAR CON EL DEDO
+// ==========================================
+// Es el mismo gesto que la firma de enterado de una difusión, sólo que aquí hay
+// un lienzo por pregunta y no uno solo en su hoja. Lo trazado espera en el
+// propio `<canvas>` hasta el envío, que es donde se comprime y se sube: hacerlo
+// a cada trazo sería comprimir diez veces la misma firma.
+//
+// `trazosDeFirma` dice si hay algo dibujado, y hace falta aparte: el lienzo
+// tiene píxeles blancos igual cuando está vacío, así que no se puede preguntar
+// al dibujo.
+window.trazosDeFirma = {};
+
+window.montarFirmasDePreguntas = () => {
+    document.querySelectorAll('.firma-lienzo').forEach(lienzo => {
+        if (lienzo.dataset.montado === '1') return;
+        lienzo.dataset.montado = '1';
+        window.montarFirmaPregunta(lienzo);
+    });
+};
+
+window.montarFirmaPregunta = (lienzo) => {
+    const ctx = lienzo.getContext('2d');
+    if (!ctx) return;
+    const qid = lienzo.dataset.id;
+
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#1e293b';
+
+    // El estado va en el propio lienzo y no en una variable de aquí dentro
+    // porque el «soltar» del ratón es uno solo para toda la aplicación: sin eso
+    // haría falta un oyente de `window` por pregunta y cada encuesta que se
+    // abriera dejaría los suyos muertos detrás.
+    lienzo.__dibujando = false;
+
+    // El dedo se mide contra el recuadro que se ve y se lleva a las unidades
+    // del lienzo, que son fijas: sin esta regla de tres la firma saldría
+    // desplazada en cuanto la pantalla no midiera 600px.
+    const punto = (e) => {
+        const caja = lienzo.getBoundingClientRect();
+        const t = e.touches && e.touches[0];
+        const cx = t ? t.clientX : e.clientX;
+        const cy = t ? t.clientY : e.clientY;
+        return {
+            x: (cx - caja.left) * (lienzo.width / caja.width),
+            y: (cy - caja.top) * (lienzo.height / caja.height)
+        };
+    };
+
+    const empezar = (e) => {
+        // Sin esto el dedo arrastra la hoja en lugar de dibujar. Es la misma
+        // razón por la que el gesto de las hojas va con eventos de toque y no
+        // de puntero, y por la que el lienzo lleva `touch-action: none`.
+        e.preventDefault();
+        lienzo.__dibujando = true;
+        const p = punto(e);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        // Un toque seco sin arrastre también deja marca: sin esto, firmar un
+        // punto sobre la «i» no dibuja nada.
+        ctx.lineTo(p.x + 0.1, p.y);
+        ctx.stroke();
+        window.marcarFirmaHecha(qid);
+    };
+
+    const seguir = (e) => {
+        if (!lienzo.__dibujando) return;
+        e.preventDefault();
+        const p = punto(e);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+    };
+
+    const soltar = () => { lienzo.__dibujando = false; };
+
+    lienzo.addEventListener('touchstart', empezar, { passive: false });
+    lienzo.addEventListener('touchmove', seguir, { passive: false });
+    lienzo.addEventListener('touchend', soltar);
+    lienzo.addEventListener('touchcancel', soltar);
+    lienzo.addEventListener('mousedown', empezar);
+    lienzo.addEventListener('mousemove', seguir);
+
+    // Soltar el ratón fuera del lienzo también acaba el trazo. Una sola vez y
+    // para todos: los eventos de ratón están para poder probarlo en un
+    // escritorio, que en un teléfono el gesto es el de toque.
+    if (!window.soltarFirmasEnganchado) {
+        window.soltarFirmasEnganchado = true;
+        window.addEventListener('mouseup', () => {
+            document.querySelectorAll('.firma-lienzo').forEach(c => { c.__dibujando = false; });
+        });
+    }
+};
+
+// Firmada: el recuadro deja de pedirlo y se pinta como resuelto. El aviso de
+// qué escribir se queda hasta que hay trazo, que es cuando ya no hace falta.
+window.marcarFirmaHecha = (qid) => {
+    window.trazosDeFirma[qid] = true;
+    const caja = document.getElementById(`firma-pregunta-${qid}`);
+    if (caja) caja.classList.add('esta-firmada');
+    const ayuda = document.getElementById(`firma-ayuda-${qid}`);
+    if (ayuda) ayuda.innerText = 'Firmado';
+};
+
+window.limpiarFirmaPregunta = (qid) => {
+    const lienzo = document.getElementById(`firma-lienzo-${qid}`);
+    if (lienzo) {
+        const ctx = lienzo.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, lienzo.width, lienzo.height);
+    }
+    delete window.trazosDeFirma[qid];
+    const caja = document.getElementById(`firma-pregunta-${qid}`);
+    if (caja) caja.classList.remove('esta-firmada');
+    const ayuda = document.getElementById(`firma-ayuda-${qid}`);
+    if (ayuda) ayuda.innerText = window.TEXTO_PEDIR_FIRMA;
 };
 
 // La foto se encoge en cuanto se elige, no al enviar: así se ve el tamaño real
@@ -1676,6 +1821,7 @@ window.enviarRespuestasEval = async () => {
         const faltanMotivos = [];
         const faltanRespuestas = [];
         const evidenciasPorSubir = [];
+        const firmasPorSubir = [];
         const fueraDePlazo = [];
 
         window.preguntasCacheActual.forEach((q, indice) => {
@@ -1705,6 +1851,15 @@ window.enviarRespuestasEval = async () => {
                     val = '';
                     evidenciasPorSubir.push({ id: q.id, blob: window.fotosPreguntaListas[q.id] });
                 }
+            } else if (window.esPreguntaDeFirma(q)) {
+                // Como la evidencia: todavía no hay URL, que el lienzo se
+                // comprime y se sube más abajo, cuando ya se sabe que la
+                // encuesta está completa. Aquí sólo cuenta como firmada.
+                const lienzo = document.getElementById(`firma-lienzo-${q.id}`);
+                if (lienzo && window.trazosDeFirma[q.id]) {
+                    val = '';
+                    firmasPorSubir.push({ id: q.id, lienzo });
+                }
             } else if (window.esPreguntaDeAsistencia(q)) {
                 const el = document.querySelector(`.resp-asistencia[data-id="${q.id}"]`);
                 // Se comprueba también aquí y no sólo al dibujar: la hoja pudo
@@ -1718,9 +1873,13 @@ window.enviarRespuestasEval = async () => {
             
             answersMap[q.id] = val;
 
+            // La evidencia y la firma no se miran en `val` —que va vacío hasta
+            // que se suben— sino en lo que espera para subirse.
             const contestada = window.esPreguntaDeFoto(q)
                 ? !!window.fotosPreguntaListas[q.id]
-                : (val !== null && val !== "" && !(Array.isArray(val) && val.length === 0));
+                : (window.esPreguntaDeFirma(q)
+                    ? !!window.trazosDeFirma[q.id]
+                    : (val !== null && val !== "" && !(Array.isArray(val) && val.length === 0)));
 
             // Una encuesta a medias no dice nada: se contestan todas.
             if (!contestada) faltanRespuestas.push({ numero: indice + 1, texto: q.question_text || '', id: q.id });
@@ -1780,6 +1939,14 @@ window.enviarRespuestasEval = async () => {
                         question: q.question_text || '',
                         auto: true
                     };
+                    autoGradedCount++;
+                } else if (window.esPreguntaDeFirma(q)) {
+                    // Una firma es constancia, no examen: **no se le escribe
+                    // calificación** —así `calcularScoreRespuesta`, que promedia
+                    // lo que hay en `grades_json`, ni la ve— pero sí cuenta como
+                    // resuelta, o dejaría un pendiente de revisión donde no hay
+                    // nada que decidir. Es la mitad de cada cosa: lo de la
+                    // evidencia en modo jefe y lo de la asistencia.
                     autoGradedCount++;
                 } else if (window.seCalificaSola(q)) {
                     // La pregunta dice cuáles son sus opciones correctas, así
@@ -1880,6 +2047,22 @@ window.enviarRespuestasEval = async () => {
             const { id, blob } = evidenciasPorSubir[i];
             if (btn) btn.innerText = `Subiendo evidencia ${i + 1} de ${evidenciasPorSubir.length}…`;
             answersMap[id] = await window.subirFotoEvaluacion(blob, `preg-${id}-${targetEmployeeId}`);
+        }
+
+        // Y las firmas, por el mismo sitio: son una imagen más y van al bucket
+        // de las fotos de evaluación, así que no hay ningún script nuevo que
+        // correr. Se comprimen aquí y no al trazarlas —comprimir a cada trazo
+        // sería comprimir diez veces la misma firma— con el mismo motor que
+        // todo lo demás de la aplicación (`comprimirDibujo`, que además pone el
+        // blanco debajo: el lienzo va transparente y en JPEG eso sale negro).
+        for (let i = 0; i < firmasPorSubir.length; i++) {
+            const { id, lienzo } = firmasPorSubir[i];
+            if (btn) btn.innerText = `Subiendo firma ${i + 1} de ${firmasPorSubir.length}…`;
+            const blob = await window.comprimirDibujo(lienzo, {
+                maxLado: window.ANCHO_LIENZO_FIRMA,
+                maxBytes: window.MAX_BYTES_FIRMA
+            });
+            answersMap[id] = await window.subirFotoEvaluacion(blob, `firma-${id}-${targetEmployeeId}`);
         }
 
         // Mandamos EL TEXTO a employee_area para conservar el registro histórico en esa tabla

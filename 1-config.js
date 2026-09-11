@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-11-28';
+window.VERSION_APP = '2026-09-11-29';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -453,6 +453,39 @@ window.TIPO_PREGUNTA_FOTO = 'photo';
 window.esPreguntaDeFoto = (pregunta) =>
     !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_FOTO;
 
+// ==========================================
+// LA FIRMA DE QUIEN CONTESTA
+// ==========================================
+// Una pregunta de firma no pregunta nada: recoge **la firma de quien contesta**
+// trazada con el dedo, que es como se firma de enterado una difusión de
+// incidentes desde que existe la aplicación. Sirve para lo mismo que allí —dejar
+// constancia de que esa persona estuvo y lo dio por recibido— pero dentro de una
+// encuesta, así que se ordena, se edita y se borra como cualquier otra pregunta.
+//
+// **No es la firma oficial de nadie**: lo que se pide es que escriban su primer
+// nombre. Una rúbrica hecha con el dedo en un cristal no se parece a la del
+// documento de identidad y no vale como tal; un nombre escrito a mano sí se lee
+// y se reconoce, que es todo lo que hace falta aquí. Lo dice el propio recuadro
+// al firmar, y por eso el texto vive en un solo sitio.
+//
+// **Y no puntúa.** No se acierta ni se falla una firma, así que no entra en
+// `grades_json` —de modo que `calcularScoreRespuesta` la ignora, como la
+// evidencia en modo jefe— y tampoco deja un pendiente de revisión donde no hay
+// nada que decidir: el envío la da por resuelta, como la asistencia.
+window.TIPO_PREGUNTA_FIRMA = 'signature';
+window.esPreguntaDeFirma = (pregunta) =>
+    !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_FIRMA;
+
+// El lienzo se guarda a medida fija y la hoja de estilos lo estira: así el
+// dibujo no depende de lo ancha que sea la pantalla ni hay que rehacerlo al
+// girar el teléfono —lo que se mide es el recuadro, y las coordenadas del dedo
+// se llevan a estas unidades—. Tres a uno es la proporción de un renglón de
+// firma y lo que deja sitio para un nombre sin que el dedo se salga.
+window.ANCHO_LIENZO_FIRMA = 600;
+window.ALTO_LIENZO_FIRMA = 240;
+window.MAX_BYTES_FIRMA = 60 * 1024;
+window.TEXTO_PEDIR_FIRMA = 'Escribe tu primer nombre con el dedo';
+
 // Una pregunta de asistencia no se contesta: se confirma. Sirve para pasar
 // lista de una junta o una capacitación —la encuesta se dirige a quien tenía
 // que ir y cada quien registra que fue—, así que no hay respuesta buena ni
@@ -655,7 +688,7 @@ window.asistenciaFueraDeHora = (evaluationId, ahora) => {
 // así que sólo caben las preguntas que se puntúan solas y las evidencias, que
 // no puntúan: quedan como constancia de lo que vio mientras evaluaba. Un texto
 // o unas opciones se quedarían sin calificar y sin nadie que los revisara.
-window.TIPOS_EN_MODO_JEFE = ['range', window.TIPO_PREGUNTA_FOTO];
+window.TIPOS_EN_MODO_JEFE = ['range', window.TIPO_PREGUNTA_FOTO, window.TIPO_PREGUNTA_FIRMA];
 
 // ==========================================
 // LOS TIPOS DE PREGUNTA, CON SU EXPLICACIÓN
@@ -718,6 +751,13 @@ window.TIPOS_DE_PREGUNTA = [
         nombre: 'Registro de asistencia',
         detalle: 'No se contesta: se confirma. Para pasar lista de una junta o una capacitaci\u00f3n; queda registrada al enviar y nadie tiene que calificarla.',
         enunciado: 'A qu\u00e9 se asisti\u00f3\u2026'
+    },
+    {
+        valor: window.TIPO_PREGUNTA_FIRMA,
+        icono: '\u{1F58A}\uFE0F',
+        nombre: 'Firma',
+        detalle: 'Se firma con el dedo en la pantalla, como la de enterado de una difusi\u00f3n. Se pide escribir el primer nombre y no la firma oficial. Queda como constancia y no cuenta para la calificaci\u00f3n.',
+        enunciado: 'De qu\u00e9 se deja constancia al firmar\u2026'
     }
 ];
 

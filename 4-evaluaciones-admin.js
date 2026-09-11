@@ -339,7 +339,13 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
                 .map(x => String(x || '').trim()).filter(Boolean).join(' · ');
         }
     } else if (miUltima) {
-        const calificada = ['Revisado', 'Certificada'].includes(miUltima.review_status);
+        // «Calificada» pide además que haya algo calificado: una encuesta hecha
+        // sólo de firmas —o de evidencias en modo jefe— se guarda ya 'Revisado'
+        // con `grades_json` vacío, y ahí `calcularScoreRespuesta` devuelve 0,
+        // que se leería como haberla fallado entera. Es la misma comprobación
+        // que hace `puntajeDeRespuesta` para la tarjeta del panel.
+        const calificada = ['Revisado', 'Certificada'].includes(miUltima.review_status)
+            && window.tieneCalificaciones(miUltima);
         const score = window.calcularScoreRespuesta(miUltima);
         const colorScore = calificada ? window.getColorScore(score) : '#94a3b8';
         const fecha = new Date(miUltima.submitted_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -1868,6 +1874,12 @@ window.verDetalleRespuesta = async (resp) => {
             if(pct < 80) { color = '#b45309'; bg = '#fef3c7'; }
             if(pct < 60) { color = '#991b1b'; bg = '#fee2e2'; }
             resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${bg}; color:${color}; padding:3px 10px; border-radius:12px; font-size:0.85rem; font-weight:bold;">${val}/${max} (${pct}%)</span>`;
+        } else if (window.esPreguntaDeFirma(q)) {
+            // Una firma no se califica —no puntúa—, así que «PENDIENTE» sobre
+            // ella diría que alguien tiene que hacer algo con ella. O está
+            // firmada o no lo está.
+            const firmada = typeof rawRespuesta === 'string' && rawRespuesta.trim() !== '';
+            resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${firmada?'#f5f3ff':'#f1f5f9'}; color:${firmada?'#6d28d9':'#64748b'}; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${firmada?'FIRMADA':'SIN FIRMAR'}</span>`;
         } else if (window.esPreguntaDeAsistencia(q)) {
             // Aquí no se acierta ni se falla: o se registró o no. «CORRECTO»
             // sobre una asistencia se lee como si hubiera habido algo que
@@ -1904,6 +1916,24 @@ window.verDetalleRespuesta = async (resp) => {
                        <span>Asistencia registrada${diaDeLaRespuesta ? ` · ${window.sanitizeForHTML(diaDeLaRespuesta)}` : ''}</span>
                    </div>`
                 : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin registrar)</div>`) + lineaEvento;
+        }
+        // Una firma se mira y ya: es la constancia de que esa persona contestó,
+        // no una respuesta que se acierte o se falle, así que va sin los
+        // botones de correcto e incorrecto que sí lleva la evidencia. Ni en
+        // modo administrador se ofrece un campo para editarla —lo que se
+        // corregiría es quién firmó, y eso se arregla borrando la respuesta—;
+        // `guardarCalificacionAdmin` parte de una copia de `answers_json`, así
+        // que la URL sobrevive intacta.
+        else if (window.esPreguntaDeFirma(q)) {
+            const urlFirma = typeof rawRespuesta === 'string' ? rawRespuesta.trim() : '';
+            contentHtml = urlFirma
+                ? `<div style="background:white; border:1px solid #e2e8f0; border-radius:10px; padding:10px;">
+                       <img src="${window.sanitizeForHTML(urlFirma)}" alt="Firma"
+                            onclick="window.abrirVisorImagen && window.abrirVisorImagen('${window.sanitizeForHTML(urlFirma)}')"
+                            style="width:100%; border-radius:6px; display:block; cursor:pointer;" title="Toca para ampliar">
+                       <div style="font-size:0.75rem; color:#94a3b8; margin-top:8px;">Firmado${diaDeLaRespuesta ? ` el ${window.sanitizeForHTML(diaDeLaRespuesta)}` : ''} &middot; no cuenta para la calificación</div>
+                   </div>`
+                : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin firmar)</div>`;
         }
         // Una evidencia se mira, no se lee: su respuesta es la URL de la foto y
         // se pinta igual se pueda calificar o no. Editarla desde aquí no tiene
@@ -4477,6 +4507,7 @@ window.cerrarVistaPrevia = () => {
     window.preguntasCacheActual = [];
     window.evalIdRespondiendo = null;
     window.fotosPreguntaListas = {};
+    window.trazosDeFirma = {};
 
     const hoja = document.getElementById('modal-crear-eval');
     if (hoja) {
@@ -4673,7 +4704,7 @@ window.verificarRestriccionesModo = () => {
             if (!window.TIPOS_EN_MODO_JEFE.includes(sel.value)) sel.value = 'range';
             window.toggleTipoPregunta(sel);
         });
-        window.textoBoton(btnAddQuestion, `+ Agregar Pregunta (escala 1-${maxVal} o evidencia)`);
+        window.textoBoton(btnAddQuestion, `+ Agregar Pregunta (escala 1-${maxVal}, evidencia o firma)`);
     } else {
         allTypeSelects.forEach(sel => {
             Array.from(sel.options).forEach(op => { op.disabled = false; });
@@ -5418,6 +5449,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     const showRangeInfo = (tp === 'range');
     const showPhotoInfo = (tp === 'photo');
     const showAttendanceInfo = (tp === window.TIPO_PREGUNTA_ASISTENCIA);
+    const showSignatureInfo = (tp === window.TIPO_PREGUNTA_FIRMA);
     const optionsLabel = (tp === 'list_match') ? "Elementos Correctos (Respuesta Modelo):" : "Opciones:";
 
     d.innerHTML=`
@@ -5459,6 +5491,10 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
 
     <div class="photo-info-container" style="display:${showPhotoInfo?'block':'none'}; margin-top:15px; padding:10px; background:#eff6ff; border:1px dashed #bfdbfe; border-radius:8px; font-size:0.85rem; color:#1d4ed8;">
         📷 <b>Evidencia:</b> el enunciado de arriba es lo que se le pide fotografiar. La foto se guarda reducida a ${window.MAX_LADO_FOTO_EVAL}px junto a la respuesta, y la califica quien revise si la encuesta pasa a revisión. Para pedir varias evidencias, agrega otra pregunta de este tipo.
+    </div>
+
+    <div class="signature-info-container" style="display:${showSignatureInfo?'block':'none'}; margin-top:15px; padding:10px; background:#f5f3ff; border:1px dashed #ddd6fe; border-radius:8px; font-size:0.85rem; color:#6d28d9;">
+        🖊️ <b>Firma:</b> el enunciado de arriba dice de qué se deja constancia («Recibí la capacitación y entendí las reglas»). Debajo sale el recuadro donde se firma con el dedo, y lo que se pide escribir es <b>el primer nombre</b>, no la firma oficial: una rúbrica hecha con el dedo no vale como la del documento de identidad y un nombre escrito a mano sí se lee. <b>No cuenta para la calificación</b> y nadie tiene que revisarla.
     </div>
 
     <div class="attendance-info-container" style="display:${showAttendanceInfo?'block':'none'}; margin-top:15px;">
@@ -5883,12 +5919,14 @@ window.toggleTipoPregunta = (s) => {
     const rInfo = w.querySelector('.range-info-container');
     const fInfo = w.querySelector('.photo-info-container');
     const aInfo = w.querySelector('.attendance-info-container');
+    const sInfo = w.querySelector('.signature-info-container');
 
     if(o) o.style.display = 'none';
     if(t) t.style.display = 'none';
     if(rInfo) rInfo.style.display = 'none';
     if(fInfo) fInfo.style.display = 'none';
     if(aInfo) aInfo.style.display = 'none';
+    if(sInfo) sInfo.style.display = 'none';
 
     if (s.value === 'text') {
         if(t) t.style.display = 'block';
@@ -5905,6 +5943,10 @@ window.toggleTipoPregunta = (s) => {
         // Tampoco la asistencia: el enunciado dice a qué se asistió y no hay
         // nada más que configurar.
         if(aInfo) aInfo.style.display = 'block';
+    } else if (s.value === window.TIPO_PREGUNTA_FIRMA) {
+        // Ni la firma: el enunciado dice de qué se deja constancia y el
+        // recuadro para firmar sale solo al contestarla.
+        if(sInfo) sInfo.style.display = 'block';
     } else {
         if(o) {
             o.style.display = 'block';
@@ -6219,6 +6261,14 @@ window.preguntasDeLaHoja = () => {
                 const fecha = new Date(cuando);
                 if (!isNaN(fecha.getTime())) ops[window.PLAZA_FECHA_EVENTO] = fecha.toISOString();
             }
+        } else if (tp === window.TIPO_PREGUNTA_FIRMA) {
+            // Una firma no tiene opciones ni respuesta modelo. El campo de
+            // «Respuesta Modelo» sigue en el marcado aunque esté escondido, así
+            // que se vacía a propósito —igual que en la asistencia—: sin esto
+            // se guardaría lo que hubiera quedado escrito antes de cambiar el
+            // tipo de la pregunta.
+            corr = "";
+            ops = [];
         } else if (tp === 'range') {
             ops = [0, maxEscala, paso];
             const guia = window.guiaDeLaPregunta(d);

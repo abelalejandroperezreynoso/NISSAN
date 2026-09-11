@@ -5876,3 +5876,76 @@ html.fondo-anclado body {
 }
 
 .pendientes-cuenta[hidden] { display: none; }
+
+/* =========================================
+   FIRMAR DENTRO DE UNA ENCUESTA
+   =========================================
+   El mismo gesto que la firma de enterado de una difusión, pero como un tipo de
+   pregunta más. Lo que se pide escribir es el primer nombre y no la firma
+   oficial: una rúbrica hecha con el dedo no vale como la del documento de
+   identidad y un nombre a mano sí se lee. */
+.firma-pregunta {
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+    background: #f8fafc;
+    padding: 10px;
+}
+
+/* `touch-action: none` es lo que deja dibujar: sin él el dedo desplaza la hoja
+   y el trazo no llega a empezar. Va con el `preventDefault` del `touchmove`,
+   que es la otra mitad y la que entienden los Safari viejos.
+
+   El lienzo mide siempre lo mismo por dentro —600×240— y aquí se estira: así lo
+   dibujado no depende del ancho de la pantalla ni se pierde al girar el
+   teléfono. */
+.firma-lienzo {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 5 / 2;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+.firma-pie {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.firma-ayuda {
+    font-size: 0.8rem;
+    color: #64748b;
+    min-width: 0;
+}
+
+/* Firmada: el recuadro lo dice sin gastar otro renglón. */
+.firma-pregunta.esta-firmada {
+    border-style: solid;
+    border-color: #a78bfa;
+    background: #f5f3ff;
+}
+
+.firma-pregunta.esta-firmada .firma-ayuda {
+    color: #6d28d9;
+    font-weight: 600;
+}
+
+.firma-borrar {
+    flex-shrink: 0;
+    background: white;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+    border-radius: 8px;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.firma-borrar:active { transform: scale(0.96); }
