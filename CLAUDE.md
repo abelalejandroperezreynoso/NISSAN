@@ -4086,14 +4086,58 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     Medido a 375px, ése es el peor caso y sin la palabra cabe de una línea. Lo
     que decía va en el `title`, que ahí sí cabe.
 
+  **Y debajo del resumen va la línea de cómo vamos.** El renglón dice dónde
+  estamos y la gráfica, si vamos a mejor. Es la misma `graficaDeLinea` de la
+  hoja de una clasificación y el mismo `historialDeRevision` que la alimenta
+  ahí, con las filas de la tarjeta entera en vez de las de un grupo: así el
+  último punto es, por construcción, el número que se lee encima. **No se dibuja
+  si la consulta llegó al tope** —las respuestas vienen ordenadas de la más
+  nueva, así que lo que se queda fuera son los periodos de atrás y la línea
+  saldría subiendo desde un suelo falso—, ni con menos de dos periodos con
+  resultado, que una línea de un punto no es una tendencia.
+
+  **El eje va en meses y a la fuerza** (`window.RITMO_GRAFICA_EMPRESA`). El
+  ritmo de una clasificación lo marca su encuesta más frecuente, pero la tarjeta
+  habla de las trece de la empresa a la vez y ahí ese criterio no vale: con una
+  semanal dentro, el eje salía en semanas y las cuatro de un mes repetían el
+  mismo dato —el `periodoDeEncuesta` de una mensual es el mes entero, se
+  pregunte con la semana que se pregunte—, o sea cuatro puntos idénticos. Es el
+  **tercer argumento** de `historialDeRevision`, que pasó de ser `sobrePadron` a
+  un objeto de opciones (`{ sobrePadron, frecuencia }`); un `true` suelto se
+  sigue leyendo como `{ sobrePadron: true }`.
+
+  Y **la consulta tiene que cubrir lo que la gráfica enseña**:
+  `respuestasDelPeriodoDeTodos` lleva su `gte` al inicio del periodo más viejo
+  del eje y no al del periodo vigente, o con todas las encuestas periódicas
+  `desde` sería el día 1 de este mes y la línea tendría un solo punto. Es el
+  mismo `gte` acotado de `cargarRespuestasQueReviso`.
+
+  Dos topes que hacen falta y no son evidentes:
+
+  - **Nada de lo enviado después del instante que se mira.** Con `ahora` en el
+    presente no quita nada, pero la gráfica pregunta por periodos de atrás y una
+    encuesta de «única vez» **no tiene `fin`**: sin ese tope, su punto de abril
+    incluía lo contestado en septiembre y los seis periodos salían iguales. En
+    un proyecto donde casi todas las respuestas son de encuestas de «única vez»
+    eso es una línea plana en la cifra de hoy; con él, cada punto trae sólo lo
+    contestado hasta entonces y la línea sube según la va contestando la gente,
+    que es lo que se quiere ver.
+  - **El periodo que corre se pregunta con la hora de ahora**, no con su último
+    instante, que todavía no ha llegado. Sólo importa cuando el eje va más
+    grueso que alguna encuesta: preguntándole a una semanal por el 30 de
+    septiembre, su periodo es la semana del 28 —que aún no empieza— y su punto
+    salía vacío, de modo que el último punto de la línea no coincidía con el
+    renglón de encima.
+
   **Y la hoja de detalle mide igual, o las dos pantallas darían cifras distintas
   del mismo periodo.** `cuerpoDetalleClasificacion` escoge `historialDeRevision`
   cuando el modo está encendido —en vez de `historialDeClasificacion`, que toma
   una respuesta por periodo y enseñaría la de una persona cualquiera como el
-  resultado de la empresa— y le pasa su **tercer argumento**, `sobrePadron`, que
-  reparte cada periodo entre toda la gente a la que le tocaba. El de la tarjeta
-  de revisión sigue llamándolo **sin** ese argumento: ahí se habla de la gente a
-  la que uno califica y el padrón es otra pregunta.
+  resultado de la empresa— y le pasa `{ sobrePadron: true }`, que reparte cada
+  periodo entre toda la gente a la que le tocaba; el eje ahí **sí** sale de su
+  encuesta más frecuente, que es la que marca su ritmo de revisión. La tarjeta
+  de revisión lo sigue llamando **sin** opciones: ahí se habla de la gente a la
+  que uno califica y el padrón es otra pregunta.
 
   Tres cosas de esa gráfica:
 

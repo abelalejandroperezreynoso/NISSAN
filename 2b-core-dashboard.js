@@ -961,6 +961,12 @@ window.iconoDeAsignada = (estado) => {
 // de un panel.
 window.MAX_PAGINAS_RESPUESTAS = 6;   // 6000 filas, el tope de esta pantalla
 
+// El ritmo del eje de la gráfica de la tarjeta. Va fijo y no sale de las
+// encuestas: la tarjeta habla de todas las de la empresa a la vez, y el mes es
+// la unidad con la que se lee «cómo vamos». Lo miran la gráfica y el `gte` de
+// la consulta, que tienen que cubrir lo mismo.
+window.RITMO_GRAFICA_EMPRESA = 'monthly';
+
 // Las respuestas de todos desde el periodo más temprano en juego. PostgREST no
 // devuelve más de mil por consulta, así que se pagina; el tope existe porque
 // una encuesta anual arrastra el `gte` hasta enero y con ella el año entero.
@@ -977,6 +983,15 @@ window.respuestasDelPeriodoDeTodos = async (encuestas, ahora) => {
         const p = window.periodoDeEncuesta(ev, ahora);
         if (p && p.inicio && (!desde || p.inicio < desde)) desde = p.inicio;
     });
+
+    // Y hasta el principio del periodo más viejo que la gráfica va a enseñar,
+    // que si no no habría historia que dibujar: con todas las encuestas
+    // periódicas, `desde` sería el día 1 de este mes y la línea tendría un solo
+    // punto. Es el mismo `gte` acotado de `cargarRespuestasQueReviso`.
+    const periodos = window.periodosDeClasificacion(
+        [{ frequency: window.RITMO_GRAFICA_EMPRESA }], window.PERIODOS_EN_LA_GRAFICA);
+    const masViejo = periodos.length ? periodos[periodos.length - 1].inicio : null;
+    if (masViejo && (!desde || masViejo < desde)) desde = masViejo;
 
     const filas = [];
     let tope = false;
@@ -1046,7 +1061,8 @@ window.textoDeRespuestasAdmin = (resumen) => {
 // `padronDado` evita recalcularlo: `padronDeLaEncuesta` recorre la plantilla
 // entera y la gráfica de periodos pregunta doce veces por la misma encuesta.
 window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
-    const periodo = window.periodoDeEncuesta(ev, ahora);
+    const referencia = ahora || new Date();
+    const periodo = window.periodoDeEncuesta(ev, referencia);
     const ultimaDeCadaUno = {};
 
     (respuestas || []).forEach(r => {
@@ -1054,6 +1070,13 @@ window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
         const enviada = new Date(r.submitted_at);
         if (isNaN(enviada) || enviada < periodo.inicio) return;
         if (periodo.fin && enviada >= periodo.fin) return;
+        // Nada de lo enviado **después** del instante que se mira. Con `ahora`
+        // en el presente no quita nada —del futuro no llegan respuestas—, pero
+        // la gráfica pregunta por periodos de atrás y una encuesta de «única
+        // vez» no tiene `fin`: sin este tope, su punto de abril incluiría lo
+        // contestado en septiembre y todos los periodos saldrían iguales, o sea
+        // una línea plana en la cifra de hoy.
+        if (enviada > referencia) return;
 
         const quien = String(r.employee_id);
         const previa = ultimaDeCadaUno[quien];
@@ -1357,12 +1380,32 @@ window.cargarEncuestasAsignadas = async (userId) => {
                 promedio === null ? null : `promedio ${promedio}%`
               ].filter(Boolean).join(' · ');
 
+        // Cómo va la empresa periodo a periodo, debajo del resumen: el renglón
+        // dice dónde estamos y la línea, si vamos a mejor. Es la misma
+        // `graficaDeLinea` de la hoja de una clasificación y el mismo
+        // `historialDeRevision` que la alimenta ahí, sólo que con las filas de
+        // la tarjeta entera en vez de las de un grupo: así el punto del periodo
+        // que corre es, por construcción, el número que se lee encima.
+        //
+        // **No se dibuja si la consulta llegó al tope.** Las respuestas vienen
+        // ordenadas de la más nueva, así que lo que se queda fuera son los
+        // periodos de atrás: la línea saldría subiendo desde un suelo falso,
+        // que es peor que no enseñarla. El renglón ya avisa del corte.
+        //
+        // Con menos de dos periodos con resultado devuelve '' y no se dibuja
+        // nada, que una línea de un punto no es una tendencia.
+        const graficaHtml = (esAdmin && !topeRespuestas)
+            ? window.graficaDeLinea(window.historialDeRevision({ filas }, respuestas,
+                { sobrePadron: true, frecuencia: window.RITMO_GRAFICA_EMPRESA }))
+            : '';
+
         // Sin título: lo que la tarjeta es se ve —las clasificaciones— y el
         // renglón del resumen dice más en el mismo sitio.
         cont.innerHTML = `
             <div style="background:white; border-radius:16px; padding:15px 15px 5px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
                 <div style="font-size:0.8rem; color:#475569; font-weight:600; margin-bottom:4px;"
                      title="${esAdmin ? 'Las encuestas activas de la empresa. El promedio se reparte entre toda la gente a la que le toca: quien no contestó cuenta como 0.' : ''}">${resumen}</div>
+                ${graficaHtml}
                 ${bloques}
             </div>`;
         cont.style.display = 'block';
@@ -1766,7 +1809,7 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
     // azar con el rótulo de toda la empresa. `historialDeRevision` es el mismo
     // historial promediando todas, que es lo que esas respuestas significan.
     const historial = window.modoAdminActivo
-        ? window.historialDeRevision(grupo, respuestas || window.respuestasAsignadas || [], true)
+        ? window.historialDeRevision(grupo, respuestas || window.respuestasAsignadas || [], { sobrePadron: true })
         : window.historialDeClasificacion(grupo, null, respuestas);
     const conDato = historial.filter(p => p.promedio !== null);
     const ultimo = conDato.length > 0 ? conDato[conDato.length - 1] : null;
@@ -1948,10 +1991,22 @@ window.cargarRespuestasQueReviso = () => {
 // las dos pantallas darían cifras distintas del mismo periodo. El padrón es el
 // de hoy también para los periodos de atrás, que es lo único que sabe
 // `padronDeLaEncuesta`: quien se dio de baja desde entonces ya no cuenta.
-window.historialDeRevision = (grupo, respuestas, sobrePadron) => {
+window.historialDeRevision = (grupo, respuestas, opciones) => {
+    const opts = (opciones === true) ? { sobrePadron: true } : (opciones || {});
+    const sobrePadron = !!opts.sobrePadron;
     const encuestas = (grupo.filas || []).map(f => f.ev);
-    const periodos = window.periodosDeClasificacion(encuestas, window.PERIODOS_EN_LA_GRAFICA);
-    const ritmo = window.encuestaQueMarcaElRitmo(encuestas);
+
+    // `frecuencia` fuerza el ritmo del eje. La gráfica de una clasificación no
+    // la pasa —ahí manda su encuesta más frecuente, que es la que marca el
+    // ritmo de revisión—, pero la de la tarjeta del panel habla de las trece
+    // encuestas de la empresa a la vez y ahí ese criterio no vale: con una
+    // semanal dentro, el eje salía en semanas y las cuatro de un mes repetían
+    // el mismo dato de la mensual —el `periodoDeEncuesta` de una mensual es el
+    // mes entero, se pregunte con la semana que se pregunte—, o sea cuatro
+    // puntos idénticos y una línea que no dice nada.
+    const conRitmo = opts.frecuencia ? [{ frequency: opts.frecuencia }] : encuestas;
+    const periodos = window.periodosDeClasificacion(conRitmo, window.PERIODOS_EN_LA_GRAFICA);
+    const ritmo = window.encuestaQueMarcaElRitmo(conRitmo);
     const frecuencia = (ritmo && ritmo.frequency) || 'once';
 
     // `padronDeLaEncuesta` recorre la plantilla entera, así que se pregunta una
@@ -1966,8 +2021,18 @@ window.historialDeRevision = (grupo, respuestas, sobrePadron) => {
         let entregadas = 0;
         let suma = 0, calificadas = 0, divisor = 0, contestaron = 0;
 
+        // El periodo que corre se pregunta **con la hora de ahora** y no con su
+        // último instante, que todavía no ha llegado. Sólo importa cuando el
+        // eje va más grueso que alguna encuesta: preguntándole a una semanal
+        // por el 30 de septiembre, su periodo es la semana del 28 —que aún no
+        // empieza— y su punto salía vacío, de modo que el último punto de la
+        // línea no coincidía con el renglón de encima.
+        const ahora = Date.now();
+        const referencia = (p.actual && p.referencia && p.referencia.getTime() > ahora)
+            ? new Date(ahora) : p.referencia;
+
         encuestas.forEach(ev => {
-            const periodo = window.periodoDeEncuesta(ev, p.referencia);
+            const periodo = window.periodoDeEncuesta(ev, referencia);
 
             if (sobrePadron) {
                 // Una encuesta que todavía no existía no vale cero en aquel
@@ -1983,7 +2048,7 @@ window.historialDeRevision = (grupo, respuestas, sobrePadron) => {
                 // a quien contestó y hoy ya no está en el padrón. Calcularlo
                 // aquí aparte es lo que dejaría al punto de este periodo
                 // discrepando del número que se lee arriba.
-                const r = window.resumenDeEncuestaAdmin(ev, respuestas, p.referencia, padrones[ev.id]);
+                const r = window.resumenDeEncuestaAdmin(ev, respuestas, referencia, padrones[ev.id]);
                 suma += r.suma;
                 calificadas += r.calificadas;
                 divisor += r.total;
