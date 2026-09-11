@@ -3717,6 +3717,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   entre no deber nada y no tener nada asignado. Sin ninguna asignada la tarjeta
   no se dibuja.
 
+  **En modo administrador habla de otra cosa** —de todas las encuestas de la
+  empresa y de cómo va cada una—, y se cuenta más abajo, con la tarjeta del
+  administrador.
+
   **No decide nada por su cuenta**, que es lo único importante de esta sección:
   a quién le toca cada encuesta lo dice `leTocaEstaEncuesta` y en qué estado
   está, `esEvaluacionPendiente` —las mismas dos reglas del badge del panel y
@@ -3977,10 +3981,57 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   el esqueleto del perfil enseñaría un instante el hueco de la foto y, cien
   milisegundos después, el nombre de quien entró.
 
-  **Lo demás del panel se queda**, que es lo que se pidió: sus pendientes, sus
-  encuestas, las que revisa y su equipo siguen ahí. Lo único que además no se
-  hace es **pedir el radar** (`cargarRadarGeneralDashboard`), que son dos
-  consultas de una persona para un lienzo que ya no existe.
+  **Lo demás del panel se queda**: sus pendientes, las encuestas que revisa y
+  su equipo siguen ahí. Lo único que además no se hace es **pedir el radar**
+  (`cargarRadarGeneralDashboard`), que son dos consultas de una persona para un
+  lienzo que ya no existe. La tarjeta de las encuestas asignadas sí cambia de
+  qué habla, y se cuenta justo aquí abajo.
+
+- **Administrando, la tarjeta de las encuestas es la de la empresa entera.**
+  `cargarEncuestasAsignadas` enseña con el modo encendido **todas las encuestas
+  activas** —no las que le tocan a quien mira— y cada renglón dice **cuánta
+  gente la contestó este periodo y el promedio de lo calificado**: «Mensual · 23
+  de 40 · 86%». Era la misma lista que ve cualquiera, así que el administrador
+  tenía delante sus tres encuestas y ninguna manera de saber cómo iba la
+  plantilla sin bajar a certificación o a estadísticas.
+
+  ```js
+  window.MAX_PAGINAS_RESPUESTAS            // 6, o sea 6000 filas
+  await window.respuestasDelPeriodoDeTodos(encuestas, ahora)  // { respuestas, tope }
+  window.resumenDeEncuestaAdmin(ev, respuestas, ahora)        // { contestaron, padron, promedio }
+  ```
+
+  Seis cosas que hay que mantener:
+
+  - **El periodo es el de cada encuesta, no uno común.** Una clasificación
+    mezcla frecuencias, así que el resumen de cada una se saca con
+    `periodoDeEncuesta(ev, ahora)`: la mensual habla de septiembre y la semanal
+    de esta semana. Es la misma regla que decide el pendiente y la que usa
+    `estadoCertificacion`, así que las dos pantallas no pueden discrepar.
+  - **Cuenta gente, no respuestas**, como el pase de lista: quien contestó dos
+    veces cuenta una, y su puntaje es el de la **última** —promediar las dos la
+    pondera el doble—.
+  - **El denominador es `padronDeLaEncuesta`**, que sale de `leTocaEstaEncuesta`
+    y de los empleados activos: así el «de 40» no puede discrepar de lo que cada
+    quien ve en su panel. Sin las columnas de destinatarios no hay padrón, y
+    entonces se dice sólo cuántas respuestas hay —un «de 0» se leería como que
+    no le toca a nadie—.
+  - **La consulta se acota o se trae el historial de la empresa.** Va con un
+    `gte` al inicio del periodo **más temprano** de las encuestas en juego, y
+    pagina de mil en mil, que es el tope de PostgREST. El tope de páginas existe
+    porque una encuesta anual arrastra ese `gte` hasta enero y con ella el año
+    entero; quien lo alcanza **lo dice en pantalla** —«sobre las respuestas más
+    recientes»— en vez de enseñar un promedio corto como si fuera el bueno.
+  - **El icono es el neutro**, el círculo a rayas de
+    `estadoDeEncuestaEnLista`: una palomita verde diría que el administrador
+    está «al día» de algo que no le toca, y un círculo rojo, peor. Por lo mismo
+    el pie del grupo dice «2 encuestas · 79%» y no «2 pendientes de 4», y el
+    renglón de arriba, «4 encuestas activas · promedio 77%».
+  - **Y la hoja de detalle promedia igual.** `cuerpoDetalleClasificacion`
+    escoge `historialDeRevision` —el promedio de **todas** las respuestas del
+    periodo— cuando el modo está encendido, en vez de `historialDeClasificacion`,
+    que toma una por periodo: la respuesta de una persona cualquiera se
+    enseñaría como el resultado de la empresa.
 
 - **El panel del usuario se pliega, y de entrada está contraído.** Contraído
   se ve sólo quién es —la foto y el nombre—, que es lo que se mira de pasada; el

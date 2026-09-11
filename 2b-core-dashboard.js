@@ -946,6 +946,93 @@ window.iconoDeAsignada = (estado) => {
     </svg>`;
 };
 
+// ==========================================
+// LA MISMA TARJETA, PERO DE TODA LA EMPRESA
+// ==========================================
+// En modo administrador la tarjeta de encuestas del inicio deja de ser la de
+// quien mira —ahí no se está mirando el panel de nadie— y pasa a listar las
+// encuestas activas de la empresa con su resultado. Es la misma tarjeta, los
+// mismos grupos y el mismo plegado: lo que cambia es de quién habla cada
+// renglón.
+//
+// El promedio es el **del periodo que corre** de cada encuesta, que es lo mismo
+// que la tarjeta enseña de una persona, sólo que de todo el mundo. Eso además
+// acota la consulta: el historial entero de 455 personas no cabe en el arranque
+// de un panel.
+window.MAX_PAGINAS_RESPUESTAS = 6;   // 6000 filas, el tope de esta pantalla
+
+// Las respuestas de todos desde el periodo más temprano en juego. PostgREST no
+// devuelve más de mil por consulta, así que se pagina; el tope existe porque
+// una encuesta anual arrastra el `gte` hasta enero y con ella el año entero.
+// Quien llega al tope lo dice en pantalla en vez de enseñar un promedio corto
+// como si fuera el bueno.
+window.respuestasDelPeriodoDeTodos = async (encuestas, ahora) => {
+    const ids = (encuestas || []).map(e => e.id);
+    if (ids.length === 0) return { respuestas: [], tope: false };
+
+    // El más temprano de los periodos vigentes: dentro se filtra encuesta por
+    // encuesta con el suyo.
+    let desde = null;
+    encuestas.forEach(ev => {
+        const p = window.periodoDeEncuesta(ev, ahora);
+        if (p && p.inicio && (!desde || p.inicio < desde)) desde = p.inicio;
+    });
+
+    const filas = [];
+    let tope = false;
+    for (let pagina = 0; pagina < window.MAX_PAGINAS_RESPUESTAS; pagina++) {
+        let consulta = sb.from('evaluation_responses')
+            .select('evaluation_id, employee_id, submitted_at, review_status, grades_json')
+            .in('evaluation_id', ids)
+            .order('submitted_at', { ascending: false })
+            .range(pagina * 1000, pagina * 1000 + 999);
+        if (desde) consulta = consulta.gte('submitted_at', desde.toISOString());
+
+        const { data, error } = await consulta;
+        if (error || !data || data.length === 0) break;
+        filas.push(...data);
+        if (data.length < 1000) break;
+        if (pagina === window.MAX_PAGINAS_RESPUESTAS - 1) tope = true;
+    }
+    return { respuestas: filas, tope };
+};
+
+// Cómo va una encuesta este periodo: el promedio de lo calificado y cuánta
+// gente la contestó de la que la tiene asignada.
+//
+// **Cuenta gente, no respuestas**, igual que el pase de lista: quien contestó
+// dos veces cuenta una, y su puntaje es el de la última —promediar las dos la
+// pondera el doble—.
+window.resumenDeEncuestaAdmin = (ev, respuestas, ahora) => {
+    const periodo = window.periodoDeEncuesta(ev, ahora);
+    const ultimaDeCadaUno = {};
+
+    (respuestas || []).forEach(r => {
+        if (String(r.evaluation_id) !== String(ev.id)) return;
+        const enviada = new Date(r.submitted_at);
+        if (isNaN(enviada) || enviada < periodo.inicio) return;
+        if (periodo.fin && enviada >= periodo.fin) return;
+
+        const quien = String(r.employee_id);
+        const previa = ultimaDeCadaUno[quien];
+        if (!previa || new Date(r.submitted_at) > new Date(previa.submitted_at)) {
+            ultimaDeCadaUno[quien] = r;
+        }
+    });
+
+    const suyas = Object.values(ultimaDeCadaUno);
+    const puntajes = suyas.map(r => window.puntajeDeRespuesta(r)).filter(p => p !== null);
+
+    return {
+        contestaron: suyas.length,
+        // Sin las columnas de destinatarios `padronDeLaEncuesta` no da padrón, y
+        // un «de 0» se leería como que no le toca a nadie: ahí no se dice.
+        padron: window.padronDeLaEncuesta(ev).length,
+        promedio: puntajes.length === 0 ? null
+            : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length)
+    };
+};
+
 window.cargarEncuestasAsignadas = async (userId) => {
     const cont = document.getElementById('container-encuestas-asignadas');
     if (!cont) return;
@@ -992,22 +1079,48 @@ window.cargarEncuestasAsignadas = async (userId) => {
             .eq('active', true);
         if (error || !encuestas) return;
 
+        // En modo administrador la tarjeta es de la empresa entera: todas las
+        // encuestas activas, y no sólo las que le tocan a quien mira.
+        const esAdmin = !!window.modoAdminActivo;
         const tieneEquipo = window.tieneEquipoDirecto(empStrId);
-        const mias = encuestas.filter(ev => window.leTocaEstaEncuesta(ev, empleado, tieneEquipo));
+        const mias = esAdmin ? encuestas
+            : encuestas.filter(ev => window.leTocaEstaEncuesta(ev, empleado, tieneEquipo));
         if (mias.length === 0) return;
+
+        const ahora = new Date();
 
         // `review_status` y `grades_json` son para el plazo de reintento: sin
         // el puntaje no se sabe si hay que reponer la encuesta.
-        const { data: respuestas } = await sb.from('evaluation_responses')
-            .select('id, evaluation_id, submitted_at, review_status, grades_json')
-            .eq('employee_id', empStrId)
-            .in('evaluation_id', mias.map(e => e.id));
-
-        const ahora = new Date();
+        let respuestas = [];
+        let topeRespuestas = false;
+        if (esAdmin) {
+            const traidas = await window.respuestasDelPeriodoDeTodos(mias, ahora);
+            respuestas = traidas.respuestas;
+            topeRespuestas = traidas.tope;
+        } else {
+            const { data } = await sb.from('evaluation_responses')
+                .select('id, evaluation_id, submitted_at, review_status, grades_json')
+                .eq('employee_id', empStrId)
+                .in('evaluation_id', mias.map(e => e.id));
+            respuestas = data || [];
+        }
 
         const puntajeDe = window.puntajeDeRespuesta;
 
         const filas = mias.map(ev => {
+            // Administrando, la encuesta no es de quien mira: su estado es el
+            // neutro —una palomita diría que está «al día» de algo que no le
+            // toca— y lo que dice el renglón es cómo va la encuesta.
+            if (esAdmin) {
+                const resumen = window.resumenDeEncuestaAdmin(ev, respuestas, ahora);
+                return {
+                    ev, resumen, resp: null,
+                    vencimiento: { mostrar: false },
+                    estado: { texto: 'Encuesta de la empresa', neutro: true, color: '#94a3b8', listo: true },
+                    puntaje: resumen.promedio
+                };
+            }
+
             const contestaQuienMira = (ev.mode || 'self') !== 'boss';
             const vencimiento = window.esEvaluacionPendiente(
                 respuestas, ev.id, ev.frequency, ev.created_at, ev, contestaQuienMira);
@@ -1063,7 +1176,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
         window.respuestasAsignadas = respuestas || [];
 
         const bloques = grupos.map((g, indice) => {
-            const renglones = g.filas.map(({ ev, estado, puntaje }) => {
+            const renglones = g.filas.map(({ ev, estado, puntaje, resumen }) => {
                 const safeTitle = String(ev.title || '').replace(/'/g, "&apos;").replace(/"/g, "&quot;");
                 const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
                 const color = (puntaje !== null && typeof window.getColorScore === 'function')
@@ -1071,9 +1184,25 @@ window.cargarEncuestasAsignadas = async (userId) => {
                 // El puntaje en las contestadas; en las que faltan, lo que
                 // falta —que ahí no hay puntaje que enseñar y el renglón
                 // quedaría con la frecuencia sola—.
-                const resultado = puntaje !== null
+                let resultado = puntaje !== null
                     ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
                     : (estado.listo ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
+
+                // Administrando, delante del promedio va cuánta gente la
+                // contestó: un 100% sobre tres respuestas de cuarenta no dice
+                // lo mismo que sobre treinta y nueve. Sin padrón —la encuesta
+                // llegó sin sus columnas de destinatarios— se dice sólo cuántas
+                // respuestas hay, que un «de 0» se leería como que no le toca a
+                // nadie.
+                if (resumen) {
+                    const participacion = resumen.padron > 0
+                        ? `${resumen.contestaron} de ${resumen.padron}`
+                        : `${resumen.contestaron} ${resumen.contestaron === 1 ? 'respuesta' : 'respuestas'}`;
+                    const cifra = puntaje !== null
+                        ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
+                        : ' · sin calificar';
+                    resultado = ` · ${participacion}${cifra}`;
+                }
 
                 return `
                     <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
@@ -1099,9 +1228,11 @@ window.cargarEncuestasAsignadas = async (userId) => {
 
             const cuantas = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
             const pie = [
-                pendientesGrupo > 0
-                    ? `${pendientesGrupo} pendiente${pendientesGrupo === 1 ? '' : 's'} de ${g.filas.length}`
-                    : `${cuantas} al día`,
+                esAdmin
+                    ? cuantas
+                    : (pendientesGrupo > 0
+                        ? `${pendientesGrupo} pendiente${pendientesGrupo === 1 ? '' : 's'} de ${g.filas.length}`
+                        : `${cuantas} al día`),
                 promedioGrupo === null ? null
                     : `<span style="color:${colorGrupo}; font-weight:700;">${promedioGrupo}%</span>`
             ].filter(Boolean).join(' · ');
@@ -1137,12 +1268,22 @@ window.cargarEncuestasAsignadas = async (userId) => {
         }).join('');
 
         const promedio = promedioDe(filas);
-        const resumen = [
-            pendientes === 0
-                ? `Ninguna pendiente de ${filas.length}`
-                : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${filas.length}`,
-            promedio === null ? null : `promedio ${promedio}%`
-        ].filter(Boolean).join(' · ');
+        // Administrando, el renglón habla de la empresa y no de lo que le falta
+        // a quien mira. El aviso del tope sólo sale cuando de verdad se alcanzó:
+        // un promedio sacado de una parte de las respuestas no se puede enseñar
+        // como si fueran todas.
+        const resumen = esAdmin
+            ? [
+                `${filas.length} encuesta${filas.length === 1 ? '' : 's'} activa${filas.length === 1 ? '' : 's'}`,
+                promedio === null ? null : `promedio ${promedio}%`,
+                topeRespuestas ? 'sobre las respuestas más recientes' : null
+              ].filter(Boolean).join(' · ')
+            : [
+                pendientes === 0
+                    ? `Ninguna pendiente de ${filas.length}`
+                    : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${filas.length}`,
+                promedio === null ? null : `promedio ${promedio}%`
+              ].filter(Boolean).join(' · ');
 
         // Sin título: lo que la tarjeta es se ve —las clasificaciones— y el
         // renglón del resumen dice más en el mismo sitio.
@@ -1546,7 +1687,14 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
     // dejó alguno —con su nombre, que puede no ser el que corre— y la línea de
     // los anteriores. Cuántas faltan y cuántas están al día ya lo dice el
     // renglón de la clasificación, y aquí lo dice cada encuesta de abajo.
-    const historial = window.historialDeClasificacion(grupo, null, respuestas);
+    // En modo administrador las respuestas que llegan aquí son de todo el
+    // mundo, y `historialDeClasificacion` toma **una** por encuesta y periodo
+    // —la última de quien sea—: el resultado sería el de una persona elegida al
+    // azar con el rótulo de toda la empresa. `historialDeRevision` es el mismo
+    // historial promediando todas, que es lo que esas respuestas significan.
+    const historial = window.modoAdminActivo
+        ? window.historialDeRevision(grupo, respuestas || window.respuestasAsignadas || [])
+        : window.historialDeClasificacion(grupo, null, respuestas);
     const conDato = historial.filter(p => p.promedio !== null);
     const ultimo = conDato.length > 0 ? conDato[conDato.length - 1] : null;
 
@@ -1610,8 +1758,11 @@ window.abrirDetalleClasificacion = (indice) => {
     const total = grupo.filas.length;
 
     document.getElementById('titulo-detalle-clasif').innerText = grupo.nombre;
-    document.getElementById('subtitulo-detalle-clasif').innerText =
-        `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
+    // «Asignadas» es de quien mira, y administrando estas encuestas no son de
+    // nadie en particular.
+    document.getElementById('subtitulo-detalle-clasif').innerText = window.modoAdminActivo
+        ? `${total} encuesta${total === 1 ? '' : 's'} de la empresa`
+        : `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
 
     window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev));
 
