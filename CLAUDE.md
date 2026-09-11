@@ -3997,6 +3997,27 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   dos periodos con resultado no se dibuja nada —una línea de un punto no es una
   tendencia—.
 
+  **Y por eso mismo la caja lleva `max-width: 520px`.** Estirarse con el
+  contenedor quiere decir **escalarlo todo en bloque**: el mismo dibujo que en un
+  teléfono sale a 1:1 —340px de tarjeta contra 320 de lienzo— en una laptop de
+  1440 se escala 4,4×, y con él la letra de 8px, los puntos de radio 4 y los
+  150px de alto. El eje salía con «abr» a 35px y la gráfica se llevaba 660px de
+  pantalla, al lado de unos renglones de clasificación que seguían a su tamaño de
+  siempre. Es la otra cara de no tener que redibujarla nunca, y no se arregla con
+  una media consulta: el tamaño no depende del ancho de la pantalla sino del de
+  su contenedor.
+
+  El tope corta ese escalado en seco. Por debajo de 520px no cambia nada —en un
+  teléfono la tarjeta no llega, así que se ve exactamente igual que siempre— y
+  por encima el dibujo se queda como está en vez de crecer sin fin. Alcanza a las
+  **tres** gráficas, que las otras dos viven en hojas de 600 y 800px y también se
+  escalaban.
+
+  **Va alineada a la izquierda, no centrada.** Centrada queda flotando en mitad
+  de la tarjeta con un hueco muerto a un lado, que se lee como un fallo de
+  maqueta; a la izquierda cae a plomo con el renglón del resumen y con los de
+  cada clasificación, o sea dentro de la columna de texto a la que pertenece.
+
   **El eje rotula todos los periodos, y en una sola talla.**
   `window.etiquetasDeEje(inicio, frecuencia)` da dos: la `corta` («ago», «T3»,
   «2ª ago», «23 ago») y la `minima` para cuando no cabe —la inicial del mes, o

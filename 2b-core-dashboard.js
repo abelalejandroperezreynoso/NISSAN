@@ -1830,8 +1830,28 @@ window.graficaDeLinea = (puntos, alElegir) => {
                 </g>`;
     }).join('');
 
+    // **La caja lleva tope de ancho, y no es cosmética.** Un SVG con `viewBox`
+    // no mide nada: se estira con su contenedor y **lo escala todo en bloque**,
+    // así que el mismo dibujo que en un teléfono sale a 1:1 —340px de tarjeta
+    // contra 320 de lienzo— en una laptop de 1440 se escala 4,4× y con él la
+    // letra de 8px, los puntos de radio 4 y los 150px de alto: el eje salía con
+    // «abr» a 35px y la gráfica se llevaba 660px de pantalla, al lado de unos
+    // renglones de clasificación que seguían a su tamaño de siempre. Es la otra
+    // cara de lo que hace que no haya que redibujarla al girar el teléfono.
+    //
+    // El tope corta ese escalado en seco: por debajo de 520px no cambia nada
+    // —en un teléfono la tarjeta no llega, así que se ve exactamente igual— y
+    // por encima el dibujo se queda como está en vez de crecer sin fin. Alcanza
+    // a las tres gráficas, que las otras dos viven en hojas de 600 y 800px y
+    // también se escalaban.
+    //
+    // **Y va alineada a la izquierda, no centrada.** Centrada queda flotando en
+    // mitad de la tarjeta con un hueco muerto a un lado, que se lee como un
+    // fallo de maqueta; a la izquierda cae a plomo con el renglón del resumen y
+    // con los de cada clasificación, o sea dentro de la columna de texto a la
+    // que pertenece.
     return `
-        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 8px 4px; margin-bottom:16px;">
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 8px 4px; margin-bottom:16px; max-width:520px;">
             <svg viewBox="0 0 ${A} ${ALTO}" style="width:100%; height:auto; display:block;" role="img"
                  aria-label="Resultados por periodo">
                 ${rejilla}${umbral}${linea}${dots}${rotulos}${globos}
