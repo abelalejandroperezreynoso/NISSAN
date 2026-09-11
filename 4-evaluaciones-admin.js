@@ -5626,6 +5626,7 @@ window.borrarEvaluacion = async (id) => {
 
         window.evalCache = null;
         if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+        if (window.refrescarTarjetaDeEncuestas) window.refrescarTarjetaDeEncuestas();
         alert(`🗑️ Se eliminó «${titulo}».`);
         return true;
     } catch (e) {
@@ -5929,6 +5930,10 @@ window.guardarDestinatariosEncuesta = async () => {
         alert("✅ Guardado correctamente");
         document.getElementById('modal-crear-eval').style.display = 'none';
         window.evalCache = null;
+        // A quién va dirigida es el padrón, o sea el divisor de la tarjeta del
+        // panel: sin esto seguiría repartiendo sobre la lista de antes.
+        if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+        if (window.refrescarTarjetaDeEncuestas) window.refrescarTarjetaDeEncuestas();
         cargarVistaEvaluaciones();
     } catch (e) {
         alert("❌ Error: " + e.message);
@@ -6178,6 +6183,12 @@ window.guardarNuevaEvaluacion = async () => {
                 // asistencia nueva o con la hora movida, y de esa caché salen
                 // los pendientes.
                 await window.cargarVentanasDeAsistencia(true);
+                // Y la tarjeta del panel de detrás, que no se entera sola: se
+                // quedaba con las filas que trajo al cargar el inicio, así que
+                // el título, la clasificación, «Activa» o la fecha desde la que
+                // aplica seguían siendo los de antes hasta la próxima recarga.
+                if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+                if (window.refrescarTarjetaDeEncuestas) window.refrescarTarjetaDeEncuestas();
                 cargarVistaEvaluaciones();
             }catch(e){ alert("❌ Error: " + e.message); console.error(e); }
         };

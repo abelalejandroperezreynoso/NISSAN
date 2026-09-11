@@ -4405,18 +4405,29 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   con todas las letras en el `title`, que es donde esta tarjeta pone siempre lo
   que no cabe en un renglón: de eso sigue viviendo `TEXTO_SIN_EXISTIR`.
 
-  El alta se compara contra el **fin** del periodo: una creada a mitad de agosto
-  existió en agosto. Y **una de «única vez» no tiene fin de periodo, así que ahí
-  manda el instante que se mira**: `periodoDeEncuesta` le da `fin: null` —su
-  periodo es «alguna vez»—, de modo que mirando sólo el fin no se descartaba
-  nunca, y las de DOJO y JUNTAS, creadas en julio, seguían pidiendo «0/9
-  respuestas · 0%» en abril mientras la de al lado ya decía «Todavía no
-  existía». Es además el mismo tope con el que `resumenDeEncuestaAdmin` le cuenta
-  las respuestas —nada de lo enviado después de esa fecha—, así que las dos
-  mitades miran lo mismo: si no se le cuenta ninguna respuesta posterior, tampoco
-  se le puede cobrar el padrón de antes de existir.
+  **Se compara contra el instante que se mira, que es el fin del periodo que se
+  dibuja**: una creada a mitad de agosto existió en agosto, aunque no el día 1.
+  Es además el mismo tope con el que `resumenDeEncuestaAdmin` le cuenta las
+  respuestas —nada de lo enviado después de esa fecha—, así que las dos mitades
+  miran lo mismo: si no se le cuenta ninguna respuesta posterior, tampoco se le
+  puede cobrar el padrón de antes de existir.
 
-  Sin `created_at` se cuenta. Y un 0% de una encuesta que sí existía se queda
+  **Y el periodo que manda es el del eje, no el de la encuesta.** Esto miraba el
+  fin del periodo *de la encuesta* (`periodoDeEncuesta`), y con eso el tope se
+  iba más allá del punto que se estaba dibujando en cuanto la encuesta era más
+  lenta que el eje. El eje de la tarjeta va en meses a la fuerza, así que al
+  preguntarle por agosto a una **semanal** el fin era el domingo 7 de septiembre
+  y a una **anual**, el 1 de enero siguiente: una que empieza el 1 de septiembre
+  seguía saliendo en agosto con su «0/64 respuestas · 0%», y con ella el punto de
+  la gráfica. Sólo cuadraba cuando encuesta y eje iban al mismo ritmo, que es por
+  qué pasó desapercibido: las mensuales salían bien.
+
+  El instante que se mira ya **es** el fin del periodo dibujado —lo pasan así los
+  dos que preguntan—, de modo que no hay nada que calcular: `alta <= referencia`
+  y se acabó. Lo de «única vez» —que no tiene fin de periodo y por eso caía en
+  esa rama ya entonces— resultó ser la regla de todas.
+
+  Sin fecha de alta se cuenta. Y un 0% de una encuesta que sí existía se queda
   como está: ahí el cero significa que no la contestó nadie, que es justo lo que
   hay que ver.
 
@@ -4426,8 +4437,18 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   sin corregirlo se desvanece en todos los periodos de atrás—. Se cuenta más
   arriba, con las trampas de `active`.
 
-  Cinco cosas que hay que mantener:
+  Seis cosas que hay que mantener:
 
+  - **La tarjeta no se entera sola de lo que se escribe desde la hoja de una
+    encuesta.** `cargarEncuestasAsignadas` sólo corre desde `mostrarDashboard`, y
+    cerrar la hoja se limita a esconderla: se cambiaba el título, la
+    clasificación, «Activa» o la fecha desde la que aplica, se volvía al inicio y
+    todo seguía diciendo lo de antes —y al tocar un punto de la gráfica, que no
+    consulta nada, lo de antes otra vez— hasta la siguiente recarga. Guardar una
+    encuesta, corregir a quién va dirigida y eliminarla llaman hoy a
+    **`window.refrescarTarjetaDeEncuestas()`**, que la rehace con lo que hay en la
+    base y devuelve el periodo elegido a hoy. Toda escritura nueva sobre
+    `evaluations` tiene que llamarla, como llama a `invalidarCacheDashboard`.
   - **El cuerpo de la tarjeta vive fuera de `cargarEncuestasAsignadas`**
     (`cuerpoTarjetaEncuestas`) porque se repinta sin volver a cargar nada, y
     **sólo se repintan el resumen y los bloques** —de ahí sus dos ids—: la

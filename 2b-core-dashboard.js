@@ -1057,9 +1057,10 @@ window.promedioSobrePadron = (suma, calificadas, padron) => {
 // lo mismo de tres maneras.
 window.TEXTO_SIN_EXISTIR = 'Todavía no existía';
 
-// ¿Existía ya esta encuesta en el periodo al que cae esa fecha? Se compara su
-// alta contra el **fin del periodo** y no contra la fecha misma: una creada a
-// mitad de agosto existió en agosto, aunque no el día 1.
+// ¿Existía ya esta encuesta en el instante que se está mirando? Se compara
+// desde cuándo cuenta contra esa fecha, que es **el último instante del periodo
+// que se dibuja** —el que le pasan los dos que preguntan—, así que una creada a
+// mitad de agosto existió en agosto aunque no el día 1.
 //
 // Hace falta porque una encuesta que todavía no existía **no vale cero**: su
 // padrón entero contaría como gente que no la contestó, y el periodo de antes
@@ -1069,14 +1070,21 @@ window.TEXTO_SIN_EXISTIR = 'Todavía no existía';
 // atrás, también la lista de debajo: sin esto las dos discrepaban, porque el
 // punto de abril se dibujaba sin esas encuestas y el renglón las contaba.
 //
-// **Una de «única vez» no tiene fin de periodo, y ahí manda el instante que se
-// mira.** `periodoDeEncuesta` le da `fin: null` —su periodo es «alguna vez»—,
-// así que mirando el fin no se descartaba nunca: las de DOJO y JUNTAS, creadas
-// en julio, seguían pidiendo «0/9 respuestas · 0%» en abril. Y es el mismo tope
-// con el que `resumenDeEncuestaAdmin` cuenta sus respuestas —nada de lo enviado
-// después del instante que se mira—, así que las dos mitades miran lo mismo: si
-// no se le cuenta ninguna respuesta posterior a esa fecha, tampoco se le puede
-// cobrar el padrón de antes de existir.
+// Es el mismo tope con el que `resumenDeEncuestaAdmin` cuenta sus respuestas
+// —nada de lo enviado después del instante que se mira—, así que las dos
+// mitades miran lo mismo: si no se le cuenta ninguna respuesta posterior a esa
+// fecha, tampoco se le puede cobrar el padrón de antes de existir.
+//
+// **El periodo que manda es el del eje, no el de la encuesta.** Esto miraba el
+// fin del periodo *de la encuesta* (`periodoDeEncuesta`), y con eso el tope se
+// iba más allá del punto que se estaba dibujando en cuanto la encuesta era más
+// lenta que el eje: el eje de la tarjeta va en meses a la fuerza, así que al
+// preguntarle por agosto a una **semanal** el fin era el domingo 7 de
+// septiembre y a una **anual**, el 1 de enero siguiente —una que empieza el 1
+// de septiembre seguía saliendo en agosto con su «0/64 respuestas · 0%»—. El
+// instante que se mira ya **es** el fin del periodo dibujado, así que no hay
+// nada que calcular: lo de «única vez» —que no tiene fin y por eso caía aquí ya
+// entonces— resultó ser la regla de todas.
 //
 // **Desde cuándo existe lo dice `inicioDeEncuesta`**, no `created_at` a secas:
 // una encuesta puede llevar puesta a mano la fecha desde la que aplica —el caso
@@ -1088,10 +1096,7 @@ window.TEXTO_SIN_EXISTIR = 'Todavía no existía';
 window.encuestaExistiaEn = (ev, referencia) => {
     const alta = window.inicioDeEncuesta(ev);
     if (!alta || isNaN(alta)) return true;
-    const cuando = referencia || new Date();
-    const periodo = window.periodoDeEncuesta(ev, cuando);
-    const fin = (periodo && periodo.fin) || cuando;
-    return alta < fin;
+    return alta <= (referencia || new Date());
 };
 
 // Lo mismo de un grupo de encuestas: se suman los puntajes y los padrones, no
@@ -1668,6 +1673,30 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // no depende de esto.
         console.warn('No se pudieron cargar las encuestas asignadas:', e.message);
     }
+};
+
+// Rehace la tarjeta del panel con lo que hay ahora en la base.
+//
+// Hace falta porque **el panel no se entera de lo que se escribe desde la hoja
+// de una encuesta**: `cargarEncuestasAsignadas` sólo corre desde
+// `mostrarDashboard`, y cerrar la hoja se limita a esconderla, así que la
+// tarjeta se quedaba con las filas que trajo al cargar el panel. Se cambiaba el
+// título, la clasificación, la casilla «Activa» o la fecha desde la que aplica,
+// se volvía al inicio y todo seguía diciendo lo de antes —y al tocar un punto de
+// la gráfica, que no consulta nada, lo de antes otra vez— hasta la siguiente
+// recarga. Es la misma idea que `invalidarCacheDashboard`, sólo que aquí no hay
+// caché que tirar sino una tarjeta que repintar.
+//
+// El periodo elegido vuelve a hoy, que es lo que hace la tarjeta al nacer: las
+// cifras son otras y dejarla en un mes de atrás sería enseñar las nuevas bajo el
+// rótulo viejo. Y no se espera: quien guarda no tiene por qué quedarse mirando
+// una consulta del panel de detrás.
+window.refrescarTarjetaDeEncuestas = () => {
+    if (!document.getElementById('container-encuestas-asignadas')) return;
+    let user = null;
+    try { user = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null'); } catch (e) { user = null; }
+    if (!user || !user.id) return;
+    window.cargarEncuestasAsignadas(user.id);
 };
 
 // El puntaje de una respuesta, o null si todavía no está calificada. Sin
