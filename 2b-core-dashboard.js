@@ -972,7 +972,7 @@ window.RITMO_GRAFICA_EMPRESA = 'monthly';
 // una encuesta anual arrastra el `gte` hasta enero y con ella el año entero.
 // Quien llega al tope lo dice en pantalla en vez de enseñar un promedio corto
 // como si fuera el bueno.
-window.respuestasDelPeriodoDeTodos = async (encuestas, ahora) => {
+window.respuestasDelPeriodoDeTodos = async (encuestas, ahora, frecuencia) => {
     const ids = (encuestas || []).map(e => e.id);
     if (ids.length === 0) return { respuestas: [], tope: false };
 
@@ -988,8 +988,15 @@ window.respuestasDelPeriodoDeTodos = async (encuestas, ahora) => {
     // que si no no habría historia que dibujar: con todas las encuestas
     // periódicas, `desde` sería el día 1 de este mes y la línea tendría un solo
     // punto. Es el mismo `gte` acotado de `cargarRespuestasQueReviso`.
+    //
+    // `frecuencia` es **el ritmo del eje que se va a dibujar**, no el de las
+    // encuestas: la tarjeta del panel habla de todas a la vez y su eje va en
+    // meses a la fuerza, pero la pantalla de una encuesta dibuja el suyo. Sin
+    // esto, una trimestral traía seis meses para un eje de seis trimestres y
+    // los cuatro puntos de atrás salían vacíos o, peor, a medias —que es la
+    // línea subiendo desde un suelo falso que la gráfica no dibuja nunca—.
     const periodos = window.periodosDeClasificacion(
-        [{ frequency: window.RITMO_GRAFICA_EMPRESA }], window.PERIODOS_EN_LA_GRAFICA);
+        [{ frequency: frecuencia || window.RITMO_GRAFICA_EMPRESA }], window.PERIODOS_EN_LA_GRAFICA);
     const masViejo = periodos.length ? periodos[periodos.length - 1].inicio : null;
     if (masViejo && (!desde || masViejo < desde)) desde = masViejo;
 

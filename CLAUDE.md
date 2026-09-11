@@ -710,6 +710,51 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Sin la ficha de la encuesta (`evalData` en null) el recuadro **no se dibuja**
   en lugar de caer al resultado personal, que es lo que se vino a quitar.
 
+  **Y debajo del recuadro va la línea de cómo se ha comportado.** El recuadro
+  dice dónde está hoy y la gráfica, si va a mejor: es la misma `graficaDeLinea`
+  de la tarjeta del panel con el mismo `historialDeRevision` que la alimenta
+  —`{ filas: [{ ev }] }` y `{ sobrePadron: true }`—, así que el último punto es,
+  por construcción, la cifra que se lee encima. Tocar un punto abre su globo y
+  nada más: aquí no hay una lista debajo que cambiar, que es lo que hace el
+  segundo argumento de `graficaDeLinea` en la tarjeta.
+
+  **El eje es el de esta encuesta y no el de meses de la tarjeta**: ahí se
+  mezclan trece frecuencias y el eje se fuerza a meses, pero aquí hay una sola,
+  así que una semanal se lee por semanas y una trimestral por trimestres —eso lo
+  hace `historialDeRevision` solo, llamándolo **sin** `frecuencia`—. Una de
+  «única vez» no tiene periodos que recorrer: da un punto, y con menos de dos no
+  se dibuja nada, que es lo correcto —esa encuesta no tiene tendencia—.
+
+  **Y salen de su propia consulta, que alimenta también el recuadro.** Las
+  respuestas que esta pantalla ya tiene a mano se piden con un `select('*')` sin
+  acotar, así que PostgREST las corta en mil: de una encuesta con casi tres mil
+  respuestas al mes el recuadro decía «1000/3237» mientras la tarjeta del panel
+  decía «2887/3237» de la misma. Hoy las dos salen de
+  `respuestasDelPeriodoDeTodos([ev], ahora, ev.frequency)`, acotada y paginada, y
+  **no se dibuja la gráfica si llegó al tope** —las respuestas vienen de la más
+  nueva, así que lo que falta son los periodos de atrás y la línea subiría desde
+  un suelo falso—, que es la regla de la tarjeta.
+
+  Ese **tercer argumento es nuevo**: es el ritmo del eje que se va a dibujar y
+  no el de las encuestas. La tarjeta no lo pasa —su eje va en meses a la
+  fuerza—, pero sin él una trimestral traía seis meses para un eje de seis
+  trimestres y los cuatro puntos de atrás salían vacíos o a medias.
+
+  Dos cosas que hay que mantener:
+
+  - **La consulta se lanza arriba y se espera abajo.** Esta pantalla se pinta
+    entera al final, así que en serie sería una espera más antes del primer
+    fotograma; lanzada en cuanto se sabe la encuesta, corre en paralelo con el
+    material y con las respuestas y no cuesta nada. Lleva su `.catch(() => null)`
+    **desde el lanzamiento**: una promesa que pasa un rato sin nadie que la
+    atienda se lleva por delante la pantalla entera si la red falla ahí, y sin
+    ella esa hoja se dibujaba igual. Al caer, el recuadro vuelve a las
+    respuestas que la pantalla ya tiene, que es lo de antes.
+  - **La plantilla se carga también en modo administrador.** De ella sale el
+    padrón sobre el que se reparten el recuadro y cada punto; sin ella el divisor
+    es cero, el recuadro cae a promediar sólo lo calificado y la línea no se
+    dibuja. Antes sólo se pedía si la encuesta pasaba lista.
+
   **Quién la revisa se enseña con `window.filaDeRevisores`**, la misma fila de
   caras con el nombre de pila debajo que la hoja de detalle de una
   clasificación. Era un renglón de texto dentro del recuadro gris —«La revisa
@@ -4019,7 +4064,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   ```js
   window.MAX_PAGINAS_RESPUESTAS            // 6, o sea 6000 filas
-  await window.respuestasDelPeriodoDeTodos(encuestas, ahora)  // { respuestas, tope }
+  await window.respuestasDelPeriodoDeTodos(encuestas, ahora, frecuencia)  // { respuestas, tope }
   window.resumenDeEncuestaAdmin(ev, respuestas, ahora)
   // → { contestaron, calificadas, padron, suma, promedio, promedioContestadas }
   window.promedioSobrePadron(suma, calificadas, padron)

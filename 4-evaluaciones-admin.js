@@ -93,7 +93,12 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // el inicio con la plantilla todavía sin cargar. Sólo si hay alguna
     // pregunta de asistencia: no se le cobra la consulta a quien abre una
     // encuesta que no pasa lista.
-    if ((qs || []).some(q => window.esPreguntaDeAsistencia(q)) &&
+    //
+    // Administrando hace falta igual, y por lo mismo: de la plantilla sale el
+    // padrón sobre el que se reparten el «Resultado de la empresa» y cada punto
+    // de su gráfica. Sin ella el divisor es cero, el recuadro cae a promediar
+    // sólo lo calificado y la línea no se dibuja.
+    if (((qs || []).some(q => window.esPreguntaDeAsistencia(q)) || window.modoAdminActivo) &&
         (window.todosLosEmpleadosData || []).length === 0 && window.cargarDatosEmpleados) {
         await window.cargarDatosEmpleados();
     }
@@ -103,6 +108,22 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // Hace falta antes de filtrar: es lo que dice si a esta persona le toca
     // revisar la encuesta aunque no sea jefe de nadie.
     const encuestaDeLaLista = await window.encuestaDeLaRespuesta(evalId);
+
+    // Lo que llena el recuadro de la empresa y su gráfica, **lanzado aquí y
+    // esperado abajo**: esta pantalla se pinta entera al final, así que una
+    // consulta más en serie sería una espera más antes del primer fotograma.
+    // Corre en paralelo con el material y con las respuestas y no cuesta nada.
+    //
+    // Y con su `catch` puesto desde ya: una promesa lanzada y esperada cinco
+    // líneas más abajo pasa un rato sin nadie que la atienda, y si la red falla
+    // ahí el rechazo se llevaría por delante la pantalla entera —hoy, sin esta
+    // consulta, esa hoja se dibuja igual—. Sin respuestas se cae a las que la
+    // pantalla ya tiene, que es exactamente lo de antes.
+    const empresaPendiente = (window.modoAdminActivo && encuestaDeLaLista
+        && window.respuestasDelPeriodoDeTodos)
+        ? window.respuestasDelPeriodoDeTodos([encuestaDeLaLista], new Date(), encuestaDeLaLista.frequency)
+            .catch(() => null)
+        : null;
 
     // El material de apoyo. Va aquí y no en paralelo con lo demás porque una
     // tabla que todavía no existe deja el recuadro sin dibujar y no puede
@@ -224,14 +245,46 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // misma función, que si no las dos pantallas discreparían.
     const miUltima = responses.find(r => String(r.employee_id) === String(user.id));
     let ultimoResultadoHtml = '';
+    let graficaHtml = '';
 
     if (window.modoAdminActivo) {
+        // La cifra de la empresa y su gráfica salen de **su propia consulta**,
+        // acotada al eje que se va a dibujar y paginada
+        // (`respuestasDelPeriodoDeTodos`), y no de las respuestas que esta
+        // pantalla ya tiene a mano: aquéllas se piden con un `select('*')` sin
+        // acotar y PostgREST las corta en mil, así que de una encuesta con casi
+        // tres mil respuestas al mes el recuadro decía «1000/3237» mientras la
+        // tarjeta del panel decía «2887/3237» de lo mismo. Es además la misma
+        // función que llena esa tarjeta, así que las dos pantallas no pueden
+        // discrepar.
+        const ahora = new Date();
+        const traidas = (empresaPendiente ? await empresaPendiente : null)
+            || { respuestas: responses, tope: false };
+
         // Sin la ficha de la encuesta no hay padrón que repartir, y ahí no se
         // cae al resultado personal: enseñarle al administrador su propio 100%
         // como el de la encuesta es justo lo que se vino a quitar.
         const resumen = evalData && window.resumenDeEncuestaAdmin
-            ? window.resumenDeEncuestaAdmin(evalData, responses, new Date()) : null;
-        const periodo = evalData ? window.periodoDeEncuesta(evalData, new Date()) : null;
+            ? window.resumenDeEncuestaAdmin(evalData, traidas.respuestas, ahora) : null;
+        const periodo = evalData ? window.periodoDeEncuesta(evalData, ahora) : null;
+
+        // Y debajo del recuadro, cómo se ha comportado la encuesta periodo a
+        // periodo: el recuadro dice dónde está hoy y la línea, si va a mejor.
+        // Es la misma `graficaDeLinea` de la tarjeta del panel y el mismo
+        // `historialDeRevision` que la alimenta, con una sola encuesta en vez
+        // de las de la empresa, así que el último punto es —por construcción—
+        // la cifra que se lee encima.
+        //
+        // **El eje es el de esta encuesta**, no el de meses de la tarjeta: aquí
+        // no hay que mezclar frecuencias, así que una semanal se lee por semanas
+        // y una trimestral por trimestres. Y **no se dibuja si la consulta llegó
+        // al tope**, que es la regla de siempre: las respuestas vienen de la más
+        // nueva, así que lo que se queda fuera son los periodos de atrás y la
+        // línea saldría subiendo desde un suelo falso.
+        if (resumen && !traidas.tope && window.historialDeRevision && window.graficaDeLinea) {
+            graficaHtml = window.graficaDeLinea(window.historialDeRevision(
+                { filas: [{ ev: evalData }] }, traidas.respuestas, { sobrePadron: true }));
+        }
         if (resumen) {
             const colorScore = resumen.promedio === null ? '#94a3b8' : window.getColorScore(resumen.promedio);
 
@@ -293,6 +346,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     const bannerHtml = `
         <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 25px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
             ${ultimoResultadoHtml}
+            ${graficaHtml}
             ${actionButtonHtml}
             ${destinatariosBtnHtml}
         </div>
