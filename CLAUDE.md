@@ -3990,31 +3990,79 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **La gráfica se dibuja a mano en SVG y no con Chart**, aunque el panel ya lo
   cargue: Chart mide el lienzo al dibujarlo y aquí la hoja está en
   `display:none` hasta el instante anterior, que es la misma trampa del radar
-  del panel plegado. Un SVG con `viewBox` no mide nada —se estira con su
-  contenedor—, así que tampoco hay que redibujarlo al girar el teléfono. Lleva
-  la referencia del 0, el 50 y el 100 y, aparte y a trazos, el mínimo de
-  `UMBRAL_CERTIFICACION`, que es contra lo que se lee cada punto. Con menos de
-  dos periodos con resultado no se dibuja nada —una línea de un punto no es una
-  tendencia—.
+  del panel plegado. Lleva la referencia del 0, el 50 y el 100 y, aparte y a
+  trazos, el mínimo de `UMBRAL_CERTIFICACION`, que es contra lo que se lee cada
+  punto. Con menos de dos periodos con resultado no se dibuja nada —una línea de
+  un punto no es una tendencia—.
 
-  **Y por eso mismo la caja lleva `max-width: 520px`.** Estirarse con el
-  contenedor quiere decir **escalarlo todo en bloque**: el mismo dibujo que en un
-  teléfono sale a 1:1 —340px de tarjeta contra 320 de lienzo— en una laptop de
-  1440 se escala 4,4×, y con él la letra de 8px, los puntos de radio 4 y los
-  150px de alto. El eje salía con «abr» a 35px y la gráfica se llevaba 660px de
-  pantalla, al lado de unos renglones de clasificación que seguían a su tamaño de
-  siempre. Es la otra cara de no tener que redibujarla nunca, y no se arregla con
-  una media consulta: el tamaño no depende del ancho de la pantalla sino del de
-  su contenedor.
+  **Se lleva todo el ancho de su contenedor, y lo que se topa es la escala del
+  trazo.** Un SVG con `viewBox` no mide nada: se estira con su contenedor y **lo
+  escala todo en bloque**, así que el mismo dibujo que en un teléfono sale a 1:1
+  —340px de tarjeta contra 320 de lienzo— en la tarjeta del panel de una laptop
+  se escalaba 2,7× y con él la letra de 8px, los puntos de radio 4 y los 150px de
+  alto: el eje salía con «abr» a 22px y la gráfica se llevaba media pantalla al
+  lado de unos renglones de clasificación que seguían a su tamaño de siempre.
 
-  El tope corta ese escalado en seco. Por debajo de 520px no cambia nada —en un
-  teléfono la tarjeta no llega, así que se ve exactamente igual que siempre— y
-  por encima el dibujo se queda como está en vez de crecer sin fin. Alcanza a las
-  **tres** gráficas, que las otras dos viven en hojas de 600 y 800px y también se
-  escalaban.
+  Eso se atajó un tiempo con un **tope de ancho de 520px** sobre la caja, y el
+  remedio tenía su propio defecto: por encima de esos 520 la gráfica dejaba de
+  crecer pero la tarjeta no, así que en una laptop —donde `.main-container` deja
+  890px de lienzo— se quedaba arrinconada a la izquierda con 350px muertos al
+  lado, que se lee como un fallo de maqueta.
 
-  **Va alineada a la izquierda, no centrada.** Centrada queda flotando en mitad
-  de la tarjeta con un hueco muerto a un lado, que se lee como un fallo de
+  Hoy la caja va a lo ancho y lo que se topa es **cuánto crece la tinta**:
+
+  ```js
+  window.ANCHO_BASE_GRAFICA   // 320, la talla de un teléfono
+  window.MAX_ESCALA_GRAFICA   // 1.6, hasta dónde se deja crecer el trazo
+  window.unidadesDeGrafica(anchoCaja)   // cuántas unidades de viewBox caben
+  window.dibujoDeGraficaDeLinea(puntos, alElegir, A)   // el <svg>, en A unidades
+  ```
+
+  `unidadesDeGrafica` reparte el ancho medido a escala tope y devuelve las
+  unidades de `viewBox` que caben dentro: con 890px de caja salen 556 unidades
+  dibujadas a 1,6×, así que **la letra, los puntos y el alto miden en pantalla
+  exactamente lo que medían con el tope de 520** —el dibujo entero era ahí 1,6×
+  la talla de un teléfono— y lo único que crece es lo que tenía que crecer, el
+  tramo de eje entre un periodo y el siguiente. Por debajo de 320 no se encoge
+  nada: en un teléfono la caja no llega a esa talla y el dibujo se ve
+  exactamente igual que siempre.
+
+  **La contrapartida es que ahora sí hay que medir, y por tanto redibujar.**
+  `graficaDeLinea` dibuja a la talla base —al devolver la cadena no hay todavía
+  nada en el documento que medir—, se apunta en `window.graficasDeLinea` con su
+  número en `data-grafica` y pide un barrido:
+
+  ```js
+  window.programarAjusteDeGraficas()   // uno por fotograma, no uno por gráfica
+  window.ajustarGraficasDeLinea()      // el barrido: pone al día y vigila
+  window.ajustarGraficaDeLinea(caja)   // una sola, si cambió de talla
+  ```
+
+  El barrido corre en el `requestAnimationFrame` siguiente —los tres sitios que
+  la dibujan insertan el HTML en la misma tanda—, deja cada caja vigilada por un
+  `ResizeObserver` y tira del registro las que ya no están en el documento, que
+  cada repintado crea una caja nueva. De ahí en adelante es el observador quien
+  avisa: al girar el teléfono, al cambiar el tamaño de la ventana y **al abrirse
+  la hoja que la traía**, que es el caso de las otras dos gráficas —mientras el
+  overlay está en `display:none` la caja mide cero y ahí no se toca nada—. El
+  `resize` con su temporizador se queda como red de seguridad para los Safari sin
+  `ResizeObserver`.
+
+  Tres cosas que hay que mantener:
+
+  - **Se mide el SVG, no la caja.** Va a `width:100%`, así que lo que ocupa es
+    justo el hueco disponible, ya descontado el relleno de la caja.
+  - **Si la talla sale la misma no se toca nada**, y eso es lo que corta el
+    bucle del observador: redibujar cambia el alto, el alto vuelve a avisar al
+    observador y ahí se sale.
+  - **El globo abierto sobrevive al redibujado.** En la tarjeta del panel no es
+    un detalle que se abre y se cierra sino la marca de qué periodo se está
+    mirando, y perderlo al girar el teléfono dejaría la lista hablando de un
+    periodo sin decir cuál.
+
+  **Va alineada a la izquierda, no centrada.** Hoy ocupa el ancho entero y no se
+  nota, pero la regla se queda: una caja más estrecha que su contenedor centrada
+  queda flotando con un hueco muerto a cada lado, que se lee como un fallo de
   maqueta; a la izquierda cae a plomo con el renglón del resumen y con los de
   cada clasificación, o sea dentro de la columna de texto a la que pertenece.
 

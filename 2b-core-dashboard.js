@@ -1746,13 +1746,55 @@ window.historialDeClasificacion = (grupo, cuantos, respuestas) => {
     });
 };
 
-// La gráfica de línea del historial, dibujada a mano en SVG.
+// El ancho, en unidades del `viewBox`, con el que se dibuja mientras no se ha
+// medido nada: el de un teléfono, que es donde no sobra ni un píxel.
+window.ANCHO_BASE_GRAFICA = 320;
+
+// Hasta cuánto se deja crecer **la tinta** —la letra del eje, el radio de los
+// puntos, el grosor de la línea, los márgenes—. Un SVG con `viewBox` no mide
+// nada: se estira con su contenedor y **lo escala todo en bloque**, así que el
+// mismo dibujo que en un teléfono sale a 1:1 —340px de tarjeta contra 320 de
+// lienzo— en la tarjeta del panel de una laptop se escalaba 2,7× y con él la
+// letra de 8px, los puntos de radio 4 y los 150px de alto.
+//
+// Eso se atajó un tiempo con un tope de ancho de 520px sobre la caja, y el
+// remedio tenía su propio defecto: por encima de esos 520 la gráfica dejaba de
+// crecer pero la tarjeta no, así que en una laptop se quedaba arrinconada a la
+// izquierda con 350px muertos al lado, que se lee como un fallo de maqueta.
+//
+// Lo que se topa hoy es la escala y no el ancho: la caja se lleva **todo** el
+// ancho de su contenedor y lo que se calcula es cuántas unidades de `viewBox`
+// caben dentro a esa escala. Con eso el trazo mide en pantalla exactamente lo
+// que medía con el tope de 520 —1,6× la talla de un teléfono— y lo que crece es
+// el único que tenía que crecer: el tramo de eje entre un periodo y el
+// siguiente.
+window.MAX_ESCALA_GRAFICA = 1.6;
+
+// Cuántas unidades de `viewBox` se dibujan para una caja de este ancho en
+// píxeles. Por debajo de la talla base no se encoge nada —en un teléfono la
+// tarjeta no llega a 320 y ahí el dibujo se ve exactamente como siempre—; por
+// encima se reparte el ancho sobrante a escala tope.
+window.unidadesDeGrafica = (anchoCaja) => {
+    const base = window.ANCHO_BASE_GRAFICA;
+    const ancho = Math.round(anchoCaja || 0);
+    if (!(ancho > base)) return base;
+    return Math.round(ancho / Math.min(window.MAX_ESCALA_GRAFICA, ancho / base));
+};
+
+// Lo dibujado y todavía a mano, por si hay que rehacerlo a otra talla: la caja
+// lleva su número en `data-grafica` y aquí están sus puntos. Cada repintado
+// crea una entrada nueva, así que el barrido tira las que ya no están en el
+// documento.
+window.graficasDeLinea = {};
+
+// La gráfica de cómo se ha comportado algo periodo a periodo: un punto por
+// periodo con resultado, la línea que los une y el eje de abajo con el nombre
+// de cada uno. Con menos de dos puntos devuelve '' —una línea de un punto no es
+// una tendencia— y entonces no se dibuja nada.
 //
 // No usa Chart aunque el panel ya lo cargue: Chart mide el lienzo al dibujarlo
 // y aquí la hoja está en `display:none` hasta el instante anterior, que es la
-// misma trampa del radar del panel plegado. Un SVG con `viewBox` no mide nada
-// —se estira con su contenedor— así que tampoco hay que redibujarlo al girar el
-// teléfono.
+// misma trampa del radar del panel plegado.
 //
 // `alElegir` es el nombre de la función a la que se le pasa el índice del punto
 // tocado. Sin él, tocar un punto sólo abre su globo, que es lo que hacen las
@@ -1760,10 +1802,29 @@ window.historialDeClasificacion = (grupo, cuantos, respuestas) => {
 // del panel, que pasa a hablar de aquel mes—. Es un identificador escrito aquí
 // dentro y no texto de nadie: no hay nada que escapar.
 window.graficaDeLinea = (puntos, alElegir) => {
-    const conDato = puntos.filter(p => p.promedio !== null);
-    if (conDato.length < 2) return '';
+    if (puntos.filter(p => p.promedio !== null).length < 2) return '';
 
-    const A = 320, ALTO = 150, IZQ = 26, DER = 10, ARRIBA = 16, ABAJO = 26;
+    // Se dibuja a la talla base, que es la que no se puede equivocar: aquí
+    // todavía no hay nada en el documento que medir. El barrido de debajo la
+    // rehace en cuanto la caja tiene ancho, y el observador la mantiene al día
+    // si cambia —al girar el teléfono, o al abrirse la hoja que la traía—.
+    const id = (window.contadorDeGraficas = (window.contadorDeGraficas || 0) + 1);
+    const unidades = window.ANCHO_BASE_GRAFICA;
+    window.graficasDeLinea[id] = { puntos, alElegir, unidades };
+    window.programarAjusteDeGraficas();
+
+    return `
+        <div class="grafica-linea" data-grafica="${id}"
+             style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 8px 4px; margin-bottom:16px;">
+            ${window.dibujoDeGraficaDeLinea(puntos, alElegir, unidades)}
+        </div>`;
+};
+
+// El SVG, dibujado en `A` unidades de ancho. Todo lo que no sea el reparto
+// horizontal de los puntos va en unidades fijas, así que es la escala a la que
+// se estire el `viewBox` la que decide el tamaño del trazo en pantalla.
+window.dibujoDeGraficaDeLinea = (puntos, alElegir, A) => {
+    const ALTO = 150, IZQ = 26, DER = 10, ARRIBA = 16, ABAJO = 26;
     const ancho = A - IZQ - DER, alto = ALTO - ARRIBA - ABAJO;
     const n = puntos.length;
     const x = (i) => IZQ + (n === 1 ? ancho / 2 : ancho * i / (n - 1));
@@ -1830,34 +1891,85 @@ window.graficaDeLinea = (puntos, alElegir) => {
                 </g>`;
     }).join('');
 
-    // **La caja lleva tope de ancho, y no es cosmética.** Un SVG con `viewBox`
-    // no mide nada: se estira con su contenedor y **lo escala todo en bloque**,
-    // así que el mismo dibujo que en un teléfono sale a 1:1 —340px de tarjeta
-    // contra 320 de lienzo— en una laptop de 1440 se escala 4,4× y con él la
-    // letra de 8px, los puntos de radio 4 y los 150px de alto: el eje salía con
-    // «abr» a 35px y la gráfica se llevaba 660px de pantalla, al lado de unos
-    // renglones de clasificación que seguían a su tamaño de siempre. Es la otra
-    // cara de lo que hace que no haya que redibujarla al girar el teléfono.
-    //
-    // El tope corta ese escalado en seco: por debajo de 520px no cambia nada
-    // —en un teléfono la tarjeta no llega, así que se ve exactamente igual— y
-    // por encima el dibujo se queda como está en vez de crecer sin fin. Alcanza
-    // a las tres gráficas, que las otras dos viven en hojas de 600 y 800px y
-    // también se escalaban.
-    //
-    // **Y va alineada a la izquierda, no centrada.** Centrada queda flotando en
-    // mitad de la tarjeta con un hueco muerto a un lado, que se lee como un
-    // fallo de maqueta; a la izquierda cae a plomo con el renglón del resumen y
-    // con los de cada clasificación, o sea dentro de la columna de texto a la
-    // que pertenece.
+    // `width:100%` con `height:auto`: el alto sale de la proporción del
+    // `viewBox`, así que a más unidades de ancho, más baja queda la gráfica en
+    // pantalla —y el trazo, que va en unidades fijas, se queda donde estaba—.
     return `
-        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 8px 4px; margin-bottom:16px; max-width:520px;">
-            <svg viewBox="0 0 ${A} ${ALTO}" style="width:100%; height:auto; display:block;" role="img"
-                 aria-label="Resultados por periodo">
-                ${rejilla}${umbral}${linea}${dots}${rotulos}${globos}
-            </svg>
-        </div>`;
+        <svg viewBox="0 0 ${A} ${ALTO}" style="width:100%; height:auto; display:block;" role="img"
+             aria-label="Resultados por periodo">
+            ${rejilla}${umbral}${linea}${dots}${rotulos}${globos}
+        </svg>`;
 };
+
+// Redibuja una gráfica si su caja ha cambiado de ancho. No toca nada cuando la
+// talla sale la misma, que es lo que corta el bucle del observador: redibujar
+// cambia el alto, el alto vuelve a avisar al observador y aquí se sale.
+window.ajustarGraficaDeLinea = (caja) => {
+    const reg = window.graficasDeLinea[caja.getAttribute('data-grafica')];
+    if (!reg) return;
+    const svg = caja.querySelector('svg');
+    if (!svg) return;
+
+    // Se mide el SVG y no la caja: va a `width:100%`, así que lo que ocupa es
+    // justo el hueco disponible, ya descontado el relleno de la caja. Un cero
+    // es una hoja todavía en `display:none` —el observador vuelve a avisar en
+    // cuanto se abra—.
+    const A = window.unidadesDeGrafica(svg.getBoundingClientRect().width);
+    if (A === reg.unidades || svg.getBoundingClientRect().width < 1) return;
+
+    // El globo abierto no es un detalle que se abre y se cierra: en la tarjeta
+    // del panel es la marca de qué periodo se está mirando, y perderlo al girar
+    // el teléfono dejaría la lista hablando de un periodo sin decir cuál.
+    let marcado = null;
+    svg.querySelectorAll('[data-globo]').forEach(g => {
+        if (g.style.display !== 'none') marcado = g.getAttribute('data-globo');
+    });
+
+    reg.unidades = A;
+    caja.innerHTML = window.dibujoDeGraficaDeLinea(reg.puntos, reg.alElegir, A);
+    if (marcado !== null) {
+        const globo = caja.querySelector(`[data-globo="${marcado}"]`);
+        if (globo) globo.style.display = '';
+    }
+};
+
+// El barrido: pone al día las que hay en el documento, las deja vigiladas y
+// tira del registro las que ya no están —cada repintado crea una caja nueva—.
+window.ajustarGraficasDeLinea = () => {
+    window.ajusteDeGraficasPedido = false;
+    if (!window.observadorDeGraficas && typeof ResizeObserver === 'function') {
+        window.observadorDeGraficas = new ResizeObserver(entradas => {
+            entradas.forEach(e => window.ajustarGraficaDeLinea(e.target));
+        });
+    }
+    const vistas = {};
+    document.querySelectorAll('[data-grafica]').forEach(caja => {
+        vistas[caja.getAttribute('data-grafica')] = true;
+        if (window.observadorDeGraficas) window.observadorDeGraficas.observe(caja);
+        window.ajustarGraficaDeLinea(caja);
+    });
+    Object.keys(window.graficasDeLinea).forEach(id => {
+        if (!vistas[id]) delete window.graficasDeLinea[id];
+    });
+};
+
+// Un barrido por fotograma, no uno por gráfica: una tarjeta puede traer varias
+// y todas se insertan en la misma tanda. Se pide desde `graficaDeLinea`, que es
+// lo que descubre la caja recién escrita y se la entrega al observador; de ahí
+// en adelante es él quien avisa.
+window.programarAjusteDeGraficas = () => {
+    if (window.ajusteDeGraficasPedido) return;
+    window.ajusteDeGraficasPedido = true;
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(window.ajustarGraficasDeLinea);
+    else setTimeout(window.ajustarGraficasDeLinea, 0);
+};
+
+// Sin `ResizeObserver` —Safari viejo— el giro del teléfono y el cambio de
+// tamaño de la ventana son lo único que puede mover el ancho de una caja.
+window.addEventListener('resize', () => {
+    clearTimeout(window.relojDeGraficas);
+    window.relojDeGraficas = setTimeout(window.ajustarGraficasDeLinea, 150);
+});
 
 // El globo de un punto de la gráfica: se enseña al tocarlo y se quita al volver
 // a tocarlo o al tocar otro. Sólo uno a la vez, que en un teléfono dos globos
