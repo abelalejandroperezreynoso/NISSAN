@@ -4097,7 +4097,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.resumenDeEncuestaAdmin(ev, respuestas, ahora)
   // → { contestaron, calificadas, padron, suma, promedio, promedioContestadas }
   window.promedioSobrePadron(suma, calificadas, padron)
-  window.totalDeEncuestasAdmin(filas)      // el de un grupo, o el de la tarjeta
+  window.totalDeEncuestasAdmin(filas)      // el de un grupo: pondera por padrón
+  window.promedioDeClasificaciones(filas)  // el de la tarjeta: cada clasificación pesa igual
   window.textoDeRespuestasAdmin(resumen)   // «23/40 respuestas»
   window.encuestaExistiaEn(ev, referencia) // ¿existía ya en ese periodo?
   window.ritmoDelEjeDeEncuesta(ev)         // el suyo, o meses si no tiene periodos
@@ -4144,10 +4145,34 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     vez» se resuelve como «alguna vez» —desde el origen del tiempo—, así que ahí
     se cuentan **todas** las respuestas que ha tenido nunca. Es lo correcto —esa
     encuesta se contesta una vez y ya— y es de donde salía el «126/95».
-  - **Un grupo suma puntajes y padrones; no promedia promedios.** Una encuesta
-    de cuarenta personas y otra de tres no pesan igual, y promediar sus dos
-    cifras las iguala. Lo hace `totalDeEncuestasAdmin`, que es por donde pasan
-    el pie de la clasificación y el renglón de la tarjeta.
+  - **Dentro de una clasificación se suman puntajes y padrones; no se
+    promedian promedios.** Una encuesta de cuarenta personas y otra de tres no
+    pesan igual, y promediar sus dos cifras las iguala. Lo hace
+    `totalDeEncuestasAdmin`, que es de donde sale el pie de cada clasificación
+    y el de su hoja de detalle.
+  - **Pero la cifra de la empresa pesa por clasificación, no por padrón**
+    (`promedioDeClasificaciones`). Ponderando también ahí, el número de la
+    tarjeta acababa siendo el de la clasificación más grande disfrazado de
+    número de la empresa: en abril, LÍDER 5 REGLAS se llevaba 3237 de los 3426
+    del padrón —el **94%**—, así que el 65% de arriba era su 67% y AUDITORIA al
+    33% y DIAGNOSIS al 29% no movían un punto. La línea salía plana en 65%
+    durante seis meses sin decir nada de las otras dos, que son justo las que
+    van mal. Con cada clasificación pesando igual, (33+29+67)/3 = **43%**.
+
+    No es una incoherencia con el punto de arriba: **son dos niveles distintos**.
+    Dentro de una clasificación sus encuestas miden lo mismo sobre gente
+    comparable, así que el tamaño manda; entre clasificaciones, cada una es un
+    programa distinto y el indicador de la empresa dice cómo va el programa
+    entero, no cómo va su parte más numerosa.
+
+    Una clasificación sin nada calificado —o que en aquel periodo todavía no
+    existía— no entra en la media: su promedio es null y un cero ahí se leería
+    como haberlo hecho mal en vez de no haber empezado.
+
+    **Lo que no cambia son las cuentas de respuestas.** «2993/3426» son
+    personas, y ahí cada una cuenta una vez se pondere como se pondere: ese
+    trozo del renglón lo sigue dando `totalDeEncuestasAdmin`. Lo único que sale
+    de la media es el porcentaje.
   - **La consulta se acota o se trae el historial de la empresa.** Va con un
     `gte` al inicio del periodo **más temprano** de las encuestas en juego, y
     pagina de mil en mil, que es el tope de PostgREST. El tope de páginas existe
@@ -4172,6 +4197,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   nueva, así que lo que se queda fuera son los periodos de atrás y la línea
   saldría subiendo desde un suelo falso—, ni con menos de dos periodos con
   resultado, que una línea de un punto no es una tendencia.
+
+  **Y cada punto se calcula con la misma regla que el renglón** —de eso va la
+  opción `porClasificacion` de `historialDeRevision`, que sólo pasa esta
+  tarjeta—: el último punto **es** la cifra que se lee encima, así que si el
+  renglón pesa por clasificación y la gráfica por padrón, el globo diría 43%
+  sobre un renglón que dice 65%. La hoja de detalle de una clasificación la
+  llama **sin** esa opción, y tiene que ser así: ahí sólo hay una clasificación
+  y lo que se compara son sus encuestas entre sí.
 
   **El eje va en meses y a la fuerza** (`window.RITMO_GRAFICA_EMPRESA`). El
   ritmo de una clasificación lo marca su encuesta más frecuente, pero la tarjeta

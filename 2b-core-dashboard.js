@@ -1106,6 +1106,43 @@ window.totalDeEncuestasAdmin = (filas) => {
              promedio: window.promedioSobrePadron(suma, calificadas, total) };
 };
 
+// **El promedio de la empresa pesa por clasificación, no por padrón.** Sumando
+// puntajes y padrones de todas sus encuestas de un tirón —que es lo que hace
+// `totalDeEncuestasAdmin`— la cifra acaba siendo la de la clasificación más
+// grande: en abril, LÍDER 5 REGLAS se llevaba 3237 de los 3426 del padrón, el
+// 94%, así que el 65% de la tarjeta era su 67% y AUDITORIA al 33% y DIAGNOSIS
+// al 29% no movían un punto. Una línea plana que en realidad era la de una sola
+// clasificación, y que además escondía justo a las que van mal.
+//
+// Aquí cada clasificación pesa lo mismo —(33+29+67)/3 = 43%—, que es lo que se
+// quiere de un indicador de la empresa: dice cómo va el programa entero y no
+// cómo va su parte más numerosa.
+//
+// **Dentro de una clasificación se sigue ponderando**, y no es una
+// incoherencia: ahí sus encuestas miden lo mismo sobre gente comparable, y una
+// de cuarenta personas y otra de tres no pueden pesar igual. Lo que se reparte
+// en partes iguales es el nivel de arriba, donde cada clasificación es un
+// programa distinto.
+//
+// Una clasificación sin nada calificado —o que en aquel periodo todavía no
+// existía— no entra: su promedio es null y un cero ahí se leería como haberlo
+// hecho mal en vez de no haber empezado.
+window.promedioDeClasificaciones = (filas) => {
+    const porClasificacion = {};
+    (filas || []).forEach(f => {
+        if (!f || !f.ev) return;
+        const clave = window.normalizarClasificacion(f.ev.category || '');
+        (porClasificacion[clave] = porClasificacion[clave] || []).push(f);
+    });
+
+    const promedios = Object.values(porClasificacion)
+        .map(unas => window.totalDeEncuestasAdmin(unas).promedio)
+        .filter(p => p !== null);
+
+    if (promedios.length === 0) return null;
+    return Math.round(promedios.reduce((a, b) => a + b, 0) / promedios.length);
+};
+
 // «23/40 respuestas», o sólo cuántas hay si no se pudo saber el padrón. El
 // divisor es `total` —el padrón de hoy más quien contestó y ya no está en él—,
 // que es lo único que no puede dar una fracción mayor que uno.
@@ -1360,6 +1397,11 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
     // sólo sale cuando de verdad se alcanzó: un promedio sacado de una parte
     // de las respuestas no se puede enseñar como si fueran todas.
     const total = esAdmin ? window.totalDeEncuestasAdmin(filas) : null;
+    // La cuenta de respuestas sigue siendo la suma de todas —2993 de 3426 es
+    // gente, y ahí cada persona cuenta una—; lo que pesa por clasificación es
+    // el promedio. Tiene que salir de ahí y no de `total.promedio`, o el
+    // renglón diría 65% encima de un punto de la gráfica que dice 43%.
+    const promedioAdmin = esAdmin ? window.promedioDeClasificaciones(filas) : null;
     // Cuántas encuestas había entonces, no cuántas hay hoy: mirando abril, las
     // cuatro que se crearon en julio no son cuatro encuestas al 0%, es que
     // todavía no existían. Así el renglón dice la misma cifra que el punto de
@@ -1373,7 +1415,7 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
         ? [
             `${cuantasAdmin} encuesta${cuantasAdmin === 1 ? '' : 's'}`,
             window.textoDeRespuestasAdmin(total),
-            total.promedio === null ? null : `${total.promedio}%`,
+            promedioAdmin === null ? null : `${promedioAdmin}%`,
             topeRespuestas ? 'sobre las respuestas más recientes' : null
           ].filter(Boolean).join(' · ')
         : [
@@ -1586,7 +1628,8 @@ window.cargarEncuestasAsignadas = async (userId) => {
         window.filasDeLaTarjeta = filas;
         window.periodosDeLaTarjeta = (esAdmin && !topeRespuestas)
             ? window.historialDeRevision({ filas }, respuestas,
-                { sobrePadron: true, frecuencia: window.RITMO_GRAFICA_EMPRESA })
+                { sobrePadron: true, frecuencia: window.RITMO_GRAFICA_EMPRESA,
+                  porClasificacion: true })
             : [];
         window.periodoElegidoTarjeta = null;
         // `padronDeLaEncuesta` recorre la plantilla entera: se pregunta una vez
@@ -2232,6 +2275,13 @@ window.cargarRespuestasQueReviso = () => {
 window.historialDeRevision = (grupo, respuestas, opciones) => {
     const opts = (opciones === true) ? { sobrePadron: true } : (opciones || {});
     const sobrePadron = !!opts.sobrePadron;
+    // **Cada clasificación pesa lo mismo**, en vez de sumar puntajes y padrones
+    // de todas sus encuestas de un tirón. Lo pasa sólo la tarjeta del panel, que
+    // es la única que habla de varias clasificaciones a la vez: sin esto su
+    // línea era la de la clasificación más grande —el 94% del padrón— disfrazada
+    // de línea de la empresa. Es la misma regla de `promedioDeClasificaciones`,
+    // y tiene que serlo: el último punto **es** la cifra que se lee encima.
+    const porClasificacion = !!opts.porClasificacion;
     const encuestas = (grupo.filas || []).map(f => f.ev);
 
     // `frecuencia` fuerza el ritmo del eje. La gráfica de una clasificación no
@@ -2254,10 +2304,27 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
         padrones[ev.id] = window.padronDeLaEncuesta(ev);
     });
 
+    // La media de los promedios de cada clasificación. Es `promedioDeClasificaciones`
+    // sobre lo ya acumulado de este periodo, y no puede llamarla directamente
+    // porque aquélla parte de filas con su `resumen` puesto y aquí lo que hay
+    // son los totales del periodo que se está dibujando.
+    const mediaDeClasificaciones = (porClave) => {
+        const promedios = Object.values(porClave)
+            .map(a => window.promedioSobrePadron(a.suma, a.calificadas, a.divisor))
+            .filter(p => p !== null);
+        if (promedios.length === 0) return null;
+        return Math.round(promedios.reduce((a, b) => a + b, 0) / promedios.length);
+    };
+
     return periodos.slice().reverse().map(p => {
         const puntajes = [];
         let entregadas = 0;
         let suma = 0, calificadas = 0, divisor = 0, contestaron = 0;
+        // Lo mismo, partido por clasificación, para cuando cada una pesa igual.
+        // Las cuentas de arriba se siguen llevando enteras: son gente y
+        // respuestas, y ahí cada persona cuenta una vez, se pondere como se
+        // pondere.
+        const porClave = {};
 
         // El periodo que corre se pregunta **con la hora de ahora** y no con su
         // último instante, que todavía no ha llegado. Sólo importa cuando el
@@ -2292,6 +2359,14 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
                 calificadas += r.calificadas;
                 divisor += r.total;
                 contestaron += r.contestaron;
+
+                if (porClasificacion) {
+                    const clave = window.normalizarClasificacion(ev.category || '');
+                    const acc = porClave[clave] || (porClave[clave] = { suma: 0, calificadas: 0, divisor: 0 });
+                    acc.suma += r.suma;
+                    acc.calificadas += r.calificadas;
+                    acc.divisor += r.total;
+                }
                 return;
             }
 
@@ -2324,7 +2399,8 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
             total: sobrePadron ? contestaron : entregadas,
             divisor,
             promedio: sobrePadron
-                ? window.promedioSobrePadron(suma, calificadas, divisor)
+                ? (porClasificacion ? mediaDeClasificaciones(porClave)
+                    : window.promedioSobrePadron(suma, calificadas, divisor))
                 : (puntajes.length === 0 ? null
                     : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length))
         };
