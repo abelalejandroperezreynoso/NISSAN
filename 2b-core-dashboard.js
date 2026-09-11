@@ -1228,12 +1228,14 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             }
 
             // Mirando un periodo en el que esta encuesta todavía no existía no
-            // hay respuestas que contar ni promedio que repartir: se dice, en
-            // gris, en lugar de enseñar el «0/9 respuestas · 0%» que salía de
-            // repartir su padrón entre gente que no pudo contestarla.
-            if (existia === false) {
-                resultado = ` · <span style="color:#94a3b8;">${window.TEXTO_SIN_EXISTIR}</span>`;
-            }
+            // hay respuestas que contar ni promedio que repartir: el renglón se
+            // queda **sin cifras y desvanecido**, en lugar de enseñar el «0/9
+            // respuestas · 0%» que salía de repartir su padrón entre gente que
+            // no pudo contestarla. Debajo le queda su ritmo, que es de la
+            // encuesta y no del periodo, así que no se lleva por delante la
+            // regla de no dejar un título con nada debajo. Lo que pasó se dice
+            // en el `title`, como el resto de lo que no cabe en un renglón.
+            if (existia === false) resultado = '';
 
             // El globo dice lo que la cifra no puede: qué sacaron los que
             // sí contestaron, que es de donde sale el promedio de la
@@ -1246,7 +1248,7 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
 
             return `
                 <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
-                     title="${globo}"
+                     title="${globo}" class="${existia === false ? 'sin-existir' : ''}"
                      style="display:flex; align-items:center; gap:10px; padding:9px 8px 9px 30px; border-top:1px solid #f1f5f9; cursor:pointer;">
                     ${window.iconoDeAsignada(estado)}
                     <div style="flex:1; min-width:0;">
@@ -1276,7 +1278,13 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             ? window.getColorScore(promedioGrupo) : '#64748b';
 
         const cuantas = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
-        const pie = (esAdmin && vigentes.length === 0) ? window.TEXTO_SIN_EXISTIR : [
+        // Ninguna de las suyas existía: el renglón se desvanece entero y dice
+        // cuántas encuestas tiene, que es lo único suyo que no depende del
+        // periodo. «0 respuestas», que es lo que daría `totalDeEncuestasAdmin`
+        // sin filas que sumar, diría que nadie contestó algo que no se había
+        // creado.
+        const sinExistir = esAdmin && vigentes.length === 0;
+        const pie = sinExistir ? cuantas : [
             esAdmin
                 ? window.textoDeRespuestasAdmin(totalGrupo)
                 : (pendientesGrupo > 0
@@ -1297,7 +1305,9 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
         // botón suyo. Son dos acciones distintas sobre la misma fila.
         return `
             <details class="grupo-asignadas">
-                <summary onclick="event.preventDefault(); window.abrirDetalleClasificacion(${indice})">
+                <summary onclick="event.preventDefault(); window.abrirDetalleClasificacion(${indice})"
+                         class="${sinExistir ? 'sin-existir' : ''}"
+                         title="${sinExistir ? window.TEXTO_SIN_EXISTIR : ''}">
                     ${window.iconoDeAsignada(estadoGrupo)}
                     <div style="flex:1; min-width:0;">
                         <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${window.sanitizeForHTML(g.nombre)}</div>
@@ -2038,19 +2048,21 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
             ? new Date(cuando).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })
             : '';
         // Con un periodo de atrás elegido en la gráfica de la tarjeta, la que
-        // entonces no existía lo dice: `verPeriodoDeLaTarjeta` la dejó sin
-        // puntaje, y sin esto su renglón quedaría con el estado de hoy encima
-        // de unas cifras que son de otro periodo.
+        // entonces no existía se desvanece y se queda con su ritmo a secas:
+        // `verPeriodoDeLaTarjeta` la dejó sin puntaje, y sin esto su renglón
+        // llevaría el estado de hoy encima de unas cifras que son de otro
+        // periodo. Lo dice su `title`, como en la tarjeta del panel.
+        const sinExistir = existia === false;
         const pie = [
             window.sanitizeForHTML(ritmo),
-            existia === false
-                ? `<span style="color:#94a3b8;">${window.TEXTO_SIN_EXISTIR}</span>`
-                : `<span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`,
-            (existia !== false && fecha) ? `${resp ? 'contestada' : 'última vez'} ${fecha}` : null
+            sinExistir ? null : `<span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`,
+            (!sinExistir && fecha) ? `${resp ? 'contestada' : 'última vez'} ${fecha}` : null
         ].filter(Boolean).join(' · ');
 
         return `
             <div onclick="${abridor}('${ev.id}', '${safeTitle}')"
+                 class="${sinExistir ? 'sin-existir' : ''}"
+                 title="${sinExistir ? window.TEXTO_SIN_EXISTIR : ''}"
                  style="display:flex; align-items:center; gap:12px; padding:12px 4px; border-top:1px solid #f1f5f9; cursor:pointer;">
                 ${window.iconoDeAsignada(estado)}
                 <div style="flex:1; min-width:0;">

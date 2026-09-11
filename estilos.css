@@ -2144,6 +2144,18 @@ textarea:focus {
 
 .grupo-asignadas > summary::-webkit-details-marker { display: none; }
 
+/* Lo que en el periodo que se está mirando todavía no existía va desvanecido,
+   no con palabras. Decirlo —«Todavía no existía»— gastaba el renglón que las
+   demás usan para su cifra y ponía un texto largo donde el resto de la lista
+   tiene números, así que se leía como el dato más importante de la tarjeta
+   siendo el que menos dice.
+
+   No se distingue **sólo** por lo apagado, que sería pedirle a la vista lo que
+   esta aplicación no le pide en ningún otro sitio: al renglón le faltan además
+   los números —queda su ritmo y nada más, frente al «0/9 respuestas · 0%» de
+   una que sí existía— y lo dice con todas las letras su `title`. */
+.sin-existir { opacity: 0.45; }
+
 /* La flecha va dentro de un botón suyo, porque el renglón entero hace otra
    cosa: abre la hoja de detalle de la clasificación. Sin botón, tocar el
    renglón era la única acción posible y no cabían las dos. */

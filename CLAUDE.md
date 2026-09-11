@@ -4143,12 +4143,29 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   encuestas y el renglón de debajo las contaba, de modo que el globo decía 65%
   encima de un resumen que decía 63%.
 
-  Hoy esa encuesta se queda sin resumen y sin puntaje, y lo dice
-  (`TEXTO_SIN_EXISTIR`) en los **tres** sitios que la nombran: su renglón, el
-  pie de su clasificación —cuando ninguna de las suyas existía— y su fila de la
-  hoja de detalle. Se va al final de su grupo, que no tiene nada que decir de
-  aquel periodo, y **el resumen cuenta las que había entonces** —«9 encuestas»,
-  no las trece de hoy—, que es lo que hace que diga la misma cifra que el punto.
+  Hoy esa encuesta se queda sin resumen y sin puntaje, se va al final de su
+  grupo —no tiene nada que decir de aquel periodo— y **el resumen cuenta las que
+  había entonces** —«9 encuestas», no las trece de hoy—, que es lo que hace que
+  diga la misma cifra que el punto.
+
+  **Y se dice desvaneciéndola, no con palabras.** Llevó un tiempo un «Todavía no
+  existía» en el renglón y se quitó: gastaba el sitio donde las demás ponen su
+  cifra y metía un texto largo donde el resto de la lista tiene números, así que
+  se leía como el dato más importante de la tarjeta siendo el que menos dice. Es
+  la clase `.sin-existir` de `estilos.css`, y va en los **tres** sitios: el
+  renglón de la encuesta, el `<summary>` de su clasificación —cuando ninguna de
+  las suyas existía— y su fila de la hoja de detalle.
+
+  **No se distingue sólo por lo apagado**, que sería pedirle a la vista lo que
+  esta aplicación no le pide en ningún otro sitio —es la regla del icono de
+  estado, que se distingue por la forma y no sólo por el color—: al renglón le
+  faltan además **los números**, y ahí queda su ritmo a secas frente al «0/9
+  respuestas · 0%» de una que sí existía. El renglón de la clasificación dice
+  **cuántas encuestas tiene** —lo único suyo que no depende del periodo; «0
+  respuestas», que es lo que daría `totalDeEncuestasAdmin` sin filas que sumar,
+  diría que nadie contestó algo que no se había creado—. Y lo que pasó se dice
+  con todas las letras en el `title`, que es donde esta tarjeta pone siempre lo
+  que no cabe en un renglón: de eso sigue viviendo `TEXTO_SIN_EXISTIR`.
 
   El alta se compara contra el **fin** del periodo: una creada a mitad de agosto
   existió en agosto. Y **una de «única vez» no tiene fin de periodo, así que ahí
