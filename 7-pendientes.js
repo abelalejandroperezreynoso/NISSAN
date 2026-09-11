@@ -886,9 +886,6 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
             const textoTiempo = obtenerTiempoTranscurrido(item.date);
             let badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">⏳ ${textoTiempo}</span>`;
             
-            let txtEstado = "¡Pendiente!";
-            let colorEstado = "#ea580c";
-            
             // Racha de periodos que cerraron sin respuesta. Se muestra aparte del
             // estado para que el atraso acumulado quede a la vista.
             let badgeOmisionesHtml = '';
@@ -917,17 +914,14 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     // El puntaje no va en la etiqueta: ahí sólo cabe el plazo, y
                     // la cifra se explica entera en el bloque de abajo.
                     badgeTiempoHtml = `<span style="background:${fondo}; color:${color}; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid ${borde};">🔁 Repetir ${plazo}</span>`;
-                    txtEstado = "¡Vuelve a contestarla!";
-                    colorEstado = color;
                     bloqueEstadoHtml = window.bloqueDeReintento(r, item.vencimiento.vencida);
                 } else if (item.vencimiento.tipoAviso === 'relanzada') {
                     // La contestó y relanzaron la encuesta, así que toca otra
-                    // vuelta. Se queda con el «¡Pendiente!» de cualquier otra
-                    // tarjeta, y sin más etiqueta que la de la frecuencia: la
-                    // roja de «cuándo apareció» —que aquí diría «Hoy», el día
-                    // del relanzamiento— pinta de urgencia algo que no la
-                    // tiene, y las de vencimiento no aplican porque una
-                    // encuesta de «única vez» no tiene periodo que vencer.
+                    // vuelta. Se queda sin más etiqueta que la de la
+                    // frecuencia: la roja de «cuándo apareció» —que aquí diría
+                    // «Hoy», el día del relanzamiento— pinta de urgencia algo
+                    // que no la tiene, y las de vencimiento no aplican porque
+                    // una encuesta de «única vez» no tiene periodo que vencer.
                     //
                     // Por eso la rama no puede desaparecer aunque casi no haga
                     // nada: al caer en el `else` de abajo diría «Vence en 0
@@ -936,12 +930,8 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 } else if (item.vencimiento.vencida) {
                     const etiquetaVencida = item.vencimiento.tipoAviso === 'nunca' ? 'Nunca contestada' : 'Vencida';
                     badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">🚨 ${etiquetaVencida}</span>`;
-                    txtEstado = "¡Vencida!";
-                    colorEstado = "#b91c1c";
                 } else if (item.vencimiento.tipoAviso === 'falta_periodo') {
                     badgeTiempoHtml = `<span style="background:#e0f2fe; color:#0369a1; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #bae6fd;">📅 Falta ${item.vencimiento.nombrePeriodo}</span>`;
-                    txtEstado = "¡Actualiza tu registro!";
-                    colorEstado = "#0369a1";
                 } else {
                     const d = item.vencimiento.diasFaltantes;
                     let txt = '';
@@ -951,8 +941,6 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     else txt = `en ${Math.floor(d / 30)} mes${Math.floor(d / 30)>1?'es':''}`;
                     
                     badgeTiempoHtml = `<span style="background:#fef9c3; color:#a16207; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fef08a;">⏳ Vence ${txt}</span>`;
-                    txtEstado = "¡Por vencer!";
-                    colorEstado = "#a16207";
                 }
             }
 
@@ -978,9 +966,6 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 return `
                 <div class="incident-card" style="border-left: 5px solid #ef4444;">
                     <div class="card-header" style="align-items: flex-start;">
-                        <div class="thumb-container" style="background:#fef2f2; border:1px solid #fecaca; margin-top:4px;">
-                            <span style="font-size:1.5rem;">⚠️</span>
-                        </div>
                         <div class="card-info" style="flex: 1;">
                             <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
                             
@@ -1038,9 +1023,6 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 return `
                 <div class="incident-card" style="border-left: 5px solid #be185d;">
                     <div class="card-header" style="align-items: flex-start;">
-                        <div class="thumb-container" style="background:#fdf2f8; border:1px solid #fbcfe8; margin-top:4px;">
-                            <span style="font-size:1.5rem;">👑</span>
-                        </div>
                         <div class="card-info" onclick="window.confirmarEvaluacionSub('${item.real_eval_id}', '${safeTitle}', '${item.sub_id}', '${item.sub_name}', 'boss')" style="cursor:pointer; flex:1;">
                             <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
                             
@@ -1073,9 +1055,6 @@ if (item.virtual_type === 'waiting_boss') {
     return `
     <div class="incident-card" style="border-left: 5px solid #a855f7;">
         <div class="card-header" style="align-items: flex-start;">
-            <div class="thumb-container" style="background:#f3e8ff; border:1px solid #d8b4fe; margin-top:4px;">
-                <span style="font-size:1.5rem;">👑</span>
-            </div>
             <div class="card-info" style="flex: 1;">
                 <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
                 
@@ -1102,9 +1081,6 @@ if (item.virtual_type === 'waiting_boss') {
                 return `
                 <div class="incident-card" style="border-left: 5px solid #a855f7;">
                     <div class="card-header">
-                        <div class="thumb-container" style="background:#f3e8ff; border:1px solid #d8b4fe;">
-                            <span style="font-size:1.5rem;">⚠️</span>
-                        </div>
                         <div class="card-info" onclick="alert('Esta encuesta fue auditada y marcada como Mal Revisada.\\n\\nPor favor, contacta a tu jefe inmediato para pedirle que la vuelva a revisar y calificar correctamente en su bandeja de pendientes.')" style="cursor:pointer;">
                             <h3 class="card-title">${item.title}</h3>
                             <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:4px;">
@@ -1135,9 +1111,6 @@ if (item.virtual_type === 'waiting_boss') {
                 return `
                 <div class="incident-card" style="border-left: 5px solid ${borderColor};">
                     <div class="card-header">
-                        <div class="thumb-container" style="background:${bgColor}; border:1px solid ${iconColor};">
-                            <span style="font-size:1.5rem;">📝</span>
-                        </div>
                         <div class="card-info" onclick='window.verDetalleRespuesta(${jsonString})' style="cursor:pointer;">
                             <h3 class="card-title">${item.title}</h3>
                             <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-top:4px;">
@@ -1189,15 +1162,10 @@ if (item.virtual_type === 'waiting_boss') {
                 return `
                 <div class="incident-card" style="border-left: 5px solid #2563eb;">
                     <div class="card-header" style="align-items: flex-start;">
-                        <div class="thumb-container" style="background:#eff6ff; border:1px solid #bfdbfe; margin-top:4px;">
-                            <span style="font-size:1.5rem;">✍️</span>
-                        </div>
                         <div class="card-info" onclick="window.responderDirecto('${item.id}', '${safeTitle}')" style="cursor:pointer; flex:1;">
                             <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
                             
                             <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:8px; margin-top:0;">
-                                <span class="badge-type" style="background-color:#2563eb">Encuesta</span>
-                                <span style="color:${colorEstado}; font-weight:bold; font-size:0.8rem;">${txtEstado}</span>
                                 ${badgeFreqHtml}
                                 ${badgeTiempoHtml}
                                 ${badgeOmisionesHtml}

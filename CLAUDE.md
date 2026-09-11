@@ -2917,6 +2917,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `.thumb-container`— **sólo las usa `7-pendientes.js`**; `.incident-card` a
   secas sí la comparten objetivos, hallazgos y el detalle de una respuesta, y
   ésa no se toca aquí.
+
+  **Y la tarjeta dice qué hay que hacer, no qué clase de cosa es.** Llevaba
+  encima tres cosas que no decían nada que no estuviera ya escrito al lado, y
+  las tres se fueron:
+
+  - **El recuadro con el emoji** (`.thumb-container` con un ✍️, un 👑, un ⚠️…),
+    que se llevaba 60px de los 329 de ancho de un teléfono —la columna del
+    texto vive de lo que le dejen— para repetir con un dibujo lo que dice el
+    borde de color de la izquierda. Se fue de las **seis** tarjetas virtuales;
+    el de la tarjeta de un incidente se queda, que ahí no es un emoji sino la
+    imagen del registro (`Incidente.png` / `Difusion.png`).
+  - **La chapa del tipo** («Encuesta», en azul sobre una tarjeta azul con el
+    botón «Responder» debajo).
+  - **La frase de estado** («¡Actualiza tu registro!», «¡Vencida!», «¡Por
+    vencer!», «¡Vuelve a contestarla!»), que era la etiqueta de tiempo de al
+    lado dicha otra vez y con signos de admiración: «📅 Falta este mes» ya es
+    el estado, y va con su color. Con ella se fueron `txtEstado` y
+    `colorEstado`, que no las leía nadie más.
+
+  Las otras cinco tarjetas conservan su chapa y su frase: ahí no nombran el
+  tipo sino lo que pasa —«Falta Contestar», «Pendiente de tu Jefe», «Mal
+  Revisada»—, y quitarlas dejaría el pendiente sin decir por qué está ahí.
 - **Las estadísticas tienen dos desgloses y dos orígenes.** Por
   departamentos, los conteos vienen del reporte `obtener_estadisticas_empleados`,
   que suma todos los registros del filtro en la base. Por registro, en cambio,
