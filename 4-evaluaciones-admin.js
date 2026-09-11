@@ -119,9 +119,11 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // ahí el rechazo se llevaría por delante la pantalla entera —hoy, sin esta
     // consulta, esa hoja se dibuja igual—. Sin respuestas se cae a las que la
     // pantalla ya tiene, que es exactamente lo de antes.
+    const ritmoDelEje = window.ritmoDelEjeDeEncuesta
+        ? window.ritmoDelEjeDeEncuesta(encuestaDeLaLista) : null;
     const empresaPendiente = (window.modoAdminActivo && encuestaDeLaLista
         && window.respuestasDelPeriodoDeTodos)
-        ? window.respuestasDelPeriodoDeTodos([encuestaDeLaLista], new Date(), encuestaDeLaLista.frequency)
+        ? window.respuestasDelPeriodoDeTodos([encuestaDeLaLista], new Date(), ritmoDelEje)
             .catch(() => null)
         : null;
 
@@ -283,7 +285,8 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // línea saldría subiendo desde un suelo falso.
         if (resumen && !traidas.tope && window.historialDeRevision && window.graficaDeLinea) {
             graficaHtml = window.graficaDeLinea(window.historialDeRevision(
-                { filas: [{ ev: evalData }] }, traidas.respuestas, { sobrePadron: true }));
+                { filas: [{ ev: evalData }] }, traidas.respuestas,
+                { sobrePadron: true, frecuencia: ritmoDelEje }));
         }
         if (resumen) {
             const colorScore = resumen.promedio === null ? '#94a3b8' : window.getColorScore(resumen.promedio);

@@ -718,19 +718,33 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   nada más: aquí no hay una lista debajo que cambiar, que es lo que hace el
   segundo argumento de `graficaDeLinea` en la tarjeta.
 
-  **El eje es el de esta encuesta y no el de meses de la tarjeta**: ahí se
-  mezclan trece frecuencias y el eje se fuerza a meses, pero aquí hay una sola,
-  así que una semanal se lee por semanas y una trimestral por trimestres —eso lo
-  hace `historialDeRevision` solo, llamándolo **sin** `frecuencia`—. Una de
-  «única vez» no tiene periodos que recorrer: da un punto, y con menos de dos no
-  se dibuja nada, que es lo correcto —esa encuesta no tiene tendencia—.
+  **El eje es el de esta encuesta, y el de meses cuando no tiene ninguno**
+  (`window.ritmoDelEjeDeEncuesta`). En la tarjeta se mezclan trece frecuencias y
+  por eso se fuerza a meses; aquí hay una sola, así que una semanal se lee por
+  semanas y una trimestral por trimestres.
+
+  **Y una de «única vez» también se dibuja**, aunque no tenga periodos que
+  recorrer. Se probó a dejarla sin gráfica —da un solo punto, y con menos de dos
+  no se dibuja nada— con el argumento de que esa encuesta no tiene tendencia, y
+  es falso: se contesta a lo largo de meses, y cada mes dice cuánta gente la
+  llevaba contestada, así que la línea sube según la va contestando la plantilla.
+  Lo que hace que cada punto cuente sólo hasta su fecha es el tope de «nada de lo
+  enviado después del instante que se mira», que ya estaba puesto para esto
+  mismo en la tarjeta. En este proyecto casi todas las respuestas son de
+  encuestas de «única vez», así que sin ese ritmo prestado la mayoría de las
+  pantallas se quedaba sin gráfica —«Autoevaluación 5RGSM SV», con 321
+  respuestas repartidas en meses, no enseñaba ninguna—.
+
+  El ritmo se decide **una sola vez** y va a los dos sitios: a la consulta y a
+  `historialDeRevision`. Si el eje y el `gte` no hablaran del mismo tramo de
+  tiempo, los puntos de atrás saldrían a medias.
 
   **Y salen de su propia consulta, que alimenta también el recuadro.** Las
   respuestas que esta pantalla ya tiene a mano se piden con un `select('*')` sin
   acotar, así que PostgREST las corta en mil: de una encuesta con casi tres mil
   respuestas al mes el recuadro decía «1000/3237» mientras la tarjeta del panel
   decía «2887/3237» de la misma. Hoy las dos salen de
-  `respuestasDelPeriodoDeTodos([ev], ahora, ev.frequency)`, acotada y paginada, y
+  `respuestasDelPeriodoDeTodos([ev], ahora, ritmoDelEje)`, acotada y paginada, y
   **no se dibuja la gráfica si llegó al tope** —las respuestas vienen de la más
   nueva, así que lo que falta son los periodos de atrás y la línea subiría desde
   un suelo falso—, que es la regla de la tarjeta.
@@ -4071,6 +4085,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.totalDeEncuestasAdmin(filas)      // el de un grupo, o el de la tarjeta
   window.textoDeRespuestasAdmin(resumen)   // «23/40 respuestas»
   window.encuestaExistiaEn(ev, referencia) // ¿existía ya en ese periodo?
+  window.ritmoDelEjeDeEncuesta(ev)         // el suyo, o meses si no tiene periodos
   window.TEXTO_SIN_EXISTIR                 // «Todavía no existía»
   ```
 

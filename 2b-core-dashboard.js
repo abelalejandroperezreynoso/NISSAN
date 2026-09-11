@@ -967,6 +967,25 @@ window.MAX_PAGINAS_RESPUESTAS = 6;   // 6000 filas, el tope de esta pantalla
 // la consulta, que tienen que cubrir lo mismo.
 window.RITMO_GRAFICA_EMPRESA = 'monthly';
 
+// Con qué ritmo se dibuja el eje de **una** encuesta: el suyo, y el de meses
+// cuando no tiene ninguno.
+//
+// Una de «única vez» no tiene periodos que recorrer —`periodoDeEncuesta` la
+// resuelve como «alguna vez»—, así que su eje sería un solo punto y la gráfica
+// no se dibujaría. Pero historia sí tiene: se contesta a lo largo de meses, y
+// cada mes dice cuánta gente la llevaba contestada —el tope de «nada de lo
+// enviado después del instante que se mira» es lo que hace que cada punto
+// cuente sólo hasta su fecha—, de modo que la línea sube según la va
+// contestando la plantilla. Es exactamente lo que ya hace la tarjeta del panel,
+// que fuerza el eje a meses por otra razón: ahí se mezclan frecuencias.
+//
+// En este proyecto casi todas las respuestas son de encuestas de «única vez»,
+// así que sin esto la pantalla de la mayoría de ellas se quedaba sin gráfica.
+window.ritmoDelEjeDeEncuesta = (ev) => {
+    const periodo = ev ? window.periodoDeEncuesta(ev, new Date()) : null;
+    return (periodo && periodo.fin) ? ev.frequency : window.RITMO_GRAFICA_EMPRESA;
+};
+
 // Las respuestas de todos desde el periodo más temprano en juego. PostgREST no
 // devuelve más de mil por consulta, así que se pagina; el tope existe porque
 // una encuesta anual arrastra el `gte` hasta enero y con ella el año entero.
