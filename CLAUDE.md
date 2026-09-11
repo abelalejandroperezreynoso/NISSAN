@@ -2595,6 +2595,27 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `review_status` y `grades_json` en las dos consultas de respuestas, porque
   sin el puntaje no se sabe si hay que reponerla.
 
+  **Y el plazo no sobrevive a su periodo.** Ir por encima del periodo significa
+  que mientras corre **esconde** al del periodo que toque, y eso sólo vale
+  dentro del suyo: una mensual reprobada en agosto se seguía pidiendo en
+  septiembre —y tapaba la de septiembre—, cuando lo que quedaba por hacer ya no
+  era reponer aquélla sino contestar la de este mes, que es la misma encuesta
+  otra vez y ya con las contramedidas puestas. Por eso `reintentoDeRespuesta`
+  mira además si la respuesta sigue siendo del periodo vigente de la encuesta
+  (`periodoDeEncuesta`) y, si no, devuelve null: el plazo **se apaga solo** al
+  cambiar el periodo y el pendiente vuelve a ser el del periodo, sin nada que
+  limpiar ni ninguna fecha que sellar. Lo que sacó aquella respuesta se sigue
+  leyendo en su historial.
+
+  Las de **«única vez» no tienen periodo siguiente** que lo sustituya, y
+  `periodoDeEncuesta` las resuelve como «alguna vez» —desde el origen del
+  tiempo—, así que ahí el plazo corre hasta agotarse, que es lo de siempre. Lo
+  decide `ev.frequency`, y es la trampa de la columna que no se pidió: llega
+  `undefined`, la encuesta se lee como de «única vez» y el plazo vuelve a
+  sobrevivir al periodo. Las tres consultas que deciden un pendiente ya la
+  traen —es de donde sale el tercer argumento de `esEvaluacionPendiente`—, y
+  ahí se degrada igual que el periodo, que sin frecuencia tampoco se calcula.
+
   **Tres cosas tienen que llegarle o el plazo se dispara donde no debe**, y las
   tres se colaron alguna vez:
 

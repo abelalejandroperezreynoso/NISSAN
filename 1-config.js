@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-10-14';
+window.VERSION_APP = '2026-09-11-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -788,7 +788,26 @@ window.reintentoDeRespuesta = (ev, resp, fecha) => {
     if (puntaje >= window.UMBRAL_CERTIFICACION) return null;
 
     const ahora = fecha ? new Date(fecha) : new Date();
-    const vence = new Date(new Date(resp.submitted_at).getTime() + dias * 86400000);
+
+    // Y sólo mientras esa respuesta siga siendo la del periodo que corre. Una
+    // mensual reprobada en agosto abre su plazo en agosto; si el plazo alcanza
+    // a septiembre, lo que queda por hacer ya no es reponer aquélla sino
+    // contestar la de este mes, que es la misma encuesta otra vez y ya con las
+    // contramedidas puestas. Pedir la de agosto en septiembre es pedir un
+    // periodo que ya cerró —y además esconder el de ahora, porque este
+    // pendiente va por encima del periodo—. Al cambiar el periodo el plazo se
+    // apaga solo y el pendiente vuelve a ser el del periodo, sin nada que
+    // limpiar.
+    //
+    // Las de «única vez» no tienen periodo siguiente que lo sustituya, y
+    // `periodoDeEncuesta` las resuelve como «alguna vez» —desde el origen del
+    // tiempo—, así que ahí el plazo corre hasta agotarse, como hasta ahora.
+    const enviada = new Date(resp.submitted_at);
+    const periodo = typeof window.periodoDeEncuesta === 'function'
+        ? window.periodoDeEncuesta(ev, ahora) : null;
+    if (periodo && !isNaN(enviada) && enviada < periodo.inicio) return null;
+
+    const vence = new Date(enviada.getTime() + dias * 86400000);
     const diasFaltantes = Math.ceil((vence - ahora) / 86400000);
 
     return { dias, puntaje, vence, diasFaltantes, vencida: diasFaltantes < 0,
