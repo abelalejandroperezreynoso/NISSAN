@@ -2226,14 +2226,44 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     puerta se cierra —un solo `materialPorGuardar` no puede con dos documentos a
     la vez, y convertir es lento—.
 
-  El renglón de un documento lleva **su primera página de portada**, y si esa
-  imagen no carga —sin red, o borrada desde Storage— `window.portadaRota` la
-  cambia por el emoji de siempre, que es lo que había antes de que hubiera
-  portadas. Tocarlo abre el visor (`window.abrirVisorImagenes`, en
-  `3-incidentes.js`, que es el de los incidentes generalizado a una lista de
-  urls): las páginas una debajo de otra, a pantalla completa, que es como se lee
-  un documento y lo único de esta aplicación que va a pantalla completa a
-  propósito.
+  **Un documento es una tarjeta con su primera página de portada a todo lo ancho
+  y el pie debajo**, que es como se enseña un documento compartido en cualquier
+  aplicación de mensajería. Era un renglón con una miniatura de 34px al lado del
+  nombre, y ahí la portada no llegaba a decir de qué iba: a ese tamaño una
+  diapositiva es un cuadrito gris y todo el peso de reconocer el documento se lo
+  llevaba su nombre de archivo, que es justo lo que menos se lee de él.
+
+  Tocarla abre el visor (`window.abrirVisorImagenes`, en `3-incidentes.js`, que
+  es el de los incidentes generalizado a una lista de urls): las páginas una
+  debajo de otra, a pantalla completa, que es como se lee un documento y lo único
+  de esta aplicación que va a pantalla completa a propósito.
+
+  Cuatro cosas que hay que mantener:
+
+  - **La proporción de la portada es 16:9 y no otra.** Casi todo el material de
+    aquí es una presentación, que es exactamente 16:9: así una diapositiva entra
+    entera y no se le recortan los lados —a 16:10, el título de la plática de
+    seguridad perdía la primera palabra—. Va con `object-fit: cover` y proporción
+    fija porque sin eso una diapositiva apaisada y una página vertical dan dos
+    tarjetas de alturas muy distintas y la lista deja de leerse; lo que se
+    recorta de una página vertical es su pie, que es por lo que se ancla
+    **arriba** (`object-position: center top`): el título es lo que la hace
+    reconocible.
+  - **La «✕» va encima de la portada**, en su esquina y sobre un disco oscuro:
+    es el único sitio donde no le quita ancho al nombre, y debajo puede haber
+    cualquier cosa —un ✕ gris sobre una diapositiva clara no se ve—. Sigue
+    siendo **hermana** del enlace y no va dentro, que un botón dentro de un
+    enlace no vale en HTML.
+  - **Sin portada que enseñar se vuelve al renglón compacto**, con la clase
+    `sin-portada`: lo subido antes de que el material se convirtiera en imágenes
+    son archivos sueltos y no tienen página, y ahí una caja de proporción fija
+    con un emoji centrado dentro no se lee como nada. A esa misma clase cae
+    `window.portadaRota` cuando la imagen no carga —sin red, o borrada desde
+    Storage—, que además cambia la portada por el emoji de siempre.
+  - **El nombre se deja llegar a dos renglones** en la tarjeta y se queda en uno
+    en el renglón compacto: debajo de la portada hay ancho de sobra y
+    «Presentación dojo de mantenimiento línea E3.pptx» cabe entero, que es lo que
+    se perdía recortándolo siempre a una línea.
 
   Un formato nuevo se agrega a `TIPOS_DE_MATERIAL` con su `via`, que es lo único
   que decide por qué puerta entra. Un Excel o un Word no entran por ninguna: se

@@ -2935,28 +2935,35 @@ textarea:focus {
     margin-bottom: 8px;
 }
 
-/* Dos acciones —abrir el archivo y quitarlo—, así que el enlace y la «✕» son
-   hermanos: un botón dentro de un enlace no vale en HTML. */
+/* Un documento es una tarjeta con su primera página de portada **a todo lo
+   ancho** y el pie debajo, que es como se enseña un documento compartido en
+   cualquier aplicación de mensajería. Era un renglón con una miniatura de 34px
+   al lado del nombre, y ahí la portada no llegaba a decir de qué iba: a ese
+   tamaño una diapositiva es un cuadrito gris y todo el peso de reconocer el
+   documento se lo llevaba su nombre de archivo.
+
+   Dos acciones —abrirlo y quitarlo—, así que el enlace y la «✕» son hermanos:
+   un botón dentro de un enlace no vale en HTML. La «✕» va encima de la portada,
+   que es el único sitio donde no le quita ancho al nombre. */
 .material-fila {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-bottom: 4px;
+    position: relative;
+    margin-bottom: 10px;
 }
 
 /* Vale para el `<a>` de lo que se subió antes como archivo y para el `<button>`
    de un documento convertido, que es lo que hay desde que todo son imágenes: un
-   botón trae borde, fuente y alineación propios y hay que quitárselos. */
+   botón trae borde, fuente y alineación propios y hay que quitárselos.
+
+   `overflow:hidden` es lo que le recorta las esquinas a la portada, que va
+   pegada a los tres bordes de arriba. */
 .material-enlace {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex: 1 1 auto;
-    min-width: 0;
+    display: block;
+    width: 100%;
     box-sizing: border-box;
-    padding: 10px;
-    border: none;
-    border-radius: 10px;
+    padding: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    overflow: hidden;
     background: #f8fafc;
     text-decoration: none;
     text-align: left;
@@ -2964,17 +2971,33 @@ textarea:focus {
     cursor: pointer;
 }
 
-/* La primera página, de portada. Va con medida fija —una página apaisada y una
-   vertical tienen que dejar el renglón a la misma altura— y recortada, que es
-   lo que hace que se lea como una miniatura y no como una imagen estirada. */
+/* La primera página, de portada. La proporción es fija y la imagen va recortada
+   —`cover`—, que es lo que deja todas las tarjetas a la misma altura venga una
+   diapositiva apaisada o una página vertical; sin eso, dos documentos seguidos
+   dan dos tarjetas de alturas muy distintas y la lista deja de leerse.
+
+   La proporción es **16:9 y no otra** porque casi todo el material de aquí es
+   una presentación, que es exactamente 16:9: así una diapositiva entra entera y
+   no se le recortan los lados —a 16:10 el título de la de seguridad perdía la
+   primera palabra—. Lo que se recorta es lo de una página vertical, y ahí el
+   corte cae donde tiene que caer, abajo.
+
+   Y se ancla **arriba**: de una página vertical lo que se recorta es el pie, no
+   el título, que es justo lo que hace reconocible el documento. */
 .material-portada {
-    flex-shrink: 0;
-    width: 34px;
-    height: 34px;
-    border-radius: 6px;
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
     object-fit: cover;
+    object-position: center top;
     background: #e2e8f0;
-    border: 1px solid #e2e8f0;
+}
+
+.material-pie {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
 }
 
 .material-icono {
@@ -2991,15 +3014,18 @@ textarea:focus {
     gap: 1px;
 }
 
-/* De una línea y recortado: «Presentación dojo de mantenimiento línea E3.pptx»
-   partido en tres renglones hace la lista el doble de alta. */
+/* Hasta dos renglones: debajo de la portada hay ancho de sobra y
+   «Presentación dojo de mantenimiento línea E3.pptx» cabe entero, que es lo que
+   se perdía recortándolo a una línea. En el renglón compacto vuelve a una. */
 .material-nombre {
     font-size: 0.88rem;
     font-weight: 600;
     color: #1e293b;
-    white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
 }
 
 .material-detalle {
@@ -3014,17 +3040,74 @@ textarea:focus {
     line-height: 1;
 }
 
+/* Encima de la portada, en su esquina. Va sobre un disco oscuro porque debajo
+   puede haber cualquier cosa: un ✕ gris sobre una diapositiva clara no se ve, y
+   sobre una foto de taller tampoco. */
 .material-quitar {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 1;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.55);
+    color: white;
+    font-family: inherit;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
+}
+
+/* Sin portada que enseñar —lo que se subió como archivo suelto, y la portada
+   que no llega a cargar— la tarjeta vuelve al renglón compacto de siempre: una
+   caja de proporción fija con un emoji centrado dentro no se lee como nada. */
+/* El contenedor vuelve a ser flex: en la tarjeta la «✕» va flotando encima de
+   la portada, pero aquí es hermana del enlace y tiene que ir a su lado. */
+.material-fila.sin-portada {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.material-fila.sin-portada .material-enlace {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 10px;
+}
+
+.material-fila.sin-portada .material-pie {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+}
+
+.material-fila.sin-portada .material-nombre {
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.material-fila.sin-portada .material-quitar {
+    position: static;
     flex-shrink: 0;
     width: 36px;
+    height: auto;
     align-self: stretch;
-    border: none;
-    background: none;
     border-radius: 10px;
+    background: none;
     color: #cbd5e1;
-    font-family: inherit;
     font-size: 0.95rem;
-    cursor: pointer;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }
 
 /* Es un `<label for>` y no un botón: en iOS el `.click()` programático sobre un

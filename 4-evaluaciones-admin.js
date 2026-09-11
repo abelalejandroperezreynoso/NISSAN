@@ -665,30 +665,36 @@ window.bloqueDeMaterial = (evalId, puedeSubir) => {
                        title="Quitar este material" aria-label="Quitar «${window.sanitizeForHTML(doc.nombre)}»">✕</button>`
             : '';
 
-        const texto = `
-            <span class="material-texto">
-                <span class="material-nombre">${window.sanitizeForHTML(doc.nombre)}</span>
-                ${detalle ? `<span class="material-detalle">${window.sanitizeForHTML(detalle)}</span>` : ''}
-            </span>
-            <span class="material-flecha" aria-hidden="true">&rsaquo;</span>`;
+        // El pie va **debajo** de la portada, no a su lado: es lo que convierte
+        // el renglón en una tarjeta con su imagen arriba a todo lo ancho.
+        const pie = `
+            <span class="material-pie">
+                <span class="material-texto">
+                    <span class="material-nombre">${window.sanitizeForHTML(doc.nombre)}</span>
+                    ${detalle ? `<span class="material-detalle">${window.sanitizeForHTML(detalle)}</span>` : ''}
+                </span>
+                <span class="material-flecha" aria-hidden="true">&rsaquo;</span>
+            </span>`;
 
         // Lo convertido son imágenes y se leen dentro de la aplicación, con la
-        // primera página de portada. Lo que se subió antes de esto es un
-        // archivo y sigue siendo un enlace con `target="_blank"`: iOS enseña el
-        // PDF y ofrece abrir la presentación con la app que toque, que es lo
-        // que se espera de un enlace a un documento.
+        // primera página **de portada a todo lo ancho**. Lo que se subió antes
+        // de esto es un archivo, no tiene página que enseñar y se queda con el
+        // renglón compacto de siempre: su `sin-portada` es el mismo al que cae
+        // una portada que no carga. Y sigue siendo un enlace con
+        // `target="_blank"`, que es lo que se espera de un documento: iOS
+        // enseña el PDF y ofrece abrir la presentación con la app que toque.
         const cuerpo = doc.esArchivo
             ? `<a class="material-enlace" href="${window.sanitizeForHTML(doc.paginas[0].url)}" target="_blank" rel="noopener">
                    <span class="material-icono" aria-hidden="true">${window.iconoDeMaterial(doc.nombre)}</span>
-                   ${texto}
+                   ${pie}
                </a>`
             : `<button type="button" class="material-enlace" onclick="window.abrirDocumentoMaterial('${window.sanitizeForHTML(doc.clave)}')">
                    <img class="material-portada" src="${window.sanitizeForHTML(doc.paginas[0].url)}" alt="" loading="lazy"
                         onerror="window.portadaRota(this)">
-                   ${texto}
+                   ${pie}
                </button>`;
 
-        return `<div class="material-fila">${cuerpo}${borrar}</div>`;
+        return `<div class="material-fila${doc.esArchivo ? ' sin-portada' : ''}">${cuerpo}${borrar}</div>`;
     }).join('');
 
     // El campo se abre con un `<label for>` y no con un `.click()` sobre el
@@ -717,14 +723,18 @@ window.bloqueDeMaterial = (evalId, puedeSubir) => {
 };
 
 // Sin red, o con el archivo borrado desde Storage, la portada deja el icono de
-// imagen rota del navegador en medio del renglón. Se cambia por el emoji de
-// siempre, que es lo que había antes de que hubiera portadas.
+// imagen rota del navegador ocupando la mitad de la tarjeta. Se cambia por el
+// emoji de siempre —lo que había antes de que hubiera portadas— y la tarjeta
+// **vuelve al renglón compacto**: una caja de proporción fija con un emoji
+// centrado dentro no se lee como nada.
 window.portadaRota = (img) => {
     const icono = document.createElement('span');
     icono.className = 'material-icono';
     icono.setAttribute('aria-hidden', 'true');
     icono.textContent = '🖼️';
+    const fila = img.closest('.material-fila');
     img.replaceWith(icono);
+    if (fila) fila.classList.add('sin-portada');
 };
 
 // Las páginas de un documento, una debajo de otra y a pantalla completa. Es el
