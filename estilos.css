@@ -2301,6 +2301,91 @@ textarea:focus {
 .ios-boton-cerrar::before { transform: rotate(45deg); }
 .ios-boton-cerrar::after  { transform: rotate(-45deg); }
 
+/* --- La portada de una hoja ----------------------------------------------
+   El material de una encuesta se enseña como portada de su hoja: lo primero
+   que se ve al abrirla, a sangre y recortada por las esquinas de arriba. Estaba
+   en un recuadro a media hoja y ahí se lo saltaba todo el mundo, que es lo que
+   hay que mirar **antes** de contestarla.
+
+   Va antes del encabezado y no dentro del cuerpo, que es lo que la deja pegada
+   al borde; el título y la frecuencia se quedan debajo, sobre blanco y siempre
+   legibles —encima de la imagen dependerían de un degradado y de qué foto
+   toque—. */
+.hoja-contenido.con-portada {
+    /* El relleno de arriba lo pone cada hoja en su atributo `style`, así que
+       aquí hace falta el `!important`: sin él quedarían 12px de blanco entre el
+       borde de la hoja y la imagen, que es justo lo que se vino a quitar. */
+    padding-top: 0 !important;
+}
+
+/* El tirador deja de ocupar sitio y pasa a flotar sobre la imagen, que es lo
+   que hace iOS con las hojas que abren con una foto. Sin esto se llevaría sus
+   15px de blanco por encima de la portada. */
+.hoja-contenido.con-portada::before {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    /* Blanco con sombra, que es lo único que se ve **sobre cualquier imagen**:
+       una diapositiva suele ser blanca y una foto de taller, oscura. */
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.55), 0 0 0 0.5px rgba(15, 23, 42, 0.18);
+}
+
+/* Con la imagen justo encima, los 4px de siempre dejan el título pegado a
+   ella. */
+.hoja-contenido.con-portada .hoja-encabezado-lista {
+    padding-top: 12px;
+}
+
+.hoja-portada {
+    position: relative;
+    flex-shrink: 0;
+}
+
+/* Es un botón —tocarla abre el visor con todas las páginas—, así que hay que
+   quitarle el borde y el relleno que trae de serie. */
+.hoja-portada-imagen {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: #e2e8f0;
+    cursor: pointer;
+}
+
+/* La misma proporción que la portada de una tarjeta de material, y por lo
+   mismo: casi todo lo que se sube aquí es una presentación, que es 16:9, así
+   que una diapositiva entra entera y no se le recortan los lados. */
+/* Con tope de alto: la hoja llega a 800px en una laptop y ahí un 16:9 son 450px
+   de portada fija por encima del encabezado, o sea media pantalla para una
+   imagen antes de llegar al botón de responder. En un teléfono la proporción no
+   alcanza el tope —375px dan 211— y se ve exactamente igual. */
+.hoja-portada-imagen img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 300px;
+    object-fit: cover;
+    object-position: center top;
+}
+
+/* El botón de cerrar —o el de volver— prestado a la esquina de la portada: es
+   el mismo nodo del encabezado, movido. Va sobre un disco oscuro porque debajo
+   puede haber cualquier cosa: el azul de iOS sobre una diapositiva clara no se
+   ve, y sobre una foto de taller tampoco. */
+.ios-boton-icono.portada-boton {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 2;
+    background: rgba(15, 23, 42, 0.5);
+    color: white;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+}
+
 /* --- Formularios largos dentro de una hoja -------------------------------
    Cuando el formulario no cabe de una vez, lo que se desplaza es el cuerpo y
    no la hoja entera: así el encabezado —con el botón de guardar— se queda a
@@ -3084,15 +3169,33 @@ textarea:focus {
     border-radius: 10px;
 }
 
+/* En el renglón compacto la portada vuelve a ser miniatura. Hace falta desde
+   que el documento que está de portada de la hoja baja aquí compacto: con la
+   proporción de tarjeta sería la misma imagen dos veces en la misma pantalla.
+   Medida fija y recortada, que una página apaisada y una vertical tienen que
+   dejar el renglón a la misma altura. */
+.material-fila.sin-portada .material-portada {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    aspect-ratio: auto;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
 .material-fila.sin-portada .material-pie {
     flex: 1 1 auto;
     min-width: 0;
     padding: 0;
 }
 
-.material-fila.sin-portada .material-nombre {
+/* De una línea los dos: el renglón compacto es una lista de gestión y «2
+   páginas · 145 KB · Gomez» partido en dos lo deja más alto que su miniatura. */
+.material-fila.sin-portada .material-nombre,
+.material-fila.sin-portada .material-detalle {
     display: block;
     white-space: nowrap;
+    overflow: hidden;
     text-overflow: ellipsis;
 }
 

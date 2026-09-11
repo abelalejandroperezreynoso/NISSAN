@@ -284,7 +284,34 @@ window.volverALaListaDeEncuestas = () => {
     return window.vengoDeLaListaDeEncuestas ? () => window.cargarVistaEvaluaciones() : null;
 };
 
+// Quita la portada del material y devuelve el botón de cerrar a su sitio.
+//
+// La portada la pone sólo la pantalla de una encuesta, así que se quita aquí
+// —por donde pasan las siete— y no en cada una: es lo mismo que hace este
+// encabezado con el lápiz y con los dos botones de una clasificación, y por lo
+// mismo, o la de la encuesta anterior se quedaría encima de la lista.
+//
+// **El botón es el mismo nodo de siempre, prestado a la portada.** Se mueve en
+// vez de dibujar otro porque lo que hace cambia con la pantalla —la cruz cierra
+// y la flecha retrocede— y dos botones serían dos sitios donde acordarse. Vuelve
+// al encabezado antes de que nadie lo toque, que es el estado del que parten
+// las demás pantallas.
+window.quitarPortadaDeLaHoja = () => {
+    const hoja = document.querySelector('#modal-evaluaciones-flotante .hoja-contenido');
+    const acciones = document.querySelector('#modal-evaluaciones-flotante .hoja-acciones');
+    const btn = document.getElementById('btn-hoja-evaluaciones');
+    if (btn && acciones && btn.parentElement !== acciones) {
+        btn.classList.remove('portada-boton');
+        acciones.appendChild(btn);
+    }
+    const portada = document.getElementById('portada-hoja-evaluaciones');
+    if (portada) portada.remove();
+    if (hoja) hoja.classList.remove('con-portada');
+    window.hayPortadaEnLaHoja = false;
+};
+
 window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta, subtitulo) => {
+    window.quitarPortadaDeLaHoja();
     const h = document.getElementById('titulo-hoja-evaluaciones');
     const btn = document.getElementById('btn-hoja-evaluaciones');
     if (h) h.innerText = titulo || 'Evaluaciones y encuestas';

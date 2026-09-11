@@ -407,6 +407,10 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // que abra la encuesta lo puede leer, que es para lo que está.
     const imparte = window.modoAdminActivo || (evalData && window.puedeEditarDestinatarios(evalData, user.id));
     window.materialDeLaHoja = { id: evalId, puedeSubir: imparte };
+    // Se decide **antes** de armar el recuadro, que es quien la mira para no
+    // repetir arriba y abajo el mismo documento. La portada se monta después,
+    // cuando ya hay encabezado en el documento donde insertarla.
+    window.hayPortadaEnLaHoja = window.documentosConPortada(window.materialesEncuesta).length > 0;
     const materialHtml = `<div id="material-encuesta">${window.bloqueDeMaterial(evalId, imparte)}</div>`;
 
     window.paseDeLista = {
@@ -442,6 +446,11 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     `;
     
     window.renderizarListaRespuestas();
+
+    // La primera página del material, de portada de la hoja. Va al final y no
+    // con el encabezado porque `encabezadoHojaEvaluaciones` quita la anterior:
+    // puesta antes, se la llevaría por delante.
+    window.pintarPortadaDeLaHoja();
 
     if(maintainScroll && window.lastScrollPosition) window.scrollTo(0, window.lastScrollPosition);
 };
@@ -658,7 +667,25 @@ window.bloqueDeMaterial = (evalId, puedeSubir) => {
     const pendiente = window.materialPorGuardar;
     if (materiales.length === 0 && !puedeSubir && !pendiente) return '';
 
-    const filas = window.documentosDeMaterial(materiales).map(doc => {
+    // Lo que ya está arriba no se repite aquí. A quien sólo lee le sobra: la
+    // portada abre el visor con todas las páginas de todos los documentos
+    // convertidos, así que el recuadro se le quedaría en una copia del primero.
+    // A quien puede subirlos no: éste es el sitio donde se agregan y se quitan,
+    // y ahí hacen falta todos. Y los archivos sueltos se quedan siempre, que
+    // ésos no entran en el visor.
+    const documentos = window.documentosDeMaterial(materiales)
+        .filter(d => puedeSubir || !window.hayPortadaEnLaHoja || d.esArchivo);
+
+    if (documentos.length === 0 && !puedeSubir && !pendiente) return '';
+
+    // El que está de portada baja a renglón compacto: a tamaño de tarjeta sería
+    // la misma imagen dos veces en la misma pantalla, y eso se lee como un
+    // fallo. Los demás sí se quedan con su portada, que es el único sitio donde
+    // se ven.
+    const conPortada = window.documentosConPortada(materiales);
+    const deLaHoja = (window.hayPortadaEnLaHoja && conPortada.length > 0) ? conPortada[0].clave : null;
+
+    const filas = documentos.map(doc => {
         const detalle = window.detalleDeDocumento(doc);
         const borrar = puedeSubir
             ? `<button type="button" class="material-quitar" onclick="window.quitarMaterial('${window.sanitizeForHTML(doc.clave)}')"
@@ -694,7 +721,8 @@ window.bloqueDeMaterial = (evalId, puedeSubir) => {
                    ${pie}
                </button>`;
 
-        return `<div class="material-fila${doc.esArchivo ? ' sin-portada' : ''}">${cuerpo}${borrar}</div>`;
+        const compacta = doc.esArchivo || doc.clave === deLaHoja;
+        return `<div class="material-fila${compacta ? ' sin-portada' : ''}">${cuerpo}${borrar}</div>`;
     }).join('');
 
     // El campo se abre con un `<label for>` y no con un `.click()` sobre el
@@ -720,6 +748,79 @@ window.bloqueDeMaterial = (evalId, puedeSubir) => {
             <div class="material-rotulo">Material</div>
             ${filas}${vacio}${window.bloqueDeConversion()}${subirHtml}
         </div>`;
+};
+
+// ==========================================
+// LA PORTADA DE LA HOJA
+// ==========================================
+// El material no es un renglón más de la encuesta: es lo que hay que mirar
+// antes de contestarla, y enterrado en un recuadro a media hoja se lo saltaba
+// todo el mundo. La primera página del primer documento pasa a ser **la portada
+// de la hoja**: lo primero que se ve al abrirla, a sangre y con las esquinas
+// redondeadas de arriba, con el botón de cerrar flotando en su esquina.
+//
+// Y es la puerta a todo lo demás: tocarla abre el visor con **todas** las
+// páginas de **todos** los documentos convertidos, una debajo de otra. Por eso
+// abajo no se repiten —quien sólo lee ya no ve el recuadro de los que tienen
+// portada—, y el recuadro se queda para quien puede subirlos y quitarlos, que
+// es su consola, y para los archivos sueltos, que no se pueden abrir ahí.
+window.hayPortadaEnLaHoja = false;
+
+// Los documentos que tienen página que enseñar: los convertidos. Lo que se
+// subió antes de que el material fueran imágenes son archivos sueltos, y ésos
+// ni tienen portada ni se pueden abrir en el visor.
+window.documentosConPortada = (materiales) =>
+    window.documentosDeMaterial(materiales)
+        .filter(d => !d.esArchivo && d.paginas.length > 0);
+
+window.paginasDeLaPortada = () =>
+    window.documentosConPortada(window.materialesEncuesta)
+        .reduce((todas, d) => todas.concat(d.paginas.map(p => p.url)), []);
+
+window.abrirPortadaMaterial = () => {
+    const urls = window.paginasDeLaPortada();
+    if (urls.length > 0) window.abrirVisorImagenes(urls);
+};
+
+// La monta y le presta el botón de cerrar. Se llama **después** de
+// `encabezadoHojaEvaluaciones`, que es quien la quita: si no, la del anterior
+// seguiría puesta.
+window.pintarPortadaDeLaHoja = () => {
+    const docs = window.documentosConPortada(window.materialesEncuesta);
+    if (docs.length === 0) return;
+
+    const hoja = document.querySelector('#modal-evaluaciones-flotante .hoja-contenido');
+    const encabezado = hoja && hoja.querySelector('.hoja-encabezado-lista');
+    if (!hoja || !encabezado) return;
+
+    const portada = document.createElement('div');
+    portada.id = 'portada-hoja-evaluaciones';
+    portada.className = 'hoja-portada';
+    portada.innerHTML = `
+        <button type="button" class="hoja-portada-imagen" onclick="window.abrirPortadaMaterial()"
+                title="Ver el material" aria-label="Ver el material de esta encuesta">
+            <img src="${window.sanitizeForHTML(docs[0].paginas[0].url)}" alt=""
+                 onerror="window.portadaDeLaHojaRota()">
+        </button>`;
+
+    // Va **antes** del encabezado y no dentro del cuerpo: es lo que la deja
+    // pegada al borde de arriba, recortada por las esquinas de la hoja.
+    hoja.insertBefore(portada, encabezado);
+    hoja.classList.add('con-portada');
+    window.hayPortadaEnLaHoja = true;
+
+    const btn = document.getElementById('btn-hoja-evaluaciones');
+    if (btn) { btn.classList.add('portada-boton'); portada.appendChild(btn); }
+};
+
+// La portada no carga —sin red, o borrada desde Storage—. Se quita, y con ella
+// se rehace el recuadro de abajo: sin este segundo paso, quien sólo lee se
+// quedaría sin portada y sin recuadro, o sea sin manera de abrir el material.
+window.portadaDeLaHojaRota = () => {
+    window.quitarPortadaDeLaHoja();
+    const caja = document.getElementById('material-encuesta');
+    const m = window.materialDeLaHoja;
+    if (caja && m) caja.innerHTML = window.bloqueDeMaterial(m.id, m.puedeSubir);
 };
 
 // Sin red, o con el archivo borrado desde Storage, la portada deja el icono de

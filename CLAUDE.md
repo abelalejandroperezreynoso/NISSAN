@@ -2226,17 +2226,67 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     puerta se cierra —un solo `materialPorGuardar` no puede con dos documentos a
     la vez, y convertir es lento—.
 
-  **Un documento es una tarjeta con su primera página de portada a todo lo ancho
-  y el pie debajo**, que es como se enseña un documento compartido en cualquier
-  aplicación de mensajería. Era un renglón con una miniatura de 34px al lado del
+  **La primera página del material es la portada de la hoja.** Lo primero que se
+  ve al abrir una encuesta, a sangre y recortada por las esquinas de arriba, con
+  el botón de cerrar flotando en su esquina y el título y la frecuencia debajo.
+  El material estaba en un recuadro a media hoja y ahí se lo saltaba todo el
+  mundo, que es justo lo que hay que mirar **antes** de contestarla.
+
+  ```js
+  window.hayPortadaEnLaHoja          // ¿la hay? lo mira el recuadro de abajo
+  window.documentosConPortada(materiales)   // los convertidos, los que tienen página
+  window.paginasDeLaPortada()        // todas las páginas de todos ellos
+  window.pintarPortadaDeLaHoja()  window.quitarPortadaDeLaHoja()
+  window.abrirPortadaMaterial()   window.portadaDeLaHojaRota()
+  ```
+
+  **Y es la puerta a todo lo demás**: tocarla abre el visor
+  (`window.abrirVisorImagenes`, en `3-incidentes.js`, que es el de los
+  incidentes generalizado a una lista de urls) con **todas** las páginas de
+  **todos** los documentos convertidos, una debajo de otra y a pantalla completa
+  —que es como se lee un documento y lo único de esta aplicación que va a
+  pantalla completa a propósito—.
+
+  Cinco cosas que hay que mantener:
+
+  - **Va antes del encabezado y no dentro del cuerpo.** Es lo que la deja pegada
+    al borde de arriba; dentro del cuerpo quedaría por debajo del encabezado y
+    sin las esquinas de la hoja. El título y la frecuencia se quedan **debajo**,
+    sobre blanco: encima de la imagen dependerían de un degradado y de qué
+    portada toque, y aquí se leen siempre.
+  - **El botón de cerrar es el mismo nodo, prestado.** Se mueve a la esquina de
+    la portada en vez de dibujar otro, porque lo que hace cambia con la pantalla
+    —la cruz cierra y la flecha retrocede— y dos botones serían dos sitios donde
+    acordarse. Va sobre un disco oscuro: el azul de iOS sobre una diapositiva
+    clara no se ve.
+  - **La quita `encabezadoHojaEvaluaciones`**, que es por donde pasan las siete
+    pantallas de la hoja, y no cada una: es lo mismo que hace con el lápiz y con
+    los dos botones de una clasificación, y por lo mismo —si no, la portada de la
+    encuesta anterior se quedaría encima de la lista—. Por eso
+    `pintarPortadaDeLaHoja` se llama **al final** de la pantalla de la encuesta:
+    puesta antes, el encabezado se la llevaría por delante.
+  - **El tirador pasa a flotar sobre la imagen** y el relleno de arriba de la
+    hoja se va a cero. Ese relleno lo pone cada hoja en su atributo `style`, así
+    que la regla lleva `!important`: sin él quedarían 12px de blanco entre el
+    borde y la imagen, que es justo lo que se vino a quitar.
+  - **Si la portada no carga, `portadaDeLaHojaRota` rehace además el recuadro de
+    abajo.** Sin ese segundo paso, quien sólo lee se quedaría sin portada y sin
+    recuadro, o sea sin ninguna manera de abrir el material.
+
+  **Y abajo no se repite lo que ya está arriba.** A quien sólo lee le sobra el
+  recuadro entero —la portada abre el visor con todo—, así que ahí sólo le quedan
+  los archivos sueltos, que no entran en el visor. A quien puede subirlos no: ése
+  es el sitio donde se agregan y se quitan, y ahí hacen falta todos —sólo que el
+  que está de portada **baja a renglón compacto**, porque a tamaño de tarjeta
+  sería la misma imagen dos veces en la misma pantalla y eso se lee como un
+  fallo—.
+
+  **Los demás documentos sí son una tarjeta con su portada a todo lo ancho y el
+  pie debajo**, que es como se enseña un documento compartido en cualquier
+  aplicación de mensajería. Eran un renglón con una miniatura de 34px al lado del
   nombre, y ahí la portada no llegaba a decir de qué iba: a ese tamaño una
   diapositiva es un cuadrito gris y todo el peso de reconocer el documento se lo
   llevaba su nombre de archivo, que es justo lo que menos se lee de él.
-
-  Tocarla abre el visor (`window.abrirVisorImagenes`, en `3-incidentes.js`, que
-  es el de los incidentes generalizado a una lista de urls): las páginas una
-  debajo de otra, a pantalla completa, que es como se lee un documento y lo único
-  de esta aplicación que va a pantalla completa a propósito.
 
   Cuatro cosas que hay que mantener:
 
@@ -2259,7 +2309,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     son archivos sueltos y no tienen página, y ahí una caja de proporción fija
     con un emoji centrado dentro no se lee como nada. A esa misma clase cae
     `window.portadaRota` cuando la imagen no carga —sin red, o borrada desde
-    Storage—, que además cambia la portada por el emoji de siempre.
+    Storage—, que además cambia la portada por el emoji de siempre, y el
+    documento que está de portada de la hoja. En ese renglón la imagen vuelve a
+    ser miniatura de 34px, y su renglón de detalle a una sola línea.
   - **El nombre se deja llegar a dos renglones** en la tarjeta y se queda en uno
     en el renglón compacto: debajo de la portada hay ancho de sobra y
     «Presentación dojo de mantenimiento línea E3.pptx» cabe entero, que es lo que
