@@ -2172,6 +2172,54 @@ textarea:focus {
 .grupo-asignadas[open] .grupo-asignadas-flecha { transform: rotate(180deg); }
 
 /* =========================================
+   LA TARJETA DEL MODO ADMINISTRADOR
+   =========================================
+   Sustituye a la del usuario mientras el modo está encendido. Ocupa lo mismo
+   —el icono mide los 60px de la foto—, así que el panel no da un salto al
+   encenderlo, y va en el rojo del título, que es lo que ya dice en esa
+   pantalla que el modo está activo. */
+.tarjeta-admin {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.tarjeta-admin-icono {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #d32f2f;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 6px -1px rgba(211, 47, 47, 0.35);
+}
+
+.tarjeta-admin-icono svg {
+    width: 30px;
+    height: 30px;
+}
+
+/* Las mismas medidas fluidas que el nombre y el puesto de la tarjeta del
+   usuario, o la tarjeta cambiaría de alto al encender el modo. */
+.tarjeta-admin-titulo {
+    font-size: clamp(1rem, 5vw, 1.3rem);
+    font-weight: 700;
+    color: #d32f2f;
+    line-height: 1.1;
+    word-wrap: break-word;
+}
+
+.tarjeta-admin-nota {
+    font-size: clamp(0.7rem, 3.5vw, 0.85rem);
+    color: #64748b;
+    margin-top: 4px;
+    line-height: 1.2;
+}
+
+/* =========================================
    EL PANEL DEL USUARIO SE PLIEGA
    =========================================
    Contraído se ve sólo quién es —la foto y el nombre—; el radar sale al tocar

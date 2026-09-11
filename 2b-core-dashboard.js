@@ -628,6 +628,40 @@ window.alternarPanelUsuario = () => {
     window.aplicarPanelUsuario(abierto);
 };
 
+// ==========================================
+// LA TARJETA DEL MODO ADMINISTRADOR
+// ==========================================
+// Con el modo encendido, la tarjeta de arriba deja de ser la de quien entró:
+// ahí no se está mirando el panel de nadie en particular —se administra— y
+// seguir enseñando su foto, su nombre y su badge de pendientes se lee como si
+// el modo no hubiera cambiado nada.
+//
+// No lleva chevron ni `.panel-usuario-detalle`: lo que se plegaba era el radar,
+// que es de una persona. Tampoco es pulsable, que el modo se apaga donde se
+// encendió —el título— y es lo que dice su renglón.
+window.tarjetaDeAdministrador = () => `
+    <div class="tarjeta-admin">
+        <div class="tarjeta-admin-icono">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3l7 3v5c0 4.4-2.9 8.4-7 10-4.1-1.6-7-5.6-7-10V6l7-3z"/>
+                <path d="M9 11.8l2 2 4-4"/>
+            </svg>
+        </div>
+        <div style="min-width:0;">
+            <div class="tarjeta-admin-titulo">Administrador</div>
+            <div class="tarjeta-admin-nota">Modo administrador activo · toca el título de arriba para salir</div>
+        </div>
+    </div>`;
+
+// La pone en el encabezado y deshace lo que hubiera dejado el panel del
+// usuario: la marca de plegado no tiene aquí nada que esconder.
+window.pintarTarjetaAdmin = (userHeader) => {
+    if (!userHeader) return;
+    userHeader.classList.remove('esta-contraido');
+    userHeader.innerHTML = window.tarjetaDeAdministrador();
+};
+
 window.mostrarDashboard = async (user) => {
     document.getElementById('vista-login').classList.add('hidden');
     document.getElementById('vista-dashboard').classList.remove('hidden');
@@ -640,22 +674,29 @@ window.mostrarDashboard = async (user) => {
     if(userHeader) {
         userHeader.style.display = 'block';
         userHeader.style.padding = '15px';
-        userHeader.innerHTML = `
-            <div class="panel-usuario-resumen">
-                <div class="skeleton" style="width:60px; height:60px; border-radius:50%; flex-shrink:0;"></div>
-                <div style="flex:1;">
-                    <div class="skeleton" style="width: 50%; height: 20px; margin-bottom: 8px;"></div>
-                    <div class="skeleton" style="width: 30%; height: 14px;"></div>
+        // La tarjeta del administrador no espera a ninguna consulta, así que se
+        // dibuja ya: el esqueleto del perfil enseñaría un instante el hueco de
+        // la foto y el nombre de quien entró, que es de lo que se sale aquí.
+        if (window.modoAdminActivo) {
+            window.pintarTarjetaAdmin(userHeader);
+        } else {
+            userHeader.innerHTML = `
+                <div class="panel-usuario-resumen">
+                    <div class="skeleton" style="width:60px; height:60px; border-radius:50%; flex-shrink:0;"></div>
+                    <div style="flex:1;">
+                        <div class="skeleton" style="width: 50%; height: 20px; margin-bottom: 8px;"></div>
+                        <div class="skeleton" style="width: 30%; height: 14px;"></div>
+                    </div>
                 </div>
-            </div>
-            <div class="panel-usuario-detalle" style="width: 100%; padding-top: 10px;">
-                 <div id="header-radar-container" style="display:block; width: 100%; max-width: 400px; height: 210px; margin: 0 auto; position: relative;">
-                    <div id="radar-loading-skeleton" class="skeleton" style="width: 190px; height: 190px; border-radius: 50%; opacity: 0.5; position: absolute; top:10px; left: 50%; transform: translateX(-50%); z-index:10;"></div>
-                    <canvas id="dashboard-main-radar"></canvas>
-                 </div>
-            </div>
-        `;
-        window.aplicarPanelUsuario(window.panelUsuarioAbierto());
+                <div class="panel-usuario-detalle" style="width: 100%; padding-top: 10px;">
+                     <div id="header-radar-container" style="display:block; width: 100%; max-width: 400px; height: 210px; margin: 0 auto; position: relative;">
+                        <div id="radar-loading-skeleton" class="skeleton" style="width: 190px; height: 190px; border-radius: 50%; opacity: 0.5; position: absolute; top:10px; left: 50%; transform: translateX(-50%); z-index:10;"></div>
+                        <canvas id="dashboard-main-radar"></canvas>
+                     </div>
+                </div>
+            `;
+            window.aplicarPanelUsuario(window.panelUsuarioAbierto());
+        }
     }
 
     if (quickTeam) {
@@ -729,7 +770,14 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
             headerBgStyle = 'background:white; border:2px solid #bfdbfe; padding:0;';
         }
 
-        if (userHeader) {
+        if (userHeader && window.modoAdminActivo) {
+            // Administrando no hay perfil que enseñar, y por lo mismo no hay
+            // radar que pedir: esas dos consultas son de una persona. El equipo
+            // sí se dibuja, que es de lo que el modo enseña de más.
+            userHeader.style.display = 'block';
+            window.pintarTarjetaAdmin(userHeader);
+            window.renderizarVistaRapidaEquipo(false);
+        } else if (userHeader) {
             // FIX DEFINITIVO: Forzamos la visualización en bloque aquí también
             userHeader.style.display = 'block';
             

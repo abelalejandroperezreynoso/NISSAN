@@ -3954,6 +3954,34 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   departamento posterior no aparecería ahí, y de esos dos campos depende qué
   encuestas le tocan.
 
+- **En modo administrador la tarjeta de arriba es otra.** Con el modo
+  encendido no se está mirando el panel de nadie en particular —se
+  administra—, así que la tarjeta de identidad deja de ser la de quien entró:
+  seguir enseñando su foto, su nombre, su badge de pendientes y su radar se lee
+  como si encender el modo no hubiera cambiado nada.
+
+  ```js
+  window.tarjetaDeAdministrador()        // el marcado
+  window.pintarTarjetaAdmin(userHeader)  // lo pone y quita `esta-contraido`
+  ```
+
+  Es un escudo en el rojo del título, «Administrador» y un renglón que dice que
+  el modo está activo y **cómo se sale** —tocando el título—, que es lo único
+  que hace falta saber ahí. No lleva chevron ni `.panel-usuario-detalle`: lo
+  que se plegaba era el radar, y el radar es de una persona. Tampoco es
+  pulsable, que el modo se apaga donde se encendió. El icono mide los 60px de
+  la foto, así que el panel no pega un salto al encender el modo.
+
+  Se dibuja en **los dos sitios** donde `mostrarDashboard` escribe ese
+  encabezado —el esqueleto de carga y la tarjeta de después—, y por lo mismo:
+  el esqueleto del perfil enseñaría un instante el hueco de la foto y, cien
+  milisegundos después, el nombre de quien entró.
+
+  **Lo demás del panel se queda**, que es lo que se pidió: sus pendientes, sus
+  encuestas, las que revisa y su equipo siguen ahí. Lo único que además no se
+  hace es **pedir el radar** (`cargarRadarGeneralDashboard`), que son dos
+  consultas de una persona para un lienzo que ya no existe.
+
 - **El panel del usuario se pliega, y de entrada está contraído.** Contraído
   se ve sólo quién es —la foto y el nombre—, que es lo que se mira de pasada; el
   radar sale al tocar la tarjeta. En un
