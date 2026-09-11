@@ -57,8 +57,24 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     // abriera desde el inicio. Por la lista no se notaba —`evalCache` se trae
     // la fila entera con `select('*')`—, así que dependía de por dónde se
     // hubiera entrado.
+    //
+    // Y por lo mismo va **`frequency`**, que es de donde sale el periodo: sin
+    // ella, `periodoDeEncuesta` resuelve cualquier encuesta traída por aquí
+    // como de «única vez» —«alguna vez», desde el origen del tiempo—, así que
+    // su pantalla la titulaba «Única vez» mientras su renglón de la lista decía
+    // «Mensual», el recuadro de la empresa contaba **todas** las respuestas que
+    // ha tenido nunca —«126/126 · 78%» donde el mes en curso iba por «44/95 ·
+    // 36%», con los de baja sumando como ajenos— y cada punto de su gráfica
+    // salía acumulado en vez de ser el de su periodo, o sea una línea que sólo
+    // sube. `created_at` va con ella, que es lo que decide si la encuesta ya
+    // existía en el periodo que dibuja cada punto.
+    //
+    // `description` y `evaluates_area` son del recuadro gris de esa misma
+    // pantalla: sin pedirlas, una encuesta con descripción no la enseñaba y
+    // una que mide por área no lo decía.
     const campos = await window.camposConRelanzamiento(await window.camposConRevisores(
-        'id, title, mode, category, is_obligatory, target_employees, target_positions, target_departments'));
+        'id, title, mode, category, frequency, created_at, description, evaluates_area, '
+        + 'is_obligatory, target_employees, target_positions, target_departments'));
     const { data } = await sb.from('evaluations').select(campos).eq('id', evaluationId).single();
     if (data) window.cacheEncuestasRevision[String(evaluationId)] = data;
     return data || null;

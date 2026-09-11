@@ -2895,6 +2895,21 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   trae la fila entera con `select('*')`—, así que fallaba o no según por dónde
   se hubiera entrado, que es lo que lo hacía parecer cosa de la pantalla.
 
+  **Y le faltaba `frequency`, que es de donde sale el periodo.** Sin ella,
+  `periodoDeEncuesta` resuelve la encuesta como de «única vez» —«alguna vez»,
+  desde el origen del tiempo—, y esa pantalla se quedaba diciendo tres cosas
+  distintas de la misma encuesta: el subtítulo del encabezado ponía «Única vez»
+  mientras su renglón de la lista decía «Mensual»; el recuadro de la empresa
+  contaba **todas** las respuestas que ha tenido nunca —«126/126 · 78%» donde el
+  mes en curso iba por «44/95 · 36%»—, y de paso inflaba el divisor con los
+  `ajenos`, que en una encuesta de «alguna vez» son todos los que contestaron
+  alguna vez y ya no están en el padrón; y cada punto de su gráfica salía
+  acumulado en vez de ser el de su periodo, o sea una línea que sólo puede
+  subir. `created_at` va con ella —es lo que decide si la encuesta ya existía en
+  el periodo de cada punto—, y `description` y `evaluates_area` van porque son
+  el recuadro gris de esa misma pantalla, que sin pedirlas no enseñaba la
+  descripción ni decía que mide por área.
+
   **Las estadísticas usan esta misma regla, en los cinco sitios donde deciden
   qué está asignado**: el conteo de asignadas, el filtro de respuestas, el
   radar y los dos desgloses por colaborador. Antes cada uno miraba sólo puesto
