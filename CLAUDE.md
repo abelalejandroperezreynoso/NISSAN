@@ -690,6 +690,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     estado se queda —«Certificada», «Mal Revisada»—: lo que se quitó fue el
     dibujo de delante.
 
+  **Y administrando, esa pantalla tampoco es la de quien inició sesión.**
+  «Tu último resultado» ponía ahí el 100% del administrador como si fuera el de
+  la encuesta, y el botón de responder salía en **todas** —ese `if` llevaba un
+  `window.modoAdminActivo ||` delante de `leTocaEstaEncuesta`—, o sea invitaba a
+  contestar por alguien a quien no le tocaba. Con el modo encendido:
+
+  - El recuadro de arriba dice **«Resultado de la empresa»**, con la misma cifra
+    de la tarjeta del panel y sacada de la misma función
+    (`resumenDeEncuestaAdmin`), que si no las dos pantallas discreparían: el
+    promedio repartido sobre el padrón y, debajo, «23/40 respuestas · este
+    mes». Una de «única vez» no lleva esa última palabra —`periodoDeEncuesta` la
+    resuelve como «alguna vez», que ahí no se lee, y el subtítulo del encabezado
+    ya lo dice—. No es pulsable: la lista de respuestas está justo debajo.
+  - **El botón de responder se decide con la regla de siempre.** Al
+    administrador al que la encuesta sí le toca le sale igual; al que no, ya no.
+
+  Sin la ficha de la encuesta (`evalData` en null) el recuadro **no se dibuja**
+  en lugar de caer al resultado personal, que es lo que se vino a quitar.
+
   **Quién la revisa se enseña con `window.filaDeRevisores`**, la misma fila de
   caras con el nombre de pila debajo que la hoja de detalle de una
   clasificación. Era un renglón de texto dentro del recuadro gris —«La revisa

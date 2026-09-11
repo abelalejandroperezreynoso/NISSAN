@@ -179,7 +179,12 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     let actionButtonHtml = '';
     if (mode === 'boss') {
         actionButtonHtml = `<button onclick="window.abrirSeleccionSubordinado('${evalId}', '${safeTitle}', 'boss')" style="width: 100%; padding:12px 20px; background:#be185d; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(190, 24, 93, 0.25); transition: transform 0.1s;">Evaluar a un Colaborador...</button>`;
-    } else if (window.modoAdminActivo || window.leTocaEstaEncuesta(evalData, user, window.tieneEquipoDirecto(user.id))) {
+    } else if (window.leTocaEstaEncuesta(evalData, user, window.tieneEquipoDirecto(user.id))) {
+        // Sin `modoAdminActivo ||` a propósito: administrando no se está
+        // mirando la encuesta de nadie en particular, y ese «||» le ofrecía
+        // «Responder Encuesta» al administrador en **todas** —también en las
+        // que no van dirigidas a él—, que es contestar por alguien a quien no
+        // le tocaba. Si de verdad le toca, la regla de siempre se lo da igual.
         const misRespuestas = responses.filter(r => String(r.employee_id) === String(user.id));
         const btnText = misRespuestas.length > 0 ? "Volver a Responder" : "Responder Encuesta";
         actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" style="width: 100%; padding:12px 20px; background:#2563eb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:bold; font-size:1rem; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 6px rgba(37,99,235,0.25); transition: transform 0.1s;">${btnText}</button>`;
@@ -210,10 +215,53 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // Es lo que viene a mirar quien abre su propia encuesta, y estaba enterrado
     // en la lista de respuestas de todo el equipo. `responses` ya viene ordenada
     // de la más reciente a la más vieja.
+    //
+    // **Administrando no se enseña lo suyo sino lo de la empresa**: con el modo
+    // encendido no se está mirando el panel de nadie en particular, y «Tu
+    // último resultado» ponía ahí el 100% de quien inició sesión como si fuera
+    // el de la encuesta. Es la misma cifra de la tarjeta del panel —el promedio
+    // repartido sobre el padrón, con quien no contestó en cero— y sale de la
+    // misma función, que si no las dos pantallas discreparían.
     const miUltima = responses.find(r => String(r.employee_id) === String(user.id));
     let ultimoResultadoHtml = '';
 
-    if (miUltima) {
+    if (window.modoAdminActivo) {
+        // Sin la ficha de la encuesta no hay padrón que repartir, y ahí no se
+        // cae al resultado personal: enseñarle al administrador su propio 100%
+        // como el de la encuesta es justo lo que se vino a quitar.
+        const resumen = evalData && window.resumenDeEncuestaAdmin
+            ? window.resumenDeEncuestaAdmin(evalData, responses, new Date()) : null;
+        const periodo = evalData ? window.periodoDeEncuesta(evalData, new Date()) : null;
+        if (resumen) {
+            const colorScore = resumen.promedio === null ? '#94a3b8' : window.getColorScore(resumen.promedio);
+
+            // Sin padrón no hay sobre qué repartir y la cifra sería la de lo
+            // entregado, que no es lo que promete el rótulo: ahí se dice «—»,
+            // como en una respuesta sin calificar.
+            const cifraHtml = resumen.promedio === null
+                ? `<div style="font-size:1rem; font-weight:700; color:#94a3b8; line-height:1;">&mdash;</div>`
+                : `<div style="font-size:1.6rem; font-weight:800; color:${colorScore}; line-height:1;">${resumen.promedio}%</div>`;
+
+            // Una encuesta de «única vez» no tiene periodo —`periodoDeEncuesta`
+            // la resuelve como «alguna vez»— y ahí el renglón no lo dice: eso
+            // ya lo cuenta el subtítulo del encabezado, y «23/40 respuestas ·
+            // alguna vez» no se lee.
+            const cuando = periodo && periodo.fin
+                ? ` &middot; ${window.sanitizeForHTML(periodo.nombre || '')}` : '';
+
+            ultimoResultadoHtml = `
+                <div title="Quien no contestó cuenta como 0.${resumen.promedioContestadas !== null ? ` ${resumen.promedioContestadas}% entre quienes la contestaron.` : ''}"
+                     style="display:flex; align-items:center; gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:15px;">
+                    <div style="text-align:center; min-width:52px;">
+                        ${cifraHtml}
+                    </div>
+                    <div style="min-width:0; flex:1;">
+                        <div style="font-size:0.8rem; color:#64748b; font-weight:600;">Resultado de la empresa</div>
+                        <div style="font-size:0.75rem; color:#94a3b8;">${window.textoDeRespuestasAdmin(resumen)}${cuando}</div>
+                    </div>
+                </div>`;
+        }
+    } else if (miUltima) {
         const calificada = ['Revisado', 'Certificada'].includes(miUltima.review_status);
         const score = window.calcularScoreRespuesta(miUltima);
         const colorScore = calificada ? window.getColorScore(score) : '#94a3b8';
