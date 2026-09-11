@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-11-25">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-11-26">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -151,8 +151,6 @@
              window.cargarEncuestasQueReviso y se queda escondido si no revisa
              ninguna. -->
         <div id="container-encuestas-reviso" style="display:none; margin-bottom: 15px; padding: 0 5px;"></div>
-
-        <div id="container-accesos-directos" style="margin-bottom: 20px;"></div>
 
         <!-- Modal Flotante para Stats Difusión -->
                 <div id="modal-stats-difusion" class="hoja-overlay" style="z-index:4000;">
@@ -800,9 +798,9 @@
     </div>
 
     <!-- Panel de administración. El z-index va por debajo del de las hojas que
-         abren sus botones (formulario 2000, crear encuesta 2000, accesos 4000):
-         esas se cierran ésta antes de abrirse, y si alguna vez no lo hiciera,
-         quedaría delante y no detrás. -->
+         abren sus botones (formulario 2000, crear encuesta 2000, consumo
+         4000): ésas cierran ésta antes de abrirse, y si alguna vez no lo
+         hicieran, quedaría delante y no detrás. -->
     <div id="modal-admin" class="hoja-overlay" style="z-index:1700;">
         <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 0;">
             <div class="hoja-encabezado-lista">
@@ -822,7 +820,6 @@
                     <div class="admin-hoja-lista">
                         <button id="btn-nuevo" class="admin-btn" onclick="window.abrirNuevoRegistro()"><span aria-hidden="true">📝</span><span data-texto>Nuevo Registro</span></button>
                         <button id="btn-nueva-eval" class="admin-btn" onclick="window.abrirNuevaEvaluacion()"><span aria-hidden="true">📋</span><span data-texto>Nueva Evaluación</span></button>
-                        <button class="admin-btn" onclick="window.cerrarPanelAdmin(); window.abrirModalAccesos();" style="border-color: #eab308; color: #ca8a04;"><span aria-hidden="true">⭐</span><span data-texto>Accesos Directos</span></button>
                     </div>
                 </div>
 
@@ -943,22 +940,6 @@
             </div>
 
             <div id="cuerpo-revisores-clasif" style="flex:1; overflow-y: auto; padding: 15px 15px calc(15px + env(safe-area-inset-bottom)); background: #f8fafc;"></div>
-        </div>
-    </div>
-
-    <div id="modal-gestionar-accesos" class="hoja-overlay" style="z-index:4000;">
-        <div class="form-content hoja-contenido" style="max-width: 500px; overflow: hidden; padding: 12px 0 0;">
-            <div class="hoja-encabezado-lista">
-                <div style="min-width:0;">
-                    <h2 class="hoja-titulo">Accesos directos</h2>
-                    <div class="hoja-subtitulo">Selecciona cuáles aparecerán en el panel</div>
-                </div>
-                <button onclick="document.getElementById('modal-gestionar-accesos').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
-            </div>
-            
-            <div id="lista-gestionar-accesos" style="flex:1; overflow-y: auto; padding: 15px; background: #f8fafc; display: flex; flex-direction: column; gap: 10px;">
-                <div style="text-align:center; padding:20px; color:#64748b;">Cargando lista...</div>
-            </div>
         </div>
     </div>
 
@@ -1099,22 +1080,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-11-25"></script>
-    <script src="2a-core-nav.js?v=2026-09-11-25"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-11-25"></script>
-    <script src="3-incidentes.js?v=2026-09-11-25"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-11-25"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-11-25"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-11-25"></script>
-    <script src="5-objetivos.js?v=2026-09-11-25"></script>
-    <script src="6-calendario.js?v=2026-09-11-25"></script>
-    <script src="7-pendientes.js?v=2026-09-11-25"></script>
-    <script src="8-hallazgos.js?v=2026-09-11-25"></script>
-    <script src="9-estadisticas.js?v=2026-09-11-25"></script>
+    <script src="1-config.js?v=2026-09-11-26"></script>
+    <script src="2a-core-nav.js?v=2026-09-11-26"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-11-26"></script>
+    <script src="3-incidentes.js?v=2026-09-11-26"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-11-26"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-11-26"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-11-26"></script>
+    <script src="5-objetivos.js?v=2026-09-11-26"></script>
+    <script src="6-calendario.js?v=2026-09-11-26"></script>
+    <script src="7-pendientes.js?v=2026-09-11-26"></script>
+    <script src="8-hallazgos.js?v=2026-09-11-26"></script>
+    <script src="9-estadisticas.js?v=2026-09-11-26"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-09-11-25"></script>
-    <script src="13-gestion.js?v=2026-09-11-25"></script>
-    <script src="10-refacciones.js?v=2026-09-11-25"></script> 
+    <script src="12-almacenamiento.js?v=2026-09-11-26"></script>
+    <script src="13-gestion.js?v=2026-09-11-26"></script>
+    <script src="10-refacciones.js?v=2026-09-11-26"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

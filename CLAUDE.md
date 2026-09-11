@@ -202,7 +202,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   se esté viendo.
 
   No hace falta ningún script de `sql/`: la tabla `system_config` ya existe y la
-  clave es una fila más, como `titulo_accesos_directos`. Lo que sí hace falta es
+  clave es una fila más, como `ahorro_datos`. Lo que sí hace falta es
   **contar las filas del `.select()`** al escribirla —una política de RLS que la
   rechace no da error, sólo afecta a cero filas—, o el panel diría que la orden
   se dio sin que nadie vaya a salir.
@@ -4745,13 +4745,33 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     único que sabe `padronDeLaEncuesta`: quien se dio de baja desde entonces
     entra como ajeno en su propio periodo en vez de como destinatario.
 
+- **Ya no hay accesos directos.** El panel de inicio llevó una tarjeta
+  «🚀 Accesos Directos» con dos cuadros —Encuestas y Capacitaciones— que
+  abrían lo que el administrador hubiera marcado como destacado desde
+  «⭐ Accesos Directos» del panel de administración, con su hoja de casillas y
+  su campo para cambiarle el título a la tarjeta. Se quitó entera: nadie la
+  usaba, y lo que enseñaba lo dicen mejor las dos tarjetas que hay debajo —las
+  encuestas asignadas y las que uno revisa—, que salen solas y dicen además
+  cómo va cada una, sin que nadie tenga que acordarse de marcar nada.
+
+  Con ella se fueron `cargarAccesosDirectos`, `abrirModalAccesos`,
+  `guardarTituloAccesos` y `toggleAccesoDestacado` (`2b-core-dashboard.js`), el
+  hueco `#container-accesos-directos` del panel, la hoja
+  `#modal-gestionar-accesos` y el botón que la abría.
+
+  **En la base se quedan tres cosas que ya no lee nadie** y que se pueden
+  borrar a mano cuando se quiera: las columnas `evaluations.destacado` e
+  `incidents.destacado` y la fila `titulo_accesos_directos` de `system_config`.
+  Es lo mismo que pasó con `evaluations.requires_certification`: el código deja
+  de mirarlas y la base no se toca desde la aplicación.
+
 - **El panel del usuario se pliega, y de entrada está contraído.** Contraído
   se ve sólo quién es —la foto y el nombre—, que es lo que se mira de pasada; el
   radar sale al tocar la tarjeta. En un
   iPhone 12 mini esa tarjeta medía 413px abiertos contra 128 cerrados, media
   pantalla del panel todos los días para algo que se consulta de vez en cuando
-  y que empujaba abajo los pendientes y los accesos directos, que es a lo que
-  se entra.
+  y que empujaba abajo los pendientes y las encuestas asignadas, que es a lo
+  que se entra.
 
   ```js
   window.panelUsuarioAbierto()        // lo que dejó elegido quien lo usa

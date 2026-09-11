@@ -2314,8 +2314,8 @@ textarea:focus {
    =========================================
    Contraído se ve sólo quién es —la foto y el nombre—; el radar sale al tocar
    la tarjeta. En un teléfono ocupaba media pantalla del panel para algo que se
-   consulta de vez en cuando, y empujaba abajo los pendientes y los accesos
-   directos. */
+   consulta de vez en cuando, y empujaba abajo los pendientes y las encuestas
+   asignadas. */
 .panel-usuario-resumen {
     display: flex;
     align-items: center;
