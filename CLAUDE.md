@@ -3989,19 +3989,36 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
 - **Administrando, la tarjeta de las encuestas es la de la empresa entera.**
   `cargarEncuestasAsignadas` enseña con el modo encendido **todas las encuestas
-  activas** —no las que le tocan a quien mira— y cada renglón dice **cuánta
-  gente la contestó este periodo y el promedio de lo calificado**: «Mensual · 23
-  de 40 · 86%». Era la misma lista que ve cualquiera, así que el administrador
-  tenía delante sus tres encuestas y ninguna manera de saber cómo iba la
-  plantilla sin bajar a certificación o a estadísticas.
+  activas** —no las que le tocan a quien mira— y los tres renglones dicen lo
+  mismo con la misma forma: **cuánta gente la contestó este periodo y cómo va la
+  empresa con ella**. «Mensual · 23/40 respuestas · 49%» la encuesta,
+  «35/80 respuestas · 35%» su clasificación y «4 encuestas · 53/160 respuestas ·
+  25%» la tarjeta entera. Era la misma lista que ve cualquiera, así que el
+  administrador tenía delante sus tres encuestas y ninguna manera de saber cómo
+  iba la plantilla sin bajar a certificación o a estadísticas.
 
   ```js
   window.MAX_PAGINAS_RESPUESTAS            // 6, o sea 6000 filas
   await window.respuestasDelPeriodoDeTodos(encuestas, ahora)  // { respuestas, tope }
-  window.resumenDeEncuestaAdmin(ev, respuestas, ahora)        // { contestaron, padron, promedio }
+  window.resumenDeEncuestaAdmin(ev, respuestas, ahora)
+  // → { contestaron, calificadas, padron, suma, promedio, promedioContestadas }
+  window.promedioSobrePadron(suma, calificadas, padron)
+  window.totalDeEncuestasAdmin(filas)      // el de un grupo, o el de la tarjeta
+  window.textoDeRespuestasAdmin(resumen)   // «23/40 respuestas»
   ```
 
-  Seis cosas que hay que mantener:
+  **Quien no contestó cuenta como cero**, que es lo que separa «cómo les fue a
+  los que la hicieron» de «cómo va la empresa con esta encuesta»: con 23 de 40
+  al 86%, el 86% dice que va bien algo que lleva diecisiete personas sin hacer.
+  Por eso el divisor es el **padrón** y no las respuestas que llegaron, y por eso
+  **la participación va pegada a la cifra en los tres renglones**: un 49% sin el
+  «23/40» de al lado no dice si es media plantilla al 100 o la plantilla entera a
+  la mitad. Lo que sacaron quienes sí contestaron no se pierde —va en el `title`
+  del renglón—, y **el promedio de un periodo recién empezado es 0%**, que es lo
+  que significa que todavía no lo ha hecho nadie; se lee bien porque al lado va
+  «0/40 respuestas».
+
+  Siete cosas que hay que mantener:
 
   - **El periodo es el de cada encuesta, no uno común.** Una clasificación
     mezcla frecuencias, así que el resumen de cada una se saca con
@@ -4014,8 +4031,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - **El denominador es `padronDeLaEncuesta`**, que sale de `leTocaEstaEncuesta`
     y de los empleados activos: así el «de 40» no puede discrepar de lo que cada
     quien ve en su panel. Sin las columnas de destinatarios no hay padrón, y
-    entonces se dice sólo cuántas respuestas hay —un «de 0» se leería como que
-    no le toca a nadie—.
+    entonces se dice sólo cuántas respuestas hay y se promedia lo calificado,
+    que es lo de antes —un «de 0» se leería como que no le toca a nadie—.
+  - **Un grupo suma puntajes y padrones; no promedia promedios.** Una encuesta
+    de cuarenta personas y otra de tres no pesan igual, y promediar sus dos
+    cifras las iguala. Lo hace `totalDeEncuestasAdmin`, que es por donde pasan
+    el pie de la clasificación y el renglón de la tarjeta.
   - **La consulta se acota o se trae el historial de la empresa.** Va con un
     `gte` al inicio del periodo **más temprano** de las encuestas en juego, y
     pagina de mil en mil, que es el tope de PostgREST. El tope de páginas existe
@@ -4024,14 +4045,32 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     recientes»— en vez de enseñar un promedio corto como si fuera el bueno.
   - **El icono es el neutro**, el círculo a rayas de
     `estadoDeEncuestaEnLista`: una palomita verde diría que el administrador
-    está «al día» de algo que no le toca, y un círculo rojo, peor. Por lo mismo
-    el pie del grupo dice «2 encuestas · 79%» y no «2 pendientes de 4», y el
-    renglón de arriba, «4 encuestas activas · promedio 77%».
-  - **Y la hoja de detalle promedia igual.** `cuerpoDetalleClasificacion`
-    escoge `historialDeRevision` —el promedio de **todas** las respuestas del
-    periodo— cuando el modo está encendido, en vez de `historialDeClasificacion`,
-    que toma una por periodo: la respuesta de una persona cualquiera se
-    enseñaría como el resultado de la empresa.
+    está «al día» de algo que no le toca, y un círculo rojo, peor.
+  - **El renglón de arriba va sin la palabra «activas»**, que es lo que son —las
+    apagadas no se listan—: con ella, «13 encuestas activas · 128/455 respuestas
+    · 100%» se parte en dos y deja el porcentaje solo en el segundo renglón.
+    Medido a 375px, ése es el peor caso y sin la palabra cabe de una línea. Lo
+    que decía va en el `title`, que ahí sí cabe.
+
+  **Y la hoja de detalle mide igual, o las dos pantallas darían cifras distintas
+  del mismo periodo.** `cuerpoDetalleClasificacion` escoge `historialDeRevision`
+  cuando el modo está encendido —en vez de `historialDeClasificacion`, que toma
+  una respuesta por periodo y enseñaría la de una persona cualquiera como el
+  resultado de la empresa— y le pasa su **tercer argumento**, `sobrePadron`, que
+  reparte cada periodo entre toda la gente a la que le tocaba. El de la tarjeta
+  de revisión sigue llamándolo **sin** ese argumento: ahí se habla de la gente a
+  la que uno califica y el padrón es otra pregunta.
+
+  Dos cosas de esa gráfica:
+
+  - **Una encuesta que todavía no existía no vale cero en aquel periodo.** Sin
+    la guarda de `created_at`, una creada hace tres meses dibujaría nueve puntos
+    clavados en el 0 antes de su primer resultado. Un periodo que se queda sin
+    padrón no tiene promedio y la gráfica se lo salta, que es lo que ya hacía
+    cuando no había nada calificado.
+  - **El padrón es el de hoy también para los periodos de atrás**, que es lo
+    único que sabe `padronDeLaEncuesta`: quien se dio de baja desde entonces ya
+    no cuenta en su propio periodo.
 
 - **El panel del usuario se pliega, y de entrada está contraído.** Contraído
   se ve sólo quién es —la foto y el nombre—, que es lo que se mira de pasada; el

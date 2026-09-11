@@ -997,8 +997,45 @@ window.respuestasDelPeriodoDeTodos = async (encuestas, ahora) => {
     return { respuestas: filas, tope };
 };
 
-// Cómo va una encuesta este periodo: el promedio de lo calificado y cuánta
-// gente la contestó de la que la tiene asignada.
+// El promedio de la empresa: **quien no contestó cuenta como cero**, así que el
+// divisor es el padrón y no las respuestas que llegaron. Es lo que separa «cómo
+// les fue a los que la hicieron» de «cómo va la empresa con esta encuesta», que
+// es lo que se viene a ver administrando: con 23 de 40 al 86%, el 86% dice que
+// va bien algo que lleva diecisiete personas sin hacer.
+//
+// Sin padrón —la encuesta llegó sin sus columnas de destinatarios— no hay sobre
+// qué repartir, y entonces se promedia lo calificado, que es lo de antes.
+window.promedioSobrePadron = (suma, calificadas, padron) => {
+    if (padron > 0) return Math.round(suma / padron);
+    return calificadas > 0 ? Math.round(suma / calificadas) : null;
+};
+
+// Lo mismo de un grupo de encuestas: se suman los puntajes y los padrones, no
+// se promedian los promedios. Una encuesta de cuarenta personas y otra de tres
+// no pesan igual, y promediar sus dos cifras las iguala.
+window.totalDeEncuestasAdmin = (filas) => {
+    let suma = 0, calificadas = 0, padron = 0, contestaron = 0;
+    (filas || []).forEach(f => {
+        if (!f.resumen) return;
+        suma += f.resumen.suma;
+        calificadas += f.resumen.calificadas;
+        padron += f.resumen.padron;
+        contestaron += f.resumen.contestaron;
+    });
+    return { contestaron, padron, calificadas,
+             promedio: window.promedioSobrePadron(suma, calificadas, padron) };
+};
+
+// «23/40 respuestas», o sólo cuántas hay si no se pudo saber el padrón.
+window.textoDeRespuestasAdmin = (resumen) => {
+    const n = resumen.contestaron;
+    return resumen.padron > 0
+        ? `${n}/${resumen.padron} respuestas`
+        : `${n} respuesta${n === 1 ? '' : 's'}`;
+};
+
+// Cómo va una encuesta este periodo: el promedio de la empresa y cuánta gente
+// la contestó de la que la tiene asignada.
 //
 // **Cuenta gente, no respuestas**, igual que el pase de lista: quien contestó
 // dos veces cuenta una, y su puntaje es el de la última —promediar las dos la
@@ -1022,14 +1059,20 @@ window.resumenDeEncuestaAdmin = (ev, respuestas, ahora) => {
 
     const suyas = Object.values(ultimaDeCadaUno);
     const puntajes = suyas.map(r => window.puntajeDeRespuesta(r)).filter(p => p !== null);
+    const suma = puntajes.reduce((a, b) => a + b, 0);
+    // Sin las columnas de destinatarios `padronDeLaEncuesta` no da padrón, y un
+    // «de 0» se leería como que no le toca a nadie: ahí no se dice.
+    const padron = window.padronDeLaEncuesta(ev).length;
 
     return {
         contestaron: suyas.length,
-        // Sin las columnas de destinatarios `padronDeLaEncuesta` no da padrón, y
-        // un «de 0» se leería como que no le toca a nadie: ahí no se dice.
-        padron: window.padronDeLaEncuesta(ev).length,
-        promedio: puntajes.length === 0 ? null
-            : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length)
+        calificadas: puntajes.length,
+        padron, suma,
+        promedio: window.promedioSobrePadron(suma, puntajes.length, padron),
+        // Lo que sacaron quienes sí la contestaron. No se dibuja: va en el globo
+        // del renglón, que es donde cabe explicar de dónde sale el otro.
+        promedioContestadas: puntajes.length === 0 ? null
+            : Math.round(suma / puntajes.length)
     };
 };
 
@@ -1189,24 +1232,26 @@ window.cargarEncuestasAsignadas = async (userId) => {
                     : (estado.listo ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
 
                 // Administrando, delante del promedio va cuánta gente la
-                // contestó: un 100% sobre tres respuestas de cuarenta no dice
-                // lo mismo que sobre treinta y nueve. Sin padrón —la encuesta
-                // llegó sin sus columnas de destinatarios— se dice sólo cuántas
-                // respuestas hay, que un «de 0» se leería como que no le toca a
-                // nadie.
+                // contestó: el promedio se reparte sobre el padrón, así que sin
+                // esa cuenta no se sabe si un 49% es media plantilla al 100 o
+                // la plantilla entera a la mitad.
                 if (resumen) {
-                    const participacion = resumen.padron > 0
-                        ? `${resumen.contestaron} de ${resumen.padron}`
-                        : `${resumen.contestaron} ${resumen.contestaron === 1 ? 'respuesta' : 'respuestas'}`;
                     const cifra = puntaje !== null
                         ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
                         : ' · sin calificar';
-                    resultado = ` · ${participacion}${cifra}`;
+                    resultado = ` · ${window.textoDeRespuestasAdmin(resumen)}${cifra}`;
                 }
+
+                // El globo dice lo que la cifra no puede: qué sacaron los que
+                // sí contestaron, que es de donde sale el promedio de la
+                // empresa al repartirlo sobre el padrón.
+                const globo = resumen && resumen.promedioContestadas !== null
+                    ? `${resumen.promedioContestadas}% entre quienes la contestaron`
+                    : estado.texto;
 
                 return `
                     <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
-                         title="${estado.texto}"
+                         title="${globo}"
                          style="display:flex; align-items:center; gap:10px; padding:9px 8px 9px 30px; border-top:1px solid #f1f5f9; cursor:pointer;">
                         ${window.iconoDeAsignada(estado)}
                         <div style="flex:1; min-width:0;">
@@ -1222,14 +1267,18 @@ window.cargarEncuestasAsignadas = async (userId) => {
             // promedio de lo ya calificado.
             const pendientesGrupo = g.filas.filter(f => f.vencimiento.mostrar).length;
             const estadoGrupo = g.filas[0].estado;   // ya vienen ordenadas por lo que urge
-            const promedioGrupo = promedioDe(g.filas);
+            // Administrando se suman los puntajes y los padrones de sus
+            // encuestas, no se promedian sus promedios: una de cuarenta
+            // personas y otra de tres no pesan igual.
+            const totalGrupo = esAdmin ? window.totalDeEncuestasAdmin(g.filas) : null;
+            const promedioGrupo = esAdmin ? totalGrupo.promedio : promedioDe(g.filas);
             const colorGrupo = (promedioGrupo !== null && typeof window.getColorScore === 'function')
                 ? window.getColorScore(promedioGrupo) : '#64748b';
 
             const cuantas = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
             const pie = [
                 esAdmin
-                    ? cuantas
+                    ? window.textoDeRespuestasAdmin(totalGrupo)
                     : (pendientesGrupo > 0
                         ? `${pendientesGrupo} pendiente${pendientesGrupo === 1 ? '' : 's'} de ${g.filas.length}`
                         : `${cuantas} al día`),
@@ -1267,15 +1316,23 @@ window.cargarEncuestasAsignadas = async (userId) => {
                 </details>`;
         }).join('');
 
-        const promedio = promedioDe(filas);
+        const promedio = esAdmin ? null : promedioDe(filas);
         // Administrando, el renglón habla de la empresa y no de lo que le falta
-        // a quien mira. El aviso del tope sólo sale cuando de verdad se alcanzó:
-        // un promedio sacado de una parte de las respuestas no se puede enseñar
-        // como si fueran todas.
+        // a quien mira. La participación va aquí también: el promedio se reparte
+        // sobre el padrón, así que un «0%» recién empezado el periodo tiene que
+        // salir al lado del «0/312 respuestas» que lo explica. El aviso del tope
+        // sólo sale cuando de verdad se alcanzó: un promedio sacado de una parte
+        // de las respuestas no se puede enseñar como si fueran todas.
+        const total = esAdmin ? window.totalDeEncuestasAdmin(filas) : null;
+        //
+        // Va sin la palabra «activas» —que es lo que son: las apagadas no se
+        // listan— porque con ella el renglón se parte en dos y deja el
+        // porcentaje solo en el segundo. Lo dice su globo, que ahí sí cabe.
         const resumen = esAdmin
             ? [
-                `${filas.length} encuesta${filas.length === 1 ? '' : 's'} activa${filas.length === 1 ? '' : 's'}`,
-                promedio === null ? null : `promedio ${promedio}%`,
+                `${filas.length} encuesta${filas.length === 1 ? '' : 's'}`,
+                window.textoDeRespuestasAdmin(total),
+                total.promedio === null ? null : `${total.promedio}%`,
                 topeRespuestas ? 'sobre las respuestas más recientes' : null
               ].filter(Boolean).join(' · ')
             : [
@@ -1289,7 +1346,8 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // renglón del resumen dice más en el mismo sitio.
         cont.innerHTML = `
             <div style="background:white; border-radius:16px; padding:15px 15px 5px; box-shadow:0 4px 6px -1px rgba(0,0,0,0.05); border:1px solid #f1f5f9;">
-                <div style="font-size:0.8rem; color:#475569; font-weight:600; margin-bottom:4px;">${resumen}</div>
+                <div style="font-size:0.8rem; color:#475569; font-weight:600; margin-bottom:4px;"
+                     title="${esAdmin ? 'Las encuestas activas de la empresa. El promedio se reparte entre toda la gente a la que le toca: quien no contestó cuenta como 0.' : ''}">${resumen}</div>
                 ${bloques}
             </div>`;
         cont.style.display = 'block';
@@ -1693,7 +1751,7 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
     // azar con el rótulo de toda la empresa. `historialDeRevision` es el mismo
     // historial promediando todas, que es lo que esas respuestas significan.
     const historial = window.modoAdminActivo
-        ? window.historialDeRevision(grupo, respuestas || window.respuestasAsignadas || [])
+        ? window.historialDeRevision(grupo, respuestas || window.respuestasAsignadas || [], true)
         : window.historialDeClasificacion(grupo, null, respuestas);
     const conDato = historial.filter(p => p.promedio !== null);
     const ultimo = conDato.length > 0 ? conDato[conDato.length - 1] : null;
@@ -1866,18 +1924,41 @@ window.cargarRespuestasQueReviso = () => {
 // El periodo se mira **de cada encuesta en el suyo** (`periodoDeEncuesta`), que
 // una clasificación puede mezclar frecuencias, y el eje se rotula con el ritmo
 // de la que lo marca, igual que en la otra.
-window.historialDeRevision = (grupo, respuestas) => {
+//
+// Con `sobrePadron` el promedio se reparte entre toda la gente a la que le
+// tocaba —quien no contestó cuenta como cero—, que es lo que dice la tarjeta
+// del panel en modo administrador: si la gráfica promediara sólo lo entregado,
+// las dos pantallas darían cifras distintas del mismo periodo. El padrón es el
+// de hoy también para los periodos de atrás, que es lo único que sabe
+// `padronDeLaEncuesta`: quien se dio de baja desde entonces ya no cuenta.
+window.historialDeRevision = (grupo, respuestas, sobrePadron) => {
     const encuestas = (grupo.filas || []).map(f => f.ev);
     const periodos = window.periodosDeClasificacion(encuestas, window.PERIODOS_EN_LA_GRAFICA);
     const ritmo = window.encuestaQueMarcaElRitmo(encuestas);
     const frecuencia = (ritmo && ritmo.frequency) || 'once';
 
+    // `padronDeLaEncuesta` recorre la plantilla entera, así que se pregunta una
+    // vez por encuesta y no una vez por encuesta y periodo.
+    const padrones = {};
+    if (sobrePadron) encuestas.forEach(ev => {
+        padrones[ev.id] = window.padronDeLaEncuesta(ev).length;
+    });
+
     return periodos.slice().reverse().map(p => {
         const puntajes = [];
         let entregadas = 0;
+        let padron = 0;
 
         encuestas.forEach(ev => {
             const periodo = window.periodoDeEncuesta(ev, p.referencia);
+            // Una encuesta que todavía no existía no vale cero en aquel
+            // periodo: sin esto, la de hace tres meses dibujaría nueve puntos
+            // clavados en el 0 antes de su primer resultado. Sin padrón el
+            // periodo se queda sin promedio y la gráfica se lo salta, que es lo
+            // que ya hacía cuando no había nada calificado.
+            const alta = ev.created_at ? new Date(ev.created_at) : null;
+            const existia = !alta || isNaN(alta) || !periodo.fin || alta < periodo.fin;
+            if (existia) padron += padrones[ev.id] || 0;
             (respuestas || []).forEach(r => {
                 if (String(r.evaluation_id) !== String(ev.id)) return;
                 const enviada = new Date(r.submitted_at);
@@ -1899,8 +1980,12 @@ window.historialDeRevision = (grupo, respuestas) => {
             actual: !!p.actual,
             calificadas: puntajes.length,
             total: entregadas,
-            promedio: puntajes.length === 0 ? null
-                : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length)
+            padron,
+            promedio: sobrePadron
+                ? window.promedioSobrePadron(
+                    puntajes.reduce((a, b) => a + b, 0), puntajes.length, padron)
+                : (puntajes.length === 0 ? null
+                    : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length))
         };
     });
 };
