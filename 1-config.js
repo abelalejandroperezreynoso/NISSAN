@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-12-1';
+window.VERSION_APP = '2026-09-12-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3066,10 +3066,17 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
 // cada pantalla porque las hojas son las mismas en los tres documentos: se
 // engancha una vez, delegado, y toda hoja nueva lo trae puesta sin hacer nada.
 //
-// **Sólo arranca si no hay nada que desplazar por encima.** Ésa es la regla que
-// lo hace convivir con las listas de dentro: si el dedo cae sobre un contenedor
-// que se puede desplazar y no está en su tope, el gesto es suyo y aquí no se
-// toca nada. Sin eso, arrastrar la lista de una encuesta cerraría la hoja.
+// **Se arrastra por el borde de arriba**: el tirador y el encabezado, que es de
+// donde se agarra una hoja. Desde cualquier punto, una encuesta que cabe entera
+// —sin nada que desplazar por encima, así que el gesto era suyo— se cerraba al
+// primer dedo que bajara por ella, y con ella la firma ya trazada y lo
+// contestado a medias.
+//
+// **Y aun dentro de esa franja, sólo si no hay nada que desplazar por encima.**
+// Ésa es la regla que lo hace convivir con las listas de dentro: si el dedo cae
+// sobre un contenedor que se puede desplazar y no está en su tope, el gesto es
+// suyo y aquí no se toca nada. La hoja misma entra en ese recorrido, que hay
+// hojas que se desplazan ellas en vez de tener un cuerpo aparte.
 //
 // Para arrastrar la hoja hay que **cancelar** el desplazamiento del navegador,
 // y eso sólo se puede en un `touchmove` no pasivo: con `pointermove` iOS ya ha
@@ -3088,20 +3095,35 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
     const UMBRAL_RAPIDO = 45;    // px que bastan si el gesto va rápido
     const VELOCIDAD = 0.5;       // px/ms a partir de los cuales cuenta como rápido
     const HOLGURA = 8;           // px antes de dar el gesto por empezado
+    const FRANJA_MINIMA = 56;    // el tirador, cuando la hoja no trae encabezado
 
     let hoja = null, overlay = null, inicioY = 0, inicioT = 0, avance = 0;
     let siguiendo = false, finDeArrastre = 0;
 
     const CAMPOS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 
+    // Hasta dónde llega la franja por la que se arrastra: el tirador y el
+    // encabezado, que es de donde se agarra una hoja. Si el encabezado se fue
+    // por arriba —hojas cuyo cuerpo desplaza la hoja entera— queda el tirador.
+    const finDelTirador = (contenido) => {
+        const arriba = contenido.getBoundingClientRect().top;
+        const cabecera = contenido.querySelector('.hoja-encabezado, .hoja-encabezado-lista');
+        const abajo = cabecera ? cabecera.getBoundingClientRect().bottom : 0;
+        return Math.max(arriba + FRANJA_MINIMA, abajo);
+    };
+
     // ¿Hay algo desplazable entre el dedo y la hoja que no esté en su tope?
+    // **La hoja entra en el recorrido**: hay hojas que se desplazan ellas
+    // mismas en vez de tener un cuerpo aparte, y pararse antes de mirarlas
+    // daba por bueno el gesto con la lista a media altura.
     const nadaQueDesplazar = (nodo) => {
         let el = nodo;
-        while (el && el !== hoja && el.nodeType === 1) {
+        while (el && el.nodeType === 1) {
             if (el.scrollHeight > el.clientHeight + 1) {
                 const desbordeY = getComputedStyle(el).overflowY;
                 if (desbordeY === 'auto' || desbordeY === 'scroll') return el.scrollTop <= 0;
             }
+            if (el === hoja) break;
             el = el.parentElement;
         }
         return true;
@@ -3128,6 +3150,12 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
         if (!contenido) return;
         const capa = contenido.closest('.hoja-overlay');
         if (!capa) return;
+
+        // Sólo desde el borde de arriba. Arrastrando desde cualquier punto, una
+        // encuesta que cabe entera —nada que desplazar por encima, así que el
+        // gesto era suyo— se cerraba al primer dedo que bajara por ella, y con
+        // ella la firma ya trazada y las respuestas a medias.
+        if (y > finDelTirador(contenido)) return;
 
         hoja = contenido; overlay = capa;
         inicioY = y; inicioT = Date.now(); avance = 0;

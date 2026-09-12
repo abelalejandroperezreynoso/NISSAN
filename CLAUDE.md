@@ -364,12 +364,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   ya espera en iOS. Vive en `1-config.js`, delegado en `document`, así que lo
   comparten los tres documentos y una hoja nueva lo trae puesto sin hacer nada.
 
-  La regla que lo hace convivir con las listas de dentro: **sólo arranca si no
-  hay nada que desplazar por encima**. Si el dedo cae sobre un contenedor que se
-  puede desplazar y no está en su tope, el gesto es suyo y aquí no se toca nada;
-  desde el encabezado de la hoja, en cambio, arrastra siempre. Cierra a partir
-  de 110px, o de 45 si el gesto va rápido (más de 0.5 px/ms); por debajo, la
-  hoja vuelve a su sitio con la misma curva con la que sube.
+  **Se arrastra por el borde de arriba**: el tirador y el encabezado, que es de
+  donde se agarra una hoja —y donde no hay nada que perder—. Valió un tiempo
+  desde cualquier punto, y eso se llevaba por delante lo que la hoja tuviera
+  dentro: una encuesta que **cabe entera** no tiene nada que desplazar por
+  encima, así que el gesto era suyo desde el primer píxel y bajar el dedo por
+  ella la cerraba con la firma ya trazada y las respuestas a medias. Hasta dónde
+  llega esa franja lo dice `finDelTirador`: el borde de abajo del encabezado
+  (`.hoja-encabezado` o `.hoja-encabezado-lista`) y, si no lo hay o se fue por
+  arriba, los 56px del tirador.
+
+  Y dentro de esa franja sigue valiendo la regla que lo hace convivir con las
+  listas de dentro: **sólo arranca si no hay nada que desplazar por encima**. Si
+  el dedo cae sobre un contenedor que se puede desplazar y no está en su tope, el
+  gesto es suyo y aquí no se toca nada. **La hoja misma entra en ese recorrido**
+  —hay hojas que se desplazan ellas en vez de tener un cuerpo aparte
+  (`.form-content` con `overflow-y:auto`), y pararse antes de mirarlas daba por
+  bueno el gesto con la lista a media altura—; ahí, además, el encabezado se va
+  con el desplazamiento, así que para arrastrar hay que subir primero, que es lo
+  que hace cualquier hoja de iOS.
+
+  Cierra a partir de 110px, o de 45 si el gesto va rápido (más de 0.5 px/ms); por
+  debajo, la hoja vuelve a su sitio con la misma curva con la que sube.
 
   Dos cosas que no son evidentes:
 
