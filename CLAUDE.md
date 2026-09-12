@@ -3647,6 +3647,56 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   le pide a la base y no habría preguntas que enseñar. Se esconde con `hidden`,
   así que depende de la regla `.ios-boton-icono[hidden]` de siempre.
 
+- **El botón de guardar no admite dos pulsaciones, y dice que está guardando.**
+  Publicar una encuesta nueva es un `insert`, así que la segunda pulsación no
+  repetía el guardado: creaba **otra encuesta**. `idEditandoEval` sigue en null
+  mientras el primer insert va de camino, de modo que la segunda vuelta vuelve a
+  insertar y quedan dos encuestas iguales, cada una con su lista, su pase de
+  lista y su historial.
+
+  Y no hacía falta impaciencia para dar dos veces: antes del insert van varias
+  preguntas a la base —`hayColumna…` por cada columna que añadió un script de
+  `sql/`, y la ficha de la encuesta en la hoja restringida del revisor— y desde
+  un teléfono en 4G eso es un segundo o dos en los que la pantalla no dice nada.
+  **Las dos mitades van juntas**: el pestillo impide el duplicado y el estado
+  quita la razón de buscarlo.
+
+  ```js
+  window.guardandoEncuesta                    // ¿hay un guardado de camino?
+  window.marcarGuardandoEncuesta(activo, queVa)
+  window.publicarEncuestaDeLaHoja()           // el guardado entero, sin el pestillo
+  ```
+
+  `window.guardarNuevaEvaluacion` es hoy el envoltorio: mira el pestillo, lo
+  echa, desvía al guardado del revisor o al de la hoja entera —que se llama
+  `publicarEncuestaDeLaHoja` y es el mismo de siempre— y lo suelta en un
+  `finally`. Eso último no es un detalle: el guardado se planta en media docena
+  de sitios —falta el título, no hay preguntas, no hay nadie en la lista, la
+  clasificación no es la que se puede crear— y soltarlo sólo por el camino bueno
+  dejaría el botón muerto con la hoja todavía abierta.
+
+  Tres cosas que hay que mantener:
+
+  - **El estado va al subtítulo del encabezado** —«Publicando la encuesta…»,
+    «Guardando los cambios…», «Guardando a quién va dirigida…»—, nunca con
+    `innerText` sobre el botón, que borraría su `<svg>`. Es la regla de todo
+    botón de icono, la misma del botón de recargar y la del de refacciones. Se
+    apunta el subtítulo que había para devolverlo al terminar, y
+    `prepararEncabezadoEval` lo suelta al abrir la hoja: el que escribe ella es
+    el bueno.
+  - **El bote de basura se apaga también.** Eliminar la encuesta a mitad de
+    guardarla es la otra manera de acabar con la hoja diciendo una cosa y la base
+    otra.
+  - **Un botón de icono apagado tiene que verse apagado** (`.ios-boton-icono:disabled`,
+    en `estilos.css`, que le quita además el hundido del toque): no tiene texto
+    que atenuar, así que lo único que puede decirlo es él mismo. Sin esa regla se
+    veía igual que antes de pulsarlo, que es lo que lleva a pulsarlo otra vez.
+
+  `guardarDestinatariosEncuesta` ya no toca el botón: lo apaga y lo enciende el
+  pestillo, que es quien lo tiene apagado desde antes de su primera consulta
+  —ella lo hacía después de dos, que es justo el hueco en el que se volvía a
+  pulsar—.
+
 - **Editar una encuesta parte su historial en dos.** `answers_json` y
   `grades_json` guardan cada respuesta bajo el **id de la pregunta**
   (`evaluation_questions.id`). Editar el enunciado conserva el id, así que la

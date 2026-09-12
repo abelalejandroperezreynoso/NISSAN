@@ -4384,6 +4384,9 @@ window.prepararMaterialEnEdicion = async (id) => {
 };
 
 window.prepararEncabezadoEval = (editando, soloDestinatarios = false) => {
+    // El subtítulo que se escribe aquí es el bueno: si quedó apuntado el de
+    // antes de un guardado, soltarlo ahora o se repondría encima de éste.
+    window.subtituloAntesDeGuardar = null;
     const titulo = document.getElementById('titulo-crear-eval');
     const subtitulo = document.getElementById('subtitulo-crear-eval');
     const guardar = document.getElementById('btn-guardar-eval');
@@ -6160,9 +6163,9 @@ window.guardarDestinatariosEncuesta = async () => {
         );
     }
 
-    const btn = document.getElementById('btn-guardar-eval');
-    if (btn) btn.disabled = true;
-
+    // El botón no se toca aquí: lo apaga y lo vuelve a encender el pestillo de
+    // `guardarNuevaEvaluacion`, que es la única puerta por la que se entra y el
+    // que ya lo tiene apagado desde antes de la primera consulta.
     try {
         // PostgREST responde con éxito a un update que las políticas de RLS
         // rechazan: simplemente no afecta a ninguna fila. Aquí escribe alguien
@@ -6191,8 +6194,6 @@ window.guardarDestinatariosEncuesta = async () => {
     } catch (e) {
         alert("❌ Error: " + e.message);
         console.error(e);
-    } finally {
-        if (btn) btn.disabled = false;
     }
 };
 
@@ -6292,10 +6293,77 @@ window.preguntasDeLaHoja = () => {
     return preguntas;
 };
 
+// --- EL BOTÓN DE GUARDAR NO ADMITE DOS PULSACIONES ---
+//
+// Guardar una encuesta nueva es un `insert`, así que la segunda pulsación no
+// repetía el guardado: creaba **otra encuesta**. `idEditandoEval` sigue en null
+// mientras el primer insert va de camino, de modo que la segunda vuelta vuelve
+// a insertar, y quedan dos encuestas iguales con su propia lista y su propio
+// historial.
+//
+// Y no hacía falta impaciencia para dar dos veces: antes del insert van varias
+// preguntas a la base —`hayColumna…` por cada columna que añadió un script, y
+// la ficha de la encuesta en la hoja del revisor— y desde un teléfono en 4G eso
+// es un segundo o dos en los que la pantalla no dice nada. Las dos mitades van
+// juntas: el pestillo impide el duplicado y el estado en el encabezado quita la
+// razón de buscarlo.
+//
+// El estado va al **subtítulo de la hoja** y el botón se apaga mientras tanto,
+// nunca con `innerText` sobre el botón: eso borraría su `<svg>`, que es la regla
+// de todo botón de icono de la aplicación. Se guarda el subtítulo que había
+// para devolverlo, que lo escribió `prepararEncabezadoEval` y dice de qué va la
+// hoja.
+window.guardandoEncuesta = false;
+window.subtituloAntesDeGuardar = null;
+
+window.marcarGuardandoEncuesta = (activo, queVa) => {
+    window.guardandoEncuesta = !!activo;
+    const btn = document.getElementById('btn-guardar-eval');
+    const borrar = document.getElementById('btn-borrar-eval');
+    const sub = document.getElementById('subtitulo-crear-eval');
+
+    // El bote de basura se apaga también: eliminar la encuesta a mitad de
+    // guardarla es la otra manera de acabar con la hoja diciendo una cosa y la
+    // base otra.
+    if (btn) btn.disabled = !!activo;
+    if (borrar) borrar.disabled = !!activo;
+
+    if (!sub) return;
+    if (activo) {
+        if (window.subtituloAntesDeGuardar === null) window.subtituloAntesDeGuardar = sub.innerText;
+        sub.innerText = queVa || 'Guardando…';
+    } else if (window.subtituloAntesDeGuardar !== null) {
+        sub.innerText = window.subtituloAntesDeGuardar;
+        window.subtituloAntesDeGuardar = null;
+    }
+};
+
 window.guardarNuevaEvaluacion = async () => {
-    // La hoja restringida del revisor guarda por su cuenta: aquí abajo se leen
-    // campos que ella ni siquiera enseña.
-    if (window.editandoSoloDestinatarios) return window.guardarDestinatariosEncuesta();
+    // La pulsación de más no vale: se está guardando lo que esa pulsación
+    // pedía.
+    if (window.guardandoEncuesta) return;
+
+    // La hoja restringida del revisor guarda por su cuenta: el guardado entero
+    // lee campos que ella ni siquiera enseña.
+    const soloDestinatarios = !!window.editandoSoloDestinatarios;
+    window.marcarGuardandoEncuesta(true, soloDestinatarios
+        ? 'Guardando a quién va dirigida…'
+        : (window.idEditandoEval ? 'Guardando los cambios…' : 'Publicando la encuesta…'));
+
+    try {
+        if (soloDestinatarios) return await window.guardarDestinatariosEncuesta();
+        await window.publicarEncuestaDeLaHoja();
+    } finally {
+        // En el `finally` y no al final del guardado: éste se planta en media
+        // docena de sitios —falta el título, no hay preguntas, nadie en la
+        // lista, la clasificación no es la que se puede crear— y soltar el
+        // pestillo sólo por el camino bueno dejaría el botón muerto con la hoja
+        // todavía abierta.
+        window.marcarGuardandoEncuesta(false);
+    }
+};
+
+window.publicarEncuestaDeLaHoja = async () => {
 
     const tit = document.getElementById('eval-title-input').value.trim();
     const cat = document.getElementById('eval-category-input').value.trim() || "General";
