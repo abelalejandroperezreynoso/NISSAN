@@ -912,6 +912,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   el grupo de una sola (`{ filas: [{ ev }] }`) y su `title` dice «revisa esta
   encuesta».
 
+  **Y va dentro de «Respuestas», no encima del botón de responder.** Quien abre
+  una encuesta viene a contestarla, y ahí la fila de caras se llevaba un
+  recuadro entero por encima de la acción principal —entre el recuadro gris y el
+  botón— para decir algo que sólo importa cuando ya hay respuestas: quién las
+  califica. Plegada con ellas, se lee al desplegar la lista y no antes. Va la
+  primera del `.hoja-plegable-cuerpo`, encima del buscador y con su propio
+  margen de arriba: ese cuerpo no tiene relleno superior, sólo la línea que lo
+  separa del renglón.
+
   Debajo de las caras estuvo un renglón que contaba que con destinatarios
   asignados cada revisor califica a los suyos, y se quitó: eran dos líneas de
   letra pequeña explicando un reparto que quien revisa ya ve —le salen unas

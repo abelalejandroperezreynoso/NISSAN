@@ -201,6 +201,12 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // letra pequeña explicando un reparto que quien revisa ya ve —le salen
         // unas respuestas y no otras—, y las caras de encima no lo necesitan
         // para leerse. Con él se fue el segundo argumento de `filaDeRevisores`.
+        //
+        // **Y va dentro de «Respuestas», no encima del botón de responder.**
+        // Quien abre la encuesta viene a contestarla, y ahí la fila de caras se
+        // llevaba un recuadro entero por encima de la acción principal para
+        // decir algo que sólo importa cuando ya hay respuestas: quién las
+        // califica. Plegado con ellas, se lee al desplegar la lista y no antes.
         revisoresHtml = window.filaDeRevisores({ filas: [{ ev: evalData }] });
 
         // Con la frecuencia en el subtítulo y los revisores en su propio
@@ -437,7 +443,6 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // --- CONSTRUCCIÓN DEL CONTENEDOR FINAL ---
         container.innerHTML = `
             ${infoHtml}
-            ${revisoresHtml}
 
         ${bannerHtml}
         ${materialHtml}
@@ -449,6 +454,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
                 ${avisoRevision}
             </summary>
             <div class="hoja-plegable-cuerpo">
+                ${revisoresHtml ? `<div style="margin-top:12px;">${revisoresHtml}</div>` : ''}
                 <input type="text" id="buscador-historial" placeholder="Buscar usuario..." oninput="window.renderizarListaRespuestas()" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:16px; outline:none; background:#f8fafc; margin:12px 0;">
                 <div id="lista-respuestas-historial">Cargando...</div>
             </div>
