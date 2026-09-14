@@ -4780,21 +4780,47 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   como si encender el modo no hubiera cambiado nada.
 
   ```js
-  window.tarjetaDeAdministrador()        // el marcado
-  window.pintarTarjetaAdmin(userHeader)  // lo pone y quita `esta-contraido`
+  window.ESCUDO_ADMIN                          // el <svg>, que se dibuja de dos tamaños
+  window.abrirMiPerfil()                       // la hoja de quien inició sesión
+  window.tarjetaDeAdministrador(fotoHtml)      // el marcado
+  window.pintarTarjetaAdmin(userHeader, foto)  // lo pone y quita `esta-contraido`
   ```
 
-  Es un escudo en el rojo del título, «Administrador» y un renglón que dice que
-  el modo está activo y **cómo se sale** —tocando el título—, que es lo único
-  que hace falta saber ahí. No lleva chevron ni `.panel-usuario-detalle`: lo
-  que se plegaba era el radar, y el radar es de una persona. Tampoco es
-  pulsable, que el modo se apaga donde se encendió. El icono mide los 60px de
-  la foto, así que el panel no pega un salto al encender el modo.
+  «Administrador» y un renglón que dice que el modo está activo y **cómo se
+  sale** —tocando el título—, que es lo único que hace falta saber ahí. No lleva
+  chevron ni `.panel-usuario-detalle`: lo que se plegaba era el radar, y el
+  radar es de una persona.
+
+  **Pero su foto se queda, y no como adorno: es una puerta.** Tocar la foto abre
+  `abrirStatsEmpleado`, que es la hoja donde se **cambia la foto de perfil** y
+  donde se **recorre el equipo** bajando de un subordinado al siguiente. Esa
+  hoja no se alcanza desde ningún otro sitio del panel, así que sin foto el
+  administrador era el único que no podía hacer ninguna de las dos cosas. Lo que
+  no vuelve es el resto del perfil —ni el nombre, ni el badge de pendientes, ni
+  el radar—, que es lo que hacía leer el panel como si encender el modo no
+  hubiera cambiado nada.
+
+  **El escudo no desaparece: baja a sello en la esquina de la foto**
+  (`.tarjeta-admin-sello`), que es lo que sigue diciendo de un vistazo que el
+  modo está encendido —y se distingue por la forma, no sólo por el rojo del
+  título—. Sin foto, o antes de que llegue la plantilla, se queda el disco rojo
+  entero, que es lo que había.
+
+  El `onclick` **no mete el nombre en una cadena dentro del atributo**: llama a
+  `window.abrirMiPerfil()`, que lo lee de la sesión. Es lo que evita que un
+  apellido con apóstrofo parta el atributo, que es lo que le pasa a la tarjeta
+  del usuario desde siempre.
 
   Se dibuja en **los dos sitios** donde `mostrarDashboard` escribe ese
   encabezado —el esqueleto de carga y la tarjeta de después—, y por lo mismo:
   el esqueleto del perfil enseñaría un instante el hueco de la foto y, cien
-  milisegundos después, el nombre de quien entró.
+  milisegundos después, el nombre de quien entró. **La foto sólo la lleva el
+  segundo**, que es donde ya está resuelto el avatar.
+
+  **Los tres estados miden 64px de ancho**, que es lo que mide la foto del
+  usuario —60 más su borde de 2px, y ahí no hay `box-sizing`—. El escudo solo
+  medía 60 y el panel pegaba un salto de 4px al encender el modo y otro al
+  llegar la foto; hoy lo iguala un borde transparente en `.tarjeta-admin-icono`.
 
   **Lo demás del panel se queda**: sus pendientes, las encuestas que revisa y
   su equipo siguen ahí. Lo único que además no se hace es **pedir el radar**

@@ -2273,11 +2273,62 @@ textarea:focus {
     justify-content: center;
     flex-shrink: 0;
     box-shadow: 0 4px 6px -1px rgba(211, 47, 47, 0.35);
+    /* La foto del usuario son 60px MÁS su borde de 2px, y aquí no hay
+       `box-sizing`, así que mide 64. Este borde transparente es lo que deja el
+       escudo del mismo tamaño: sin él, el panel daba un salto de 4px al
+       encender el modo y otro al llegar la foto. */
+    border: 2px solid transparent;
 }
 
 .tarjeta-admin-icono svg {
     width: 30px;
     height: 30px;
+}
+
+/* Con foto, el disco deja de ser el escudo: pasa a ser la puerta al perfil
+   —cambiar la foto y recorrer el equipo—, así que va como la foto de la
+   tarjeta del usuario y no como un icono. Mide lo mismo, de modo que el panel
+   no pega un salto al encender el modo. */
+.tarjeta-admin-icono--foto {
+    background: white;
+    border: 2px solid #fecaca;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    position: relative;
+    font-size: 2rem;
+}
+
+.tarjeta-admin-icono--foto img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+/* El escudo no desaparece al haber foto: baja a sello en la esquina, que es lo
+   que sigue diciendo que el modo está encendido. El borde blanco es lo que lo
+   despega de la foto de debajo, sea clara u oscura. */
+.tarjeta-admin-sello {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #d32f2f;
+    color: white;
+    border: 2px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Más específica que `.tarjeta-admin-icono svg`, o el sello saldría con los
+   30px del escudo grande. */
+.tarjeta-admin-sello svg {
+    width: 13px;
+    height: 13px;
 }
 
 /* Las mismas medidas fluidas que el nombre y el puesto de la tarjeta del

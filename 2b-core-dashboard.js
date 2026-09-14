@@ -401,27 +401,64 @@ window.alternarPanelUsuario = () => {
 // No lleva chevron ni `.panel-usuario-detalle`: lo que se plegaba era el radar,
 // que es de una persona. Tampoco es pulsable, que el modo se apaga donde se
 // encendió —el título— y es lo que dice su renglón.
-window.tarjetaDeAdministrador = () => `
+// El escudo del modo administrador. Va suelto porque se dibuja de dos tamaños:
+// grande cuando es todo lo que hay, y de sello en la esquina de la foto.
+window.ESCUDO_ADMIN = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 3l7 3v5c0 4.4-2.9 8.4-7 10-4.1-1.6-7-5.6-7-10V6l7-3z"/>
+        <path d="M9 11.8l2 2 4-4"/>
+    </svg>`;
+
+// Abre el perfil de quien inició sesión, que es la hoja donde se cambia la foto
+// y se recorre el equipo. Existe para que el `onclick` no tenga que meter el
+// nombre dentro de una cadena en un atributo: un apellido con apóstrofo la
+// partiría, que es lo que le pasa al de la tarjeta del usuario desde siempre.
+window.abrirMiPerfil = () => {
+    let u = null;
+    try { u = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null'); } catch (e) { u = null; }
+    if (!u || !u.id || !window.abrirStatsEmpleado) return;
+    window.abrirStatsEmpleado(u.id, u.name, u.puesto || 'Colaborador');
+};
+
+// La tarjeta de arriba con el modo encendido. No es la del usuario —ahí no se
+// está mirando el panel de nadie en particular— pero **su foto se queda**, y no
+// como adorno: es la única puerta a `abrirStatsEmpleado`, que es donde se
+// cambia la foto de perfil y donde se recorre el equipo bajando de un
+// subordinado al siguiente. Quitándola, el administrador era el único que no
+// podía hacer ninguna de las dos cosas.
+//
+// Con foto, el escudo baja a **sello en la esquina** en vez de desaparecer: es
+// lo que sigue diciendo de un vistazo que el modo está encendido, que era todo
+// lo que hacía el disco rojo. Sin foto —o antes de que llegue la plantilla— se
+// queda el disco de siempre, que es lo que había.
+window.tarjetaDeAdministrador = (fotoHtml) => {
+    const icono = fotoHtml
+        ? `<div id="tarjeta-admin-foto" class="tarjeta-admin-icono tarjeta-admin-icono--foto"
+                onclick="window.abrirMiPerfil()" role="button" tabindex="0"
+                title="Mi perfil: cambiar mi foto y ver a mi equipo"
+                aria-label="Mi perfil: cambiar mi foto y ver a mi equipo">
+               ${fotoHtml}
+               <span class="tarjeta-admin-sello" aria-hidden="true">${window.ESCUDO_ADMIN}</span>
+           </div>`
+        : `<div class="tarjeta-admin-icono">${window.ESCUDO_ADMIN}</div>`;
+
+    return `
     <div class="tarjeta-admin">
-        <div class="tarjeta-admin-icono">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 3l7 3v5c0 4.4-2.9 8.4-7 10-4.1-1.6-7-5.6-7-10V6l7-3z"/>
-                <path d="M9 11.8l2 2 4-4"/>
-            </svg>
-        </div>
+        ${icono}
         <div style="min-width:0;">
             <div class="tarjeta-admin-titulo">Administrador</div>
             <div class="tarjeta-admin-nota">Modo administrador activo · toca el título de arriba para salir</div>
         </div>
     </div>`;
+};
 
 // La pone en el encabezado y deshace lo que hubiera dejado el panel del
 // usuario: la marca de plegado no tiene aquí nada que esconder.
-window.pintarTarjetaAdmin = (userHeader) => {
+window.pintarTarjetaAdmin = (userHeader, fotoHtml) => {
     if (!userHeader) return;
     userHeader.classList.remove('esta-contraido');
-    userHeader.innerHTML = window.tarjetaDeAdministrador();
+    userHeader.innerHTML = window.tarjetaDeAdministrador(fotoHtml);
 };
 
 window.mostrarDashboard = async (user) => {
@@ -533,11 +570,18 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
         }
 
         if (userHeader && window.modoAdminActivo) {
-            // Administrando no hay perfil que enseñar, y por lo mismo no hay
-            // radar que pedir: esas dos consultas son de una persona. El equipo
-            // sí se dibuja, que es de lo que el modo enseña de más.
+            // Administrando no se enseña el perfil de quien entró —ni su
+            // nombre, ni su badge, ni su radar, que por eso tampoco se pide:
+            // esas dos consultas son de una persona—. Lo que sí se queda es su
+            // **foto**, porque es la puerta a la hoja donde se cambia y donde
+            // se recorre el equipo. El equipo de abajo se dibuja igual, que es
+            // de lo que el modo enseña de más.
+            //
+            // Aquí ya está resuelto el avatar, así que ésta es la llamada que
+            // lo lleva; la de arriba se dibuja antes de la plantilla y se queda
+            // con el escudo, como el esqueleto del panel del usuario.
             userHeader.style.display = 'block';
-            window.pintarTarjetaAdmin(userHeader);
+            window.pintarTarjetaAdmin(userHeader, avatarUrl ? headerAvatarHtml : '');
             window.renderizarVistaRapidaEquipo(false);
         } else if (userHeader) {
             // FIX DEFINITIVO: Forzamos la visualización en bloque aquí también
