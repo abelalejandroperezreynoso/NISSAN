@@ -1459,22 +1459,23 @@ window.alternarAsistencia = async (idEmpleado) => {
     window.pintarHojaPaseDeLista();
 };
 
-// La calificación es la misma que se pone sola al enviarla: pasar lista no
-// tiene respuesta buena ni mala, haberla confirmado es todo lo que se
-// preguntaba.
-window.calificacionDeAsistencia = (q) => ({
-    type: 'standard', status: 'correct', question: q.question_text || '', auto: true
-});
+// Aquí vivía `calificacionDeAsistencia`, que le ponía a lo apuntado el mismo
+// «correcto» automático que el envío escribía entonces. Se fue con él: una
+// asistencia no puntúa, venga de quien la registró o de quien pasó lista por
+// ella —si no, la misma asistencia valdría 100% o nada según por qué puerta
+// se apuntara—. Ver `esPreguntaDeConstancia`, en `1-config.js`.
 
 window.apuntarAsistencia = async (q, emp, respuestaExistente) => {
     if (respuestaExistente) {
         const answers = { ...(respuestaExistente.answers_json || {}), [q.id]: window.TEXTO_ASISTENCIA };
-        const grades = { ...(respuestaExistente.grades_json || {}), [q.id]: window.calificacionDeAsistencia(q) };
+        // Sólo la respuesta: una asistencia no lleva nota. Lo demás de
+        // `grades_json` se queda como estaba, que la encuesta puede llevar
+        // preguntas que sí se califican.
         // Contar las filas del `.select()`: aquí escribe alguien que no es
         // administrador y una política de RLS que lo rechace no da error,
         // simplemente no afecta a ninguna fila.
         const { data, error } = await sb.from('evaluation_responses')
-            .update({ answers_json: answers, grades_json: grades })
+            .update({ answers_json: answers })
             .eq('id', respuestaExistente.id).select();
         if (error || !data || data.length === 0) {
             alert("No se pudo guardar la asistencia. Puede que la base no te deje escribir esa respuesta.");
@@ -1493,9 +1494,10 @@ window.apuntarAsistencia = async (q, emp, respuestaExistente) => {
         employee_id: emp.id,
         employee_area: emp.area || null,
         answers_json: { [q.id]: window.TEXTO_ASISTENCIA },
-        grades_json: { [q.id]: window.calificacionDeAsistencia(q) },
-        // Una encuesta que sólo pasa lista queda calificada al apuntarla, como
-        // cuando la contesta su destinatario: no hay nada que revisar.
+        // Sin nota, como cuando la contesta su destinatario: pasar lista no se
+        // acierta ni se falla. Y ya revisada, que no hay nada que decidir sobre
+        // ella —es lo que evita crearle un pendiente a quien acaba de apuntarla—.
+        grades_json: {},
         review_status: 'Revisado',
         submitted_at: cuando.toISOString()
     }).select();

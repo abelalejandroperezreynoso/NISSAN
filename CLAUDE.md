@@ -1693,6 +1693,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   rótulo y su contador van envueltos en un solo `<span>` o el «(10)» se separa
   del texto, que es la trampa de `.hoja-plegable-resumen` de siempre.
 
+  **Lo apuntado a mano tampoco lleva nota.** `apuntarAsistencia` escribía el
+  mismo «correcto» automático que escribía el envío, y quitarlo sólo de un lado
+  habría dejado la misma asistencia valiendo 100% o nada según por qué puerta se
+  registró. Al insertar una respuesta nueva va con `grades_json` vacío y ya
+  `'Revisado'` —no hay nada que revisar—, y al apuntar sobre una que ya existe
+  **no se toca `grades_json`**: la encuesta puede llevar preguntas que sí se
+  califican y ésas se quedan como estaban.
+
   **Y quien la imparte pasa lista a mano.** La casilla que enseña la encuesta es
   de quien asiste y sólo vale dentro de su hora: pasado el plazo, un registro
   que faltó ya no lo arregla nadie, y quien fue sin tener la encuesta asignada
