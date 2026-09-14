@@ -1418,6 +1418,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     nota de evidencia o su «correcto» de asistencia dentro de `grades_json` y
     ahí siguen contando: `gradesTemp` parte de lo que había, así que volver a
     guardar una no las borra. Lo que cambia es que no se escriben más.
+
+  **Y el rezago no se cierra solo**, que es lo que hay que saber al desplegarlo:
+  `review_status` se escribe **al enviar la respuesta** y nada lo recalcula
+  después, así que todo lo que se envió antes del cambio sigue en `'Pendiente'`
+  —pidiéndole a alguien que califique una fotografía—. Se cierra abriendo cada
+  respuesta y pulsando «Guardar Revisión» una vez, o de golpe con
+  `sql/cerrar-pendientes-sin-nada-que-calificar.sql`, que pone en `'Revisado'`
+  las que no tienen ni una pregunta por calificar. Ese script **no toca
+  `'Mal Revisada'`** —es el veredicto de alguien que miró la respuesta— ni
+  `grades_json`, que reescribir puntajes pasados podría tumbar una certificación
+  ya dada.
 - **La firma es un tipo de pregunta más, y no puntúa.** Recoge **la firma de
   quien contesta** trazada con el dedo, que es el mismo gesto con el que se firma
   de enterado una difusión de incidentes desde siempre; lo que cambia es que
