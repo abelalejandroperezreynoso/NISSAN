@@ -384,6 +384,37 @@ window.conMinimoEnTodas = (fila) => {
     return fila;
 };
 
+// **La calificación se mide sobre las asignadas, no sobre lo que llegó.** Un
+// departamento donde una persona de cuatro contestó y sacó 89 no va al 89%:
+// va como va la gente que no ha contestado, que es cero. Promediando sólo lo
+// calificado, el cuadro decía 76% con tres de sus cuatro figuras en gris —el
+// número más visible de la pantalla diciendo lo contrario que el dibujo de
+// debajo—, y de paso el criterio no se podía comparar con los de al lado, que
+// sí miden sobre lo asignado.
+//
+// Lo que **no** entra en el divisor es lo contestado y todavía sin calificar:
+// eso no dice nada de quien lo contestó y su cero sería el atraso del
+// revisor, no el suyo. Es la misma regla que ya sostienen «Avance de
+// revisión» y «80% Líderes», y la que hace que el número suba solo según se
+// va revisando en vez de mezclar dos cosas. Lo que se falló —una respuesta
+// falsa o mal revisada— tampoco puntúa ni ocupa sitio, que es lo que ya hacía
+// `countScore`.
+//
+// Sin nada calificado y sin nada por contestar no hay divisor, y entonces se
+// dice «sin calificar» en lugar de un 0% que se leería como haberlo hecho
+// mal.
+window.baseDeCalificacion = (d) => {
+    const asignadas = d.assignedCount || 0;
+    const contestadas = d.responses || 0;
+    return (d.countScore || 0) + Math.max(0, asignadas - contestadas);
+};
+
+// Cómo les fue a los que sí la contestaron, que es la otra pregunta y la que
+// respondía antes el criterio. Se queda en el globo, con su nombre, para que
+// las dos cifras no se lean como la misma.
+window.calificacionDeLoContestado = (d) => (d.countScore || 0) > 0
+    ? window.pctTexto(d.sumScore / d.countScore / 100) : null;
+
 // El porcentaje que se lee en pantalla. `Math.round` decía 100% con 478 de
 // 480 —faltando dos— y 0% con 1 de 480, que son las dos cifras que nadie
 // quiere ver mal: el 100% es el cierre total y el 0% es no haber empezado.
@@ -473,8 +504,20 @@ window.CRITERIOS_STATS = [
     { clave: 'mal_revisadas', etiqueta: 'Mal rev.', nombre: 'mal revisadas', color: '#a855f7', relleno: '#e9d5ff',
       peorEsAlto: true,
       valor: (d) => d.assignedCount > 0 ? (d.malRevisadas || 0) / d.assignedCount : 0 },
+    // Sobre las asignadas: quien no contestó cuenta como cero (ver
+    // `baseDeCalificacion`). Lo contestado y sin calificar no entra en el
+    // divisor, así que sin nada que medir se dice «sin calificar» y no 0%.
     { clave: 'calificacion', etiqueta: 'Calificación', nombre: 'de calificación', color: '#16a34a', relleno: '#86efac',
-      valor: (d) => d.countScore > 0 ? (d.sumScore / d.countScore) / 100 : 0 },
+      valor: (d) => {
+          const base = window.baseDeCalificacion(d);
+          return base > 0 ? (d.sumScore || 0) / 100 / base : 0;
+      },
+      texto: (d) => window.baseDeCalificacion(d) > 0
+          ? `${window.pctTexto((d.sumScore || 0) / 100, window.baseDeCalificacion(d))}% de calificación`
+          : 'sin calificar',
+      corto: (d) => window.baseDeCalificacion(d) > 0
+          ? { cifra: `${window.pctTexto((d.sumScore || 0) / 100, window.baseDeCalificacion(d))}%`, detalle: '' }
+          : { cifra: '—', detalle: 'sin calificar' } },
     // Prontitud: qué parte del plazo quedaba sin gastar al contestar. Lleno es
     // pronto. Dentro del cuadro no se enseña esa proporción sino los días, que
     // es lo que se entiende sin explicación.
@@ -2250,7 +2293,7 @@ window.nodosDeCuadros = (mapa) => {
             asignadas: asignadas,
             respuestas: d.responses || 0,
             procesadas: window.procesadasDe(d),
-            calificacion: d.countScore > 0 ? window.pctTexto(d.sumScore / d.countScore / 100) : null
+            calificacion: window.calificacionDeLoContestado(d)
         });
     });
     return nodos;
@@ -2454,8 +2497,7 @@ window.llenadoDeLaPersona = (ficha) => {
 // Lo que dice el globo de una figura: quién es, de dónde y cómo va.
 window.globoDePersona = (ficha) => {
     const criterio = window.criterioStats();
-    const calificacion = ficha.countScore > 0
-        ? window.pctTexto(ficha.sumScore / ficha.countScore / 100) : null;
+    const calificacion = window.calificacionDeLoContestado(ficha);
 
     return [
         ficha.nombre || 'Sin nombre',
@@ -2464,7 +2506,7 @@ window.globoDePersona = (ficha) => {
         ficha.area ? '📍 Área: ' + ficha.area : '',
         criterio.etiqueta + ': ' + window.cifraDelCriterio(ficha),
         'Asignadas: ' + (ficha.assignedCount || 0) + ' · Contestadas: ' + (ficha.responses || 0),
-        calificacion === null ? '' : '⭐ Calificación: ' + calificacion + '%'
+        calificacion === null ? '' : '⭐ Calificación de lo contestado: ' + calificacion + '%'
     ].filter(Boolean).join('\n');
 };
 
@@ -2762,7 +2804,7 @@ window.dibujarCuadros = (nodos, alTocar) => {
             window.medidasDelRotulo(w, h, n.nombre, enPersonas, grupos);
 
         el.title = `${n.nombre}\nAsignadas: ${n.asignadas}\nContestadas: ${n.respuestas}`
-            + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación: ${n.calificacion}%`)
+            + `\nRevisadas: ${n.procesadas}` + (n.calificacion === null ? '' : `\n⭐ Calificación de lo contestado: ${n.calificacion}%`)
             + `\n${criterio.etiqueta}: ${window.cifraDelCriterio(n.datos)} (puesto ${puesto[n.nombre]} de ${nodos.length})`
             + (grupos ? `\n${window.lineaGrupos(grupos)}` : '');
 
@@ -2880,7 +2922,7 @@ if (!window.__cuadrosDesgloseEscucha) {
 // puesto.
 window.globoDeFila = (encabezado, fila) => {
     const criterio = window.criterioStats();
-    const calificacion = fila.countScore > 0 ? window.pctTexto(fila.sumScore / fila.countScore / 100) : null;
+    const calificacion = window.calificacionDeLoContestado(fila);
     const grupos = window.gruposDeLaFila(fila);
 
     return `${encabezado}`
@@ -2890,7 +2932,7 @@ window.globoDeFila = (encabezado, fila) => {
         + `&#10;Certificadas: ${fila.certificadas || 0}`
         + `&#10;Falsas/Anuladas: ${fila.falsas || 0}`
         + `&#10;Mal Revisadas: ${fila.malRevisadas || 0}`
-        + (calificacion === null ? '' : `&#10;⭐ Calificación: ${calificacion}%`)
+        + (calificacion === null ? '' : `&#10;⭐ Calificación de lo contestado: ${calificacion}%`)
         + `&#10;${criterio.etiqueta}: ${window.cifraDelCriterio(fila)}`
         + (grupos ? `&#10;${window.lineaGrupos(grupos)}` : '');
 };

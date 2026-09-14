@@ -4007,8 +4007,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   propiedad `extremo` de cada criterio. El total dice más en el mismo sitio.
 
   Casi todos los criterios miden **sobre las asignadas**, que es lo que hace
-  comparables las barras y los cuadros entre sí. Las tres excepciones son
-  calificación, que ya viene en porcentaje; **80% Líderes**, que mide sobre
+  comparables las barras y los cuadros entre sí. Las dos excepciones son
+  **80% Líderes**, que mide sobre
   la gente y no sobre las encuestas (más abajo); y **avance de revisión**, que se
   mide sobre las **contestadas**: dice qué parte de lo que ya entregaron lleva
   calificada quien revisa, y meter en el denominador una encuesta que nadie
@@ -4018,6 +4018,39 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   respuesta dice «sin contestar»: no hay revisión atrasada que reprocharle. Lo que cuenta como revisado es
   cualquier veredicto —revisada, certificada, falsa o mal revisada—, que es lo
   que reúne `window.procesadasDe(fila)`.
+
+  **Y la calificación se mide sobre las asignadas, no sobre lo que llegó.** Era
+  el promedio de lo calificado y nada más, así que un departamento donde una
+  persona de cuatro contestó y sacó 89 salía al 89%: el número más visible de la
+  pantalla decía lo contrario que el dibujo de debajo, donde tres de sus cuatro
+  figuras estaban en gris. Quien no ha contestado va como va, que es cero.
+
+  ```js
+  window.baseDeCalificacion(fila)          // el divisor: lo calificado y lo que falta por contestar
+  window.calificacionDeLoContestado(fila)  // el promedio de antes, que se queda en el globo
+  ```
+
+  Lo que **no** entra en el divisor es lo contestado y todavía sin calificar: eso
+  no dice nada de quien lo contestó y su cero sería el atraso del revisor, no el
+  suyo. Es la misma regla que sostienen «Avance de revisión» y «80% Líderes», y
+  es lo que hace que la cifra suba sola según se va revisando en vez de mezclar
+  dos cosas. Una respuesta falsa o mal revisada no puntúa ni ocupa sitio, que es
+  lo que ya hacía `countScore`.
+
+  Sin nada calificado y sin nada por contestar no hay divisor, y entonces se dice
+  **«sin calificar»** —«—» en la columna, que es estrecha— en lugar de un 0% que
+  se leería como haberlo hecho mal.
+
+  **Las dos cifras conviven, y por eso se llaman distinto.** «Cómo les fue a los
+  que la hicieron» sigue siendo un dato, y sigue en el globo del cuadro, de la
+  columna y de cada figura; lo que no puede es llamarse «Calificación» al lado
+  de la del criterio, que mide otra cosa: ahí pone **«⭐ Calificación de lo
+  contestado»**. Salía de la misma expresión escrita en cuatro sitios y hoy la da
+  `calificacionDeLoContestado`.
+
+  Lo que **no** cambió es la tarjeta «Calificación Promedio» del encabezado de la
+  pantalla, que sigue promediando lo calificado (`globalAvgScore`): habla del
+  filtro entero y no de un corte, y no se tocó en el mismo cambio.
 
   **«Revisadas ≥80%» y «80% Líderes» no son el mismo filtro.** El primero
   cuenta encuestas —qué parte de lo asignado se calificó por encima del
