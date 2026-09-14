@@ -1800,12 +1800,35 @@ window.verDetalleRespuesta = async (resp) => {
                          style="width:100%; border-radius:10px; display:block; cursor:pointer;" title="Toca para ampliar">
                 </div>` : '';
 
+        // El departamento de quien contestó, detrás de su nombre. Saber de
+        // quién es la respuesta que se está calificando es media cosa: la otra
+        // media es de dónde, que es lo que sitúa lo que se lee debajo —una
+        // auditoría de PRODUCCIÓN no se lee igual que una de CALIDAD—.
+        //
+        // Sale de su ficha y no de la respuesta, que no lo guarda —lo único
+        // histórico que guarda es `employee_area`, el área de aquel día—, así
+        // que **es el departamento de hoy**: si esa persona cambió de
+        // departamento desde que contestó, se lee el nuevo. Es lo mismo que ya
+        // hacen el resto de las pantallas que deciden sobre alguien, y por lo
+        // mismo: la ficha es la verdad y la sesión dura treinta días.
+        //
+        // Se resuelve como el nombre de al lado —primero la ficha, después el
+        // mapa—, así que si la plantilla no está cargada no se dibuja y el
+        // encabezado se queda como estaba; ahí el nombre tampoco saldría.
+        const fichaQuienContesto = (window.todosLosEmpleadosData || [])
+            .find(e => String(e.id) === String(resp.employee_id));
+        const deptoQuienContesto = (fichaQuienContesto && fichaQuienContesto.dept)
+            || (window.employeeDeptMap || {})[String(resp.employee_id)] || '';
+        const deptoHtml = deptoQuienContesto
+            ? ` &middot; ${window.sanitizeForHTML(deptoQuienContesto)}`
+            : '';
+
         modal.innerHTML = `
             <div class="hoja-contenido" style="max-width:900px; background:#f8fafc; overflow:hidden; padding:12px 0 0;">
             <div class="hoja-encabezado-lista">
                 <div style="min-width:0;">
                     <h2 class="hoja-titulo">Detalle de respuesta</h2>
-                    <div class="hoja-subtitulo">Empleado: <b>${window.employeeNameMap[resp.employee_id] || resp.employee_id}</b> ${areaInfoHtml}</div>
+                    <div class="hoja-subtitulo">Empleado: <b>${window.employeeNameMap[resp.employee_id] || resp.employee_id}</b>${deptoHtml} ${areaInfoHtml}</div>
                 </div>
                 <div class="hoja-acciones">
                     ${badgeCalificacionHtml}

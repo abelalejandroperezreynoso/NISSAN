@@ -1882,6 +1882,27 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `window.claveDeArea()`: la respuesta guarda el nombre que tenía el empleado
   ese día y la pantalla agrupa por el de su ficha, así que «Planta 1» y
   « planta 1 » tienen que caer en el mismo sitio.
+- **La hoja de detalle de una respuesta dice de quién es y de dónde.** En el
+  subtítulo del encabezado, detrás del nombre y separado por «·»: «Empleado:
+  **Olivares Valdez Ernesto** · PRODUCCION». Saber de quién es la respuesta que
+  se está calificando es media cosa; la otra media es de dónde, que es lo que
+  sitúa lo que se lee debajo —una auditoría de PRODUCCIÓN no se lee igual que
+  una de CALIDAD—.
+
+  **Es el departamento de hoy, no el de aquel día.** La respuesta no lo guarda
+  —lo único histórico que guarda es `employee_area`, el área del día—, así que
+  sale de la ficha: quien cambió de departamento desde que contestó se lee con
+  el nuevo. Es lo mismo que hacen las demás pantallas que deciden sobre alguien,
+  y por lo mismo.
+
+  Se resuelve como el nombre que lleva al lado —primero `todosLosEmpleadosData`,
+  después `window.employeeDeptMap`—, así que **no consulta nada**; y si la
+  plantilla no está cargada no se dibuja y el encabezado se queda como estaba,
+  que ahí el nombre tampoco saldría. Va **fuera del `<b>`**: el nombre es lo que
+  se busca y el departamento lo que lo sitúa. Medido a 375px con el peor caso
+  —nombre largo, «MANTENIMIENTO INDUSTRIAL», la cifra del resultado y el
+  desplegable de área del administrador—, el encabezado no desborda ni echa la
+  cruz fuera de la hoja.
 - **Una encuesta se entrega completa.** No se puede enviar dejando preguntas en
   blanco: `enviarRespuestasEval` reúne lo que falta —lo sin contestar y los
   motivos sin escribir—, lo dice todo junto en un solo aviso, señala en rojo
