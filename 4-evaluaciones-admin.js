@@ -221,10 +221,14 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     const mode = evalData ? (evalData.mode || 'self') : 'self';
     const safeTitle = title.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
     
-    // Los tres van **sueltos**, sin la tarjeta blanca que los envolvía: era un
-    // recuadro con borde y sombra alrededor de un botón que ya es un bloque de
-    // color a todo lo ancho, o sea un marco por encima del elemento más visible
-    // de la pantalla. Lo que los separa hoy es el hueco de `.eval-acciones`.
+    // Van **sueltos**, sin la tarjeta blanca que los envolvía: era un recuadro
+    // con borde y sombra alrededor de un botón que ya es un bloque de color a
+    // todo lo ancho, o sea un marco por encima del elemento más visible de la
+    // pantalla. Lo que los separa hoy es el hueco de `.eval-acciones`.
+    //
+    // Aquí queda sólo la acción principal —responder, evaluar a un colaborador,
+    // o el aviso de que toca revisar—: «Editar a quién va dirigida» se fue con
+    // la fila de revisores al plegable de «Respuestas».
     let actionButtonHtml = '';
     if (mode === 'boss') {
         actionButtonHtml = `<button onclick="window.abrirSeleccionSubordinado('${evalId}', '${safeTitle}', 'boss')" class="eval-accion eval-accion--jefe">Evaluar a un Colaborador...</button>`;
@@ -249,8 +253,11 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // colgaba del aviso de «te toca revisar», así que al revisor al que la
     // encuesta también le tocaba —que es lo normal— nunca le aparecía.
     //
-    // Va debajo de la acción principal y con menos peso que ella: aquí se
-    // viene a responder, y esto es lo secundario.
+    // **Y va dentro de «Respuestas», con la fila de quién revisa.** Debajo del
+    // botón de responder era lo segundo que se veía al abrir la encuesta, y lo
+    // que se viene a hacer aquí es contestarla: corregir la lista es de quien la
+    // imparte y habla de lo mismo que el plegable —a quién le toca, quién ha
+    // contestado y quién califica—, así que ahí es donde se busca.
     let destinatariosBtnHtml = '';
     if (evalData && (window.modoAdminActivo || window.puedeEditarDestinatarios(evalData, user.id))) {
         destinatariosBtnHtml = `
@@ -374,13 +381,12 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             .map(x => String(x || '').trim()).filter(Boolean).join(' · ');
     }
 
-    // La gráfica se queda con su recuadro —es un dibujo y necesita fondo—; los
-    // botones no, que ya son bloques de color a todo lo ancho. Sin ninguno de
-    // los dos no se escribe nada: un contenedor vacío deja su margen.
+    // La gráfica se queda con su recuadro —es un dibujo y necesita fondo—; la
+    // acción principal no, que ya es un bloque de color a todo lo ancho. Sin
+    // ninguna de las dos no se escribe nada: un contenedor vacío deja su margen.
     const bannerHtml = `
         ${graficaHtml ? `<div class="eval-grafica">${graficaHtml}</div>` : ''}
-        ${(actionButtonHtml || destinatariosBtnHtml)
-            ? `<div class="eval-acciones">${actionButtonHtml}${destinatariosBtnHtml}</div>` : ''}
+        ${actionButtonHtml ? `<div class="eval-acciones">${actionButtonHtml}</div>` : ''}
     `;
 
     // El nombre de la encuesta manda en el encabezado de la hoja. La cruz se
@@ -454,7 +460,8 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
                 ${avisoRevision}
             </summary>
             <div class="hoja-plegable-cuerpo">
-                ${revisoresHtml ? `<div style="margin-top:12px;">${revisoresHtml}</div>` : ''}
+                ${(revisoresHtml || destinatariosBtnHtml)
+                    ? `<div style="margin-top:12px;">${revisoresHtml}${destinatariosBtnHtml}</div>` : ''}
                 <input type="text" id="buscador-historial" placeholder="Buscar usuario..." oninput="window.renderizarListaRespuestas()" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:16px; outline:none; background:#f8fafc; margin:12px 0;">
                 <div id="lista-respuestas-historial">Cargando...</div>
             </div>

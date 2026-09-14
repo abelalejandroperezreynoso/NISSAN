@@ -787,7 +787,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   y se recorta con «…» mientras la cifra no: al revés, un nombre largo la echaría
   fuera de la hoja.
 
-  **Y los tres botones van sueltos, sin tarjeta.** La acción principal
+  **Y los botones van sueltos, sin tarjeta.** La acción principal
   —«Responder Encuesta», «Volver a Responder», «Evaluar a un Colaborador…»—, el
   aviso de «Te toca revisar esta encuesta» y «Editar a quién va dirigida» vivían
   dentro de un recuadro blanco con borde y sombra, que es un marco alrededor de
@@ -796,6 +796,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   de `.eval-acciones`, y sus estilos están en `estilos.css` (`.eval-accion`,
   `.eval-accion--responder`, `.eval-accion--jefe`, `.eval-accion-secundaria`,
   `.eval-aviso-revisar`) y no en atributos `style`.
+
+  **En `.eval-acciones` queda hoy sólo la acción principal**: «Editar a quién va
+  dirigida» se fue al plegable de «Respuestas», con la fila de revisores —se
+  cuenta más abajo—, así que ese contenedor se dibuja o no según haya acción
+  principal y nada más. Su clase `.eval-accion-secundaria` se queda: es la del
+  botón, que sigue siendo el mismo allí donde esté.
 
   **La gráfica sí conserva el suyo** (`.eval-grafica`): es un dibujo y necesita
   un fondo blanco detrás, al revés que los botones. Sin gráfica y sin botones no
@@ -920,6 +926,21 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   primera del `.hoja-plegable-cuerpo`, encima del buscador y con su propio
   margen de arriba: ese cuerpo no tiene relleno superior, sólo la línea que lo
   separa del renglón.
+
+  **Y con ella se fue «Editar a quién va dirigida»**, que iba debajo del botón
+  de responder y era lo segundo que se veía al abrir la encuesta. Habla de lo
+  mismo que el plegable —a quién le toca, quién ha contestado, quién califica—,
+  es de quien la imparte y no de quien la contesta, y arriba se llevaba un
+  bloque a todo lo ancho justo debajo de la acción principal. Va detrás de las
+  caras, dentro del mismo `<div>` de margen, así que el hueco de arriba se pone
+  una sola vez y lo escriba quien lo escriba —puede haber botón sin revisores,
+  y revisores sin botón— el plegable empieza igual.
+
+  Lo que **no** cambió es quién lo ve: sigue siendo `puedeEditarDestinatarios`
+  —el administrador y quien revisa la encuesta—, y sigue sin colgar de cuál de
+  las acciones de arriba haya salido. Lo que cambia es que ahora hay que
+  desplegar «Respuestas» para llegar a él, que es donde se va a mirar la lista
+  que se viene a corregir.
 
   Debajo de las caras estuvo un renglón que contaba que con destinatarios
   asignados cada revisor califica a los suyos, y se quitó: eran dos líneas de
@@ -2317,8 +2338,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   ser administrador y sin tocar nada más: es el instructor que la imparte y es
   quien sabe a quién le falta tomarla. Se entra por dos sitios: el lápiz de la
   tarjeta en la lista —el mismo que tiene el administrador— y el botón
-  «Editar a quién va dirigida» de la pantalla de la encuesta, debajo del de
-  responder. Los dos llaman a `window.editarDestinatariosEncuesta(id)`, que
+  «Editar a quién va dirigida» de la pantalla de la encuesta, dentro del
+  plegable de «Respuestas» y detrás de la fila de quién revisa —ahí se explica
+  por qué—. Los dos llaman a `window.editarDestinatariosEncuesta(id)`, que
   comprueba el permiso con `window.puedeEditarDestinatarios(ev, empleadoId)`
   (en `1-config.js`, junto a las demás reglas de revisión).
 
