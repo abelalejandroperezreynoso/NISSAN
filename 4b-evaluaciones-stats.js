@@ -627,8 +627,10 @@ window.cambiarOrdenStats = (criterio) => {
     window.currentStatsSortCriterion = criterio;
     sessionStorage.setItem('criterioStats', criterio);
     // Sólo hay que repintar el desglose: los totales de arriba y el radar no
-    // dependen del criterio.
-    window.pintarDesglose();
+    // dependen del criterio. Y se repinta **el nivel que se esté mirando**, no
+    // la raíz: cambiar de medida no es salirse del departamento en el que se
+    // había entrado (ver `repintarNivelDesglose`).
+    window.repintarNivelDesglose();
 };
 
 
@@ -1855,6 +1857,62 @@ window.FORMAS_DESGLOSE = ['cuadros', 'personas', 'barras'];
 window.formaDesgloseActual = () =>
     window.FORMAS_DESGLOSE.indexOf(window.formaDesglose) >= 0 ? window.formaDesglose : 'cuadros';
 
+// --- POR DÓNDE SE ESTÁ MIRANDO ---
+// El desglose tiene niveles —la raíz, los supervisores de un departamento, los
+// colaboradores de un supervisor o de un puesto—, y cambiar **qué se mide** o
+// **cómo se dibuja** no es salirse de donde se está: quien entró a PRODUCCIÓN
+// para ver su participación y pulsa «Calificación» quiere la calificación de
+// PRODUCCIÓN, no volver a la lista de departamentos. Antes los tres
+// conmutadores llamaban a `pintarDesglose`, que **es** la raíz, así que
+// cualquiera de los dos devolvía al principio y había que volver a entrar.
+//
+// De dónde se está se acuerda `window.nivelDesglose` —null es la raíz— y
+// repintarlo es volver a llamar a la misma función que dibujó ese nivel, que
+// lee la caché al vuelo y de paso deja el radar en el sitio que le toca.
+//
+// El corte sí reinicia, y tiene que hacerlo: el nivel es de su corte —dentro
+// de un departamento no hay nada que enseñar si ahora se mira por puesto—.
+window.nivelDesglose = null;
+
+// ¿Sigue en pie el nivel apuntado? La caché se rehace con cada filtro y el
+// corte se puede haber cambiado, así que antes de repintar se comprueba que
+// eso que se estaba mirando siga existiendo; si no, se vuelve a la raíz, que
+// es lo que hacía siempre.
+window.nivelDesgloseVigente = () => {
+    const nivel = window.nivelDesglose;
+    const cache = window.encuestasStatsCacheForDrilldown;
+    if (!nivel || !cache) return null;
+
+    const corte = window.dimensionStats().clave;
+
+    if (nivel.tipo === 'grupo') return nivel.dimension === corte ? nivel : null;
+
+    // Los otros dos niveles cuelgan del corte por departamento.
+    if (corte !== 'departamento') return null;
+    const depto = (cache.statsCache || {})[nivel.dept];
+    if (!depto) return null;
+    if (nivel.tipo === 'supervisor') {
+        return (depto.supervisors || {})[nivel.sup] ? nivel : null;
+    }
+    return nivel;
+};
+
+// Repinta el nivel que se esté mirando. Es lo que llaman el conmutador de
+// criterio y el de forma, que no cambian de nivel: sólo qué se mide y cómo se
+// dibuja.
+window.repintarNivelDesglose = () => {
+    const nivel = window.nivelDesgloseVigente();
+    if (!nivel) return window.pintarDesglose();
+
+    // Dibujar un nivel de dentro no pasa por `pintarDesglose`, así que los
+    // conmutadores se marcan aquí o se quedarían diciendo lo anterior.
+    window.marcarConmutadoresDesglose();
+
+    if (nivel.tipo === 'supervisor') return window.verStatsDetalleSupervisor(nivel.dept, nivel.sup);
+    if (nivel.tipo === 'grupo') return window.verStatsDetalleGrupo(nivel.dimension, nivel.nombre);
+    return window.verStatsDetalleDepto(nivel.dept);
+};
+
 window.cambiarDimensionDesglose = (dimension) => {
     window.dimensionDesglose = window.dimensionStatsPor(dimension).clave;
     sessionStorage.setItem('dimensionDesglose', window.dimensionDesglose);
@@ -1864,7 +1922,27 @@ window.cambiarDimensionDesglose = (dimension) => {
 window.cambiarFormaDesglose = (forma) => {
     window.formaDesglose = window.FORMAS_DESGLOSE.indexOf(forma) >= 0 ? forma : 'cuadros';
     sessionStorage.setItem('formaDesglose', window.formaDesglose);
-    window.pintarDesglose();
+    window.repintarNivelDesglose();
+};
+
+// Los tres conmutadores del encabezado dicen qué hay elegido, y eso no depende
+// del nivel que se esté mirando: se marcan igual desde la raíz que desde dentro
+// de un departamento. Por eso se marcan aparte de `pintarDesglose`, que es sólo
+// la raíz —`repintarNivelDesglose` los marca sin pasar por ella—.
+window.marcarConmutadoresDesglose = () => {
+    const dimension = window.dimensionStats();
+    const forma = window.formaDesgloseActual();
+    const criterio = window.criterioStats();
+
+    document.querySelectorAll('#conmutador-dimension button').forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.dimension === dimension.clave));
+    });
+    document.querySelectorAll('#conmutador-forma button').forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.forma === forma));
+    });
+    document.querySelectorAll('#conmutador-criterio button').forEach(b => {
+        b.setAttribute('aria-pressed', String(b.dataset.criterio === criterio.clave));
+    });
 };
 
 // Pinta el desglose como esté elegido y devuelve el radar a la vista general.
@@ -1877,17 +1955,10 @@ window.pintarDesglose = () => {
     const dimension = window.dimensionStats();
     const forma = window.formaDesgloseActual();
 
-    document.querySelectorAll('#conmutador-dimension button').forEach(b => {
-        b.setAttribute('aria-pressed', String(b.dataset.dimension === dimension.clave));
-    });
-    document.querySelectorAll('#conmutador-forma button').forEach(b => {
-        b.setAttribute('aria-pressed', String(b.dataset.forma === forma));
-    });
-
-    const criterio = window.criterioStats();
-    document.querySelectorAll('#conmutador-criterio button').forEach(b => {
-        b.setAttribute('aria-pressed', String(b.dataset.criterio === criterio.clave));
-    });
+    // Esto es la raíz, así que ya no se está mirando dentro de nada: lo que
+    // haya apuntado `nivelDesglose` deja de valer.
+    window.nivelDesglose = null;
+    window.marcarConmutadoresDesglose();
 
     // Volver al nivel de arriba también devuelve el radar a la vista general:
     // lo que se estuviera mirando ya no está en pantalla.
@@ -2869,6 +2940,11 @@ window.verStatsDetalleDepto = (deptName) => {
     
     const data = window.encuestasStatsCacheForDrilldown.statsCache[deptName];
     if (!data) return;
+
+    // Aquí es donde se está, y de eso vive el conmutador de criterio: cambiar
+    // de medida repinta este mismo departamento en vez de volver a la raíz.
+    window.nivelDesglose = { tipo: 'departamento', dept: deptName };
+
     const supList = Object.keys(data.supervisors).map(supName => ({ name: supName, ...data.supervisors[supName] }));
     supList.sort((a,b) => {
         const assA = a.assignedCount || 0;
@@ -2930,7 +3006,9 @@ window.verStatsDetalleDepto = (deptName) => {
 
 window.verStatsDetalleSupervisor = (deptName, supName) => {
     window.actualizarRadarDOM(deptName, supName);
-    
+
+    window.nivelDesglose = { tipo: 'supervisor', dept: deptName, sup: supName };
+
     const data = window.encuestasStatsCacheForDrilldown;
     const allEmps = window.todosLosEmpleadosData;
     const responses = data.cleanResponses || [];
@@ -3073,6 +3151,11 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
 window.verStatsDetalleGrupo = (claveDimension, nombre) => {
     const dimension = window.dimensionStatsPor(claveDimension);
     window.actualizarRadarDOM(null, null, { dimension: dimension, valor: nombre });
+
+    // El nivel es de su corte: se apunta con el que de verdad se está mirando
+    // —`dimensionStatsPor` devuelve departamento ante cualquier cosa rara—, o
+    // repintarlo lo daría por caducado y volvería a la raíz.
+    window.nivelDesglose = { tipo: 'grupo', dimension: dimension.clave, nombre: nombre };
 
     const data = window.encuestasStatsCacheForDrilldown;
     const allEmps = window.todosLosEmpleadosData;

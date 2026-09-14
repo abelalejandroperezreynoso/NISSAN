@@ -3820,10 +3820,45 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Los cortes comparten un solo bloque, «Desglose», con tres conmutadores en su
   encabezado: por dónde se corta —`dimensionDesglose`—, con qué forma se dibuja
   —`formaDesglose`— y qué se mide —`currentStatsSortCriterion`, de la lista
-  `window.CRITERIOS_STATS`—. Las tres elecciones viven en `sessionStorage` y las
-  pinta `window.pintarDesglose()`, que es también lo que llaman los botones
+  `window.CRITERIOS_STATS`—. Las tres elecciones viven en `sessionStorage`.
+  `window.pintarDesglose()` pinta **la raíz**, que es lo que llaman los botones
   «Volver» para no salirse del modo, y que de paso devuelve el radar a la vista
-  general.
+  general; los tres conmutadores se marcan aparte
+  (`window.marcarConmutadoresDesglose`), porque lo elegido se dice igual desde
+  la raíz que desde dentro de un departamento.
+
+  **Cambiar qué se mide o cómo se dibuja no es salirse de donde se está.** El
+  desglose tiene niveles —la raíz, los supervisores de un departamento, los
+  colaboradores de un supervisor o de un puesto—, y los tres conmutadores
+  llamaban a `pintarDesglose`, que **es** la raíz: quien había entrado a
+  PRODUCCIÓN para ver su participación y pulsaba «Calificación» se encontraba
+  otra vez la lista de departamentos y tenía que volver a entrar. Hoy el
+  criterio y la forma repintan el nivel que se esté mirando.
+
+  ```js
+  window.nivelDesglose          // dónde se está; null es la raíz
+  window.nivelDesgloseVigente() // el mismo, o null si ya no existe
+  window.repintarNivelDesglose()
+  ```
+
+  **El corte sí reinicia, y tiene que hacerlo**: el nivel es de su corte, y
+  dentro de un departamento no hay nada que enseñar si ahora se mira por puesto.
+
+  Tres cosas que hay que mantener:
+
+  - **Cada puerta a un nivel apunta cuál es** —`verStatsDetalleDepto`,
+    `verStatsDetalleSupervisor` y `verStatsDetalleGrupo`—, y `pintarDesglose` lo
+    devuelve a null. Un nivel nuevo que no se apunte se comportará como antes:
+    al cambiar de criterio se volverá a la raíz.
+  - **Repintar es volver a llamar a la función que lo dibujó**, que lee la caché
+    al vuelo y de paso deja el radar en el sitio que le toca
+    (`actualizarRadarDOM`): un nivel repintado a mano se quedaría con el radar
+    de otra pantalla.
+  - **Antes de repintar se comprueba que ese nivel siga existiendo**
+    (`nivelDesgloseVigente`). La caché se rehace con cada filtro y el corte se
+    puede haber cambiado, así que un departamento que ya no está en
+    `statsCache` —o un nivel de departamento con el corte puesto en puesto—
+    vuelve a la raíz, que es lo que hacía siempre.
 
   **Por dónde se corta lo dice `window.DIMENSIONES_DESGLOSE`**, y son cuatro:
   departamento, puesto, área y encargos extra. Cada uno trae su etiqueta, el
