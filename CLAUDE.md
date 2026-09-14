@@ -2924,17 +2924,75 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   lanzarlos a la vez es la manera de que alguno se caiga por tiempo. Lo listado
   se queda en el nodo del bucket, así que volver a entrar no lo vuelve a pedir.
 
-  **Es de consulta, con una sola excepción: los huérfanos del material.** Un
-  huérfano es un archivo que está en `materiales-evaluaciones` y que ninguna fila
-  de `materiales_encuesta` nombra —los deja el camino de error de la subida, que
-  sube las páginas antes de guardar sus fichas a propósito—, así que no lo enseña
-  ninguna encuesta y sólo ocupa sitio. Ésos sí se retiran desde aquí.
+  **Es de consulta, con una sola excepción: los huérfanos.** Un huérfano es un
+  archivo que está en un bucket y que **ninguna fila de la base nombra**: no lo
+  enseña ninguna pantalla, no lo reclama nadie y sólo ocupa sitio. Ésos sí se
+  retiran desde aquí, y es lo único que impide que esos buckets crezcan para
+  siempre.
 
-  Todo lo demás **no se borra desde esta pantalla**, y no por timidez: una foto
-  de evaluación es la constancia de cómo estaba un área y su bucket ni siquiera
-  da permiso de borrado; un material se quita **desde su encuesta**, que además
-  se lleva su ficha —borrarlo aquí dejaría la fila apuntando al vacío—. La
-  pantalla dice dónde está el peso; quitarlo se hace donde vive.
+  Son **dos**, cada uno con su propio dueño:
+
+  - **`materiales-evaluaciones`**, cuyas fichas son las filas de
+    `materiales_encuesta` (la columna `archivo`).
+  - **`fotos-evaluaciones`** —las evidencias y las firmas—, cuyas fichas son las
+    URL que viven dentro de `answers_json`.
+
+  ```js
+  window.GRACIA_HUERFANOS_MS        // 24 h: lo que tiene que llevar subido
+  window.MAX_PAGINAS_COMPROBACION   // 40, o sea 40.000 respuestas
+  window.rutaDeUrlDeBucket(url, bucket)
+  window.rutasDeFotosEnRespuesta(valor, bucket, donde)
+  await window.fotosUsadasEnRespuestas()   // Set de rutas, o null si no se pudo
+  ```
+
+  **De dónde salen.** Los deja el camino de error de una subida —el archivo sube
+  y la fila no llega a guardarse, que es el orden a propósito— y, sobre todo,
+  **todo lo que se borra**: una respuesta eliminada, una encuesta borrada con
+  todas las suyas o el barrido del historial de una persona se llevan la fila y
+  dejan el archivo dentro. Con una firma por persona y por capacitación eso son
+  miles de archivos al año en una cuenta de 1 GB, y antes no había manera de
+  recuperarlos: el bucket de las fotos ni siquiera daba permiso de borrado.
+
+  **Tres cosas tienen que cumplirse a la vez para retirar un archivo**, y las
+  tres son la diferencia entre limpiar y destruir una constancia:
+
+  - **Haber leído entero lo que podría nombrarlo.** Si la consulta falla o se
+    agotan las páginas, `fotosUsadasEnRespuestas` devuelve **null** y ese bucket
+    **no ofrece ningún huérfano**: un archivo que no se llegó a mirar parecería
+    no tener dueño. La pantalla lo dice en su propio aviso —«Sin comprobar»— y
+    lo dice **aunque no haya nada que ofrecer**, que callarlo dejaría creer que
+    ahí está todo revisado.
+  - **Que no lo nombre nadie.** No se recorren todas las respuestas de la
+    empresa: sólo las de las encuestas que pueden guardar una URL ahí —las que
+    llevan alguna pregunta de evidencia o de firma, más las «por área», que es
+    donde vivió la vieja `__foto_area`—. El recorrido entra en los objetos de
+    dentro, que `__comentarios` es uno y lo que venga mañana puede serlo.
+  - **Que lleve subido más de un día.** El archivo se sube **antes** que la fila
+    que lo nombra, así que durante unos segundos uno legítimo es indistinguible
+    de uno sin dueño: sin esta espera, limpiar justo mientras alguien envía una
+    encuesta le borraría la firma que acaba de trazar. Un archivo **sin fecha
+    tampoco se toca** —la comparación con `NaN` es falsa, que es lo que hay que
+    hacer ante la duda—.
+
+  **El borrado va bucket a bucket** (`remove` es de uno solo) y **cuenta las
+  filas que devuelve**: una política que lo rechace no da error, simplemente no
+  borra nada, y entonces se dice **qué bucket se resistió y qué script le
+  falta**. Es la trampa de RLS de siempre.
+
+  **La política de borrado de `fotos-evaluaciones` es nueva** y su script se
+  corre a mano (`sql/fotos-evaluaciones.sql`, que se puede correr las veces que
+  haga falta). Ahí no hubo borrado durante mucho tiempo y la razón era buena
+  —una foto es constancia—; lo que se vio después es que sin él el bucket sólo
+  puede crecer. **Lo que protege hoy a una foto con dueño no es la política sino
+  la aplicación**, con las tres reglas de arriba; quien prefiera el trato de
+  antes no corre ese bloque y la limpieza dirá que no la dejan borrar.
+
+  Lo que tiene dueño **no se borra desde esta pantalla**, y no por timidez: un
+  material se quita **desde su encuesta**, que además se lleva su ficha
+  —borrarlo aquí dejaría la fila apuntando al vacío—, y una foto o una firma se
+  van con la respuesta que las nombra. Los otros cuatro buckets no dan permiso
+  de borrado en su script y ahí no se toca nada. La pantalla dice dónde está el
+  peso; quitar lo que tiene dueño se hace donde vive.
 
   Aquí **sí hay umbrales de color** —verde hasta el 70%, ámbar hasta el 90, rojo
   de ahí—, al revés que la barra del pase de lista: una cuota es un tope de

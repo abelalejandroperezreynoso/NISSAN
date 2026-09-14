@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-14-10';
+window.VERSION_APP = '2026-09-14-11';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1081,12 +1081,14 @@ window.pesoLegible = (bytes) => {
 // se quede sin contar.
 //
 // `borrable` dice si el bucket admite que se borre desde la aplicación, que va
-// por política y no por gusto: las fotos de una evaluación son la constancia de
-// cómo estaba un área ese día y su script no da permiso de borrado a propósito.
+// por política y no por gusto. Los dos que lo son lo son **sólo para retirar
+// huérfanos**: lo que tiene dueño se quita desde donde vive —un material, desde
+// su encuesta— y lo que no lo tiene no lo reclama nadie. Los otros cuatro no
+// dan permiso de borrado en su script y ahí todo se queda.
 // **Un bucket nuevo se agrega aquí**, o su peso no se contará.
 window.BUCKETS_DE_LA_APP = [
     { id: 'materiales-evaluaciones', nombre: 'Material de encuestas', borrable: true },
-    { id: 'fotos-evaluaciones', nombre: 'Fotos de evaluaciones', borrable: false },
+    { id: 'fotos-evaluaciones', nombre: 'Fotos de evaluaciones', borrable: true },
     { id: 'fotos-refacciones', nombre: 'Fotos de refacciones', borrable: false },
     { id: 'incident-images', nombre: 'Imágenes de incidentes', borrable: false },
     { id: 'avatars', nombre: 'Fotos de perfil', borrable: false },

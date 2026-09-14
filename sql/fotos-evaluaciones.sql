@@ -50,5 +50,36 @@ create policy "fotos_evaluaciones_reemplazo"
     using (bucket_id = 'fotos-evaluaciones')
     with check (bucket_id = 'fotos-evaluaciones');
 
--- A propósito no se da permiso de borrado: una foto es la constancia de cómo
--- estaba el área ese día y nadie debería poder quitarla desde la aplicación.
+-- Borrado: sólo para poder retirar los huérfanos.
+-- ------------------------------------------------------------------
+-- Aquí no hubo permiso de borrado durante mucho tiempo, y la razón era buena:
+-- una foto es la constancia de cómo estaba aquello y una firma la de quién
+-- estuvo, así que nadie debería poder quitarlas desde la aplicación.
+--
+-- Lo que se vio después es que sin borrado **el bucket sólo puede crecer**. Una
+-- respuesta que se elimina, una encuesta que se borra con todas las suyas o una
+-- persona a la que se le barre el historial dejan sus archivos dentro, y ya no
+-- hay ninguna fila que los nombre: no los enseña ninguna pantalla, no los
+-- reclama nadie y siguen ocupando sitio para siempre. Con una firma por persona
+-- y por capacitación eso son miles de archivos al año en una cuenta de 1 GB.
+--
+-- **Lo que protege a una foto con dueño no es esta política: es la aplicación.**
+-- El único sitio que borra aquí es la limpieza de huérfanos de la pantalla
+-- «Consumo», y sólo retira un archivo cuando se cumplen las tres cosas a la vez:
+--
+--   1. Ha podido leer **todas** las respuestas que podrían nombrarlo. Si la
+--      consulta se corta, no se ofrece limpiar nada.
+--   2. Ninguna de ellas lo nombra.
+--   3. Lleva subido más de un día, para no llevarse por delante el archivo de
+--      una encuesta que se está enviando ahora mismo —se sube antes de que se
+--      guarde la fila que lo nombra, así que durante unos segundos cualquier
+--      archivo legítimo parece huérfano—.
+--
+-- Quien prefiera el trato de antes puede no correr este bloque: todo lo demás
+-- sigue igual y la limpieza dirá que la política no la deja borrar, en vez de
+-- decir que no había nada que quitar.
+drop policy if exists "fotos_evaluaciones_borrado" on storage.objects;
+create policy "fotos_evaluaciones_borrado"
+    on storage.objects for delete
+    to anon, authenticated
+    using (bucket_id = 'fotos-evaluaciones');

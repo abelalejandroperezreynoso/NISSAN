@@ -7,8 +7,14 @@
 // subir. Esta pantalla lo dice desde la propia aplicación.
 //
 // Se entra por «💾 Consumo» del panel de administración y es **de consulta**,
-// con una sola excepción: los archivos huérfanos del material de encuestas, que
-// se pueden retirar de aquí porque no los reclama nadie (más abajo).
+// con una sola excepción: los archivos **huérfanos**, que se pueden retirar de
+// aquí porque no los reclama nadie (más abajo).
+//
+// Eso vale para dos buckets —el material de las encuestas y las fotos y firmas
+// de las respuestas— y es lo único que impide que crezcan para siempre: al
+// borrar una respuesta, una encuesta entera o el historial de una persona, la
+// fila se va y el archivo se queda dentro sin que nadie lo nombre. Los otros
+// cuatro buckets no dan permiso de borrado en su script y ahí no se toca nada.
 //
 // **Lo que se mide es lo que cobra Supabase**, y eso obliga a preguntárselo a
 // la base: las cuatro funciones de `sql/consumo-almacenamiento.sql`.
@@ -73,6 +79,101 @@ window.archivosDelBucket = async (bucket, tope = 5000) => {
     }
 
     return archivos;
+};
+
+// ------------------------------------------------------------------
+// QUIÉN RECLAMA CADA ARCHIVO
+// ------------------------------------------------------------------
+// Un huérfano es un archivo que está en un bucket y que **ninguna fila de la
+// base nombra**: no lo enseña ninguna pantalla, no lo reclama nadie y sólo
+// ocupa sitio. Los deja el camino de error de una subida —el archivo sube y la
+// fila no llega a guardarse— y, sobre todo, **todo lo que se borra**: una
+// respuesta eliminada, una encuesta borrada con las suyas o el barrido del
+// historial de una persona se llevan la fila y dejan el archivo dentro.
+//
+// **Cuánto tiene que llevar subido para poder darlo por huérfano.** El archivo
+// se sube *antes* de que se guarde la fila que lo nombra —a propósito: al
+// revés, cada arrepentimiento dejaría una fila apuntando a un archivo que no
+// está—, así que durante unos segundos un archivo legítimo es indistinguible de
+// uno sin dueño. Sin esta espera, limpiar justo mientras alguien envía una
+// encuesta le borraría la firma que acaba de trazar. Un día es de sobra y no
+// cuesta nada: lo que se viene a recuperar lleva meses ahí.
+window.GRACIA_HUERFANOS_MS = 24 * 60 * 60 * 1000;
+
+// Cuántas páginas de mil respuestas se admite recorrer. No es un tope de lo que
+// se limpia sino de lo que se puede **comprobar**: si se llega a él no se ha
+// leído todo y entonces no se ofrece limpiar nada, que es la regla de abajo.
+window.MAX_PAGINAS_COMPROBACION = 40;
+
+// La ruta dentro del bucket de una URL pública suya, que es lo que se guarda en
+// `answers_json`. Devuelve '' si esa URL no es de este bucket.
+window.rutaDeUrlDeBucket = (url, bucket) => {
+    const texto = String(url || '');
+    const marca = `/${bucket}/`;
+    const corte = texto.indexOf(marca);
+    if (corte < 0) return '';
+    let ruta = texto.slice(corte + marca.length).split('?')[0].split('#')[0];
+    try { ruta = decodeURIComponent(ruta); } catch (e) { /* se queda como vino */ }
+    return ruta;
+};
+
+// Recoge las rutas de este bucket que aparezcan dentro de un `answers_json`.
+// Se recorre en profundidad porque ahí dentro no todo son cadenas sueltas:
+// `__comentarios` es un objeto, y lo que venga mañana puede serlo también.
+window.rutasDeFotosEnRespuesta = (valor, bucket, donde, hondura = 0) => {
+    if (typeof valor === 'string') {
+        const ruta = window.rutaDeUrlDeBucket(valor, bucket);
+        if (ruta) donde.add(ruta);
+        return;
+    }
+    if (!valor || typeof valor !== 'object' || hondura > 3) return;
+    Object.values(valor).forEach(v =>
+        window.rutasDeFotosEnRespuesta(v, bucket, donde, hondura + 1));
+};
+
+// Todas las rutas de `fotos-evaluaciones` que alguna respuesta nombra, o
+// **null** si no se pudo leer entero: ahí lo correcto es no ofrecer limpiar
+// nada, porque un archivo que no se llegó a mirar parecería no tener dueño.
+//
+// No se recorren todas las respuestas de la empresa: sólo las de las encuestas
+// que pueden guardar una URL aquí —las que llevan alguna pregunta de evidencia
+// o de firma, más las «por área», que es donde vivió la vieja `__foto_area`—.
+// En un proyecto con trece encuestas eso deja fuera casi todo.
+window.fotosUsadasEnRespuestas = async () => {
+    const bucket = window.BUCKET_FOTOS_EVAL;
+
+    const { data: preguntas, error: errPreg } = await sb.from('evaluation_questions')
+        .select('evaluation_id')
+        .in('question_type', [window.TIPO_PREGUNTA_FOTO, window.TIPO_PREGUNTA_FIRMA]);
+    if (errPreg) { console.error(errPreg); return null; }
+
+    const { data: porArea, error: errArea } = await sb.from('evaluations')
+        .select('id').eq('evaluates_area', true);
+    if (errArea) { console.error(errArea); return null; }
+
+    const ids = Array.from(new Set(
+        (preguntas || []).map(p => String(p.evaluation_id))
+            .concat((porArea || []).map(e => String(e.id)))
+    )).filter(Boolean);
+
+    const usados = new Set();
+    if (ids.length === 0) return usados;   // no hay ninguna que pueda nombrar nada
+
+    for (let pagina = 0; pagina < window.MAX_PAGINAS_COMPROBACION; pagina++) {
+        const desde = pagina * 1000;
+        const { data, error } = await sb.from('evaluation_responses')
+            .select('answers_json')
+            .in('evaluation_id', ids)
+            .order('id', { ascending: true })
+            .range(desde, desde + 999);
+        if (error) { console.error(error); return null; }
+        (data || []).forEach(r =>
+            window.rutasDeFotosEnRespuesta(r.answers_json, bucket, usados));
+        if (!data || data.length < 1000) return usados;
+    }
+
+    // Se agotaron las páginas: hay respuestas sin mirar, así que no se sabe.
+    return null;
 };
 
 // Una llamada a una función de `sql/consumo-almacenamiento.sql`, que puede no
@@ -184,22 +285,48 @@ window.medirAlmacenamiento = async () => {
           })).filter(f => f.bytes > 0)
         : null;
 
-    // Los huérfanos del material: archivos que están en el bucket y que ninguna
-    // fila de `materiales_encuesta` nombra. Los deja el camino de error de la
-    // subida —el archivo sube y la ficha no—, y son los únicos que se pueden
-    // retirar desde aquí sin romperle nada a nadie.
-    let huerfanos = null;
-    const material = buckets.find(b => b.id === window.BUCKET_MATERIALES);
-    if (material && material.cuantos > 0) {
-        const { data: fichas, error: errFichas } = await sb.from('materiales_encuesta').select('archivo');
-        if (!errFichas && Array.isArray(fichas)) {
-            // Aquí sí hace falta la lista: para saber cuáles sobran hay que
-            // tener los nombres. Se lista sólo este bucket, que es el pequeño.
-            if (!material.archivos) material.archivos = await window.archivosDelBucket(material.id);
-            const usados = new Set(fichas.map(f => String(f.archivo)));
-            huerfanos = material.archivos.filter(a => !usados.has(a.ruta));
-        }
-    }
+    // Los huérfanos, bucket a bucket. Cada uno dice quién reclama sus archivos:
+    // el material, una fila de `materiales_encuesta`; las fotos y las firmas de
+    // una encuesta, un `answers_json` que las nombre.
+    //
+    // **Tres cosas hacen falta para retirar un archivo**, y las tres se deciden
+    // aquí: haber podido leer entero lo que podría nombrarlo, que no lo nombre
+    // nadie, y que lleve subido más de `GRACIA_HUERFANOS_MS`.
+    const huerfanos = [];
+    const sinComprobar = [];
+
+    const revisarBucket = async (bucketId, leerUsados) => {
+        const b = buckets.find(x => x.id === bucketId);
+        if (!b || b.cuantos === 0) return;
+
+        const usados = await leerUsados();
+        // Sin la lista entera no se puede decir que a nadie le falte: callar es
+        // lo único correcto, y la pantalla lo dice en vez de ofrecer limpiar.
+        if (!usados) { sinComprobar.push(b.nombre); return; }
+
+        // Aquí sí hace falta la lista de archivos: para saber cuáles sobran hay
+        // que tener sus nombres.
+        if (!b.archivos) b.archivos = await window.archivosDelBucket(b.id);
+
+        const limite = Date.now() - window.GRACIA_HUERFANOS_MS;
+        b.archivos.forEach(a => {
+            if (usados.has(a.ruta)) return;
+            // Un archivo sin fecha no se toca: `cuando` llega NaN y la
+            // comparación es falsa, que es lo que hay que hacer ante la duda.
+            const cuando = a.cuando ? new Date(a.cuando).getTime() : NaN;
+            if (!(cuando < limite)) return;
+            huerfanos.push({ ruta: a.ruta, nombre: a.nombre, bytes: a.bytes,
+                             bucket: b.id, deNombre: b.nombre });
+        });
+    };
+
+    await revisarBucket(window.BUCKET_MATERIALES, async () => {
+        const { data, error } = await sb.from('materiales_encuesta').select('archivo');
+        if (error || !Array.isArray(data)) return null;
+        return new Set(data.map(f => String(f.archivo)));
+    });
+
+    await revisarBucket(window.BUCKET_FOTOS_EVAL, window.fotosUsadasEnRespuestas);
 
     window.consumoAlmacenamiento = {
         buckets: buckets,
@@ -211,6 +338,7 @@ window.medirAlmacenamiento = async () => {
         tablas: tablas,
         base: typeof base === 'number' ? base : null,
         huerfanos: huerfanos,
+        sinComprobar: sinComprobar,
         medidoEn: new Date()
     };
     return window.consumoAlmacenamiento;
@@ -378,19 +506,46 @@ window.pantallaDeConsumo = (c) => {
         </div>`;
     };
 
-    // Un huérfano es un archivo que subió bien y cuya ficha no llegó a
-    // guardarse: no lo enseña ninguna encuesta y sólo ocupa sitio.
+    // Un huérfano es un archivo que ninguna fila de la base nombra: o su ficha
+    // no llegó a guardarse, o la fila que lo nombraba se borró y él se quedó.
+    // No lo enseña ninguna pantalla y sólo ocupa sitio.
     const h = c.huerfanos;
     const bytesHuerfanos = (h || []).reduce((s, a) => s + a.bytes, 0);
     const uno = h && h.length === 1;
-    const huerfanosHtml = (h && h.length > 0) ? `
+
+    // De qué bucket es cada uno: son dos y no dicen lo mismo, así que el aviso
+    // los reparte en vez de dar un total que no se sabe de dónde sale.
+    const porBucket = {};
+    (h || []).forEach(a => {
+        if (!porBucket[a.deNombre]) porBucket[a.deNombre] = { cuantos: 0, bytes: 0 };
+        porBucket[a.deNombre].cuantos++;
+        porBucket[a.deNombre].bytes += a.bytes;
+    });
+    const reparto = Object.keys(porBucket).length > 1
+        ? `<div class="consumo-aviso-texto">${Object.entries(porBucket)
+              .map(([n, d]) => `${window.sanitizeForHTML(n)}: ${d.cuantos} · ${window.pesoLegible(d.bytes)}`)
+              .join('<br>')}</div>`
+        : '';
+
+    // Lo que no se pudo comprobar se dice igual, y se dice **aunque no haya
+    // ningún huérfano que ofrecer**: callarlo dejaría creer que ahí está todo
+    // revisado y que no sobra nada.
+    const sc = c.sinComprobar || [];
+    const sinComprobarHtml = sc.length > 0 ? `
+        <div class="consumo-aviso">
+            <div class="consumo-aviso-titulo">Sin comprobar: ${window.sanitizeForHTML(sc.join(', '))}</div>
+            <div class="consumo-aviso-texto">No se pudo leer entero lo que podría nombrar esos archivos, así que no se sabe cuáles sobran y no se ofrece quitar ninguno. Vuelve a abrir esta pantalla con mejor conexión.</div>
+        </div>` : '';
+
+    const huerfanosHtml = ((h && h.length > 0) ? `
         <div class="consumo-aviso">
             <div class="consumo-aviso-titulo">${h.length} archivo${uno ? '' : 's'} sin dueño · ${window.pesoLegible(bytesHuerfanos)}</div>
+            ${reparto}
             <div class="consumo-aviso-texto">${uno
-                ? 'Está en el bucket del material pero ninguna encuesta lo nombra: es una subida cuya ficha no llegó a guardarse. Quitarlo no le cambia nada a nadie.'
-                : 'Están en el bucket del material pero ninguna encuesta los nombra: son subidas cuya ficha no llegó a guardarse. Quitarlos no le cambia nada a nadie.'}</div>
+                ? 'Ninguna fila de la base lo nombra: o su ficha no llegó a guardarse, o se borró lo que lo nombraba. No lo enseña ninguna pantalla, así que quitarlo no le cambia nada a nadie.'
+                : 'Ninguna fila de la base los nombra: o su ficha no llegó a guardarse, o se borró lo que los nombraba. No los enseña ninguna pantalla, así que quitarlos no le cambia nada a nadie.'}</div>
             <button type="button" class="consumo-aviso-boton" onclick="window.limpiarHuerfanos()">Quitar ${uno ? 'el huérfano' : 'los huérfanos'}</button>
-        </div>` : '';
+        </div>` : '') + sinComprobarHtml;
 
     // El peso del proyecto entero, que es lo que cobra Supabase. Debajo, por
     // esquema: es lo que explica que `public` sea una parte y no el total —el
@@ -496,11 +651,15 @@ window.pantallaDeBucket = (b) => {
         ? `<div class="consumo-pie" style="padding:10px 2px;">Y ${listados.length - 50} más, todos por debajo de ${window.pesoLegible(listados[49].bytes)}.</div>`
         : '';
 
-    // De consulta: lo que se borra se borra desde donde vive. Una foto de
-    // evaluación es constancia y su bucket ni siquiera da permiso; un material
-    // se quita desde su encuesta, que además se lleva su ficha.
+    // De consulta: lo que tiene dueño se quita desde donde vive, que es lo que
+    // se lleva también su fila. Lo único que sale de aquí son los huérfanos, y
+    // ésos no los reclama nadie.
+    const notaPorBucket = {
+        [window.BUCKET_MATERIALES]: 'Para quitar un material, hazlo desde su encuesta: así se va también su ficha. De aquí sólo salen los archivos que ya no nombra ninguna fila.',
+        [window.BUCKET_FOTOS_EVAL]: 'Una foto o una firma son constancia y no se quitan de aquí: se van con la respuesta que las nombra. De aquí sólo salen las que ya no nombra ninguna.'
+    };
     const nota = b.borrable
-        ? `<div class="consumo-pie" style="padding:0 2px 12px;">Para quitar un material, hazlo desde su encuesta: así se va también su ficha.</div>`
+        ? `<div class="consumo-pie" style="padding:0 2px 12px;">${notaPorBucket[b.id] || 'De este bucket sólo salen los archivos que ya no nombra ninguna fila.'}</div>`
         : `<div class="consumo-pie" style="padding:0 2px 12px;">Este bucket no admite borrado desde la aplicación: lo que hay aquí es constancia de algo.</div>`;
 
     return nota + `<div class="consumo-lista">${filas}</div>` + resto;
@@ -516,23 +675,43 @@ window.limpiarHuerfanos = async () => {
     const bytes = c.huerfanos.reduce((s, a) => s + a.bytes, 0);
     const cuantos = c.huerfanos.length;
     const aviso = cuantos === 1
-        ? `Se quitará 1 archivo del bucket del material (${window.pesoLegible(bytes)}).\n\nNinguna encuesta lo nombra, así que no se pierde nada de lo que se ve en la aplicación.`
-        : `Se quitarán ${cuantos} archivos del bucket del material (${window.pesoLegible(bytes)}).\n\nNinguna encuesta los nombra, así que no se pierde nada de lo que se ve en la aplicación.`;
+        ? `Se quitará 1 archivo (${window.pesoLegible(bytes)}).\n\nNinguna fila de la base lo nombra, así que no se pierde nada de lo que se ve en la aplicación.`
+        : `Se quitarán ${cuantos} archivos (${window.pesoLegible(bytes)}).\n\nNinguna fila de la base los nombra, así que no se pierde nada de lo que se ve en la aplicación.`;
     if (!confirm(`${aviso}\n\n¿Continuar?`)) return;
 
-    const rutas = c.huerfanos.map(a => a.ruta);
+    // Cada bucket se borra por su cuenta: `remove` es de uno solo. Las
+    // políticas van por bucket y por operación, así que uno puede dejar borrar
+    // y el otro no —y eso es exactamente lo que pasa mientras no se haya
+    // corrido el script que abre el borrado de las fotos—.
+    const porBucket = {};
+    c.huerfanos.forEach(a => {
+        if (!porBucket[a.bucket]) porBucket[a.bucket] = { nombre: a.deNombre, rutas: [] };
+        porBucket[a.bucket].rutas.push(a.ruta);
+    });
+
     let quitados = 0;
-    for (let i = 0; i < rutas.length; i += 100) {
-        const { data, error } = await sb.storage.from(window.BUCKET_MATERIALES).remove(rutas.slice(i, i + 100));
-        if (error) { console.error(error); break; }
-        quitados += (data || []).length;
+    const seResistieron = [];
+    for (const [bucket, datos] of Object.entries(porBucket)) {
+        let deEste = 0;
+        for (let i = 0; i < datos.rutas.length; i += 100) {
+            const { data, error } = await sb.storage.from(bucket).remove(datos.rutas.slice(i, i + 100));
+            if (error) { console.error(error); break; }
+            deEste += (data || []).length;
+        }
+        quitados += deEste;
+        // Cuenta las filas que devuelve `remove`: una política que lo rechace
+        // no da error, simplemente no borra nada.
+        if (deEste === 0) seResistieron.push(datos.nombre);
     }
 
     if (quitados === 0) {
-        alert("No se quitó ningún archivo. Puede que la política del bucket no deje borrar; revisa que se haya corrido sql/materiales-encuesta.sql.");
+        alert(`No se quitó ningún archivo. Puede que la política del bucket no deje borrar:\n\n· Material de encuestas → sql/materiales-encuesta.sql\n· Fotos de evaluaciones → sql/fotos-evaluaciones.sql\n\nRevisa que se hayan corrido en el editor SQL de Supabase.`);
         return;
     }
 
-    alert(quitados === 1 ? "Se quitó 1 archivo." : `Se quitaron ${quitados} archivos.`);
+    const resto = seResistieron.length > 0
+        ? `\n\nNo se pudo con los de: ${seResistieron.join(', ')}. Su bucket no deja borrar todavía; corre su script de sql/.`
+        : '';
+    alert((quitados === 1 ? "Se quitó 1 archivo." : `Se quitaron ${quitados} archivos.`) + resto);
     await window.abrirConsumoAlmacenamiento();
 };
