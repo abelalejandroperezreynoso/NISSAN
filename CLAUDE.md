@@ -788,7 +788,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   fuera de la hoja.
 
   **Y los botones van sueltos, sin tarjeta.** La acción principal
-  —«Responder Encuesta», «Volver a Responder», «Evaluar a un Colaborador…»—, el
+  —«Responder», «Volver a Responder», «Evaluar a un Colaborador…»—, el
   aviso de «Te toca revisar esta encuesta» y «Editar a quién va dirigida» vivían
   dentro de un recuadro blanco con borde y sombra, que es un marco alrededor de
   un bloque de color a todo lo ancho: el elemento más visible de la pantalla
@@ -812,7 +812,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   - **No pregunta «¿Deseas registrar una nueva respuesta para esta
     evaluación?»**. Debajo estaba el botón que lo dice —«Volver a Responder»,
-    «Responder Encuesta», «Evaluar a un Colaborador…»—, así que era el rótulo
+    «Responder», «Evaluar a un Colaborador…»—, así que era el rótulo
     del botón contado dos veces y en forma de pregunta.
   - **«Tu último resultado» no lleva la etiqueta del estado** («⭐ Certificada»,
     «✓ Revisada», «⚠️ Mal revisada»…), que era una chapa de color por encima de
@@ -3358,7 +3358,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   la trampa de siempre: una columna que no se pidió llega `undefined`, y
   `leTocaEstaEncuesta` lo lee como «no acota nada». Con la encuesta traída por
   ahí, una dirigida a doce personas le tocaba a la plantilla entera: el pase de
-  lista de su hoja decía «4 de 455» y el botón de «Responder Encuesta» le salía
+  lista de su hoja decía «4 de 455» y el botón de responder le salía
   a cualquiera que la abriera. **Por la lista no se notaba** —`evalCache` se
   trae la fila entera con `select('*')`—, así que fallaba o no según por dónde
   se hubiera entrado, que es lo que lo hacía parecer cosa de la pantalla.

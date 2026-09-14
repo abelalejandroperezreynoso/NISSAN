@@ -53,7 +53,7 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     // columna que no se pidió llega `undefined`, y `leTocaEstaEncuesta` lee eso
     // como «no acota nada». Con la encuesta traída por aquí, una dirigida a
     // doce personas le tocaba a la plantilla entera: el pase de lista decía «4
-    // de 455» y el botón de «Responder Encuesta» le salía a todo el que la
+    // de 455» y el botón de responder le salía a todo el que la
     // abriera desde el inicio. Por la lista no se notaba —`evalCache` se trae
     // la fila entera con `select('*')`—, así que dependía de por dónde se
     // hubiera entrado.
@@ -235,11 +235,15 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     } else if (window.leTocaEstaEncuesta(evalData, user, window.tieneEquipoDirecto(user.id))) {
         // Sin `modoAdminActivo ||` a propósito: administrando no se está
         // mirando la encuesta de nadie en particular, y ese «||» le ofrecía
-        // «Responder Encuesta» al administrador en **todas** —también en las
+        // el botón de responder al administrador en **todas** —también en las
         // que no van dirigidas a él—, que es contestar por alguien a quien no
         // le tocaba. Si de verdad le toca, la regla de siempre se lo da igual.
+        // Dice «Responder» a secas: la encuesta es lo que se está mirando —su
+        // nombre encabeza la hoja— así que la palabra no distinguía este botón
+        // de ningún otro, y en un teléfono lo que se lee de un bloque de color a
+        // todo lo ancho es el verbo.
         const misRespuestas = responses.filter(r => String(r.employee_id) === String(user.id));
-        const btnText = misRespuestas.length > 0 ? "Volver a Responder" : "Responder Encuesta";
+        const btnText = misRespuestas.length > 0 ? "Volver a Responder" : "Responder";
         actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" class="eval-accion eval-accion--responder">${btnText}</button>`;
     } else if (window.revisoresDeEncuesta(evalData).includes(String(user.id))) {
         // Se está aquí para calificarla, no para contestarla: la encuesta no va
