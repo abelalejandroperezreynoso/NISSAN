@@ -1328,24 +1328,26 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   se elige «📷 Evidencia fotográfica» en el desplegable de tipo; el enunciado
   pasa a ser lo que se pide fotografiar («Foto del extintor con su etiqueta
   vigente») y la respuesta es la URL de lo que se subió. Al ser una pregunta y
-  no un ajuste de la encuesta, se ordena, se edita, se borra y se califica como
-  las demás, y **pedir varias evidencias es agregar varias preguntas**.
+  no un ajuste de la encuesta, se ordena, se edita y se borra como las demás, y
+  **pedir varias evidencias es agregar varias preguntas**.
 
   ```js
   window.esPreguntaDeFoto(pregunta)   // en 1-config.js
   ```
 
-  No lleva opciones ni respuesta modelo, y por lo mismo no pide motivo. La
-  califica quien revise, con el mismo correcto/incorrecto de las de texto.
+  No lleva opciones ni respuesta modelo, y por lo mismo no pide motivo. **Y no
+  la califica nadie**: es una de las tres que dejan constancia y no puntúan
+  —ver justo debajo—. Llevó un tiempo los botones de correcto e incorrecto de
+  las de texto, también fuera del modo jefe, y lo que salía de ahí era un
+  veredicto sobre una fotografía que además entraba en el promedio de la
+  persona.
 
   **En modo `boss` la evidencia entra y la encuesta se sigue calificando
   sola.** Esa encuesta se guarda ya como `'Revisado'` al enviarla, así que sólo
-  admite lo que se puntúa solo —la escala— y las evidencias, que no puntúan:
-  `calcularScoreRespuesta` promedia lo que hay en `grades_json` y una foto sin
-  calificar simplemente no entra, de modo que queda como constancia de lo que
-  el jefe vio sin diluir el resultado. Un texto o unas opciones sí quedarían
-  sin calificar y sin nadie que las revisara, y por eso siguen fuera: la lista
-  está en `window.TIPOS_EN_MODO_JEFE`. `verificarRestriccionesModo` apaga las
+  admite lo que se puntúa solo —la escala— y lo que no puntúa nada, que queda
+  como constancia de lo que el jefe vio sin diluir el resultado. Un texto o
+  unas opciones sí quedarían sin calificar y sin nadie que las revisara, y por
+  eso siguen fuera: la lista está en `window.TIPOS_EN_MODO_JEFE`. `verificarRestriccionesModo` apaga las
   opciones que no valen en vez de bloquear el desplegable entero —que es lo que
   antes dejaba «Rango Numérico» como única salida— y devuelve a escala
   cualquier pregunta con un tipo que no cuadre, incluida la recién agregada,
@@ -1358,6 +1360,64 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   respuesta de cualquier otra. **Esta pregunta es la que sustituyó a la foto
   del área** de las encuestas `evaluates_area`, que era un recuadro aparte y
   obligatorio: ver más abajo.
+
+- **Tres tipos dejan constancia y no puntúan, y a nadie le toca revisarlos.**
+  La **evidencia fotográfica**, la **firma** y el **registro de asistencia** no
+  se aciertan ni se fallan: lo que recogen es la constancia de algo —esto es lo
+  que había, ésta es mi firma, yo estuve—, y sobre eso no hay veredicto que dar.
+  No se puede calificar mal una foto del área ni acertar una firma, así que
+  pedirle esa decisión a quien revisa era pedirle una que no existe, y lo que
+  salía de ahí entraba en el promedio y movía el puntaje de la persona.
+
+  ```js
+  window.TIPOS_DE_CONSTANCIA          // ['photo', 'signature', 'attendance']
+  window.esPreguntaDeConstancia(pregunta)
+  ```
+
+  La regla es una sola y vale para las tres:
+
+  - **No se les escribe calificación** —no entran en `grades_json`—, así que
+    `calcularScoreRespuesta`, que promedia lo que hay ahí dentro, ni las ve.
+  - **Pero cuentan como resueltas** (`autoGradedCount` al enviar), o dejarían un
+    pendiente de revisión donde no hay nada que decidir. Una encuesta hecha sólo
+    de éstas se guarda ya `'Revisado'`.
+  - **La pantalla de calificar las enseña sin botones**: la insignia dice lo
+    único que hay que saber —CON EVIDENCIA, FIRMADA, REGISTRADA, o su negativa—
+    y nunca «PENDIENTE», que diría que alguien tiene algo que hacer con ellas.
+    Su tarjeta se queda además con el **borde neutro**: ese borde sale del color
+    de la insignia, y el verde de una asistencia registrada se leía como un
+    acierto.
+
+  La asistencia se apuntaba un «correcto» automático al enviarla, y era un 100%
+  regalado por haber ido a la junta: en una encuesta que pasa lista y además
+  pregunta algo, ese punto diluía lo que sí se calificaba.
+
+  **La contrapartida es que una encuesta hecha sólo de éstas se guarda con
+  `grades_json` vacío**, y ahí `calcularScoreRespuesta` devuelve 0, que es lo
+  mismo que devuelve al haberlo fallado todo. Lo tapa
+  `window.tieneCalificaciones(resp)`, y **toda pantalla que enseñe o compare un
+  puntaje tiene que preguntarlo antes** —sin ese freno, una encuesta de
+  asistencia se leería como un cero, se pediría repetirla y su clasificación no
+  se certificaría nunca—. Lo preguntan ya `puntajeDeRespuesta`,
+  `reintentoDeRespuesta`, `estadoCertificacion`, `motivoNoAplicable`, el
+  encabezado y la lista de respuestas de una encuesta y el expediente por
+  empleado: sin puntaje no hay mínimo que exigir, igual que cuando la encuesta
+  lo trae apagado.
+
+  Dos cosas más que hay que mantener:
+
+  - **El radar las deja fuera sola**: `ejesPorPregunta` no dibuja eje de una
+    pregunta sin calificaciones. Lo que sí hubo que tocar es
+    `cuestionarioDeReferencia`, que deduce la versión del cuestionario del juego
+    de preguntas calificadas: contando éstas, la huella del vigente no casaría
+    con ninguna respuesta y el radar avisaría siempre de una mezcla de versiones
+    que no existe. Por eso la consulta de preguntas de `4b-evaluaciones-stats.js`
+    **se trae `question_type`** —la trampa de la columna que no se pide: llega
+    `undefined` y se lee como que sí se califica—.
+  - **Lo ya guardado se queda como está.** Las respuestas anteriores traen su
+    nota de evidencia o su «correcto» de asistencia dentro de `grades_json` y
+    ahí siguen contando: `gradesTemp` parte de lo que había, así que volver a
+    guardar una no las borra. Lo que cambia es que no se escriben más.
 - **La firma es un tipo de pregunta más, y no puntúa.** Recoge **la firma de
   quien contesta** trazada con el dedo, que es el mismo gesto con el que se firma
   de enterado una difusión de incidentes desde siempre; lo que cambia es que
@@ -1384,26 +1444,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Lo dice el propio recuadro al firmar y lo repite la hoja de edición, y el
   texto vive en un solo sitio (`TEXTO_PEDIR_FIRMA`).
 
-  **Y no cuenta para la calificación**, que es la mitad de cada una de las otras
-  dos preguntas que tampoco se contestan escribiendo:
-
-  - **No se le escribe nota** —no entra en `grades_json`—, así que
-    `calcularScoreRespuesta`, que promedia lo que hay ahí dentro, ni la ve. Es
-    lo que ya hacía la evidencia fotográfica en modo jefe.
-  - **Pero cuenta como resuelta** (`autoGradedCount++`), o dejaría un pendiente
-    de revisión donde no hay nada que decidir. Es lo que hace la asistencia,
-    sólo que aquélla sí se pone un «correcto» porque si no una encuesta que sólo
-    pasa lista se quedaría sin puntaje que certificar.
+  **Y no cuenta para la calificación**: es una de las tres que dejan constancia
+  y no puntúan —la regla entera está arriba, con la evidencia—. No se le escribe
+  nota, así que `calcularScoreRespuesta` ni la ve, pero cuenta como resuelta
+  (`autoGradedCount++`) para no dejar un pendiente de revisión donde no hay nada
+  que decidir.
 
   Por eso **sí entra en `TIPOS_EN_MODO_JEFE`**: esa encuesta se guarda ya
   calificada y sólo admite lo que se puntúa solo o no puntúa nada.
 
   Una encuesta hecha **sólo de firmas** se guarda entonces `'Revisado'` con
-  `grades_json` vacío, que es el caso que ya existía con las evidencias en modo
-  jefe: `puntajeDeRespuesta` lo tapa con `tieneCalificaciones` —y desde ahora
-  también la cifra del encabezado de la hoja de una encuesta, que enseñaba un
-  0% donde no había nada calificado—, y el plazo de reintento lo tapa donde
-  siempre.
+  `grades_json` vacío, que es el caso general de las tres: lo tapa
+  `tieneCalificaciones` en todas las pantallas que enseñan o comparan un
+  puntaje.
 
   Seis cosas que hay que mantener:
 
@@ -1433,9 +1486,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     o cada encuesta que se abriera dejaría los suyos muertos detrás.
   - **Al calificar se mira y ya**: la insignia dice **FIRMADA** o **SIN
     FIRMAR** —«PENDIENTE» diría que alguien tiene que hacer algo con ella— y no
-    lleva los botones de correcto e incorrecto que sí tiene la evidencia. Ni en
-    modo administrador se ofrece un campo para editarla: lo que se corregiría es
-    quién firmó, y eso se arregla borrando la respuesta.
+    lleva los botones de correcto e incorrecto que llevan las de texto, como
+    ninguna de las tres que dejan constancia. Ni en modo administrador se ofrece
+    un campo para editarla: lo que se corregiría es quién firmó, y eso se arregla
+    borrando la respuesta.
 
   Es un tipo nuevo, así que **cae de lleno en la trampa del teléfono con el
   JavaScript viejo** (la primera de esta lista): ese código no conoce
@@ -1456,19 +1510,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.TEXTO_ASISTENCIA                 // 'Asistí', lo que se guarda
   ```
 
-  **Se califica sola al enviarla**, como la escala y las opciones marcadas:
-  `enviarRespuestasEval` le escribe su `grades_json` —`status: 'correct'`, con
-  `auto: true`— y suma a `autoGradedCount`, así que una encuesta que sólo pasa
-  lista se guarda ya `'Revisado'`. Tenía que ser así: dejarla sin calificar le
-  crearía a alguien un pendiente de revisión donde no hay nada que decidir, y
-  dejarla **sin nota ninguna** —como la evidencia en modo jefe— sería peor,
-  porque entonces `calcularScoreRespuesta` daría 0 sobre cero preguntas y la
-  clasificación no se certificaría nunca sin apagarle el puntaje mínimo a mano.
+  **Se da por resuelta al enviarla y no la califica nadie**: `enviarRespuestasEval`
+  suma a `autoGradedCount` sin escribirle nota, así que una encuesta que sólo
+  pasa lista se guarda ya `'Revisado'` con `grades_json` vacío. Es la tercera de
+  las que dejan constancia y no puntúan —la regla entera está arriba, con la
+  evidencia—.
 
-  Por eso **no entra en `TIPOS_EN_MODO_JEFE`** aunque cumpla el requisito de
-  puntuarse sola: ahí el puntaje es el veredicto del jefe sobre la persona, y
-  un 100 regalado por haber asistido lo diluye. Es la misma razón por la que la
-  evidencia fotográfica no puntúa en ese modo.
+  Se escribió un tiempo su propio `grades_json` —`status: 'correct'`, con `auto:
+  true`—, y era un **100% regalado por haber ido**: en una encuesta que pasa
+  lista y además pregunta algo, ese punto diluía lo que sí se calificaba. Existía
+  por una razón que ya no vale: sin nota, `calcularScoreRespuesta` da 0 sobre
+  cero preguntas y la clasificación no se certificaría nunca. Eso lo tapa hoy
+  `tieneCalificaciones` en `estadoCertificacion` y en `motivoNoAplicable` —sin
+  puntaje no hay mínimo que exigir—, que es lo que lo resuelve sin inventar una
+  nota.
+
+  Sigue **sin entrar en `TIPOS_EN_MODO_JEFE`**, aunque ahora tampoco puntúe y ya
+  no sea por el 100 regalado: ahí quien contesta es el jefe, y pasarse lista a sí
+  mismo sobre el colaborador al que evalúa no significa nada. Se pasa lista desde
+  la encuesta que se dirige a quien tenía que ir.
 
   No lleva opciones, ni respuesta modelo, ni motivo, y **`guardarNuevaEvaluacion`
   le vacía `correct_answer_text` a propósito**: el campo de «Respuesta Modelo»

@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-14-2';
+window.VERSION_APP = '2026-09-14-3';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -446,9 +446,16 @@ window.MAX_LADO_FOTO_EVAL = 600;
 
 // Una pregunta de evidencia se contesta con una fotografía en vez de con
 // texto: su enunciado dice qué hay que fotografiar y su respuesta es la URL de
-// lo que se subió. Es un tipo de pregunta más, de modo que se ordena, se
-// edita, se borra y se califica como las demás, y pedir varias evidencias es
-// añadir varias preguntas.
+// lo que se subió. Es un tipo de pregunta más, de modo que se ordena, se edita
+// y se borra como las demás, y pedir varias evidencias es añadir varias
+// preguntas.
+//
+// **Lo que no es es un examen.** Una foto del área es la constancia de cómo
+// estaba aquel día, y eso no se acierta ni se falla: llevó un tiempo los
+// botones de correcto e incorrecto que tienen las de texto —también fuera del
+// modo jefe, donde nunca los tuvo— y lo que salía de ahí era un veredicto
+// inventado que además entraba en el promedio de la persona. Hoy es una de las
+// tres que dejan constancia y no puntúan: ver `esPreguntaDeConstancia`.
 window.TIPO_PREGUNTA_FOTO = 'photo';
 window.esPreguntaDeFoto = (pregunta) =>
     !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_FOTO;
@@ -469,9 +476,10 @@ window.esPreguntaDeFoto = (pregunta) =>
 // al firmar, y por eso el texto vive en un solo sitio.
 //
 // **Y no puntúa.** No se acierta ni se falla una firma, así que no entra en
-// `grades_json` —de modo que `calcularScoreRespuesta` la ignora, como la
-// evidencia en modo jefe— y tampoco deja un pendiente de revisión donde no hay
-// nada que decidir: el envío la da por resuelta, como la asistencia.
+// `grades_json` —de modo que `calcularScoreRespuesta` la ignora— y tampoco
+// deja un pendiente de revisión donde no hay nada que decidir: el envío la da
+// por resuelta. Es la regla que comparte con la evidencia y la asistencia, y
+// está contada entera en `esPreguntaDeConstancia`.
 window.TIPO_PREGUNTA_FIRMA = 'signature';
 window.esPreguntaDeFirma = (pregunta) =>
     !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_FIRMA;
@@ -489,8 +497,13 @@ window.TEXTO_PEDIR_FIRMA = 'Escribe tu primer nombre con el dedo';
 // Una pregunta de asistencia no se contesta: se confirma. Sirve para pasar
 // lista de una junta o una capacitación —la encuesta se dirige a quien tenía
 // que ir y cada quien registra que fue—, así que no hay respuesta buena ni
-// mala que calificar y **se da por cumplida al enviarla**: el envío le escribe
-// su calificación, como hacen la escala y las opciones marcadas.
+// mala que calificar y **se da por cumplida al enviarla**, sin que nadie tenga
+// que revisarla.
+//
+// Dada por cumplida, pero **sin nota**: es otra de las tres que dejan
+// constancia y no puntúan (ver `esPreguntaDeConstancia`). El envío le escribía
+// un «correcto» automático, y eso era un 100% regalado por haber ido que se
+// promediaba con lo que la encuesta sí preguntaba.
 //
 // El valor que se guarda es este texto y no la hora: cuándo se registró ya lo
 // dice `submitted_at` de la respuesta, y así todo lo que ya imprime
@@ -499,6 +512,46 @@ window.TIPO_PREGUNTA_ASISTENCIA = 'attendance';
 window.TEXTO_ASISTENCIA = 'Asistí';
 window.esPreguntaDeAsistencia = (pregunta) =>
     !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_ASISTENCIA;
+
+// ==========================================
+// LAS QUE DEJAN CONSTANCIA Y NO PUNTÚAN
+// ==========================================
+// Tres tipos de pregunta no se aciertan ni se fallan: la **evidencia
+// fotográfica**, la **firma** y el **registro de asistencia**. Lo que recogen
+// es la constancia de algo —esto es lo que había, ésta es mi firma, yo estuve—,
+// y sobre eso no hay veredicto que dar: no se puede calificar mal una foto del
+// área ni acertar una firma. Poner ahí «Correcto» e «Incorrecto» le pedía a
+// quien revisa una decisión que no existe, y el resultado era peor que inútil:
+// esa opinión entraba en el promedio y movía el puntaje de la persona.
+//
+// La regla, entonces, es una sola y vale para las tres:
+//
+// - **No se les escribe calificación** —no entran en `grades_json`—, así que
+//   `calcularScoreRespuesta`, que promedia lo que hay ahí dentro, ni las ve.
+// - **Pero cuentan como resueltas** (`autoGradedCount` al enviar), o dejarían
+//   un pendiente de revisión donde no hay nada que decidir.
+// - **Y la pantalla de calificar las enseña sin botones**: la insignia dice lo
+//   único que hay que saber —si está o no está— y nunca «PENDIENTE», que diría
+//   que alguien tiene algo que hacer con ellas.
+//
+// La asistencia se apuntaba antes un «correcto» automático, y era un 100%
+// regalado por haber ido a la junta: en una encuesta que pasa lista y además
+// pregunta algo, ese punto diluía lo que sí se calificaba. Hoy no puntúa, como
+// las otras dos.
+//
+// La contrapartida de que no puntúen es que una encuesta hecha **sólo** de
+// estas preguntas se guarda sin nada en `grades_json`, y ahí
+// `calcularScoreRespuesta` devuelve 0 —que es lo mismo que devuelve al haberlo
+// fallado todo—. Eso lo tapa `tieneCalificaciones`, y toda pantalla que
+// enseñe o compare un puntaje tiene que preguntarlo antes: sin ese freno, una
+// encuesta de asistencia se leería como un cero y no se certificaría nunca.
+window.TIPOS_DE_CONSTANCIA = [
+    window.TIPO_PREGUNTA_FOTO,
+    window.TIPO_PREGUNTA_FIRMA,
+    window.TIPO_PREGUNTA_ASISTENCIA
+];
+window.esPreguntaDeConstancia = (pregunta) =>
+    !!pregunta && window.TIPOS_DE_CONSTANCIA.includes(pregunta.question_type);
 
 // ==========================================
 // LA HORA DE UN REGISTRO DE ASISTENCIA
@@ -685,9 +738,14 @@ window.asistenciaFueraDeHora = (evaluationId, ahora) => {
 
 // Lo que admite una encuesta de modo `boss`. Esa encuesta se guarda ya
 // calificada al enviarla —la contesta el jefe y su palabra es el veredicto—,
-// así que sólo caben las preguntas que se puntúan solas y las evidencias, que
-// no puntúan: quedan como constancia de lo que vio mientras evaluaba. Un texto
-// o unas opciones se quedarían sin calificar y sin nadie que los revisara.
+// así que sólo caben las preguntas que se puntúan solas y las que no puntúan
+// nada: quedan como constancia de lo que vio mientras evaluaba. Un texto o
+// unas opciones se quedarían sin calificar y sin nadie que los revisara.
+//
+// La asistencia se queda fuera aunque hoy tampoco puntúe, y no por la razón de
+// antes —el 100% regalado, que ya no existe—: aquí quien contesta es el jefe, y
+// pasarse lista a sí mismo sobre el colaborador al que evalúa no significa
+// nada. Se pasa lista desde la encuesta que se dirige a quien tenía que ir.
 window.TIPOS_EN_MODO_JEFE = ['range', window.TIPO_PREGUNTA_FOTO, window.TIPO_PREGUNTA_FIRMA];
 
 // ==========================================
@@ -742,14 +800,14 @@ window.TIPOS_DE_PREGUNTA = [
         valor: window.TIPO_PREGUNTA_FOTO,
         icono: '\u{1F4F7}',
         nombre: 'Evidencia fotogr\u00e1fica',
-        detalle: 'El enunciado dice qu\u00e9 hay que fotografiar y la respuesta es la foto, que se reduce antes de subirla. Para pedir varias, agrega otra pregunta as\u00ed.',
+        detalle: 'El enunciado dice qu\u00e9 hay que fotografiar y la respuesta es la foto, que se reduce antes de subirla. Queda como constancia y nadie tiene que calificarla. Para pedir varias, agrega otra pregunta as\u00ed.',
         enunciado: 'Qu\u00e9 hay que fotografiar\u2026'
     },
     {
         valor: window.TIPO_PREGUNTA_ASISTENCIA,
         icono: '\u{1F64B}',
         nombre: 'Registro de asistencia',
-        detalle: 'No se contesta: se confirma. Para pasar lista de una junta o una capacitaci\u00f3n; queda registrada al enviar y nadie tiene que calificarla.',
+        detalle: 'No se contesta: se confirma. Para pasar lista de una junta o una capacitaci\u00f3n; queda registrada al enviar, nadie tiene que calificarla y no cuenta para la calificaci\u00f3n.',
         enunciado: 'A qu\u00e9 se asisti\u00f3\u2026'
     },
     {
@@ -2249,9 +2307,18 @@ window.estadoCertificacion = (encuestas, respuestas, fecha) => {
         if (estado === 'Certificada') { resumen.certificadas++; return; }
         if (estado !== 'Revisado') { resumen.sinCalificar++; return; }
 
-        const puntaje = typeof window.calcularScoreRespuesta === 'function'
+        // Una respuesta sin ninguna pregunta calificada no sacó cero: es que
+        // no había nada que puntuar, y `calcularScoreRespuesta` devuelve 0 en
+        // los dos casos. Es lo que pasa con una encuesta hecha sólo de las que
+        // dejan constancia —pasar lista, firmar de enterado, subir la foto del
+        // día—, que se guarda ya 'Revisado' con `grades_json` vacío: sin este
+        // freno se iría a `bajoUmbral` y esa clasificación no se certificaría
+        // nunca sin apagarle el mínimo a mano. Sin puntaje no hay mínimo que
+        // exigir, igual que cuando la encuesta lo trae apagado.
+        const sinPuntaje = !window.tieneCalificaciones(resp);
+        const puntaje = (!sinPuntaje && typeof window.calcularScoreRespuesta === 'function')
             ? window.calcularScoreRespuesta(resp) : 0;
-        if (!window.exigeMinimo(ev) || puntaje >= window.UMBRAL_CERTIFICACION) {
+        if (sinPuntaje || !window.exigeMinimo(ev) || puntaje >= window.UMBRAL_CERTIFICACION) {
             resumen.calificadas++;
             resumen.certificables.push(resp.id);
         } else {

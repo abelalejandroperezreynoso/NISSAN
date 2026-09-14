@@ -130,7 +130,14 @@ window.repartirEnCuadros = (valores, ancho, alto) => {
 window.cuestionarioDeReferencia = (respuestas, preguntasVigentes) => {
     const firmaDe = (r) => Object.keys(r.grades_json || {}).sort().join('|');
 
-    const vigentes = (preguntasVigentes || []).filter(p => p && p.id);
+    // Las que dejan constancia —evidencia, firma y asistencia— no se califican
+    // nunca, así que no están en `grades_json` de ninguna respuesta y no pueden
+    // formar parte de la huella: incluyéndolas, la del cuestionario vigente no
+    // casaría con ninguna y el radar se dibujaría siempre con el cuestionario
+    // reconstruido, avisando además de una mezcla de versiones que no existe.
+    const vigentes = (preguntasVigentes || [])
+        .filter(p => p && p.id)
+        .filter(p => !window.esPreguntaDeConstancia({ question_type: p.tipo }));
     const firmaVigente = vigentes.map(p => String(p.id)).sort().join('|');
 
     // Sin calificar no hay huella: esas respuestas no dicen de qué versión son.
@@ -310,7 +317,13 @@ window.cargarStatsEncuestasGlobales = async () => {
         // El cuestionario de hoy. Las respuestas guardan la calificación bajo
         // el id de la pregunta, así que sin esta lista no hay forma de saber
         // cuáles de esas preguntas siguen existiendo.
-        const p3 = sb.from('evaluation_questions').select('id, evaluation_id, question_text, order_index').order('order_index');
+        // `question_type` hace falta para dejar fuera de la huella del
+        // cuestionario las preguntas que no se califican —evidencia, firma y
+        // asistencia—: nunca aparecen en `grades_json`, así que contándolas la
+        // huella vigente no casaría jamás y toda respuesta se leería como «de
+        // otra versión». Una columna que no se pide llega `undefined`, y eso
+        // se lee como que sí se califica, que es lo de antes.
+        const p3 = sb.from('evaluation_questions').select('id, evaluation_id, question_text, question_type, order_index').order('order_index');
 
         // Aquí iba una quinta consulta con la última foto de cada área, que
         // encabezaba su tarjeta en la comparativa. Se fue con la foto del área:
@@ -335,7 +348,7 @@ window.cargarStatsEncuestasGlobales = async () => {
         (resPreguntas && resPreguntas.data ? resPreguntas.data : []).forEach(q => {
             const clave = String(q.evaluation_id);
             if (!preguntasPorEncuesta[clave]) preguntasPorEncuesta[clave] = [];
-            preguntasPorEncuesta[clave].push({ id: String(q.id), texto: q.question_text || '' });
+            preguntasPorEncuesta[clave].push({ id: String(q.id), texto: q.question_text || '', tipo: q.question_type || '' });
         });
 
         window.encuestasRawData = {

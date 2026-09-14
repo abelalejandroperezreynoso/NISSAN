@@ -1593,7 +1593,10 @@ window.renderizarListaRespuestas = () => {
         // el nombre lo dice el encabezado de la hoja.
 
         let scoreBadge = '';
-        if(resp.review_status === 'Revisado' || resp.review_status === 'Certificada') {
+        // Sin nada calificado no hay cifra que enseñar: un 0% se leería como
+        // haberlo hecho mal en vez de como que no había nada que puntuar.
+        if((resp.review_status === 'Revisado' || resp.review_status === 'Certificada')
+            && window.tieneCalificaciones(resp)) {
              const score = window.calcularScoreRespuesta(resp);
              const pct = score;
              const color = pct >= 80 ? '#166534' : (pct >= 60 ? '#b45309' : '#991b1b');
@@ -1677,8 +1680,11 @@ window.verDetalleRespuesta = async (resp) => {
     if (esAdminTotal) {
             deleteButton = `<button onclick="borrarRespuestaIndividual('${resp.id}')" style="width:100%; background:white; color:#ef4444; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">🗑️ Eliminar esta respuesta</button>`;
 
-            // Calculamos el puntaje actual
-            const scoreActual = window.calcularScoreRespuesta(resp);
+            // El puntaje actual, o null si no hay nada calificado: una
+            // encuesta hecha sólo de las que dejan constancia no sacó cero,
+            // es que no había nada que puntuar.
+            const scoreActual = window.tieneCalificaciones(resp)
+                ? window.calcularScoreRespuesta(resp) : null;
             let adminOptions = [];
 
             // Si está alterada, permitir restaurar
@@ -1686,8 +1692,9 @@ window.verDetalleRespuesta = async (resp) => {
                 adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Revisado')" style="width:100%; background:#dcfce7; color:#166534; padding:15px; border:1px solid #22c55e; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">✅ Restaurar a Validada</button>`);
             }
             
-            // Certificar solo si tiene >= 80 y no está certificada
-            if (scoreActual >= 80 && resp.review_status !== 'Certificada') {
+            // Certificar solo si tiene >= 80 —o si no hay puntaje que
+            // exigirle— y no está certificada
+            if ((scoreActual === null || scoreActual >= 80) && resp.review_status !== 'Certificada') {
                 adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Certificada')" style="width:100%; background:#eff6ff; color:#1d4ed8; padding:15px; border:1px solid #3b82f6; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">⭐ Certificar Respuesta (Auditoría)</button>`);
             }
             
@@ -1756,7 +1763,13 @@ window.verDetalleRespuesta = async (resp) => {
 
         // --- NUEVO: CÁLCULO Y GLOBO DE CALIFICACIÓN ---
         let badgeCalificacionHtml = '';
-        if (resp.review_status === 'Revisado' || resp.review_status === 'Certificada' || resp.review_status === 'Falsa' || resp.review_status === 'Mal Revisada') {
+        const hayQuePuntuar = window.tieneCalificaciones(resp);
+        if (!hayQuePuntuar && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada')) {
+            // Una encuesta hecha sólo de las que dejan constancia —pasar lista,
+            // firmar, subir la foto— se guarda revisada y sin nada que puntuar.
+            // Ahí un 0% mentiría, así que se dice lo que pasa.
+            badgeCalificacionHtml = `<span style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; padding:4px 12px; border-radius:12px; font-size:0.85rem; font-weight:bold; white-space:nowrap;">Sin calificar</span>`;
+        } else if (resp.review_status === 'Revisado' || resp.review_status === 'Certificada' || resp.review_status === 'Falsa' || resp.review_status === 'Mal Revisada') {
             // Obtenemos el score actual
             const scoreActual = window.calcularScoreRespuesta(resp);
             // Coloreamos según desempeño
@@ -1874,6 +1887,13 @@ window.verDetalleRespuesta = async (resp) => {
             if(pct < 80) { color = '#b45309'; bg = '#fef3c7'; }
             if(pct < 60) { color = '#991b1b'; bg = '#fee2e2'; }
             resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${bg}; color:${color}; padding:3px 10px; border-radius:12px; font-size:0.85rem; font-weight:bold;">${val}/${max} (${pct}%)</span>`;
+        } else if (window.esPreguntaDeFoto(q)) {
+            // Una evidencia no se califica —no puntúa—, así que «CORRECTO» o
+            // «PENDIENTE» sobre ella dirían lo que no es: que había un
+            // veredicto que dar sobre la foto, y que alguien lo debe. O hay
+            // evidencia o no la hay.
+            const conFoto = typeof rawRespuesta === 'string' && rawRespuesta.trim() !== '';
+            resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${conFoto?'#eff6ff':'#f1f5f9'}; color:${conFoto?'#1d4ed8':'#64748b'}; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${conFoto?'CON EVIDENCIA':'SIN EVIDENCIA'}</span>`;
         } else if (window.esPreguntaDeFirma(q)) {
             // Una firma no se califica —no puntúa—, así que «PENDIENTE» sobre
             // ella diría que alguien tiene que hacer algo con ella. O está
@@ -1884,7 +1904,11 @@ window.verDetalleRespuesta = async (resp) => {
             // Aquí no se acierta ni se falla: o se registró o no. «CORRECTO»
             // sobre una asistencia se lee como si hubiera habido algo que
             // calificar.
-            const registrada = (gradeObj && gradeObj.status === 'correct') || rawRespuesta === window.TEXTO_ASISTENCIA;
+            // Lo dice la respuesta y no la nota: hoy una asistencia no lleva
+            // ninguna. Se sigue admitiendo la nota de las que se registraron
+            // cuando el envío se escribía un «correcto» automático.
+            const registrada = rawRespuesta === window.TEXTO_ASISTENCIA
+                            || (gradeObj && gradeObj.status === 'correct');
             resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${registrada?'#dcfce7':'#f1f5f9'}; color:${registrada?'#166534':'#64748b'}; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${registrada?'REGISTRADA':'SIN REGISTRAR'}</span>`;
         } else {
             let status = "pending";
@@ -1919,7 +1943,7 @@ window.verDetalleRespuesta = async (resp) => {
         }
         // Una firma se mira y ya: es la constancia de que esa persona contestó,
         // no una respuesta que se acierte o se falle, así que va sin los
-        // botones de correcto e incorrecto que sí lleva la evidencia. Ni en
+        // botones de correcto e incorrecto que llevan las de texto. Ni en
         // modo administrador se ofrece un campo para editarla —lo que se
         // corregiría es quién firmó, y eso se arregla borrando la respuesta—;
         // `guardarCalificacionAdmin` parte de una copia de `answers_json`, así
@@ -1935,32 +1959,25 @@ window.verDetalleRespuesta = async (resp) => {
                    </div>`
                 : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin firmar)</div>`;
         }
-        // Una evidencia se mira, no se lee: su respuesta es la URL de la foto y
-        // se pinta igual se pueda calificar o no. Editarla desde aquí no tiene
-        // sentido —habría que volver a tomarla—, así que ni el administrador
-        // ve un campo de texto con la URL dentro.
+        // Una evidencia se mira y ya: su respuesta es la URL de la foto y lo
+        // que deja es la constancia de cómo estaba aquello, no algo que se
+        // acierte o se falle, así que va **sin los botones de correcto e
+        // incorrecto** —los llevó, y lo que salía de ahí era un veredicto sobre
+        // una fotografía que además entraba en el promedio de la persona—.
+        // Editarla desde aquí tampoco tendría sentido —habría que volver a
+        // tomarla—, así que ni el administrador ve un campo con la URL dentro;
+        // `guardarCalificacionAdmin` parte de una copia de `answers_json`, de
+        // modo que la URL sobrevive intacta.
         else if (window.esPreguntaDeFoto(q)) {
             const urlEvidencia = typeof rawRespuesta === 'string' ? rawRespuesta : '';
             contentHtml = urlEvidencia
-                ? `<img src="${window.sanitizeForHTML(urlEvidencia)}" alt="Evidencia"
-                        onclick="window.abrirVisorImagen && window.abrirVisorImagen('${window.sanitizeForHTML(urlEvidencia)}')"
-                        style="width:100%; border-radius:10px; display:block; cursor:pointer;" title="Toca para ampliar">`
+                ? `<div>
+                       <img src="${window.sanitizeForHTML(urlEvidencia)}" alt="Evidencia"
+                            onclick="window.abrirVisorImagen && window.abrirVisorImagen('${window.sanitizeForHTML(urlEvidencia)}')"
+                            style="width:100%; border-radius:10px; display:block; cursor:pointer;" title="Toca para ampliar">
+                       <div style="font-size:0.75rem; color:#94a3b8; margin-top:8px;">Evidencia${diaDeLaRespuesta ? ` del ${window.sanitizeForHTML(diaDeLaRespuesta)}` : ''} &middot; no cuenta para la calificación</div>
+                   </div>`
                 : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin evidencia)</div>`;
-
-            // Y su calificación, que es la misma de correcto/incorrecto que
-            // llevan las de texto: mismas clases y mismo marcado, que es de lo
-            // que se agarra `setGrade` para apagar el botón contrario.
-            if (puedeCalificar) {
-                const estadoFoto = (gradeObj && gradeObj.status) || (typeof gradeObj === 'string' ? gradeObj : 'pending');
-                contentHtml += `
-                    <div style="margin-top:15px;">
-                        <div style="font-size:0.85rem; color:#64748b; margin-bottom:6px; font-weight:600;">Calificación:</div>
-                        <div style="display:flex; gap:8px;">
-                            <button class="grade-btn ${estadoFoto==='correct'?'selected-correct':''}" onclick="setGrade('${q.id}', 'correct', this)" style="flex:1; padding:8px; border-radius:8px; border:1px solid #22c55e; background:${estadoFoto==='correct'?'#22c55e':'white'}; color:${estadoFoto==='correct'?'white':'#22c55e'}; cursor:pointer; font-weight:bold; transition:all 0.2s;">Correcto</button>
-                            <button class="grade-btn ${estadoFoto==='incorrect'?'selected-incorrect':''}" onclick="setGrade('${q.id}', 'incorrect', this)" style="flex:1; padding:8px; border-radius:8px; border:1px solid #ef4444; background:${estadoFoto==='incorrect'?'#ef4444':'white'}; color:${estadoFoto==='incorrect'?'white':'#ef4444'}; cursor:pointer; font-weight:bold; transition:all 0.2s;">Incorrecto</button>
-                        </div>
-                    </div>`;
-            }
         }
         // Construir la vista Integrada (Editable/Calificable) vs la vista de Sólo Lectura
         else if (puedeCalificar) {
@@ -2112,12 +2129,17 @@ window.verDetalleRespuesta = async (resp) => {
             if (contentHtml) contentHtml = `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#334155; font-size:1rem; border:1px solid #cbd5e1;">${contentHtml}</div>`;
         }
 
-        // Borde dinámico según si es correcto/incorrecto
+        // Borde dinámico según si es correcto/incorrecto. Las que dejan
+        // constancia se quedan con el neutro: ahí no hay veredicto, y el verde
+        // —que esta regla saca del color de la insignia, y la de una asistencia
+        // registrada es verde— se lee como un acierto donde no se acertó nada.
         let cardBorderColor = '#e2e8f0';
-        if (resultBadge.includes('INCORRECTO') || (resultBadge.includes('Aciertos') && !resultBadge.includes('dcfce7'))) {
-            cardBorderColor = '#fecaca';
-        } else if (resultBadge.includes('CORRECTO') || resultBadge.includes('dcfce7')) {
-            cardBorderColor = '#bbf7d0';
+        if (!window.esPreguntaDeConstancia(q)) {
+            if (resultBadge.includes('INCORRECTO') || (resultBadge.includes('Aciertos') && !resultBadge.includes('dcfce7'))) {
+                cardBorderColor = '#fecaca';
+            } else if (resultBadge.includes('CORRECTO') || resultBadge.includes('dcfce7')) {
+                cardBorderColor = '#bbf7d0';
+            }
         }
 
         // El porqué de una pregunta con opciones. Es lo que hay que leer para
@@ -2517,8 +2539,15 @@ window.motivoNoAplicable = (resp, nuevoEstado) => {
 
         // El mínimo se puede apagar encuesta por encuesta. Sin la encuesta a
         // mano se exige, que es lo prudente.
+        //
+        // Y una respuesta sin ninguna pregunta calificada no califica por
+        // debajo de nada: es que no había nada que puntuar —una encuesta hecha
+        // sólo de las que dejan constancia—, y `calcularScoreRespuesta`
+        // devuelve 0 tanto ahí como al haberlo fallado todo. Sin esta puerta no
+        // se podría certificar jamás, ni de una en una ni en lote.
         const ev = window.encuestaEnCache ? window.encuestaEnCache(resp.evaluation_id) : null;
         if (window.exigeMinimo(ev)
+            && window.tieneCalificaciones(resp)
             && window.calcularScoreRespuesta(resp) < window.UMBRAL_CERTIFICACION) {
             return `califica por debajo de ${window.UMBRAL_CERTIFICACION}%`;
         }
@@ -2760,10 +2789,12 @@ window.renderizarExpedienteEmpleado = () => {
     // debajo van en su propio bloque en vez de mezclarse con las que sí aplican.
     const grupos = [
         { clave: 'porCertificar', titulo: '⭐ Listas para certificar', color: '#166534', fondo: '#dcfce7',
-          filtro: r => r.review_status === 'Revisado' && window.calcularScoreRespuesta(r) >= 80 },
+          filtro: r => r.review_status === 'Revisado'
+                    && (!window.tieneCalificaciones(r) || window.calcularScoreRespuesta(r) >= 80) },
         { clave: 'bajoUmbral', titulo: '📉 Calificadas por debajo de 80%', color: '#b45309', fondo: '#fef3c7',
           nota: 'No se pueden certificar mientras no suban de 80%.',
-          filtro: r => r.review_status === 'Revisado' && window.calcularScoreRespuesta(r) < 80 },
+          filtro: r => r.review_status === 'Revisado'
+                    && window.tieneCalificaciones(r) && window.calcularScoreRespuesta(r) < 80 },
         { clave: 'sinCalificar', titulo: '⏳ Sin calificar todavía', color: '#c2410c', fondo: '#fff7ed',
           filtro: r => !['Revisado', 'Certificada', 'Falsa', 'Mal Revisada'].includes(r.review_status) },
         { clave: 'certificadas', titulo: '✅ Certificadas', color: '#1d4ed8', fondo: '#eff6ff',
@@ -2778,7 +2809,8 @@ window.renderizarExpedienteEmpleado = () => {
         const marcada = seleccion.includes(String(r.id));
         const fecha = new Date(r.submitted_at).toLocaleDateString();
         const titulo = datosEval(r).title;
-        const calificada = ['Revisado', 'Certificada', 'Falsa', 'Mal Revisada'].includes(r.review_status);
+        const calificada = ['Revisado', 'Certificada', 'Falsa', 'Mal Revisada'].includes(r.review_status)
+                        && window.tieneCalificaciones(r);
         const score = calificada ? window.calcularScoreRespuesta(r) : null;
         const colorScore = score === null ? '#94a3b8' : (score >= 80 ? '#166534' : (score >= 60 ? '#b45309' : '#991b1b'));
         const fondoScore = score === null ? '#f1f5f9' : (score >= 80 ? '#dcfce7' : (score >= 60 ? '#fef3c7' : '#fee2e2'));
@@ -5493,7 +5525,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     </div>
 
     <div class="photo-info-container" style="display:${showPhotoInfo?'block':'none'}; margin-top:15px; padding:10px; background:#eff6ff; border:1px dashed #bfdbfe; border-radius:8px; font-size:0.85rem; color:#1d4ed8;">
-        📷 <b>Evidencia:</b> el enunciado de arriba es lo que se le pide fotografiar. La foto se guarda reducida a ${window.MAX_LADO_FOTO_EVAL}px junto a la respuesta, y la califica quien revise si la encuesta pasa a revisión. Para pedir varias evidencias, agrega otra pregunta de este tipo.
+        📷 <b>Evidencia:</b> el enunciado de arriba es lo que se le pide fotografiar. La foto se guarda reducida a ${window.MAX_LADO_FOTO_EVAL}px junto a la respuesta. Queda como constancia de lo que había: <b>no cuenta para la calificación</b> y nadie tiene que revisarla. Para pedir varias evidencias, agrega otra pregunta de este tipo.
     </div>
 
     <div class="signature-info-container" style="display:${showSignatureInfo?'block':'none'}; margin-top:15px; padding:10px; background:#f5f3ff; border:1px dashed #ddd6fe; border-radius:8px; font-size:0.85rem; color:#6d28d9;">
@@ -5507,7 +5539,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
                style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-size:16px; font-family:inherit;">
         <div class="plazo-asistencia" style="font-size:0.8rem; color:#15803d; font-weight:600; margin-top:6px;"></div>
         <div style="margin-top:10px; padding:10px; background:#f0fdf4; border:1px dashed #bbf7d0; border-radius:8px; font-size:0.85rem; color:#15803d;">
-            🙋 <b>Asistencia:</b> el enunciado de arriba dice a qué se asistió («Capacitación de seguridad del 4 de septiembre»). Quien la reciba sólo tiene que confirmarlo, y al enviar queda registrada y calificada sola: nadie tiene que revisarla.
+            🙋 <b>Asistencia:</b> el enunciado de arriba dice a qué se asistió («Capacitación de seguridad del 4 de septiembre»). Quien la reciba sólo tiene que confirmarlo, y al enviar queda registrada: <b>no cuenta para la calificación</b> y nadie tiene que revisarla.
             Con fecha y hora, el pendiente <b>no aparece antes del evento</b> y hay ${window.MINUTOS_PARA_REGISTRAR_ASISTENCIA} minutos para registrarlo; pasados, ya no se puede y cuenta como inasistencia. Sin fecha se puede registrar en cualquier momento.
         </div>
     </div>`;

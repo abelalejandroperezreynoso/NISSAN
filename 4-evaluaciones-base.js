@@ -1927,26 +1927,21 @@ window.enviarRespuestasEval = async () => {
                         question: q.question_text || ''
                     };
                     autoGradedCount++;
-                } else if (window.esPreguntaDeAsistencia(q)) {
-                    // Pasar lista no tiene respuesta buena ni mala: haberla
-                    // confirmado es todo lo que se preguntaba. Se califica al
-                    // enviarla para no dejarle a nadie un pendiente de revisión
-                    // que no tiene nada que decidir; y si la encuesta es sólo
-                    // de asistencia, `autoGradedCount` la guarda ya 'Revisado'.
-                    autoGradesMap[q.id] = {
-                        type: 'standard',
-                        status: 'correct',
-                        question: q.question_text || '',
-                        auto: true
-                    };
-                    autoGradedCount++;
-                } else if (window.esPreguntaDeFirma(q)) {
-                    // Una firma es constancia, no examen: **no se le escribe
-                    // calificación** —así `calcularScoreRespuesta`, que promedia
-                    // lo que hay en `grades_json`, ni la ve— pero sí cuenta como
-                    // resuelta, o dejaría un pendiente de revisión donde no hay
-                    // nada que decidir. Es la mitad de cada cosa: lo de la
-                    // evidencia en modo jefe y lo de la asistencia.
+                } else if (window.esPreguntaDeConstancia(q)) {
+                    // La evidencia, la firma y la asistencia son constancia y
+                    // no examen: no se aciertan ni se fallan. **No se les
+                    // escribe calificación** —así `calcularScoreRespuesta`, que
+                    // promedia lo que hay en `grades_json`, ni las ve— pero sí
+                    // cuentan como resueltas, o dejarían un pendiente de
+                    // revisión donde no hay nada que decidir. La regla entera
+                    // está en `esPreguntaDeConstancia`, en `1-config.js`.
+                    //
+                    // Si la encuesta es sólo de éstas —pasar lista, firmar de
+                    // enterado, subir la foto del día—, `autoGradedCount` la
+                    // guarda ya 'Revisado' con `grades_json` vacío, y eso lo
+                    // tapa `tieneCalificaciones` allí donde se lee un puntaje:
+                    // sin nada calificado no hay cifra, que no es lo mismo que
+                    // un cero.
                     autoGradedCount++;
                 } else if (window.seCalificaSola(q)) {
                     // La pregunta dice cuáles son sus opciones correctas, así
@@ -2221,7 +2216,13 @@ window.abrirHistorialEvaluacion = (evalId, title) => {
             }
             
             let scoreText = '';
-            if (r.review_status === 'Revisado' || r.review_status === 'Certificada') {
+            const revisada = r.review_status === 'Revisado' || r.review_status === 'Certificada';
+            if (revisada && !window.tieneCalificaciones(r)) {
+                // Una encuesta hecha sólo de las que dejan constancia —pasar
+                // lista, firmar, subir la foto— se guarda revisada y sin nada
+                // que puntuar. Un 0% ahí se leería como haberlo hecho mal.
+                scoreText = `<div style="font-size:0.85rem; color:#64748b; font-weight:bold;">Sin calificar</div>`;
+            } else if (revisada) {
                 const score = window.calcularScoreRespuesta(r);
                 let colorScore = window.getColorScore ? window.getColorScore(score) : '#2563eb';
                 if (r.review_status === 'Certificada') colorScore = '#1d4ed8'; 
