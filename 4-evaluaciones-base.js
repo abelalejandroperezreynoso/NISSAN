@@ -1135,14 +1135,46 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
     window.evalModeRespondiendo = mode;
     document.body.style.cursor = 'wait';
     try {
+        // Las dos columnas de más son para el freno de «una sola respuesta» de
+        // aquí abajo: la bandera y el instante del relanzamiento, que es lo que
+        // decide qué respuestas de esa persona siguen contando.
+        const camposEval = await window.camposConUnaRespuesta(
+            await window.camposConRelanzamiento(
+                'range_labels, description, frequency, evaluates_area'));
+
         const p1 = sb.from('evaluation_questions').select('*').eq('evaluation_id', evalId).order('order_index');
-        const p2 = sb.from('evaluations').select('range_labels, description, frequency, evaluates_area').eq('id', evalId).single();
+        const p2 = sb.from('evaluations').select(camposEval).eq('id', evalId).single();
         const p3 = sb.from('areas').select('id, nombre').eq('activa', true).order('nombre');
-        
+
         const [resQ, resE, resA] = await Promise.all([p1, p2, p3]);
         if (resQ.error) throw resQ.error;
 
         const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
+
+        // **El botón no es el guardia: éste lo es.** Un `disabled` se quita
+        // desde la consola, la hoja de la encuesta pudo quedarse abierta desde
+        // antes de contestarla, y al panel de pendientes se llega por otras
+        // puertas. Así que antes de abrir nada se vuelve a preguntar.
+        //
+        // La consulta extra **sólo se hace si la encuesta lo pide**: a las
+        // demás no se les cobra una vuelta más a la base por un freno que no
+        // les toca. Y sólo en modo `self`: en modo jefe quien contesta es el
+        // jefe sobre cada colaborador, que es otra cuenta —se dice en CLAUDE.md—.
+        if (mode === 'self' && window.esDeUnaSolaRespuesta(resE.data)) {
+            const { data: mias } = await sb.from('evaluation_responses')
+                .select('id, submitted_at')
+                .eq('evaluation_id', evalId)
+                .eq('employee_id', user.id);
+            const ya = window.respuestaQueYaCuenta(
+                { ...resE.data, id: evalId }, mias || []);
+            if (ya) {
+                document.body.style.cursor = 'default';
+                const dia = new Date(ya.submitted_at).toLocaleDateString('es-ES',
+                    { day: '2-digit', month: '2-digit', year: 'numeric' });
+                alert(`Esta encuesta se responde una sola vez y ya la contestaste el ${dia}.`);
+                return;
+            }
+        }
         const miAreaNorm = (user.area || "").trim().toUpperCase();
         let evaluatesArea = false;
         

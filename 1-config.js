@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-14-11';
+window.VERSION_APP = '2026-09-14-12';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -868,6 +868,15 @@ window.reintentoDeRespuesta = (ev, resp, fecha) => {
     // o esta puerta se queda abierta —la columna que no llega se lee como
     // `undefined` y eso no es `false`—. La arma `window.camposConMinimo`.
     if (!window.exigeMinimo(ev)) return null;
+
+    // **Y no se pide repetir lo que sólo se contesta una vez.** Las dos
+    // casillas son independientes y se pueden marcar a la vez sin querer, y
+    // entonces se contradicen: el pendiente diría «Repetir» y el botón se
+    // negaría a abrir la encuesta, dejando a esa persona con un pendiente que
+    // nadie puede quitarle. Manda la que cierra la puerta, que es la que se
+    // eligió a sabiendas de lo que hace. Lo que sacó se sigue leyendo en su
+    // historial y la clasificación sigue sin certificarse.
+    if (window.esDeUnaSolaRespuesta(ev)) return null;
 
     // Sólo lo ya calificado y todavía no dado por bueno: lo que está sin
     // calificar aún no se sabe, y lo certificado ya pasó.
@@ -2034,6 +2043,64 @@ window.hayColumnaVigencia = () => window.hayColumna('evaluations', 'vigente_desd
 
 window.camposConVigencia = (campos) =>
     window.camposConColumna(campos, 'evaluations', 'vigente_desde');
+
+// ==========================================
+// UNA SOLA RESPUESTA POR PERIODO
+// ==========================================
+// Hay encuestas que se contestan **una vez y ya**: una firma de enterado, un
+// pase de lista, un acta. Ahí volver a contestarla no añade nada y estropea lo
+// que hay —deja dos respuestas de la misma persona, y la que cuenta es la
+// última, así que una segunda vuelta descuidada puede tapar la buena—. La
+// aplicación, en cambio, siempre ofreció «Volver a Responder» a quien ya había
+// contestado, sin manera de impedirlo.
+//
+// La columna es `evaluations.una_sola_respuesta` y su script se corre a mano
+// (`sql/una-sola-respuesta.sql`). **Nula o `false` es lo de siempre**: se puede
+// volver a contestar. Sólo hacen falta filas para las que se cierren.
+window.esDeUnaSolaRespuesta = (ev) => !!ev && ev.una_sola_respuesta === true;
+
+window.hayColumnaUnaRespuesta = () => window.hayColumna('evaluations', 'una_sola_respuesta');
+
+window.camposConUnaRespuesta = (campos) =>
+    window.camposConColumna(campos, 'evaluations', 'una_sola_respuesta');
+
+// **Se cuenta por periodo y no por vida de la encuesta**, que es lo único
+// coherente con el resto: una mensual con esto puesto se contesta una vez **al
+// mes** y no una vez para siempre —si no, la frecuencia dejaría de significar
+// nada—. Y una de «única vez» no tiene periodo siguiente: `periodoDeEncuesta`
+// la resuelve como «alguna vez», así que ahí una es una y se acabó, que es
+// justo el caso que se vino a resolver.
+//
+// Devuelve la respuesta que cierra la puerta, o null si todavía se puede
+// contestar. Se le pasan las respuestas **de esa persona** ya filtradas.
+window.respuestaQueYaCuenta = (ev, respuestas, fecha) => {
+    if (!window.esDeUnaSolaRespuesta(ev)) return null;
+
+    // Las de antes de un relanzamiento no cuentan, como en todo lo demás: esa
+    // vuelta nombra otro evento.
+    const suyas = window.respuestasTrasRelanzar(ev, respuestas || []);
+    if (suyas.length === 0) return null;
+
+    const periodo = window.periodoDeEncuesta ? window.periodoDeEncuesta(ev, fecha) : null;
+    const dentro = suyas.filter(r => {
+        const cuando = new Date(r.submitted_at);
+        if (isNaN(cuando)) return false;
+        if (!periodo) return true;
+        if (periodo.inicio && cuando < periodo.inicio) return false;
+        if (periodo.fin && cuando > periodo.fin) return false;
+        return true;
+    });
+    if (dentro.length === 0) return null;
+
+    // La más reciente: es la que se enseña y a la que lleva el resultado.
+    return dentro.sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at))[0];
+};
+
+// ¿Puede esta persona contestarla ahora? Es lo que mira el botón, y lo que
+// vuelve a mirar `responderDirecto` antes de abrir la hoja: un `disabled` se
+// quita desde la consola y la hoja pudo quedarse abierta desde antes.
+window.puedeResponderla = (ev, respuestasSuyas, fecha) =>
+    !window.respuestaQueYaCuenta(ev, respuestasSuyas, fecha);
 
 // ==========================================
 // QUÉ CLASIFICACIONES SE CERTIFICAN

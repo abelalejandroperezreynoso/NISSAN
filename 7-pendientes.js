@@ -532,8 +532,8 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             // llena, el pendiente de revisión volvería al jefe inmediato.
             await window.cargarRevisoresDeClasificaciones();
 
-            const camposEvals = await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-                'id, title, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))));
+            const camposEvals = await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+                'id, title, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))))));
             const { data: activeEvalsDb } = await sb.from('evaluations')
                         .select(camposEvals)
                         .eq('active', true);

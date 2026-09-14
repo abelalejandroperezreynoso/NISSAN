@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-14-11">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-14-12">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -577,6 +577,17 @@
                     </div>
                     <p class="form-ayuda" style="margin-top:2px;">En 0 no se pide repetirla. Con un número, a quien no llegue al mínimo le vuelve a salir como pendiente durante esos días.</p>
                     <p id="aviso-certificacion-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/certificacion-por-encuesta.sql</code> en Supabase para poder usarlos.</p>
+                    <!-- Una vez contestada, no se vuelve a ofrecer. Se cuenta
+                         por periodo: una mensual se contesta una vez al mes y
+                         una de «única vez», una sola y para siempre. -->
+                    <label class="eval-opcion" id="opcion-una-respuesta">
+                        <input type="checkbox" id="chk-eval-una-respuesta">
+                        <span class="eval-opcion-texto">
+                            <span class="eval-opcion-titulo">🔒 Una sola respuesta</span>
+                            <span class="eval-opcion-ayuda">A quien ya la contestó no se le ofrece volver a hacerlo.</span>
+                        </span>
+                    </label>
+                    <p id="aviso-una-respuesta-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/una-sola-respuesta.sql</code> en Supabase para poder usarla.</p>
                     <label class="eval-opcion">
                         <input type="checkbox" id="chk-eval-activa" checked>
                         <span class="eval-opcion-texto">
@@ -1080,22 +1091,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-14-11"></script>
-    <script src="2a-core-nav.js?v=2026-09-14-11"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-14-11"></script>
-    <script src="3-incidentes.js?v=2026-09-14-11"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-14-11"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-14-11"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-14-11"></script>
-    <script src="5-objetivos.js?v=2026-09-14-11"></script>
-    <script src="6-calendario.js?v=2026-09-14-11"></script>
-    <script src="7-pendientes.js?v=2026-09-14-11"></script>
-    <script src="8-hallazgos.js?v=2026-09-14-11"></script>
-    <script src="9-estadisticas.js?v=2026-09-14-11"></script>
+    <script src="1-config.js?v=2026-09-14-12"></script>
+    <script src="2a-core-nav.js?v=2026-09-14-12"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-14-12"></script>
+    <script src="3-incidentes.js?v=2026-09-14-12"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-14-12"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-14-12"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-14-12"></script>
+    <script src="5-objetivos.js?v=2026-09-14-12"></script>
+    <script src="6-calendario.js?v=2026-09-14-12"></script>
+    <script src="7-pendientes.js?v=2026-09-14-12"></script>
+    <script src="8-hallazgos.js?v=2026-09-14-12"></script>
+    <script src="9-estadisticas.js?v=2026-09-14-12"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-09-14-11"></script>
-    <script src="13-gestion.js?v=2026-09-14-11"></script>
-    <script src="10-refacciones.js?v=2026-09-14-11"></script> 
+    <script src="12-almacenamiento.js?v=2026-09-14-12"></script>
+    <script src="13-gestion.js?v=2026-09-14-12"></script>
+    <script src="10-refacciones.js?v=2026-09-14-12"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

@@ -72,9 +72,15 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     // `description` y `evaluates_area` son del recuadro gris de esa misma
     // pantalla: sin pedirlas, una encuesta con descripción no la enseñaba y
     // una que mide por área no lo decía.
-    const campos = await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConRevisores(
+    //
+    // Y `una_sola_respuesta`, que es lo que decide si a quien ya contestó se le
+    // vuelve a ofrecer el botón: una columna que no se pidió llega `undefined`,
+    // que no es `true`, así que sin encadenarla la encuesta cerrada se dejaría
+    // contestar otra vez desde esta puerta. Es la trampa de siempre.
+    const campos = await window.camposConUnaRespuesta(await window.camposConVigencia(
+        await window.camposConRelanzamiento(await window.camposConRevisores(
         'id, title, mode, category, frequency, created_at, description, evaluates_area, '
-        + 'is_obligatory, target_employees, target_positions, target_departments')));
+        + 'is_obligatory, target_employees, target_positions, target_departments'))));
     const { data } = await sb.from('evaluations').select(campos).eq('id', evaluationId).single();
     if (data) window.cacheEncuestasRevision[String(evaluationId)] = data;
     return data || null;
@@ -243,8 +249,21 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // de ningún otro, y en un teléfono lo que se lee de un bloque de color a
         // todo lo ancho es el verbo.
         const misRespuestas = responses.filter(r => String(r.employee_id) === String(user.id));
-        const btnText = misRespuestas.length > 0 ? "Volver a Responder" : "Responder";
-        actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" class="eval-accion eval-accion--responder">${btnText}</button>`;
+
+        // **Y si la encuesta se contesta una sola vez, aquí se acaba.** El
+        // botón no sale: en su lugar va el aviso de que ya está contestada, con
+        // la fecha y llevando a su respuesta, que es lo único que queda por
+        // hacer ahí. Enseñarlo apagado sería un blanco muerto en el sitio de la
+        // acción principal.
+        const yaContestada = window.respuestaQueYaCuenta(evalData, misRespuestas);
+        if (yaContestada) {
+            const dia = new Date(yaContestada.submitted_at).toLocaleDateString('es-ES',
+                { day: '2-digit', month: '2-digit', year: 'numeric' });
+            actionButtonHtml = `<div class="eval-aviso-revisar">Ya la contestaste el ${dia}. Esta encuesta se responde una sola vez.</div>`;
+        } else {
+            const btnText = misRespuestas.length > 0 ? "Volver a Responder" : "Responder";
+            actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" class="eval-accion eval-accion--responder">${btnText}</button>`;
+        }
     } else if (window.revisoresDeEncuesta(evalData).includes(String(user.id))) {
         // Se está aquí para calificarla, no para contestarla: la encuesta no va
         // dirigida a esta persona y el botón de responder sobra.
@@ -4342,6 +4361,7 @@ window.RESUMEN_DE_GRUPO = {
         if (marcada('chk-eval-umbral')) partes.push('Exige 80%');
         const dias = parseInt((document.getElementById('eval-retry-days') || {}).value, 10);
         if (dias > 0) partes.push(`Repetir en ${dias} día${dias === 1 ? '' : 's'}`);
+        if (marcada('chk-eval-una-respuesta')) partes.push('Una sola respuesta');
         if (!marcada('chk-eval-activa')) partes.push('Inactiva');
         // La fecha desde la que aplica sólo se dice si se puso: vacía es «desde
         // que se creó», que es lo de siempre y no hay que contarlo.
@@ -4747,6 +4767,24 @@ window.avisarSiFaltaColumnaVigencia = async () => {
     if (fila) fila.style.opacity = hay ? '1' : '0.45';
 };
 
+// Lo mismo para «Una sola respuesta», que es otra columna de un script que se
+// corre a mano: sin ella la casilla se queda apagada y desmarcada —que es el
+// comportamiento de siempre, poder volver a contestar— en vez de dejar marcar
+// algo que el guardado no podría escribir.
+window.avisarSiFaltaColumnaUnaRespuesta = async () => {
+    const hay = await window.hayColumnaUnaRespuesta();
+    const aviso = document.getElementById('aviso-una-respuesta-no-disponible');
+    if (aviso) aviso.style.display = hay ? 'none' : 'block';
+
+    const chk = document.getElementById('chk-eval-una-respuesta');
+    if (chk) {
+        chk.disabled = !hay;
+        if (!hay) chk.checked = false;
+    }
+    const fila = document.getElementById('opcion-una-respuesta');
+    if (fila) fila.style.opacity = hay ? '1' : '0.45';
+};
+
 window.verificarRestriccionesModo = () => {
     const modeEl = document.getElementById('eval-mode-input');
     const mode = modeEl ? modeEl.value : 'self';
@@ -5128,6 +5166,7 @@ window.abrirModalCrearEval = async (categoria) => {
     if(inpVigencia) inpVigencia.value = '';
     await window.avisarSiFaltaColumnaCertificacion();
     await window.avisarSiFaltaColumnaVigencia();
+    await window.avisarSiFaltaColumnaUnaRespuesta();
 
     window.encuestaEnEdicion = null;
     window.asignacionesEnEdicion = {};
@@ -5302,6 +5341,11 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     if(chkUmbral) { chkUmbral.checked = window.exigeMinimo(evaluacion); }
     const inpReintento = document.getElementById('eval-retry-days');
     if(inpReintento) { inpReintento.value = window.diasDeReintento(evaluacion); }
+    // Una copia **sí** hereda esto, al revés que la fecha de vigencia: es una
+    // forma de ser de la encuesta —un acta se contesta una vez, y su copia del
+    // mes que viene también— y no un instante que se quede viejo al copiarla.
+    const chkUnaRespuesta = document.getElementById('chk-eval-una-respuesta');
+    if(chkUnaRespuesta) { chkUnaRespuesta.checked = window.esDeUnaSolaRespuesta(evaluacion); }
     // **Una copia no hereda la fecha de vigencia**, y es lo mismo que hace con
     // el título: la copia es la vuelta de este mes, no la del año pasado, así
     // que arrastrarle aquella fecha la metería en periodos que no son suyos.
@@ -5314,6 +5358,7 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     }
     await window.avisarSiFaltaColumnaCertificacion();
     await window.avisarSiFaltaColumnaVigencia();
+    await window.avisarSiFaltaColumnaUnaRespuesta();
 
     await window.prepararInputCategorias(evaluacion.category || 'General');
 
@@ -6537,6 +6582,13 @@ window.publicarEncuestaDeLaHoja = async () => {
                 const chkUmbral = document.getElementById('chk-eval-umbral');
                 if (await window.hayColumna('evaluations', 'requires_min_score')) {
                     payload.requires_min_score = chkUmbral ? chkUmbral.checked : true;
+                }
+
+                // Una sola respuesta por periodo. Sin la columna no se puede
+                // guardar y la hoja ya lo dijo: el resto de la encuesta sí.
+                const chkUnaRespuesta = document.getElementById('chk-eval-una-respuesta');
+                if (await window.hayColumnaUnaRespuesta()) {
+                    payload.una_sola_respuesta = chkUnaRespuesta ? chkUnaRespuesta.checked : false;
                 }
 
                 const inpReintento = document.getElementById('eval-retry-days');

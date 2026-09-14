@@ -1341,9 +1341,9 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // revisa en la hoja de detalle: sin la columna, `revisoresDeEncuesta`
         // sólo vería los de la clasificación y enseñaría los heredados en una
         // encuesta que nombra a los suyos. Es la trampa de `requires_min_score`.
-        const campos = await window.camposConVigencia(await window.camposConRevisores(
+        const campos = await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRevisores(
             await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(
-                'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments')))));
+                'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments'))))));
 
         // Igual que en el panel de pendientes: las ventanas de las encuestas
         // que pasan lista se piden antes, porque `esEvaluacionPendiente` las
@@ -3023,8 +3023,8 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
         // llena antes de contar nada.
         await window.cargarRevisoresDeClasificaciones();
 
-        const camposEvals = await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-            'id, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))));
+        const camposEvals = await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+            'id, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))))));
         const { data: activeEvalsDb } = await sb.from('evaluations')
             .select(camposEvals)
             .eq('active', true);

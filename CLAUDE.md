@@ -3521,6 +3521,81 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   persona concreta en `scheduled_evaluations` sigue apareciendo en su día
   aunque después se apague la encuesta. Esa programación es una asignación
   explícita y se cancela desde el propio calendario.
+- **Una encuesta puede contestarse una sola vez.** Hay encuestas que se
+  contestan **una vez y ya**: una firma de enterado, un pase de lista, un acta
+  de capacitación. Ahí volver a contestarla no añade nada y estropea lo que hay
+  —quedan dos respuestas de la misma persona y **la que cuenta es la última**,
+  así que una segunda vuelta descuidada tapa la buena—. La aplicación, en
+  cambio, siempre le ofreció «Volver a Responder» a quien ya había contestado,
+  sin manera de impedirlo.
+
+  Es la casilla **«🔒 Una sola respuesta»** del grupo «Opciones» de la hoja de
+  crear y editar, y la columna es `evaluations.una_sola_respuesta`, cuyo script
+  (`sql/una-sola-respuesta.sql`) se corre a mano.
+
+  ```js
+  window.esDeUnaSolaRespuesta(ev)      // nula o false es lo de siempre
+  window.respuestaQueYaCuenta(ev, respuestasSuyas, fecha)   // la que cierra la puerta, o null
+  window.puedeResponderla(ev, respuestasSuyas, fecha)
+  window.hayColumnaUnaRespuesta()  window.camposConUnaRespuesta(campos)
+  ```
+
+  **Se cuenta por periodo, no por vida de la encuesta.** Una mensual con esto
+  puesto se contesta una vez **al mes**: si no, la frecuencia dejaría de
+  significar nada. Una de «única vez» no tiene periodo siguiente
+  —`periodoDeEncuesta` la resuelve como «alguna vez»—, así que ahí una es una y
+  se acabó, que es el caso para el que se hizo.
+
+  **Y las de antes de un relanzamiento no cuentan**, como en todo lo demás: esa
+  vuelta nombra otro evento, así que la puerta se vuelve a abrir.
+
+  Cinco cosas que hay que mantener:
+
+  - **El botón no es el guardia.** La pantalla de la encuesta cambia el botón
+    por el aviso de «Ya la contestaste el …», pero quien decide de verdad es
+    **`responderDirecto`**, que lo vuelve a preguntar antes de abrir la hoja: un
+    `disabled` se quita desde la consola, la hoja pudo quedarse abierta desde
+    antes de contestarla y al panel de pendientes se llega por otras puertas.
+  - **Esa comprobación sólo consulta si la encuesta lo pide.** La consulta de
+    las respuestas propias va **detrás** de mirar la bandera, así que a las
+    demás encuestas no se les cobra una vuelta más a la base por un freno que no
+    les toca.
+  - **En lugar del botón va el aviso, no el botón apagado.** Un bloque de color
+    a todo lo ancho que no hace nada es un blanco muerto en el sitio de la
+    acción principal. El aviso dice la fecha, y a la respuesta se llega por la
+    cifra del encabezado, que ya lleva a ella.
+  - **No se pide repetir lo que sólo se contesta una vez.** Las dos casillas son
+    independientes y se pueden marcar a la vez sin querer, y entonces se
+    contradicen: el pendiente diría «Repetir» y el botón se negaría a abrir la
+    encuesta, dejando a esa persona con un pendiente que **nadie puede
+    quitarle**. `reintentoDeRespuesta` devuelve null en cuanto ve la bandera:
+    manda la que cierra la puerta, que es la que se eligió a sabiendas. Lo que
+    sacó se sigue leyendo en su historial y su clasificación sigue sin
+    certificarse.
+  - **Toda consulta que decida un pendiente encadena `camposConUnaRespuesta`**,
+    y `encuestaDeLaRespuesta` también. Es la trampa de `requires_min_score` otra
+    vez, y aquí muerde en los dos sentidos: sin la columna, la encuesta cerrada
+    se deja contestar otra vez desde la pantalla de la encuesta, y el plazo de
+    reintento vuelve a dispararse sobre ella. La encadenan
+    `cargarVistaPendientes` (`7-pendientes.js`), `calcularPendientesBatch` y
+    `cargarEncuestasAsignadas` (`2b-core-dashboard.js`) y
+    `encuestaDeLaRespuesta` (`4-evaluaciones-admin.js`).
+
+  **Una copia sí la hereda**, al revés que la fecha de vigencia: es una forma de
+  ser de la encuesta —un acta se contesta una vez, y su copia del mes que viene
+  también— y no un instante que se quede viejo al copiarla.
+
+  **El modo jefe se queda fuera**, y es la única pantalla donde el freno no
+  aplica: ahí quien contesta es el jefe sobre **cada** colaborador, así que «una
+  sola» sería una por colaborador y eso se decide en la pantalla de elegir a
+  quién se evalúa, que hoy no lo mira. Marcar la casilla en una encuesta de modo
+  jefe no rompe nada; simplemente no hace nada.
+
+  Sin correr el script todo se comporta como antes —se puede volver a contestar
+  siempre— y **la casilla se queda apagada y desmarcada** diciendo qué falta
+  (`avisarSiFaltaColumnaUnaRespuesta`), que es el mismo molde que la vigencia y
+  el umbral.
+
 - **Desde cuándo aplica una encuesta se puede corregir a mano.** La aplicación
   la hacía empezar el día que se dio de alta, y eso no siempre es verdad. La
   auditoría de septiembre se crea **copiando** la de agosto, así que su
