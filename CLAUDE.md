@@ -3821,20 +3821,40 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   el título, las etiquetas de estado y el botón; con la portada, **61px menos**
   (346 → 285 en un iPhone de 375).
 
-  **Las dos cosas se quedan en la tarjeta del equipo**, que es lo que las
+  **Y tampoco dice «Nunca contestada»: en su lugar va la fecha de la vez
+  anterior cuando la hay.** No haberla contestado nunca es el estado por
+  defecto de un pendiente —está en esa lista precisamente porque falta—, así
+  que esa etiqueta roja era la tercera vez que la tarjeta decía lo mismo,
+  encima de un título y un botón que ya ponen «Responder». Lo que sí dice algo
+  es **desde cuándo**, y eso sólo existe si ya se contestó una vez: ahí va
+  «Última vez: 12/03/2026», en gris y detrás de las de estado. Una encuesta que
+  nunca se contestó queda entonces con el título, el botón y nada más —263px en
+  un iPhone de 375, contra los 346 del recuadro azul—.
+
+  Los demás estados se quedan como estaban —«Vencida», «Falta este mes»,
+  «Repetir plazo vencido», la racha de periodos omitidos—: ésos no son el
+  estado por defecto, dicen qué pasó con el plazo.
+
+  **Las tres cosas se quedan en la tarjeta del equipo**, que es lo que las
   separa: `team_missing_survey` y `team_missing_eval` hablan de un tercero y
   son desde donde se le recuerda un pendiente a un colaborador, así que ahí
-  «Última vez» y la frecuencia son justo lo que hay que decirle.
+  «Nunca contestada», «Última vez» y la frecuencia son justo lo que hay que
+  decirle.
 
-  Dos cosas que hay que mantener:
+  Tres cosas que hay que mantener:
 
   - **La fila de etiquetas no se dibuja vacía** (`metaHtml`). La frecuencia
     estaba siempre, así que ese `<div>` nunca se quedaba sin nada dentro; sin
-    ella, una encuesta relanzada —que no lleva etiqueta de tiempo ni de
-    racha— dejaba su margen debajo del título sin decir nada.
+    ella, una encuesta relanzada —o una nunca contestada— no lleva ninguna y
+    dejaría su margen debajo del título sin decir nada.
   - **Y a la primera etiqueta se le quita su `margin-left`**, que lo traía de
     cuando iba detrás de la frecuencia: sin quitarlo queda sangrada respecto
     del título. El hueco entre etiquetas lo pone el `gap` de la fila.
+  - **El estado se mira en `item.vencimiento`, no se le recorta el texto a la
+    etiqueta ya armada.** `badgeTiempoHtml` lo arma un bloque de arriba que
+    comparten las seis tarjetas, así que esta rama decide con
+    `tipoAviso === 'nunca'` si la deja pasar; buscar «Nunca contestada» dentro
+    del HTML la ataría a cómo esté escrita esa etiqueta.
 - **Las estadísticas tienen dos desgloses y dos orígenes.** Por
   departamentos, los conteos vienen del reporte `obtener_estadisticas_empleados`,
   que suma todos los registros del filtro en la base. Por registro, en cambio,

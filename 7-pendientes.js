@@ -1174,12 +1174,36 @@ if (item.virtual_type === 'waiting_boss') {
                 // lo que hay que hacer con ella, se lee en su hoja, y en una
                 // columna de 233px se llevaba el primer sitio de la fila de
                 // etiquetas —justo delante de la que sí urge—.
-                // Las dos etiquetas traen un `margin-left` de cuando iban
+                // **«Nunca contestada» tampoco se dice aquí, y en su lugar va la
+                // fecha de la vez anterior cuando la hay.** Nunca haberla
+                // contestado es el estado por defecto de un pendiente —está en
+                // esta lista precisamente porque falta—, así que esa etiqueta
+                // roja no añadía nada a un título y un botón que dicen
+                // «Responder»: era la tercera vez que la tarjeta decía lo
+                // mismo. Lo que sí dice algo es **desde cuándo**, y eso sólo
+                // existe si ya se contestó una vez.
+                //
+                // Por eso la fila de etiquetas de esta tarjeta se arma aquí y
+                // no se hereda tal cual: la de arriba la comparten las otras
+                // cinco tarjetas, que sí necesitan decir que nunca se contestó
+                // —hablan de un tercero, y ahí es un reproche que se le
+                // traslada—.
+                const nuncaContestada = !!(item.vencimiento && item.vencimiento.tipoAviso === 'nunca');
+                const ultima = item.vencimiento && item.vencimiento.ultimaFecha
+                    ? new Date(item.vencimiento.ultimaFecha) : null;
+                const badgeUltimaHtml = (ultima && !isNaN(ultima))
+                    ? `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; border:1px solid #e2e8f0;">Última vez: ${String(ultima.getDate()).padStart(2, '0')}/${String(ultima.getMonth() + 1).padStart(2, '0')}/${ultima.getFullYear()}</span>`
+                    : '';
+
+                // Las etiquetas heredadas traen un `margin-left` de cuando iban
                 // detrás de la de frecuencia; sin ella, la primera quedaría
                 // sangrada respecto del título. El hueco entre ellas ya lo pone
                 // el `gap` de la fila.
-                const metaHtml = [badgeTiempoHtml, badgeOmisionesHtml].join('')
-                    .replace(/margin-left:\s*\d+px;\s*/g, '').trim();
+                const metaHtml = [
+                    nuncaContestada ? '' : badgeTiempoHtml,
+                    badgeOmisionesHtml,
+                    badgeUltimaHtml
+                ].join('').replace(/margin-left:\s*\d+px;\s*/g, '').trim();
 
                 // **La primera página del material, de portada de la tarjeta.**
                 // «Incidente» no dice cuál: el material sí, y es además lo que
