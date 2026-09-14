@@ -3804,6 +3804,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Las otras cinco tarjetas conservan su chapa y su frase: ahí no nombran el
   tipo sino lo que pasa —«Falta Contestar», «Pendiente de tu Jefe», «Mal
   Revisada»—, y quitarlas dejaría el pendiente sin decir por qué está ahí.
+
+  **Y la tarjeta de una encuesta propia no dice a quién va dirigida.** Debajo
+  de las etiquetas llevaba un recuadro azul a todo lo ancho con «Asignada a tu
+  puesto» —o «Correspondiente a: Septiembre», según la frecuencia— y debajo
+  «Nunca contestada» o «Última vez: …». Eso es un pendiente **de quien lo está
+  mirando**: ya sabe que le toca, que es justamente por lo que lo tiene
+  delante, y el segundo renglón era la etiqueta roja de encima dicha otra vez
+  —«Nunca contestada» en los dos sitios—. Con el recuadro se fueron
+  `textoPeriodo` y `textoUltima`, que ahí no los lee nadie más.
+
+  **Con él se fue la etiqueta de la frecuencia**, que era además la primera de
+  la fila: es de la encuesta y no de lo que hay que hacer con ella —se lee en
+  su hoja, en el subtítulo del encabezado—, y en una columna de 233px se
+  llevaba el sitio de delante de la que sí urge. La tarjeta queda entonces con
+  el título, las etiquetas de estado y el botón; con la portada, **61px menos**
+  (346 → 285 en un iPhone de 375).
+
+  **Las dos cosas se quedan en la tarjeta del equipo**, que es lo que las
+  separa: `team_missing_survey` y `team_missing_eval` hablan de un tercero y
+  son desde donde se le recuerda un pendiente a un colaborador, así que ahí
+  «Última vez» y la frecuencia son justo lo que hay que decirle.
+
+  Dos cosas que hay que mantener:
+
+  - **La fila de etiquetas no se dibuja vacía** (`metaHtml`). La frecuencia
+    estaba siempre, así que ese `<div>` nunca se quedaba sin nada dentro; sin
+    ella, una encuesta relanzada —que no lleva etiqueta de tiempo ni de
+    racha— dejaba su margen debajo del título sin decir nada.
+  - **Y a la primera etiqueta se le quita su `margin-left`**, que lo traía de
+    cuando iba detrás de la frecuencia: sin quitarlo queda sangrada respecto
+    del título. El hueco entre etiquetas lo pone el `gap` de la fila.
 - **Las estadísticas tienen dos desgloses y dos orígenes.** Por
   departamentos, los conteos vienen del reporte `obtener_estadisticas_empleados`,
   que suma todos los registros del filtro en la base. Por registro, en cambio,

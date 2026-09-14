@@ -1160,34 +1160,26 @@ if (item.virtual_type === 'waiting_boss') {
             if (item.virtual_type === 'survey') {
                             const safeTitle = (item.title || "Evaluación").replace(/'/g, "&apos;").replace(/"/g, "&quot;");
                 
-                let textoPeriodo = "Asignada a tu puesto"; 
-                
-                if (item.original_data && item.original_data.frequency) {
-                    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-                    const fechaActual = new Date();
-                    const mesActual = meses[fechaActual.getMonth()];
-                    const freq = item.original_data.frequency;
-                    
-                    if (freq === 'monthly') textoPeriodo = `Correspondiente a: ${mesActual}`;
-                    else if (freq === 'biweekly') textoPeriodo = `Quincena actual (${fechaActual.getDate() <= 15 ? '1ra' : '2da'} de ${mesActual})`;
-                    else if (freq === 'quarterly') textoPeriodo = `Trimestre actual (Q${Math.floor(fechaActual.getMonth() / 3) + 1})`;
-                    else if (freq === 'semiannual') textoPeriodo = `Semestre actual (S${Math.floor(fechaActual.getMonth() / 6) + 1})`;
-                    else if (freq === 'yearly') textoPeriodo = `Correspondiente al año ${fechaActual.getFullYear()}`;
-                    else if (freq === 'weekly') textoPeriodo = `Correspondiente a esta semana`;
-                }
-
-                let textoUltima = "Nunca contestada";
-                if (item.vencimiento && item.vencimiento.ultimaFecha) {
-                    const fechaUltima = new Date(item.vencimiento.ultimaFecha);
-                    const d = String(fechaUltima.getDate()).padStart(2, '0');
-                    const m = String(fechaUltima.getMonth() + 1).padStart(2, '0');
-                    const y = fechaUltima.getFullYear();
-                    textoUltima = `Última vez: ${d}/${m}/${y}`;
-                }
-
-                // Cómo se llama cada frecuencia lo dice `1-config.js`.
-                const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
-                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">${freqText}</span>`;
+                // **Aquí no se dice a quién va dirigida, ni cuándo fue la
+                // última vez, ni con qué frecuencia.** Este es el pendiente de
+                // quien mira: ya sabe que le toca a él —por eso lo tiene
+                // delante— y «Asignada a tu puesto» encima de «Nunca
+                // contestada» era un recuadro azul a todo lo ancho para repetir
+                // en dos renglones lo que la etiqueta roja de al lado ya dice
+                // en uno. Eso sí hace falta en la tarjeta del equipo, que habla
+                // de un tercero y es desde donde se le recuerda un pendiente a
+                // un colaborador: ahí se quedan las dos cosas.
+                //
+                // La frecuencia se fue por lo mismo: es de la encuesta y no de
+                // lo que hay que hacer con ella, se lee en su hoja, y en una
+                // columna de 233px se llevaba el primer sitio de la fila de
+                // etiquetas —justo delante de la que sí urge—.
+                // Las dos etiquetas traen un `margin-left` de cuando iban
+                // detrás de la de frecuencia; sin ella, la primera quedaría
+                // sangrada respecto del título. El hueco entre ellas ya lo pone
+                // el `gap` de la fila.
+                const metaHtml = [badgeTiempoHtml, badgeOmisionesHtml].join('')
+                    .replace(/margin-left:\s*\d+px;\s*/g, '').trim();
 
                 // **La primera página del material, de portada de la tarjeta.**
                 // «Incidente» no dice cuál: el material sí, y es además lo que
@@ -1218,21 +1210,7 @@ if (item.virtual_type === 'waiting_boss') {
                         <div class="card-info" onclick="window.responderDirecto('${item.id}', '${safeTitle}')" style="cursor:pointer; flex:1;">
                             <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
                             
-                            <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:8px; margin-top:0;">
-                                ${badgeFreqHtml}
-                                ${badgeTiempoHtml}
-                                ${badgeOmisionesHtml}
-                            </div>
-                            
-                            ${bloqueEstadoHtml ? '' : `
-                            <div style="background:#eff6ff; border:1px solid #dbeafe; border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
-                                <div style="font-size:0.85rem; color:#1e40af; font-weight:700;">
-                                    ${textoPeriodo}
-                                </div>
-                                <div style="font-size:0.75rem; color:#1e3a8a; display:flex; align-items:center; gap:4px;">
-                                    <span style="font-weight:600;">${textoUltima}</span>
-                                </div>
-                            </div>`}
+                            ${metaHtml ? `<div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:0; margin-top:0;">${metaHtml}</div>` : ''}
                         </div>
                         ${bloqueEstadoHtml}
                         <div class="card-actions" style="align-self: center;">
