@@ -5951,11 +5951,19 @@ html.fondo-anclado body {
    pregunta más. Lo que se pide escribir es el primer nombre y no la firma
    oficial: una rúbrica hecha con el dedo no vale como la del documento de
    identidad y un nombre a mano sí se lee. */
+/* **Una sola caja, que es el lienzo.** Esto fue un recuadro punteado con su
+   relleno alrededor de otro recuadro —el del lienzo—, dentro a su vez de la
+   tarjeta blanca de la pregunta: tres marcos anidados para un control que es
+   justo el que más sitio necesita, porque se escribe con el dedo. El punteado
+   se lo quedó el lienzo, que es donde dice lo que tenía que decir —«escribe
+   aquí»—, y con los 10px de relleno que había a cada lado el renglón para
+   firmar gana 20px de ancho y, por su proporción, otros 8 de alto.
+
+   El envoltorio se queda porque de él cuelga `esta-firmada`, que es lo que
+   pintan `marcarFirmaHecha` y `limpiarFirmaPregunta`; lo que ya no tiene es
+   caja propia. */
 .firma-pregunta {
-    border: 1px dashed #cbd5e1;
-    border-radius: 12px;
-    background: #f8fafc;
-    padding: 10px;
+    display: block;
 }
 
 /* `touch-action: none` es lo que deja dibujar: sin él el dedo desplaza la hoja
@@ -5971,8 +5979,8 @@ html.fondo-anclado body {
     height: auto;
     aspect-ratio: 5 / 2;
     background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
     touch-action: none;
     cursor: crosshair;
 }
@@ -5991,11 +5999,12 @@ html.fondo-anclado body {
     min-width: 0;
 }
 
-/* Firmada: el recuadro lo dice sin gastar otro renglón. */
-.firma-pregunta.esta-firmada {
+/* Firmada: el recuadro lo dice sin gastar otro renglón. Ahora el recuadro es el
+   lienzo, así que el punteado pasa a línea continua y se tiñe ahí —el fondo se
+   queda blanco, que es sobre lo que está escrito el nombre—. */
+.firma-pregunta.esta-firmada .firma-lienzo {
     border-style: solid;
     border-color: #a78bfa;
-    background: #f5f3ff;
 }
 
 .firma-pregunta.esta-firmada .firma-ayuda {

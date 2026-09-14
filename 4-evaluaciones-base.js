@@ -1455,6 +1455,11 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             // dibujado no depende del ancho de la pantalla ni se pierde al girar
             // el teléfono. Los oyentes los engancha `montarFirmasDePreguntas`
             // cuando las tarjetas ya están en el documento.
+            //
+            // **El envoltorio no dibuja ninguna caja**: la única es el lienzo.
+            // Está aquí porque de él cuelga la clase `esta-firmada` y porque
+            // agrupa lienzo y pie; lo que se ve es el punteado del lienzo, que
+            // así se lleva todo el ancho que le deja la tarjeta de la pregunta.
             inputHtml = `
                 <div class="firma-pregunta" id="firma-pregunta-${q.id}">
                     <canvas class="firma-lienzo" id="firma-lienzo-${q.id}" data-id="${q.id}"

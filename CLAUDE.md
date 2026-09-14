@@ -1513,6 +1513,21 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     al girar el teléfono, y las coordenadas del dedo se llevan a esas unidades
     con una regla de tres contra el recuadro medido: sin ella la firma sale
     desplazada en cuanto la pantalla no mide 600px.
+  - **Y la caja es una sola, la del lienzo.** Fue un recuadro punteado con su
+    relleno alrededor de otro recuadro —el del lienzo— dentro de la tarjeta
+    blanca de la pregunta: tres marcos anidados encima del control que más
+    sitio necesita, porque se escribe con el dedo y no se teclea. El punteado
+    se lo quedó `.firma-lienzo`, que es donde dice lo que tenía que decir
+    —«escribe aquí»—, y `.firma-pregunta` se queda sin caja: en un iPhone de
+    375 el renglón para firmar pasa de 255×103 a **277×112**, un 18% más de
+    superficie. El envoltorio no se puede quitar aunque ya no se vea: de él
+    cuelga `esta-firmada`, que es lo que ponen y quitan `marcarFirmaHecha` y
+    `limpiarFirmaPregunta`, y lo que agrupa el lienzo con su pie.
+
+    **Firmada se dice en el borde del lienzo**, que pasa de punteado a línea
+    continua morada, y **el fondo se queda blanco**: teñirlo de morado
+    ensuciaría el nombre que se acaba de escribir encima, que es lo que hay que
+    ver. El renglón de ayuda lo acompaña diciendo «Firmado».
   - **`touch-action: none` y `preventDefault` van juntos.** Sin ellos el dedo
     desplaza la hoja en lugar de dibujar y el trazo no llega a empezar; los
     oyentes de toque son no pasivos por lo mismo que el gesto de las hojas.
