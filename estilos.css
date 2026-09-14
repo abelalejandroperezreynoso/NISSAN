@@ -5944,6 +5944,65 @@ html.fondo-anclado body {
 
 .pendientes-cuenta[hidden] { display: none; }
 
+/* --- LA PORTADA DE UN PENDIENTE DE ENCUESTA ---------------------------------
+   La primera página del material, encima de la tarjeta. «Incidente» no dice
+   cuál; el material sí, y es además lo que hay que mirar antes de contestarla.
+   Es la misma idea que la portada de la hoja de la encuesta y lleva al mismo
+   sitio: tocarla abre el visor con todas sus páginas, no el cuestionario.
+
+   Va **a sangre**: la tarjeta tiene `overflow:hidden` y sus esquinas de 16px, así
+   que la imagen se recorta sola arriba. El `margin-right` negativo cancela el
+   `padding-right: 5px` de `.incident-card`, o quedaría una franja blanca a la
+   derecha de la imagen y sólo de ella. */
+/* El ancho va con `calc` y no con `100%`: un `<button>` no se estira solo por
+   ser `display:block` —se ajusta a su contenido—, y un `100%` se mediría contra
+   el hueco que deja el `padding-right: 5px` de la tarjeta, dejando esa franja
+   blanca a la derecha de la imagen y sólo de ella. Los 5px de más, con el
+   margen negativo que los recoge, son justo lo que la lleva hasta el borde. */
+.pendiente-portada {
+    display: block;
+    position: relative;
+    box-sizing: border-box;
+    width: calc(100% + 5px);
+    margin: 0 -5px 0 0;
+    padding: 0;
+    border: none;
+    background: #e2e8f0;
+    cursor: pointer;
+}
+
+/* 16:9 por lo mismo que en la hoja: casi todo lo que se sube aquí es una
+   presentación, así que una diapositiva entra sin que se le recorten los lados.
+   Con tope de alto, que aquí hay una tarjeta por pendiente y en un teléfono un
+   16:9 son 182px: catorce pendientes serían una lista de dos metros. Recortada,
+   lo que se pierde es el pie de la página —se ancla arriba, que es donde está
+   el título, que es lo que la hace reconocible—. */
+.pendiente-portada img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 160px;
+    object-fit: cover;
+    object-position: center top;
+}
+
+/* Cuántas páginas hay detrás, que es lo que dice que la portada se puede abrir
+   y que hay más. Sobre un disco oscuro porque debajo puede haber cualquier
+   cosa: una diapositiva clara, una foto oscura o el gris del hueco. */
+.pendiente-portada-paginas {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    background: rgba(15, 23, 42, 0.72);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
 /* =========================================
    FIRMAR DENTRO DE UNA ENCUESTA
    =========================================

@@ -892,6 +892,24 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
         items.sort((a,b) => new Date(b.date) - new Date(a.date));
 
+        // La portada del material de cada encuesta pendiente. Una sola consulta
+        // para todas, y **sólo de las que hay delante**: el panel puede traer
+        // una encuesta o catorce, y ninguna otra tarjeta la necesita.
+        //
+        // Va aquí, con la lista ya decidida y antes de dibujar, para no pedir la
+        // portada de encuestas que se filtraron por el camino. Si falla, vuelve
+        // `{}` y las tarjetas se dibujan como siempre: una portada es lo que
+        // ayuda a reconocer la encuesta, no lo que la hace funcionar.
+        const idsConPortada = items
+            .filter(i => i.virtual_type === 'survey')
+            .map(i => i.id);
+        const portadas = window.portadasDeEncuestas
+            ? await window.portadasDeEncuestas(idsConPortada).catch(() => ({}))
+            : {};
+        // Se deja puesto para que el toque de una portada sepa qué páginas
+        // abrir sin volver a consultar y sin meter catorce urls en un atributo.
+        window.portadasDePendientes = portadas;
+
         const htmlPromises = items.map(async (item) => {
             
            // 🔥 SE CALCULA Y GENERA LA ETIQUETA DE TIEMPO TRANSCURRIDO 🔥
@@ -1171,8 +1189,31 @@ if (item.virtual_type === 'waiting_boss') {
                 const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
                 const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">${freqText}</span>`;
 
+                // **La primera página del material, de portada de la tarjeta.**
+                // «Incidente» no dice cuál: el material sí, y es además lo que
+                // hay que mirar antes de contestarla. Es la misma idea que la
+                // portada de la hoja de la encuesta, y **lleva al mismo sitio**:
+                // tocarla abre el visor con todas sus páginas, no el
+                // cuestionario. Por eso es un botón suyo con `stopPropagation`,
+                // que el resto de la tarjeta sí abre la encuesta.
+                //
+                // Sin material convertido no se dibuja nada: una caja de
+                // proporción fija vacía se llevaría 160px de la tarjeta para no
+                // decir nada.
+                const portada = portadas[String(item.id)];
+                const portadaHtml = portada ? `
+                    <button type="button" class="pendiente-portada"
+                            onclick="event.stopPropagation(); window.abrirVisorImagenes && window.abrirVisorImagenes(window.paginasDePortadaDePendiente('${item.id}'))"
+                            title="Ver el material de esta encuesta"
+                            aria-label="Ver el material de esta encuesta">
+                        <img src="${window.sanitizeForHTML(portada.url)}" alt=""
+                             onerror="window.portadaDePendienteRota(this)">
+                        ${portada.cuantas > 1 ? `<span class="pendiente-portada-paginas">${portada.cuantas} páginas</span>` : ''}
+                    </button>` : '';
+
                 return `
                 <div class="incident-card" style="border-left: 5px solid #2563eb;">
+                    ${portadaHtml}
                     <div class="card-header" style="align-items: flex-start;">
                         <div class="card-info" onclick="window.responderDirecto('${item.id}', '${safeTitle}')" style="cursor:pointer; flex:1;">
                             <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
@@ -1285,6 +1326,25 @@ if (item.virtual_type === 'waiting_boss') {
 // El círculo del encabezado. En cero no se dibuja: ahí lo que se lee es el
 // «Todo al día» del cuerpo, y un 0 dentro de un globo de color se lee como un
 // pendiente más.
+// Las páginas del material de una encuesta pendiente, para el visor. Salen de
+// lo que dejó puesto `cargarVistaPendientes`: meterlas en el `onclick` sería un
+// atributo con catorce urls dentro, y volver a consultarlas, una vuelta a la
+// base por un toque.
+window.portadasDePendientes = {};
+
+window.paginasDePortadaDePendiente = (evaluationId) => {
+    const p = window.portadasDePendientes[String(evaluationId)];
+    return (p && p.paginas) ? p.paginas : [];
+};
+
+// Si la imagen no carga —sin red, o borrada desde Storage— se quita la portada
+// entera en vez de dejar el hueco roto: la tarjeta vuelve a ser la de siempre,
+// que sigue diciendo todo lo que tiene que decir.
+window.portadaDePendienteRota = (img) => {
+    const caja = img && img.closest('.pendiente-portada');
+    if (caja) caja.remove();
+};
+
 window.pintarCuentaPendientes = (cuantos) => {
     const globo = document.getElementById('badge-total');
     if (!globo) return;

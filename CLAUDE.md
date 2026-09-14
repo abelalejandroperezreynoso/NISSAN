@@ -3693,6 +3693,64 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Los emojis que quedan en `7-pendientes.js` no son de esta hoja: son de la de
   **detalle de un registro** (`abrirDetalleIndependiente`), que es otra pantalla.
 
+- **Un pendiente de encuesta enseña la primera página de su material.** «Incidente»
+  no dice cuál: el material sí, y es además lo que hay que mirar **antes** de
+  contestarla. Es la misma idea que la portada de la hoja de una encuesta,
+  llevada a la tarjeta del panel de pendientes.
+
+  ```js
+  await window.portadasDeEncuestas(ids)   // { id: { url, cuantas, paginas } }
+  window.portadasDePendientes             // lo que dejó puesto la carga
+  window.paginasDePortadaDePendiente(id)
+  window.portadaDePendienteRota(img)
+  ```
+
+  **Y lleva al mismo sitio que en la hoja**: tocarla abre el visor con **todas**
+  las páginas, no el cuestionario. Por eso es un botón suyo con
+  `stopPropagation` —el resto de la tarjeta sí abre la encuesta— y por eso la
+  consulta se guarda las urls enteras y no sólo la primera.
+
+  Cinco cosas que hay que mantener:
+
+  - **Una sola consulta, y sólo de lo que hay delante.** `portadasDeEncuestas`
+    va con un `in` sobre las encuestas que quedaron en la lista, y se lanza
+    **después** de decidirla: pedir la portada de encuestas que se filtraron por
+    el camino es cobrar una consulta por nada. La hoja de una encuesta sigue con
+    su `cargarMaterialesEncuesta`, que se trae el material entero porque lo va a
+    enseñar todo; aquí se traen catorce urls y punto.
+  - **Las páginas enteras vienen de balde.** La consulta ya devuelve todas las
+    filas de esas encuestas, así que guardarlas es lo que deja abrir el visor
+    con el documento completo sin volver a preguntar. Van en
+    `window.portadasDePendientes` y no en el `onclick`: ahí serían catorce urls
+    dentro de un atributo.
+  - **Ante cualquier problema, `{}`.** Sin la tabla, sin red o sin material, las
+    tarjetas se dibujan como siempre: una portada ayuda a reconocer la encuesta,
+    no la hace funcionar. Lo mismo si la imagen no carga —`portadaDePendienteRota`
+    quita la portada entera en vez de dejar el hueco roto—.
+  - **Sólo los documentos convertidos tienen portada.** Lo subido antes de que
+    el material fueran imágenes son archivos sueltos, sin carpeta y sin página
+    que enseñar: ésos no dibujan nada, que una caja de proporción fija vacía se
+    llevaría 160px de la tarjeta para no decir nada.
+  - **Va a sangre, y el ancho se calcula.** `.incident-card` tiene
+    `overflow:hidden` y sus esquinas de 16px, así que la imagen se recorta sola
+    arriba; lo que no es evidente es el ancho: un `<button>` **no se estira por
+    ser `display:block`** —se ajusta a su contenido— y un `width:100%` se mide
+    contra el hueco que deja el `padding-right: 5px` de la tarjeta. Sin
+    `calc(100% + 5px)` con su margen negativo quedaba una franja blanca de 43px
+    a la derecha de la imagen y sólo de ella.
+
+  **El alto va topado a 160px** sobre una proporción de 16:9. La proporción es
+  la de la hoja y por lo mismo —casi todo lo que se sube aquí es una
+  presentación—, pero aquí hay una tarjeta por pendiente y en un teléfono un
+  16:9 son 182px: catorce pendientes serían una lista de dos metros. Lo que se
+  recorta es el pie de la página, que por eso se ancla **arriba**: el título es
+  lo que la hace reconocible.
+
+  La chapa de **«N páginas»** sale sólo si hay más de una, y es lo que dice que
+  la portada se abre y que detrás hay más. Va sobre un disco oscuro porque
+  debajo puede haber cualquier cosa. Las clases están en `estilos.css`
+  (`.pendiente-portada`, `.pendiente-portada-paginas`).
+
 - **La tarjeta de un pendiente se parte en filas en el teléfono.** El
   `.card-header` reparte el ancho en tres columnas —el icono, el texto y el
   botón—, y en un iPhone 12 mini la tarjeta mide 329px: descontando los 60 del

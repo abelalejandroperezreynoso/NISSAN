@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-14-12';
+window.VERSION_APP = '2026-09-14-13';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1331,6 +1331,67 @@ window.numeroDePagina = (archivo) => {
     const ultimo = String(archivo || '').split('/').pop() || '';
     const n = parseInt(ultimo, 10);
     return isNaN(n) ? 0 : n;
+};
+
+// --- LA PORTADA DE VARIAS ENCUESTAS DE UNA VEZ ---
+//
+// La hoja de una encuesta se trae su material entero (`cargarMaterialesEncuesta`)
+// porque lo va a enseñar todo. El panel de pendientes necesita otra cosa: la
+// **primera página** de cada una de las encuestas que tiene delante, para
+// enseñarla de portada en su tarjeta. Traer el material completo de catorce
+// encuestas para quedarse con catorce urls es cobrarle a todo el mundo lo que
+// no va a mirar.
+//
+// Devuelve `{ idEncuesta: { url, cuantas, paginas } }` —la portada, cuántas
+// páginas hay y las urls de todas—, y **un objeto vacío ante cualquier
+// problema**: sin tabla, sin red o sin material, la tarjeta se dibuja como
+// siempre y no se pierde nada.
+//
+// Las páginas enteras vienen de balde: la consulta ya trae todas las filas de
+// esas encuestas, así que guardarlas es lo que deja abrir el visor con el
+// documento completo sin volver a preguntar.
+window.portadasDeEncuestas = async (ids) => {
+    const limpios = Array.from(new Set((ids || []).map(String).filter(Boolean)));
+    if (limpios.length === 0) return {};
+
+    const { data, error } = await sb.from('materiales_encuesta')
+        .select('evaluation_id, archivo, url, subido_en, id')
+        .in('evaluation_id', limpios)
+        .order('subido_en', { ascending: true });
+    if (error || !Array.isArray(data)) return {};
+
+    // Se agrupa igual que en la hoja: las páginas de una misma carpeta son un
+    // documento, y sólo los convertidos tienen portada —lo subido antes de que
+    // el material fueran imágenes son archivos sueltos, sin carpeta y sin
+    // página que enseñar—.
+    const porEncuesta = {};
+    data.forEach(m => {
+        const carpeta = window.documentoDeRuta(m.archivo);
+        if (!carpeta || !m.url) return;               // archivo suelto: no hay portada
+        const clave = String(m.evaluation_id);
+        if (!porEncuesta[clave]) porEncuesta[clave] = new Map();
+        const docs = porEncuesta[clave];
+        if (!docs.has(carpeta)) docs.set(carpeta, []);
+        docs.get(carpeta).push(m);
+    });
+
+    const portadas = {};
+    Object.keys(porEncuesta).forEach(clave => {
+        // Los documentos van en el orden en que se subieron —que es el de las
+        // filas— y dentro cada uno por su número de página, que es lo que
+        // ordena el nombre del archivo. La portada es la primera de todas.
+        const todas = [];
+        porEncuesta[clave].forEach(paginasDelDoc => {
+            paginasDelDoc.slice()
+                .sort((a, b) => (window.numeroDePagina(a.archivo) - window.numeroDePagina(b.archivo))
+                                || (a.id - b.id))
+                .forEach(m => todas.push(m.url));
+        });
+        if (todas.length > 0) {
+            portadas[clave] = { url: todas[0], cuantas: todas.length, paginas: todas };
+        }
+    });
+    return portadas;
 };
 
 window.subirPaginaMaterial = async (blob, ruta) => {
