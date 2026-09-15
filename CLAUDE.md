@@ -2506,7 +2506,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   por WhatsApp y no quedaba pegado a la encuesta, así que quien la abría un mes
   después no tenía de dónde sacarlo.
 
-  **Se agrega y se quita desde la hoja de editar la encuesta**, en su sección
+  **Se agrega y se quita desde la hoja de escribir la encuesta**, en su sección
   «Material» (`#grupo-material`, el hueco `#material-edicion`); en la hoja de la
   encuesta **sólo se lee**. Subir un documento es escribir la encuesta —como sus
   preguntas o a quién va dirigida—, no contestarla, y en la hoja de la encuesta
@@ -2514,16 +2514,59 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   enseñarle a quien sólo lee la misma portada que ya tiene arriba.
 
   ```js
-  window.materialEnEdicion              // { id } mientras la hoja de edición está a la vista
-  window.prepararMaterialEnEdicion(id)  // la llena; con null, la deja vacía y diciendo por qué
+  window.materialEnEdicion                        // { id } mientras la hoja está a la vista; id null = todavía sin fila
+  window.prepararMaterialEnEdicion(id, permitirPendiente)
   ```
 
-  **Sólo sale al editar una que ya existe.** Un archivo cuelga de su encuesta
-  —la carpeta del bucket lleva su id y cada fila la nombra—, así que sin fila no
-  hay a qué colgarlo: al crear y al copiar la sección se queda vacía y dice que
-  hay que publicarla primero. Esconderla entera dejaría a quien la busca sin
-  saber que existe. Una copia tampoco hereda el material de la original, igual
-  que no hereda su fecha de vigencia y por lo mismo: es la vuelta de este mes.
+  **Y se agrega también al crear una, aunque todavía no haya fila.** Un archivo
+  cuelga de su encuesta —la carpeta del bucket lleva su id y cada fila la
+  nombra—, así que hasta que no se publica no hay a qué colgarlo; durante un
+  tiempo eso fue la sección vacía diciendo «publica la encuesta y vuelve a
+  abrirla para agregarle material», o sea dos viajes por el mismo documento y
+  acordarse del segundo. Pero **el material ya se convertía antes de subirlo**:
+  las páginas esperan en `materialPorGuardar` hasta que se pulsa «Guardar», así
+  que lo único que faltaba era esperar un poco más —hasta el `insert`— y subirlas
+  con el id recién nacido. Se convierte mientras se escribe la encuesta y se sube
+  al publicarla, en el mismo gesto.
+
+  La marca de que todavía no hay fila es **`materialEnEdicion.id` en null**: la
+  sección se dibuja igual y la puerta de «Agregar material» funciona. Lo que
+  cambia son tres cosas, y las tres tienen que ir juntas:
+
+  - **El pie de lo convertido no lleva botón de guardar**, y no es que esté
+    apagado: no hay a qué colgar el archivo. «Descartar» se queda, que
+    arrepentirse se puede en cualquier momento.
+  - **Cuándo se sube lo dice el renglón de debajo del recuadro**
+    (`#aviso-material-sin-guardar`, «Se sube al publicar la encuesta.»), que en
+    ese estado está puesto desde antes de agregar nada —que es cuando responde a
+    la pregunta— y por eso no se repite dentro de la previa: serían la misma
+    frase dos veces en dos líneas.
+  - **Y `guardarMaterialPendiente` se planta sin `evalId`**, que es la guarda de
+    quien llame desde fuera: el botón ni siquiera se dibuja.
+
+  La subida va en `publicarEncuestaDeLaHoja`, **después de las preguntas y antes
+  del aviso de guardado**, que es donde la encuesta ya existe entera. Si falla,
+  la encuesta se queda igual de publicada: lo que se pierde es el material, así
+  que se dice con esas palabras —«Vuelve a abrirla para agregárselo»— en vez de
+  dar el guardado por bueno, y se descarta después de avisar, o sus miniaturas se
+  quedarían en la hoja siguiente.
+
+  **Una copia entra por aquí también** —copiar es crear—, así que puede llevar
+  material propio desde el principio; lo que sigue sin heredar es el de la
+  original, igual que su fecha de vigencia y por lo mismo: es la vuelta de este
+  mes.
+
+  El **tercer estado** es la hoja restringida del revisor, que no enseña esta
+  sección: ahí no se admite nada pendiente (`permitirPendiente` en false), o se
+  quedaría un documento a medio convertir dentro de un grupo escondido, sin nadie
+  que lo pudiera guardar ni descartar.
+
+  Y **lo convertido y todavía sin subir cuenta en el renglón del grupo** —«1
+  documento · 1 sin subir»—: al crear una encuesta eso es todo lo que hay, así
+  que sin contarlo el renglón diría «Ninguno» encima de una sección con las
+  miniaturas a la vista. Lo repinta `pintarMaterialEncuesta`, que es por donde
+  pasan agregar, descartar y guardar, así que es el único sitio donde hay que
+  acordarse.
 
   Ahí el recuadro va **desnudo** (`opciones.desnudo`, la clase
   `.material-tarjeta--desnuda`): sin su tarjeta blanca ni su rótulo «Material»,

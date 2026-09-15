@@ -967,6 +967,16 @@ window.bloqueDeConversion = () => {
         ? `<div class="material-nota material-nota--ojo">Una presentación se convierte de forma aproximada: las fuentes y algunas tablas o gráficos pueden cambiar. Si algo no se ve bien, expórtala a PDF desde PowerPoint y súbela así.</div>`
         : '';
 
+    // **Sin fila todavía no hay botón de guardar**, y no es que esté apagado:
+    // no hay a qué colgar el archivo hasta que la encuesta exista. Cuándo se
+    // sube lo dice el renglón de debajo del recuadro, que en ese estado está
+    // puesto y se lee desde antes de agregar nada; escribirlo también aquí
+    // sería la misma frase dos veces en dos líneas. «Descartar» se queda, que
+    // arrepentirse se puede en cualquier momento.
+    const guardar = p.evalId
+        ? `<button type="button" class="material-guardar" id="btn-guardar-material" onclick="window.guardarMaterialPendiente()">Guardar ${cuantas}</button>`
+        : '';
+
     return `
         <div class="material-previa">
             <div class="material-previa-titulo">${window.sanitizeForHTML(p.nombre)}</div>
@@ -975,7 +985,7 @@ window.bloqueDeConversion = () => {
             ${recorte}${aviso}
             <div class="material-acciones">
                 <button type="button" class="material-descartar" onclick="window.descartarMaterialPendiente()">Descartar</button>
-                <button type="button" class="material-guardar" id="btn-guardar-material" onclick="window.guardarMaterialPendiente()">Guardar ${cuantas}</button>
+                ${guardar}
             </div>
         </div>`;
 };
@@ -1085,6 +1095,11 @@ window.descartarMaterialPendiente = () => {
 window.guardarMaterialPendiente = async () => {
     const p = window.materialPorGuardar;
     if (!p || p.convirtiendo || p.paginas.length === 0) return;
+    // Sin fila no hay carpeta en el bucket ni `evaluation_id` que escribir: lo
+    // convertido en una encuesta que todavía no existe lo sube el guardado de
+    // la hoja en cuanto el `insert` devuelve su id. El botón ni siquiera se
+    // dibuja, así que esto es la guarda de quien llame desde fuera.
+    if (!p.evalId) return;
 
     const user = JSON.parse(localStorage.getItem("usuarioLogueado") || 'null');
     const btn = document.getElementById('btn-guardar-material');
@@ -1119,6 +1134,11 @@ window.guardarMaterialPendiente = async () => {
         const { data, error } = await sb.from('materiales_encuesta').insert(fichas).select();
         if (error) throw error;
         if (!data || data.length === 0) {
+            // Se suelta el pestillo antes de volver, o `descartarMaterialPendiente`
+            // se negaría a limpiar y el recuadro se quedaría diciendo
+            // «Guardando…» para siempre, con sus dos botones apagados.
+            p.guardando = false;
+            window.pintarMaterialEncuesta();
             alert("Las páginas se subieron, pero la base no aceptó sus fichas: no se guardó ninguna fila. Pide a un administrador que revise los permisos de `materiales_encuesta`.");
             return;
         }
@@ -1194,8 +1214,14 @@ window.pintarMaterialEncuesta = () => {
     }
     const edicion = document.getElementById('material-edicion');
     if (edicion && window.materialEnEdicion) {
+        // Sin id la puerta sigue abierta: lo que se elija se convierte igual y
+        // espera en `materialPorGuardar` hasta que la encuesta se publique.
         edicion.innerHTML = window.bloqueDeMaterial(
-            window.materialEnEdicion.id, true, { desnudo: true });
+            window.materialEnEdicion.id || '', true, { desnudo: true });
+        // Y el renglón del grupo lo dice sin desplegarlo: agregar, descartar y
+        // guardar pasan todos por aquí, así que es el único sitio donde hay que
+        // acordarse.
+        if (window.pintarResumenGrupos) window.pintarResumenGrupos();
     }
 };
 
@@ -4384,12 +4410,20 @@ window.RESUMEN_DE_GRUPO = {
     // Sale de lo que hay cargado en la hoja, no de otra consulta: lo llena
     // `prepararMaterialEnEdicion` al abrirla y lo rehacen el guardado y el
     // quitado, que es justo cuando cambia.
+    //
+    // **Lo que está convertido y todavía sin subir cuenta igual**, y se dice:
+    // al crear una encuesta eso es todo lo que hay —no existe la fila a la que
+    // colgarlo—, así que sin contarlo el renglón diría «Ninguno» encima de una
+    // sección con las miniaturas a la vista.
     material: () => {
-        if (!window.materialEnEdicion) return 'Al publicarla';
-        const docs = window.documentosDeMaterial(window.materialesEncuesta);
+        if (!window.materialEnEdicion) return '';
         if (window.materialesEncuesta === null) return '';
-        return docs.length === 0
-            ? 'Ninguno' : `${docs.length} documento${docs.length === 1 ? '' : 's'}`;
+        const docs = window.documentosDeMaterial(window.materialesEncuesta);
+        const sinSubir = window.materialPorGuardar ? 1 : 0;
+        const total = docs.length + sinSubir;
+        if (total === 0) return 'Ninguno';
+        const texto = `${total} documento${total === 1 ? '' : 's'}`;
+        return sinSubir ? `${texto} · 1 sin subir` : texto;
     }
 };
 
@@ -4448,26 +4482,55 @@ window.plegarGruposEval = (editando) => {
 // ella. En la hoja de la encuesta se quedan la portada, que es por donde se
 // lee, y los archivos sueltos, que no entran en el visor.
 //
-// **Sólo sale al editar una que ya existe.** Un archivo cuelga de su encuesta
-// —la carpeta del bucket lleva su id y cada fila la nombra—, así que sin fila
-// no hay a qué colgarlo: al crear y al copiar la sección se esconde y dice qué
-// falta. Una copia tampoco hereda el material de la original, igual que no
-// hereda su fecha de vigencia y por lo mismo: es la vuelta de este mes.
+// **Y también al crear una, aunque todavía no haya fila.** Un archivo cuelga de
+// su encuesta —la carpeta del bucket lleva su id y cada fila la nombra—, así que
+// hasta que no se publica no hay a qué colgarlo; durante un tiempo eso fue la
+// sección vacía diciendo «publica la encuesta y vuelve a abrirla», o sea dos
+// viajes por el mismo documento y acordarse del segundo. Pero **el material ya
+// se convertía antes de subirlo**: las páginas esperan en `materialPorGuardar`
+// hasta que se pulsa «Guardar», así que lo único que faltaba era esperar un poco
+// más —hasta el `insert`— y subirlas con el id recién nacido. Se convierte
+// mientras se escribe la encuesta y se sube al publicarla, en el mismo gesto.
+//
+// La marca de que todavía no hay fila es `materialEnEdicion.id` en **null**: la
+// sección se dibuja igual, la puerta de «Agregar material» funciona y lo que
+// cambia es el pie de lo convertido, que en vez del botón de guardar dice que se
+// sube al publicar. Una copia entra por aquí también —es crear—, así que ahora
+// puede llevar material propio desde el principio; lo que sigue sin heredar es
+// el de la original, igual que su fecha de vigencia y por lo mismo.
+//
+// El **tercer estado** es la hoja restringida del revisor, que no enseña esta
+// sección: ahí no se admite nada pendiente (`permitirPendiente` en false), o se
+// quedaría un documento a medio convertir dentro de un grupo escondido.
 window.materialEnEdicion = null;
 
-window.prepararMaterialEnEdicion = async (id) => {
+window.prepararMaterialEnEdicion = async (id, permitirPendiente = true) => {
     const grupo = document.getElementById('grupo-material');
     const hueco = document.getElementById('material-edicion');
     const aviso = document.getElementById('aviso-material-sin-guardar');
 
-    window.materialEnEdicion = id ? { id: String(id) } : null;
+    const pendiente = !id && permitirPendiente;
+    window.materialEnEdicion = id ? { id: String(id) } : (pendiente ? { id: null } : null);
     if (hueco) hueco.innerHTML = '';
-    if (aviso) aviso.style.display = id ? 'none' : 'block';
+    if (aviso) aviso.style.display = pendiente ? 'block' : 'none';
     if (!grupo) return;
 
-    // Sin encuesta todavía la sección se queda, pero vacía y diciendo por qué:
-    // esconderla entera dejaría a quien la busca sin saber que existe.
-    if (!id) { window.pintarResumenGrupos(); return; }
+    if (!id) {
+        // Lo que estuviera convirtiendo es de la hoja anterior —de otra
+        // encuesta, o de otra creación que se abandonó sin publicar—, y aquí no
+        // hay id con el que distinguirlo: se descarta siempre. Es lo mismo que
+        // hace `cargarMaterialesEncuesta` con el suyo, que es por donde pasa
+        // toda encuesta que ya existe.
+        if (window.materialPorGuardar) window.descartarMaterialPendiente();
+        // Sin fila todavía no hay nada subido, pero la lista vacía es lo que
+        // hace que el recuadro se dibuje con su puerta en vez de quedarse en
+        // blanco: `null` significa que no se pudo leer la tabla.
+        window.materialesEncuesta = pendiente ? [] : null;
+        window.hayPortadaEnLaHoja = false;
+        if (pendiente) window.pintarMaterialEncuesta();
+        window.pintarResumenGrupos();
+        return;
+    }
 
     // Aquí no hay portada que evitar repetir: el recuadro de esta hoja los
     // enseña todos, que es su consola.
@@ -5180,8 +5243,9 @@ window.abrirModalCrearEval = async (categoria) => {
     if(modeInput) { modeInput.value = 'self'; modeInput.onchange = window.verificarRestriccionesModo; }
     document.getElementById('questions-container').innerHTML = '';
     window.agregarCampoPregunta();
-    // Todavía no hay encuesta a la que colgarle un archivo: la sección se queda
-    // vacía diciendo que hay que publicarla primero.
+    // Todavía no hay encuesta a la que colgarle un archivo, pero sí se puede ir
+    // convirtiendo: lo que se agregue aquí espera en `materialPorGuardar` y se
+    // sube al publicarla.
     window.prepararMaterialEnEdicion(null);
     window.prepararEncabezadoEval(false);
     window.pintarResumenGrupos();
@@ -5269,12 +5333,16 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     // bloque de range_labels de más abajo la vuelve a abrir si hay etiquetas.
     window.prepararEncabezadoEval(!comoCopia, soloDestinatarios);
 
-    // El material es de la encuesta que ya existe: una copia todavía no es
-    // ninguna fila y el revisor que corrige a quién va dirigida tiene la
-    // sección escondida, así que en los dos casos se limpia. Va sin `await`
-    // —consulta la tabla y repinta su hueco cuando llega— para no retrasar el
-    // resto de la hoja.
-    window.prepararMaterialEnEdicion((!comoCopia && !soloDestinatarios) ? id : null);
+    // El material que ya está subido es de la encuesta que ya existe: una copia
+    // todavía no es ninguna fila, así que entra como creación —puede llevar
+    // material propio desde el principio, sólo que no hereda el de la original—.
+    // El revisor que corrige a quién va dirigida tiene la sección escondida, y
+    // ahí no se admite nada pendiente: un documento a medio convertir dentro de
+    // un grupo que no se ve no lo puede guardar ni descartar nadie. Va sin
+    // `await` —consulta la tabla y repinta su hueco cuando llega— para no
+    // retrasar el resto de la hoja.
+    window.prepararMaterialEnEdicion(
+        (!comoCopia && !soloDestinatarios) ? id : null, !soloDestinatarios);
     // Una copia nace con el nombre marcado: dos encuestas con el mismo título
     // en la misma clasificación no hay quien las distinga en ninguna lista.
     document.getElementById('eval-title-input').value = comoCopia
@@ -6671,6 +6739,25 @@ window.publicarEncuestaDeLaHoja = async () => {
                     await Promise.all(updatePromises);
                 }
                 
+                // El material que se convirtió mientras se escribía la
+                // encuesta se sube **aquí**, con el id recién nacido: hasta este
+                // punto no había carpeta en el bucket ni `evaluation_id` que
+                // escribir. Va después de las preguntas y antes del aviso, que
+                // es donde la encuesta ya existe entera.
+                //
+                // Y si falla, la encuesta se queda igual de publicada: lo que se
+                // pierde es el material, así que se dice con esas palabras en
+                // vez de dar el guardado por bueno. Se descarta después de
+                // avisar, o sus miniaturas se quedarían en la hoja siguiente.
+                if (window.materialPorGuardar && !window.materialPorGuardar.evalId) {
+                    window.materialPorGuardar.evalId = String(eid);
+                    await window.guardarMaterialPendiente();
+                    if (window.materialPorGuardar) {
+                        alert("La encuesta se publicó, pero su material no se pudo subir.\n\nVuelve a abrirla para agregárselo.");
+                        window.descartarMaterialPendiente();
+                    }
+                }
+
                 alert("✅ Guardado correctamente");
                 document.getElementById('modal-crear-eval').style.display='none';
                 window.evalCache = null;
