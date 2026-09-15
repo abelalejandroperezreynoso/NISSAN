@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-15-3">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-15-4">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -408,6 +408,29 @@
                         <span class="grupo-eval-titulo">Datos<span class="grupo-eval-valor" data-resumen="datos"></span></span>
                     </summary>
                 <div id="grupo-datos-cuerpo" class="hoja-grupo">
+                    <!-- El material de apoyo se agrega y se quita aquí, no en la
+                         hoja de la encuesta: es parte de escribirla, como sus
+                         preguntas, y allí se llevaba media pantalla por encima
+                         del pase de lista para enseñarle a quien sólo lee la
+                         misma portada que ya tiene arriba.
+
+                         Y va **encima del título**, que es el orden en que se
+                         lee la encuesta: su primera página es la portada de la
+                         hoja, y debajo el nombre. Tuvo un tiempo su propia
+                         sección plegable, y eso la dejaba a cinco renglones de
+                         distancia de lo demás que se escribe de la encuesta,
+                         con un renglón de resumen para decir «1 documento».
+
+                         Lo llena window.pintarMaterialEncuesta() y lo prepara
+                         window.prepararMaterialEnEdicion(), que también lo deja
+                         agregar al crear una encuesta que todavía no es ninguna
+                         fila: se convierte aquí y se sube al publicarla. -->
+                    <div class="form-group" id="campo-material">
+                        <label>Material</label>
+                        <div id="material-edicion"></div>
+                        <p id="aviso-material-sin-guardar" class="form-ayuda" style="display:none; margin-top:8px;">Se sube al publicar la encuesta.</p>
+                    </div>
+
                     <div class="form-group"><label>Título</label><input type="text" id="eval-title-input" placeholder="Ej. Encuesta de Clima Laboral"></div>
 
                     <div class="form-group">
@@ -630,25 +653,6 @@
                         </label>
                         <p class="form-ayuda" style="margin:10px 0 8px;">Define qué significa cada puntaje:</p>
                         <div id="dynamic-labels-container" style="display:grid; gap:8px;"></div>
-                    </div>
-                </details>
-
-                <!-- El material de apoyo se agrega y se quita aquí, no en la
-                     hoja de la encuesta: es parte de escribirla, como sus
-                     preguntas, y allí se llevaba media pantalla por encima del
-                     pase de lista para enseñarle a quien sólo lee la misma
-                     portada que ya tiene arriba. Lo llena
-                     window.pintarMaterialEncuesta() y lo prepara
-                     window.prepararMaterialEnEdicion(), que también lo deja
-                     agregar al crear una encuesta que todavía no es ninguna
-                     fila: se convierte aquí y se sube al publicarla. -->
-                <details id="grupo-material" class="hoja-plegable grupo-eval">
-                    <summary class="hoja-plegable-resumen">
-                        <span class="grupo-eval-titulo">Material<span class="grupo-eval-valor" data-resumen="material"></span></span>
-                    </summary>
-                    <div id="grupo-material-cuerpo" class="hoja-grupo">
-                        <div id="material-edicion"></div>
-                        <p id="aviso-material-sin-guardar" class="form-ayuda" style="display:none;">Se sube al publicar la encuesta.</p>
                     </div>
                 </details>
 
@@ -1092,22 +1096,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-15-3"></script>
-    <script src="2a-core-nav.js?v=2026-09-15-3"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-15-3"></script>
-    <script src="3-incidentes.js?v=2026-09-15-3"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-15-3"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-15-3"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-15-3"></script>
-    <script src="5-objetivos.js?v=2026-09-15-3"></script>
-    <script src="6-calendario.js?v=2026-09-15-3"></script>
-    <script src="7-pendientes.js?v=2026-09-15-3"></script>
-    <script src="8-hallazgos.js?v=2026-09-15-3"></script>
-    <script src="9-estadisticas.js?v=2026-09-15-3"></script>
+    <script src="1-config.js?v=2026-09-15-4"></script>
+    <script src="2a-core-nav.js?v=2026-09-15-4"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-15-4"></script>
+    <script src="3-incidentes.js?v=2026-09-15-4"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-15-4"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-15-4"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-15-4"></script>
+    <script src="5-objetivos.js?v=2026-09-15-4"></script>
+    <script src="6-calendario.js?v=2026-09-15-4"></script>
+    <script src="7-pendientes.js?v=2026-09-15-4"></script>
+    <script src="8-hallazgos.js?v=2026-09-15-4"></script>
+    <script src="9-estadisticas.js?v=2026-09-15-4"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-09-15-3"></script>
-    <script src="13-gestion.js?v=2026-09-15-3"></script>
-    <script src="10-refacciones.js?v=2026-09-15-3"></script> 
+    <script src="12-almacenamiento.js?v=2026-09-15-4"></script>
+    <script src="13-gestion.js?v=2026-09-15-4"></script>
+    <script src="10-refacciones.js?v=2026-09-15-4"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

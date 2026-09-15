@@ -506,7 +506,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   se quedó como estaba y sólo ganó su resumen.
 
   ```js
-  window.RESUMEN_DE_GRUPO        // { datos, destinatarios, revisores, opciones, escala, material, preguntas }
+  window.RESUMEN_DE_GRUPO        // { datos, destinatarios, revisores, opciones, escala, preguntas }
   window.pintarResumenGrupos()   // los rellena todos
   window.abrirGrupoEval(id)      // abre uno y lo lleva a la vista
   window.plegarGruposEval(editando)
@@ -2506,12 +2506,35 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   por WhatsApp y no quedaba pegado a la encuesta, así que quien la abría un mes
   después no tenía de dónde sacarlo.
 
-  **Se agrega y se quita desde la hoja de escribir la encuesta**, en su sección
-  «Material» (`#grupo-material`, el hueco `#material-edicion`); en la hoja de la
-  encuesta **sólo se lee**. Subir un documento es escribir la encuesta —como sus
-  preguntas o a quién va dirigida—, no contestarla, y en la hoja de la encuesta
-  ese recuadro se llevaba media pantalla por encima del pase de lista para
-  enseñarle a quien sólo lee la misma portada que ya tiene arriba.
+  **Se agrega y se quita desde la hoja de escribir la encuesta**, en el grupo
+  «Datos» y **encima del título** (`#campo-material`, con el hueco
+  `#material-edicion`); en la hoja de la encuesta **sólo se lee**. Subir un
+  documento es escribir la encuesta —como sus preguntas o a quién va dirigida—,
+  no contestarla, y en la hoja de la encuesta ese recuadro se llevaba media
+  pantalla por encima del pase de lista para enseñarle a quien sólo lee la misma
+  portada que ya tiene arriba.
+
+  **Y va encima del título porque ése es el orden en que se lee la encuesta**: su
+  primera página es la portada de la hoja y debajo va el nombre, así que
+  escribirla empieza igual. Tuvo un tiempo su propia sección plegable
+  (`#grupo-material`), y eso la dejaba a cinco renglones de distancia de todo lo
+  demás que se escribe de la encuesta, con un `<details>` entero y un renglón de
+  resumen gastados en decir «1 documento». Hoy es un `.form-group` más, como
+  «Descripción», y por lo mismo **no aparece en el renglón de «Datos»**: ese
+  renglón dice lo que la encuesta **es** —título, clasificación, frecuencia,
+  modo—, no lo que hay en cada campo. Con la sección se fueron
+  `RESUMEN_DE_GRUPO.material`, su hueco `data-resumen` y sus dos ids de
+  `plegarGruposEval` y `SECCIONES_FUERA_DE_DESTINATARIOS` —ahí ya lo esconde
+  `grupo-datos`, que lo envuelve—.
+
+  **El rótulo «Material» es del marcado y no del recuadro**, así que se esconde
+  con él: `pintarMaterialEncuesta` pone `hidden` en `#campo-material` cuando el
+  bloque vuelve vacío —sin la tabla `materiales_encuesta`—, o quedaría una
+  etiqueta sola encima del título prometiendo un campo que no existe. El camino
+  que no repinta —la hoja restringida del revisor— lo esconde desde
+  `prepararMaterialEnEdicion`, o se quedaría puesto el estado de la hoja
+  anterior. `.form-group` no lleva `display` de autor, así que el `[hidden]` del
+  navegador basta y no hace falta ninguna regla nueva.
 
   ```js
   window.materialEnEdicion                        // { id } mientras la hoja está a la vista; id null = todavía sin fila
@@ -2544,12 +2567,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - **Y `guardarMaterialPendiente` se planta sin `evalId`**, que es la guarda de
     quien llame desde fuera: el botón ni siquiera se dibuja.
 
-  La subida va en `publicarEncuestaDeLaHoja`, **después de las preguntas y antes
-  del aviso de guardado**, que es donde la encuesta ya existe entera. Si falla,
-  la encuesta se queda igual de publicada: lo que se pierde es el material, así
-  que se dice con esas palabras —«Vuelve a abrirla para agregárselo»— en vez de
-  dar el guardado por bueno, y se descarta después de avisar, o sus miniaturas se
-  quedarían en la hoja siguiente.
+  **Guardar la hoja guarda también su material.** La subida va en
+  `publicarEncuestaDeLaHoja`, **después de las preguntas y antes del aviso de
+  guardado**, que es donde la encuesta ya existe entera, y vale para los dos
+  casos y no sólo para la creación: desde que el material es un campo de «Datos»
+  y no una sección con su renglón de resumen, un documento convertido y sin
+  guardar no se ve con el grupo plegado, y cerrar la hoja lo perdía sin decir
+  nada. El botón «Guardar N páginas» se queda como atajo para subirlo sin
+  guardar el resto.
+
+  Si falla, la encuesta se queda igual de guardada: lo que se pierde es el
+  material, así que se dice con esas palabras —«Vuelve a abrirla para
+  agregárselo»— en vez de dar el guardado por bueno, y se descarta después de
+  avisar, o sus miniaturas se quedarían en la hoja siguiente.
 
   **Una copia entra por aquí también** —copiar es crear—, así que puede llevar
   material propio desde el principio; lo que sigue sin heredar es el de la
@@ -2561,17 +2591,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   quedaría un documento a medio convertir dentro de un grupo escondido, sin nadie
   que lo pudiera guardar ni descartar.
 
-  Y **lo convertido y todavía sin subir cuenta en el renglón del grupo** —«1
-  documento · 1 sin subir»—: al crear una encuesta eso es todo lo que hay, así
-  que sin contarlo el renglón diría «Ninguno» encima de una sección con las
-  miniaturas a la vista. Lo repinta `pintarMaterialEncuesta`, que es por donde
-  pasan agregar, descartar y guardar, así que es el único sitio donde hay que
-  acordarse.
-
   Ahí el recuadro va **desnudo** (`opciones.desnudo`, la clase
   `.material-tarjeta--desnuda`): sin su tarjeta blanca ni su rótulo «Material»,
-  que los pone la sección plegable que lo envuelve, y una tarjeta dentro de otra
-  no se lee como nada.
+  que los pone el campo que lo envuelve, y una tarjeta dentro de otra no se lee
+  como nada.
 
   **Y son dos huecos, así que `pintarMaterialEncuesta` repinta los dos**:
   `cerrarModalEvaluaciones` sólo esconde la hoja de la encuesta, de modo que su
