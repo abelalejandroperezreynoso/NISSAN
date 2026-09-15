@@ -1471,19 +1471,34 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.TIPO_PREGUNTA_FIRMA        // 'signature'
   window.esPreguntaDeFirma(pregunta)
   window.ANCHO_LIENZO_FIRMA  window.ALTO_LIENZO_FIRMA  window.MAX_BYTES_FIRMA
-  window.TEXTO_PEDIR_FIRMA          // «Escribe tu primer nombre con el dedo»
+  window.TEXTO_PEDIR_FIRMA          // «No es necesario que utilices tu firma oficial»
 
   window.trazosDeFirma              // { idPregunta: true } mientras la hoja está abierta
   window.montarFirmasDePreguntas()  // engancha los lienzos ya insertados
   window.marcarFirmaHecha(qid)  window.limpiarFirmaPregunta(qid)
   ```
 
-  **No es la firma oficial de nadie: lo que se pide es el primer nombre.** Una
-  rúbrica hecha con el dedo sobre un cristal no se parece a la del documento de
-  identidad y no vale como tal; un nombre escrito a mano sí se lee y se
-  reconoce, que es todo lo que hace falta para dejar constancia de quién estuvo.
-  Lo dice el propio recuadro al firmar y lo repite la hoja de edición, y el
-  texto vive en un solo sitio (`TEXTO_PEDIR_FIRMA`).
+  **No es la firma oficial de nadie, y el recuadro lo dice con esas palabras.**
+  Una rúbrica hecha con el dedo sobre un cristal no se parece a la del documento
+  de identidad y no vale como tal; con que se lea y se reconozca quién firmó
+  basta para dejar constancia de quién estuvo. El pie del lienzo pone **«No es
+  necesario que utilices tu firma oficial»**, que es lo único que hay que
+  quitarle de la cabeza a quien va a firmar —quien intenta reproducir la suya
+  con el dedo se atasca ahí—.
+
+  Decía «Escribe tu primer nombre con el dedo», que es una instrucción donde
+  hacía falta un permiso: mandaba qué escribir sin decir por qué, y con el dedo
+  ya encima del cristal eso se lee tarde. Que un nombre a mano se reconoce mejor
+  que un garabato sigue siendo verdad y se sigue contando **a quien crea la
+  encuesta**, en el `detalle` del tipo de pregunta y en la ayuda de la hoja de
+  calificar; lo que cambió es lo que se le dice a quien firma. El texto vive en
+  un solo sitio (`TEXTO_PEDIR_FIRMA`) y lo leen los dos extremos: el pie al
+  dibujarse y `limpiarFirmaPregunta` al devolverlo tras «Borrar» —firmada, ese
+  renglón dice «Firmado»—.
+
+  Cabe en **dos renglones** a 375px sin echar fuera al botón «Borrar»
+  (`.firma-ayuda` lleva `min-width: 0`, y el pie es un flex con `gap`), así que
+  la tarjeta de la pregunta mide lo mismo que antes.
 
   **Y no cuenta para la calificación**: es una de las tres que dejan constancia
   y no puntúan —la regla entera está arriba, con la evidencia—. No se le escribe

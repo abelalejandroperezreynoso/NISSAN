@@ -1479,9 +1479,10 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         }
         else if (window.esPreguntaDeFirma(q)) {
             // El enunciado dice de qué se deja constancia; aquí va el renglón
-            // donde se firma. **Lo que se pide es el primer nombre**, no la
-            // rúbrica de nadie: una firma hecha con el dedo no vale como la del
-            // documento de identidad y un nombre escrito a mano sí se lee.
+            // donde se firma. **No es la rúbrica de nadie**: una firma hecha con
+            // el dedo no vale como la del documento de identidad, y el pie lo
+            // dice con esas palabras (`TEXTO_PEDIR_FIRMA`) para que nadie se
+            // pare a intentar reproducir la suya.
             //
             // El lienzo va a medida fija y la hoja de estilos lo estira: así lo
             // dibujado no depende del ancho de la pantalla ni se pierde al girar

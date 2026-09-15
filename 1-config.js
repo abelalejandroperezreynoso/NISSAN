@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-14-15';
+window.VERSION_APP = '2026-09-15-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -469,11 +469,13 @@ window.esPreguntaDeFoto = (pregunta) =>
 // constancia de que esa persona estuvo y lo dio por recibido— pero dentro de una
 // encuesta, así que se ordena, se edita y se borra como cualquier otra pregunta.
 //
-// **No es la firma oficial de nadie**: lo que se pide es que escriban su primer
-// nombre. Una rúbrica hecha con el dedo en un cristal no se parece a la del
-// documento de identidad y no vale como tal; un nombre escrito a mano sí se lee
-// y se reconoce, que es todo lo que hace falta aquí. Lo dice el propio recuadro
-// al firmar, y por eso el texto vive en un solo sitio.
+// **No es la firma oficial de nadie**: una rúbrica hecha con el dedo en un
+// cristal no se parece a la del documento de identidad y no vale como tal; con
+// que se lea y se reconozca quién firmó basta para dejar constancia. Y eso es lo
+// que dice el recuadro —«No es necesario que utilices tu firma oficial»—, que
+// es lo único que hay que quitarle de la cabeza a quien va a firmar: pedirle
+// además qué escribir era una instrucción donde hacía falta un permiso. El
+// texto vive en un solo sitio.
 //
 // **Y no puntúa.** No se acierta ni se falla una firma, así que no entra en
 // `grades_json` —de modo que `calcularScoreRespuesta` la ignora— y tampoco
@@ -492,7 +494,7 @@ window.esPreguntaDeFirma = (pregunta) =>
 window.ANCHO_LIENZO_FIRMA = 600;
 window.ALTO_LIENZO_FIRMA = 240;
 window.MAX_BYTES_FIRMA = 60 * 1024;
-window.TEXTO_PEDIR_FIRMA = 'Escribe tu primer nombre con el dedo';
+window.TEXTO_PEDIR_FIRMA = 'No es necesario que utilices tu firma oficial';
 
 // Una pregunta de asistencia no se contesta: se confirma. Sirve para pasar
 // lista de una junta o una capacitación —la encuesta se dirige a quien tenía
