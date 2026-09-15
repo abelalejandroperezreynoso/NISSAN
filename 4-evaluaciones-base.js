@@ -356,11 +356,24 @@ window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta, subtitulo, re
     if (sub) sub.innerText = subtitulo || '';
 
     // El lápiz sale sólo en la pantalla de una encuesta —la única que sabe cuál
-    // editar— y sólo en modo administrador. Las demás llaman sin ese argumento
-    // y ahí se esconde, que es lo que evita que se quede el de la anterior.
+    // editar— y para quien puede editarla: el administrador y **quien la
+    // revisa**, que es quien la imparte. Las demás pantallas llaman sin ese
+    // argumento y ahí se esconde, que es lo que evita que se quede el de la
+    // anterior.
+    //
+    // La ficha sale de `encuestaEnCache`, que es lo único que hay aquí: este
+    // ayudante recibe el id y no la encuesta, y la pantalla que lo llama con id
+    // —`abrirHistorialEvaluacion`— la ha pedido antes con
+    // `encuestaDeLaRespuesta`, que la deja en esa caché con sus revisores. Sin
+    // ficha manda el modo administrador, que es lo de siempre: es preferible no
+    // enseñar el lápiz que enseñárselo a quien al guardar se lo van a negar.
     const lapiz = document.getElementById('btn-editar-hoja-evaluaciones');
     if (lapiz) {
-        const editable = !!idEncuesta && window.modoAdminActivo && !!window.editarEvaluacion;
+        const yo = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+        const ficha = window.encuestaEnCache ? window.encuestaEnCache(idEncuesta) : null;
+        const editable = !!idEncuesta && !!window.editarEvaluacion
+            && (window.modoAdminActivo
+                || !!(yo && ficha && window.puedeEditarEncuesta(ficha, yo.id)));
         lapiz.hidden = !editable;
         lapiz.onclick = editable
             ? () => { window.cerrarModalEvaluaciones(); window.editarEvaluacion(idEncuesta); }
@@ -916,10 +929,9 @@ window.cargarVistaEvaluaciones = async () => {
             //     tarde en tarde. Que está apagada lo sigue diciendo su etiqueta
             //     «INACTIVA», que es lo que hay que ver desde la lista.
             //
-            // Queda el del revisor, que no es lo mismo: corregir a quién va
-            // dirigida es lo único que puede abrir desde aquí quien no es
-            // administrador. Corta la propagación, que el resto de la fila abre
-            // la encuesta.
+            // Queda el del revisor, que no es lo mismo: es lo único que puede
+            // abrir desde aquí quien no es administrador. Corta la propagación,
+            // que el resto de la fila abre la encuesta.
             const botonIcono = (fondo, colorTexto, onclick, titulo, icono) => `
                 <button class="encuesta-boton" style="background:${fondo}; color:${colorTexto};"
                         onclick="event.stopPropagation(); ${onclick}"
@@ -927,13 +939,14 @@ window.cargarVistaEvaluaciones = async () => {
 
             let acciones = '';
             if (!window.modoAdminActivo && laReviso(ev)) {
-                // Quien revisa la encuesta puede corregir a quién va dirigida
-                // sin ser administrador: es quien sabe a quién le falta
-                // tomarla. La hoja se abre restringida a ese bloque; el resto
-                // de la configuración no se le enseña.
+                // Quien revisa la encuesta la edita entera sin ser
+                // administrador: es quien la imparte, y es quien descubre que
+                // una pregunta está mal escrita o que le falta gente. Abre la
+                // misma hoja que abre el lápiz del administrador; lo único que
+                // no lleva es el bote de basura.
                 acciones = botonIcono('#f3e8ff', '#7e22ce',
-                    `window.cerrarModalEvaluaciones(); window.editarDestinatariosEncuesta('${ev.id}')`,
-                    'Editar a quién va dirigida', '✏️');
+                    `window.cerrarModalEvaluaciones(); window.editarEvaluacion('${ev.id}')`,
+                    'Editar esta encuesta', '✏️');
             }
             if (acciones) acciones = `<div class="encuesta-acciones">${acciones}</div>`;
 

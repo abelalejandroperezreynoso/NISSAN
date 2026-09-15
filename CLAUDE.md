@@ -2364,15 +2364,59 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   volviendo al jefe inmediato de cada quien. La nota de herencia del bloque de
   revisores dice quién va a calificarla, que es donde se ve.
 
-  **Quien revisa una encuesta puede además corregir a quién va dirigida**, sin
-  ser administrador y sin tocar nada más: es el instructor que la imparte y es
-  quien sabe a quién le falta tomarla. Se entra por dos sitios: el lápiz de la
-  tarjeta en la lista —el mismo que tiene el administrador— y el botón
-  «Editar a quién va dirigida» de la pantalla de la encuesta, dentro del
-  plegable de «Respuestas» y detrás de la fila de quién revisa —ahí se explica
-  por qué—. Los dos llaman a `window.editarDestinatariosEncuesta(id)`, que
-  comprueba el permiso con `window.puedeEditarDestinatarios(ev, empleadoId)`
-  (en `1-config.js`, junto a las demás reglas de revisión).
+  **Quien revisa una encuesta la edita entera**, sin ser administrador: es el
+  instructor que la imparte, y es quien descubre que una pregunta está mal
+  redactada, que falta una evidencia o que la escala no se entiende. Tener que
+  pedírselo al administrador cada vez es lo que hace que no se corrija, y la
+  encuesta se sigue contestando mal durante meses. Es además lo coherente con lo
+  que ya podía hacer: **crearlas** en la clasificación que revisa, donde escribe
+  el cuestionario entero desde cero, así que negarle cambiarle una palabra a la
+  que ya existe no protegía nada.
+
+  ```js
+  window.puedeEditarEncuesta(ev, empleadoId)   // el administrador, y quien la revisa
+  window.puedeEditarDestinatarios(ev, empleadoId)   // sólo revisor; la usa el modo restringido
+  ```
+
+  Le sale el mismo **lápiz** que al administrador, en los dos sitios: el del
+  renglón de la lista —donde antes abría la hoja restringida— y el del
+  encabezado de la pantalla de la encuesta. Ese segundo necesita la ficha para
+  saber si quien mira la revisa, y `encabezadoHojaEvaluaciones` sólo recibe el
+  **id**: la saca de `encuestaEnCache`, que para cuando se dibuja esa pantalla ya
+  la tiene —`abrirHistorialEvaluacion` la pide antes con `encuestaDeLaRespuesta`,
+  que es quien la deja ahí con sus revisores—. **Sin ficha manda el modo
+  administrador**, que es lo de siempre: es preferible no enseñar el lápiz que
+  enseñárselo a quien al guardar se lo van a negar.
+
+  **Dos cosas no entran, y se quedan sólo para el administrador**:
+
+  - **Eliminar la encuesta.** Se lleva por delante lo que contestó todo el mundo
+    y no tiene vuelta atrás. El bote de basura ya se escondía sin el modo
+    encendido (`prepararEncabezadoEval`), pero desde que la hoja la abre también
+    quien revisa **esconderlo no basta**: `borrarEvaluacionEditada` lo comprueba
+    y, en vez de callarse, manda a **desmarcar «Activa»** en el grupo
+    «Opciones», que retira la encuesta conservando lo contestado —la misma
+    salida que ya se ofrece cuando la base se niega a borrarla—.
+  - **Los revisores de una clasificación entera**, el ojo del detalle: eso es
+    repartir quién califica a quién en todas sus encuestas, las que todavía no
+    existen incluidas. Los revisores **de esta encuesta** sí los toca, que es lo
+    mismo que ya hacía al crearla.
+
+  **Y quien decide de verdad es el guardado**, como siempre: el lápiz es la
+  pantalla, y un `disabled` se quita desde la consola. `publicarEncuestaDeLaHoja`
+  vuelve a comprobarlo cuando hay `idEditandoEval` —la hoja pudo quedarse abierta
+  desde antes de dejar de revisar la encuesta—, y `editarEvaluacion` lo comprueba
+  al abrirla. Las dos **esperan a `cargarRevisoresDeClasificaciones()`**: quien
+  revisa por herencia no sale en `reviewer_employees`, y sin esa caché se le
+  negaría la hoja a quien sí puede abrirla. Copiar no pasa por ahí —eso es crear,
+  y lo decide `clasificacionFijaParaCrear`—.
+
+  **El modo restringido se queda**, y sigue siendo la puerta del botón «Editar a
+  quién va dirigida» de la pantalla de la encuesta: es el atajo que lleva
+  derecho a la sección que se viene a corregir, sin la hoja entera delante. Lo
+  abre `window.editarDestinatariosEncuesta(id)`, que comprueba el permiso con
+  `window.puedeEditarDestinatarios(ev, empleadoId)` (en `1-config.js`, junto a
+  las demás reglas de revisión).
 
   Ese botón **no cuelga de cuál sea la acción principal de la pantalla**.
   Colgaba del aviso de «te toca revisar esta encuesta», que sale sólo cuando la

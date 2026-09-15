@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-15-1';
+window.VERSION_APP = '2026-09-15-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1981,6 +1981,30 @@ window.encuestasQueRevisa = (encuestas, revisorId) =>
 // de edición (al abrirla y al guardar), que son dos módulos distintos.
 window.puedeEditarDestinatarios = (ev, empleadoId) =>
     window.revisoresDeEncuesta(ev).includes(String(empleadoId));
+
+// **Y puede editarla entera**, no sólo a quién va dirigida. Quien imparte una
+// capacitación es quien descubre que una pregunta está mal redactada, que falta
+// una evidencia o que la escala no se entiende, y tener que pedírselo al
+// administrador cada vez es lo que hace que no se corrija: la encuesta se sigue
+// contestando mal durante meses. Es la misma razón por la que ya podía crearlas
+// en su clasificación —ahí puede escribir el cuestionario entero desde cero—,
+// así que negarle cambiarle una palabra a la que ya existe no protegía nada.
+//
+// Dos cosas **no** entran en esto y se quedan sólo para el administrador:
+//
+//   - **Eliminar la encuesta**, que se lleva por delante lo que contestó todo
+//     el mundo y no tiene vuelta atrás. Al revisor le queda desmarcar «Activa»
+//     en el grupo «Opciones», que la retira conservando lo contestado — la
+//     misma salida que ya se ofrece cuando la base se niega a borrarla.
+//   - **Los revisores de una clasificación entera** (el ojo del detalle), que
+//     es repartir quién califica a quién en todas sus encuestas, las que
+//     todavía no existen incluidas.
+//
+// Los revisores **de esta encuesta** sí los puede tocar, que es lo mismo que ya
+// hace al crearla: son de una sola encuesta y quien la imparte sabe con quién
+// la comparte.
+window.puedeEditarEncuesta = (ev, empleadoId) =>
+    !!window.modoAdminActivo || window.puedeEditarDestinatarios(ev, empleadoId);
 
 // Y puede además **crear encuestas nuevas en la clasificación que revisa**, que
 // es la otra mitad de lo mismo: quien imparte «Seguridad» es quien sabe qué

@@ -5244,6 +5244,24 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     }
     if (!evaluacion) { alert("Error: No se encontró la evaluación."); return; }
 
+    // Editar una encuesta que ya existe es del administrador y de quien la
+    // revisa. Copiarla no pasa por aquí —eso es crear, y lo decide
+    // `clasificacionFijaParaCrear` al guardar—, y el modo restringido trae su
+    // propia puerta en `editarDestinatariosEncuesta`.
+    //
+    // **Se espera a la caché de revisores de clasificación**: quien revisa por
+    // herencia no sale en `reviewer_employees`, y sin ella se le negaría la
+    // hoja a quien sí puede abrirla. La de arriba va sin `await` a propósito
+    // —es para una nota que se pinta enseguida— y ésta no puede.
+    if (!comoCopia && !soloDestinatarios) {
+        await window.cargarRevisoresDeClasificaciones();
+        const yo = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+        if (!window.puedeEditarEncuesta(evaluacion, yo && yo.id)) {
+            alert("Sólo el administrador y quien revisa esta encuesta pueden editarla.");
+            return;
+        }
+    }
+
     window.idEditandoEval = comoCopia ? null : id;
     window.editandoSoloDestinatarios = soloDestinatarios;
     window.aplicarModoSoloDestinatarios(soloDestinatarios);
@@ -6018,6 +6036,15 @@ window.borrarEvaluacionEditada = async () => {
     const id = window.idEditandoEval;
     if (!id || window.editandoSoloDestinatarios) return;
 
+    // Desde que la hoja la abre también quien revisa, esconder el botón no
+    // basta: borrar se lleva por delante lo que contestó todo el mundo y no
+    // tiene vuelta atrás, así que se queda en el administrador. A quien la
+    // imparte le queda desmarcar «Activa», que la retira conservándolo todo.
+    if (!window.modoAdminActivo) {
+        alert("Sólo el administrador puede eliminar una encuesta.\n\nPara retirarla conservando lo contestado, desmarca «Activa» en el grupo «Opciones».");
+        return;
+    }
+
     const boton = document.getElementById('btn-borrar-eval');
     if (boton) boton.disabled = true;
     const seFue = await window.borrarEvaluacion(id);
@@ -6483,6 +6510,19 @@ window.guardarNuevaEvaluacion = async () => {
 };
 
 window.publicarEncuestaDeLaHoja = async () => {
+    // Quien de verdad decide si se puede editar. El lápiz sale para el
+    // administrador y para quien revisa, pero un `disabled` se quita desde la
+    // consola y la hoja pudo quedarse abierta desde antes de dejar de revisar
+    // la encuesta. Sólo al editar una que ya existe: crear y copiar los decide
+    // `clasificacionFijaParaCrear`, unas líneas más abajo.
+    if (window.idEditandoEval) {
+        const yo = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+        const ficha = await window.encuestaDeLaRespuesta(window.idEditandoEval);
+        if (ficha && !window.puedeEditarEncuesta(ficha, yo && yo.id)) {
+            alert("Sólo el administrador y quien revisa esta encuesta pueden editarla.");
+            return;
+        }
+    }
 
     const tit = document.getElementById('eval-title-input').value.trim();
     const cat = document.getElementById('eval-category-input').value.trim() || "General";
