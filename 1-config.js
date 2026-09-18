@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-18-1';
+window.VERSION_APP = '2026-09-18-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -620,6 +620,13 @@ window.cargarEncuestasQuePuntuan = (recargar = false) => {
 
     return promesaEncuestasQuePuntuan;
 };
+
+// Lo que vale entregar una encuesta que no puntúa. No es un premio: es que ahí
+// **la entrega es lo único que se pide**, así que o se cumplió del todo o no se
+// cumplió, y quien no la entregó cuenta como cero sobre el mismo padrón. Con
+// eso la encuesta vuelve a medirse como las demás en vez de quedarse fuera de
+// toda cifra, y su porcentaje es su participación.
+window.PUNTAJE_POR_ENTREGAR = 100;
 
 // ¿Esta encuesta tiene alguna pregunta que se califique? Ante la duda, sí.
 window.encuestaPuntua = (ev) => {

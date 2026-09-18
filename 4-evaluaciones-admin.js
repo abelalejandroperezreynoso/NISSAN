@@ -154,6 +154,12 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // llevarse por delante el resto de la hoja.
     await window.cargarMaterialesEncuesta(evalId);
 
+    // Qué encuestas puntúan. Lo pregunta `puntajeDeRespuesta` sin poder esperar,
+    // y de él salen la cifra del encabezado y el badge de cada respuesta: sin la
+    // caché, una encuesta que sólo deja constancia se queda sin cifra en vez de
+    // enseñar el 100 que vale haberla entregado.
+    if (window.cargarEncuestasQuePuntuan) await window.cargarEncuestasQuePuntuan();
+
     let responses = [];
     const { data: todasLasRespuestas } = await sb.from('evaluation_responses').select('*').eq('evaluation_id', evalId).order('submitted_at', {ascending: false});
     if (window.modoAdminActivo) {
@@ -324,12 +330,6 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         const traidas = (empresaPendiente ? await empresaPendiente : null)
             || { respuestas: responses, tope: false };
 
-        // Qué encuestas puntúan: `resumenDeEncuestaAdmin` lo pregunta sin poder
-        // esperar, y sin la caché una hecha sólo de las que dejan constancia
-        // repartiría su cero sobre el padrón y saldría al 0% con la plantilla
-        // entera habiéndola contestado.
-        if (window.cargarEncuestasQuePuntuan) await window.cargarEncuestasQuePuntuan();
-
         // Sin la ficha de la encuesta no hay padrón que repartir, y ahí no se
         // cae al resultado personal: enseñarle al administrador su propio 100%
         // como el de la encuesta es justo lo que se vino a quitar.
@@ -368,15 +368,15 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             // entregado, que no es lo que promete el rótulo: ahí se dice «—»,
             // como en una respuesta sin calificar.
             //
-            // **Y una encuesta que no puntúa tampoco tiene cifra**, y ahí el
-            // «—» no significa lo mismo: no es que falte calificarla, es que no
-            // hay nada que calificar. Lo dice su etiqueta, que es lo que le
+            // **Y en una que no se califica, la cifra es la participación**: ahí
+            // entregarla es todo lo que se pide, así que quien la entregó cuenta
+            // como 100 y quien no, como 0. Lo dice su etiqueta, que es lo que le
             // queda a un número sin renglón.
             resultadoHoja = {
                 texto: resumen.promedio === null ? '—' : `${resumen.promedio}%`,
                 color: colorScore,
                 etiqueta: resumen.puntua === false
-                    ? 'Esta encuesta no se califica: sólo deja constancia, así que no tiene resultado. Lo que dice es cuánta gente la contestó.'
+                    ? 'Esta encuesta no se califica: entregarla es el resultado, así que quien la entregó cuenta como 100% y quien no, como 0.'
                     : `Resultado de la empresa. Quien no contestó cuenta como 0.${resumen.promedioContestadas !== null ? ` ${resumen.promedioContestadas}% entre quienes la contestaron.` : ''}${resumen.ajenos > 0 ? ` ${resumen.ajenos} de las respuestas son de gente que ya no está en la lista de hoy y cuentan aparte.` : ''}`
             };
 
@@ -388,14 +388,14 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
                 .map(x => String(x || '').trim()).filter(Boolean).join(' · ');
         }
     } else if (miUltima) {
-        // «Calificada» pide además que haya algo calificado: una encuesta hecha
-        // sólo de firmas —o de evidencias en modo jefe— se guarda ya 'Revisado'
-        // con `grades_json` vacío, y ahí `calcularScoreRespuesta` devuelve 0,
-        // que se leería como haberla fallado entera. Es la misma comprobación
-        // que hace `puntajeDeRespuesta` para la tarjeta del panel.
-        const calificada = ['Revisado', 'Certificada'].includes(miUltima.review_status)
-            && window.tieneCalificaciones(miUltima);
-        const score = window.calcularScoreRespuesta(miUltima);
+        // El puntaje sale de `puntajeDeRespuesta`, que es la misma regla de la
+        // tarjeta del panel y la única que sabe las dos cosas que aquí no se
+        // pueden decidir a mano: una respuesta entregada y todavía sin calificar
+        // no tiene cifra —un 0% se leería como haberla fallado entera— y una de
+        // una encuesta que no se califica vale 100, que ahí entregarla es todo
+        // lo que se pide.
+        const score = window.puntajeDeRespuesta(miUltima);
+        const calificada = score !== null;
         const colorScore = calificada ? window.getColorScore(score) : '#94a3b8';
         const fecha = new Date(miUltima.submitted_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
@@ -1672,12 +1672,12 @@ window.renderizarListaRespuestas = () => {
         // el nombre lo dice el encabezado de la hoja.
 
         let scoreBadge = '';
-        // Sin nada calificado no hay cifra que enseñar: un 0% se leería como
-        // haberlo hecho mal en vez de como que no había nada que puntuar.
-        if((resp.review_status === 'Revisado' || resp.review_status === 'Certificada')
-            && window.tieneCalificaciones(resp)) {
-             const score = window.calcularScoreRespuesta(resp);
-             const pct = score;
+        // Por la misma regla que el encabezado: sin calificar no hay cifra que
+        // enseñar —un 0% se leería como haberlo hecho mal—, y en una encuesta
+        // que no se califica la entrega vale 100.
+        const puntajeResp = window.puntajeDeRespuesta(resp);
+        if (puntajeResp !== null) {
+             const pct = puntajeResp;
              const color = pct >= 80 ? '#166534' : (pct >= 60 ? '#b45309' : '#991b1b');
              const bg = pct >= 80 ? '#dcfce7' : (pct >= 60 ? '#fef3c7' : '#fee2e2');
              scoreBadge = `<span style="margin-left:5px; font-weight:bold; color:${color}; background:${bg}; padding:2px 6px; border-radius:6px; font-size:0.8rem;">${pct}%</span>`;

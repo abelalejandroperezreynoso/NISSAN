@@ -426,20 +426,17 @@ window.conMinimoEnTodas = (fila) => {
 // falsa o mal revisada— tampoco puntúa ni ocupa sitio, que es lo que ya hacía
 // `countScore`.
 //
-// Y lo que **no puede puntuar** tampoco entra, ni contestado ni sin contestar:
-// una encuesta hecha sólo de las que dejan constancia no tiene resultado que
-// dar, así que no se le puede cobrar el cero a quien no la ha contestado
-// —contestándola no habría sumado nada—. De ahí que lo asignado se cuente con
-// `assignedPuntuables` y lo contestado con `responsesPuntuables`. Una fila que
-// no los traiga —o la sesión sin la caché de `encuestaPuntua` cargada— se
-// comporta como antes: todo puntúa.
+// **Y lo que no se califica entra igual**, porque sí se mide: una encuesta
+// hecha sólo de las que dejan constancia vale 100 al entregarla, así que entra
+// en `countScore` como cualquier otra y no entregarla cuenta como el cero que
+// es. No necesita contadores aparte.
 //
 // Sin nada calificado y sin nada por contestar no hay divisor, y entonces se
 // dice «sin calificar» en lugar de un 0% que se leería como haberlo hecho
 // mal.
 window.baseDeCalificacion = (d) => {
-    const asignadas = d.assignedPuntuables === undefined ? (d.assignedCount || 0) : d.assignedPuntuables;
-    const contestadas = d.responsesPuntuables === undefined ? (d.responses || 0) : d.responsesPuntuables;
+    const asignadas = d.assignedCount || 0;
+    const contestadas = d.responses || 0;
     return (d.countScore || 0) + Math.max(0, asignadas - contestadas);
 };
 
@@ -773,9 +770,6 @@ window.dimensionStatsPor = (clave) => window.DIMENSIONES_DESGLOSE.find(d => d.cl
 // esta función y no de un literal copiado.
 window.filaVaciaStats = () => ({
     employeesCount: 0, personasAsignadas: 0, assignedCount: 0, responses: 0,
-    // Lo mismo, contando sólo las encuestas que puntúan: es el divisor de
-    // «Calificación». Ver `baseDeCalificacion`.
-    assignedPuntuables: 0, responsesPuntuables: 0,
     reviewed: 0, certificadas: 0, falsas: 0, malRevisadas: 0, revisadasAltas: 0,
     // De las procesadas, las que traen alguna pregunta calificada. No es lo
     // mismo que `procesadasDe`: lo que sólo deja constancia se procesa solo y
@@ -915,8 +909,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         porEmpleado[empId] = {
             nombre: e.name || e.nombre || 'Sin nombre',
             departamento: dept, supervisor: sup, puesto: empPuestoKey, area: getAreaEmp(e),
-            assignedCount: 0, responses: 0, assignedPuntuables: 0, responsesPuntuables: 0,
-            reviewed: 0, certificadas: 0, falsas: 0,
+            assignedCount: 0, responses: 0, reviewed: 0, certificadas: 0, falsas: 0,
             malRevisadas: 0, revisadasAltas: 0, puntuadas: 0, personasAlMinimo: 0, personasEvaluadas: 0, sumScore: 0, countScore: 0,
             sumDias: 0, countDias: 0, sumProntitud: 0, countProntitud: 0
         };
@@ -925,32 +918,21 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         // recorre la plantilla entera.
         const tieneEquipoEste = window.tieneEquipoDirecto(e.id);
 
-        // De las asignadas, las que pueden dar un puntaje. Una encuesta hecha
-        // sólo de las que dejan constancia no lo da nunca, así que meterla en
-        // el divisor de «Calificación» es cobrarle a esta persona un cero que
-        // no podía evitar. Ver `baseDeCalificacion`.
-        let empPuntuables = 0;
-
         evalsList.forEach(ev => {
              const info = evalMap[ev.id];
 
              if (window.leTocaEstaEncuesta(ev, e, tieneEquipoEste)) {
                  empAssignments++;
-                 if (window.encuestaPuntua(ev)) empPuntuables++;
                  const radarKey = categoriaFiltro === 'GLOBAL' ? info.category : info.title;
                  if (!radarGroupingUsersAssigned[radarKey]) radarGroupingUsersAssigned[radarKey] = new Set();
                  radarGroupingUsersAssigned[radarKey].add(empId);
              }
         });
 
-        suyas.forEach(fila => {
-            fila.assignedCount += empAssignments;
-            fila.assignedPuntuables = (fila.assignedPuntuables || 0) + empPuntuables;
-        });
+        suyas.forEach(fila => { fila.assignedCount += empAssignments; });
         totalAsignadasGlobal += empAssignments;
 
         porEmpleado[empId].assignedCount = empAssignments;
-        porEmpleado[empId].assignedPuntuables = empPuntuables;
 
         // Sólo entra en la lista quien tiene algo asignado: son las figuras
         // que se van a dibujar, y su cuenta es `personasAsignadas`.
@@ -1124,12 +1106,7 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         // repetir un `if` más en cada uno.
         const filas = (filasDeGrupo[empId] || []).concat(suya ? [suya] : []);
 
-        filas.forEach(fila => {
-            fila.responses++;
-            if (window.encuestaPuntua(r.evaluation_id)) {
-                fila.responsesPuntuables = (fila.responsesPuntuables || 0) + 1;
-            }
-        });
+        filas.forEach(fila => { fila.responses++; });
 
         const sumarTiempos = (fila) => {
             if (!fila) return;
@@ -1191,15 +1168,19 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             }
         });
         
-        // **Una respuesta sin ninguna pregunta calificada no sacó cero: es que
-        // no había nada que puntuar.** Pasa con la encuesta hecha sólo de las
-        // que dejan constancia —una asistencia, una evidencia fotográfica, una
-        // firma—, que se guarda ya «Revisado» con `grades_json` vacío: con el
-        // cero, una junta a la que fue toda la plantilla entraba en el promedio
-        // de su departamento como si la hubieran fallado entera, y bastaba una
-        // para hundir la cifra de todo el mundo. Aquí vale `null`, que es lo que
-        // significa «sin puntaje», y de ahí en adelante no se promedia con nada.
-        const finalScore = qCount > 0 ? (sumScore / qCount) : null;
+        // **Una respuesta sin ninguna pregunta calificada no sacó cero**, y lo
+        // que vale depende de su encuesta:
+        //
+        // - Si la encuesta **no puntúa** —la hecha sólo de las que dejan
+        //   constancia: una asistencia, una evidencia, una firma— vale **100**:
+        //   ahí entregarla es todo lo que se pide, así que entregar es cumplir.
+        //   Quien no la entregó no tiene respuesta y cuenta como cero sobre las
+        //   asignadas, como en cualquier otra.
+        // - Si la encuesta **sí puntúa**, es que nadie la ha calificado todavía,
+        //   y eso no dice nada: vale `null` y no se promedia con nada. Su cero
+        //   sería el atraso del revisor y no el de quien contestó.
+        const finalScore = qCount > 0 ? (sumScore / qCount)
+            : (window.encuestaPuntua(r.evaluation_id) ? null : window.PUNTAJE_POR_ENTREGAR);
         r.finalScoreCalculated = finalScore; // Guardar para el drilldown (vistas secundarias)
 
         const procesada = ['Revisado', 'Certificada', 'Falsa', 'Mal Revisada'].includes(r.review_status);
@@ -1695,13 +1676,14 @@ window.actualizarRadarDOM = (deptName = null, supName = null, grupo = null) => {
             }
         });
         
-        // Sin nada calificado no hay puntaje que promediar —la encuesta que
-        // sólo deja constancia—, así que no entra ni en el recorte ni en el
-        // radar: un cero ahí se lee como haberla fallado entera. Ver el bucle
-        // principal, donde vive la misma regla.
-        if (qCount === 0) return;
+        // Sin nada calificado, lo que vale lo dice su encuesta: la que no
+        // puntúa se mide por la entrega —100— y la que sí, es que nadie la ha
+        // revisado todavía y no se promedia con nada. Es la misma regla del
+        // bucle principal.
+        const sinPuntaje = qCount === 0 && window.encuestaPuntua(r.evaluation_id);
+        if (sinPuntaje) return;
 
-        const finalScore = sumScore / qCount;
+        const finalScore = qCount > 0 ? (sumScore / qCount) : window.PUNTAJE_POR_ENTREGAR;
         sumaRecorte += finalScore;
         conteoRecorte++;
 
@@ -2285,10 +2267,6 @@ window.fichaDeColaborador = (emp) => window.conMinimoEnTodas({
     area: emp.area,
     assignedCount: emp.totalAssigned || 0,
     responses: emp.totalResp || 0,
-    assignedPuntuables: emp.totalAssignedPuntuables === undefined
-        ? (emp.totalAssigned || 0) : emp.totalAssignedPuntuables,
-    responsesPuntuables: emp.totalRespPuntuables === undefined
-        ? (emp.totalResp || 0) : emp.totalRespPuntuables,
     reviewed: emp.reviewedCount || 0,
     certificadas: emp.certificadasCount || 0,
     falsas: emp.falsasCount || 0,
@@ -2310,10 +2288,6 @@ window.filaCanonica = (emp) => window.conMinimoEnTodas({
     gente: [window.fichaDeColaborador(emp)],
     assignedCount: emp.totalAssigned || 0,
     responses: emp.totalResp || 0,
-    assignedPuntuables: emp.totalAssignedPuntuables === undefined
-        ? (emp.totalAssigned || 0) : emp.totalAssignedPuntuables,
-    responsesPuntuables: emp.totalRespPuntuables === undefined
-        ? (emp.totalResp || 0) : emp.totalRespPuntuables,
     reviewed: emp.reviewedCount || 0,
     certificadas: emp.certificadasCount || 0,
     falsas: emp.falsasCount || 0,
@@ -3169,8 +3143,6 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
 
     let empStats = subordinates.map(emp => {
         let totalAssigned = 0;
-        // De ésas, las que pueden dar un puntaje: ver `baseDeCalificacion`.
-        let totalPuntuables = 0;
         let obligatoryAssigned = 0;
         let obligatoryCompleted = 0;
         const tieneEquipoEsteEmp = window.tieneEquipoDirecto(emp.id);
@@ -3180,7 +3152,6 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
 
             if (window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp)) {
                 totalAssigned++;
-                if (window.encuestaPuntua(ev)) totalPuntuables++;
                 if (isObligatory) {
                     obligatoryAssigned++;
                     const hasResponded = responses.some(r => String(r.employee_id) === String(emp.id) && String(r.evaluation_id) === String(ev.id));
@@ -3191,7 +3162,6 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
 
         const empResps = responses.filter(r => String(r.employee_id) === String(emp.id));
         const totalResp = empResps.length;
-        const totalRespPuntuables = empResps.filter(r => window.encuestaPuntua(r.evaluation_id)).length;
         
         const reviewedResp = empResps.filter(r => r.review_status === 'Revisado');
         const certificadasResp = empResps.filter(r => r.review_status === 'Certificada');
@@ -3229,8 +3199,6 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
         area: getArea(emp),
         totalResp,
         totalAssigned: Math.max(totalAssigned, totalResp),
-        totalRespPuntuables,
-        totalAssignedPuntuables: Math.max(totalPuntuables, totalRespPuntuables),
         reviewedCount: reviewedResp.length,
         certificadasCount: certificadasResp.length,
         falsasCount: falsasResp.length,
@@ -3325,8 +3293,6 @@ window.verStatsDetalleGrupo = (claveDimension, nombre) => {
 
     let empStats = employeesInRole.map(emp => {
         let totalAssigned = 0;
-        // De ésas, las que pueden dar un puntaje: ver `baseDeCalificacion`.
-        let totalPuntuables = 0;
         let obligatoryAssigned = 0;
         let obligatoryCompleted = 0;
         const tieneEquipoEsteEmp = window.tieneEquipoDirecto(emp.id);
@@ -3336,7 +3302,6 @@ window.verStatsDetalleGrupo = (claveDimension, nombre) => {
 
             if (window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp)) {
                 totalAssigned++;
-                if (window.encuestaPuntua(ev)) totalPuntuables++;
                 if (isObligatory) {
                     obligatoryAssigned++;
                     const hasResponded = responses.some(r => String(r.employee_id) === String(emp.id) && String(r.evaluation_id) === String(ev.id));
@@ -3347,7 +3312,6 @@ window.verStatsDetalleGrupo = (claveDimension, nombre) => {
 
         const empResps = responses.filter(r => String(r.employee_id) === String(emp.id));
         const totalResp = empResps.length;
-        const totalRespPuntuables = empResps.filter(r => window.encuestaPuntua(r.evaluation_id)).length;
         
         const reviewedResp = empResps.filter(r => r.review_status === 'Revisado');
         const certificadasResp = empResps.filter(r => r.review_status === 'Certificada');
@@ -3385,8 +3349,6 @@ window.verStatsDetalleGrupo = (claveDimension, nombre) => {
         area: getArea(emp),
         totalResp,
         totalAssigned: Math.max(totalAssigned, totalResp),
-        totalRespPuntuables,
-        totalAssignedPuntuables: Math.max(totalPuntuables, totalRespPuntuables),
         reviewedCount: reviewedResp.length,
         certificadasCount: certificadasResp.length,
         falsasCount: falsasResp.length,

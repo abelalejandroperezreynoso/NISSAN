@@ -1042,15 +1042,14 @@ window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
     // contestado. Lo contestado y sin calificar queda fuera, que su cero sería
     // el atraso del revisor y no el de quien contestó.
     //
-    // **Y una encuesta que no puntúa no reparte nada**: la hecha sólo de las que
-    // dejan constancia no tiene resultado ni lo va a tener, así que tampoco
-    // puede cobrarle el cero a quien no la ha contestado —contestándola no
-    // habría sumado—. Sin eso, una de asistencia a medio pasar lista salía al
-    // 0%: los que faltaban contaban como ceros y los que fueron no contaban
-    // nada. Mientras la caché de `encuestaPuntua` no esté cargada, toda
-    // encuesta puntúa y esto se comporta como antes.
+    // **Una encuesta que no puntúa no necesita ningún caso aparte**: sus
+    // respuestas ya valen 100 por haberse entregado (`puntajeDeRespuesta`), así
+    // que entran en `puntajes` como cualquier otra y la base sale el padrón
+    // entero. El porcentaje acaba siendo su participación, que es lo único que
+    // de ella se puede decir. `puntua` se queda para contarlo en el globo: la
+    // cifra se lee igual, pero no sale de lo mismo.
     const puntua = window.encuestaPuntua(ev);
-    const base = puntua ? window.baseDeEncuesta(puntajes.length, suyas.length, total) : 0;
+    const base = window.baseDeEncuesta(puntajes.length, suyas.length, total);
 
     return {
         contestaron: suyas.length,
@@ -1133,14 +1132,9 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             // esa cuenta no se sabe si un 49% es media plantilla al 100 o
             // la plantilla entera a la mitad.
             if (resumen) {
-                // Y una que no puntúa lo dice con esas palabras. «Sin calificar»
-                // sería pedirle a alguien que la califique, y no hay nada que
-                // calificar: una asistencia o una evidencia dejan constancia y
-                // ya. Lo que esa encuesta tiene que decir es cuánta gente la
-                // contestó, que va justo delante.
                 const cifra = puntaje !== null
                     ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
-                    : (resumen.puntua === false ? ' · sin puntaje' : ' · sin calificar');
+                    : ' · sin calificar';
                 resultado = ` · ${window.textoDeRespuestasAdmin(resumen)}${cifra}`;
             }
 
@@ -1157,10 +1151,14 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             // El globo dice lo que la cifra no puede: qué sacaron los que
             // sí contestaron, que es de donde sale el promedio de la
             // empresa al repartirlo sobre el padrón.
+            // El globo dice de dónde sale la cifra, que no es lo mismo en las
+            // dos: en una que se califica, lo que sacaron quienes la
+            // contestaron; en una que sólo deja constancia, que la cifra **es**
+            // la participación, porque ahí entregarla es todo lo que se pide.
             const globo = existia === false
                 ? window.TEXTO_SIN_EXISTIR
                 : (resumen && resumen.puntua === false
-                    ? 'Esta encuesta no se califica: sólo deja constancia.'
+                    ? 'Esta encuesta no se califica: entregarla es el resultado, así que quien la entregó cuenta como 100%.'
                     : (resumen && resumen.promedioContestadas !== null
                         ? `${resumen.promedioContestadas}% entre quienes la contestaron`
                         : estado.texto));
@@ -1554,12 +1552,30 @@ window.refrescarTarjetaDeEncuestas = () => {
 // calificar no hay cifra que enseñar: un 0% se leería como haberlo hecho mal en
 // vez de no haberse revisado. Lo usan la tarjeta del panel y el historial de la
 // hoja de detalle, que es lo que lo saca de dentro de `cargarEncuestasAsignadas`.
+//
+// **Y en una encuesta que no puntúa, entregarla es el resultado: vale 100.** La
+// hecha sólo de las que dejan constancia —una asistencia, una evidencia, una
+// firma— no tiene nada que calificar, así que lo único que se le puede pedir a
+// quien la recibe es que la entregue, y eso o se hizo o no se hizo. Con el 100
+// la encuesta vuelve a medirse como las demás —quien no la entregó cuenta como
+// cero sobre el mismo padrón— y su porcentaje acaba siendo su participación,
+// que es exactamente lo que de ella se puede decir.
+//
+// Es la puerta por la que esa regla entra en **todas** las pantallas: de aquí
+// viven el resumen de la empresa, su gráfica, la tarjeta del panel de quien la
+// contesta y el historial de una clasificación.
+//
+// Lo de «calificada» sigue siendo lo de antes para todo lo demás: una respuesta
+// entregada y todavía sin revisar no dice nada, y ahí manda el null.
 window.puntajeDeRespuesta = (resp) => {
-    const calificada = resp
-        && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada')
-        && window.tieneCalificaciones(resp)
-        && typeof window.calcularScoreRespuesta === 'function';
-    return calificada ? window.calcularScoreRespuesta(resp) : null;
+    const entregada = resp
+        && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada');
+    if (!entregada) return null;
+
+    if (!window.encuestaPuntua(resp.evaluation_id)) return window.PUNTAJE_POR_ENTREGAR;
+
+    return (window.tieneCalificaciones(resp) && typeof window.calcularScoreRespuesta === 'function')
+        ? window.calcularScoreRespuesta(resp) : null;
 };
 
 // Cuántos periodos hacia atrás mira la gráfica de una clasificación. Seis caben

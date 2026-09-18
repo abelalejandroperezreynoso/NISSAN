@@ -1434,35 +1434,46 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   empleado: sin puntaje no hay mínimo que exigir, igual que cuando la encuesta
   lo trae apagado.
 
-  **Y una encuesta hecha sólo de éstas no tiene resultado: no vale cero.**
-  `tieneCalificaciones` tapa la respuesta suelta, pero no alcanza a las cifras
-  que **reparten un puntaje sobre el padrón**, que es donde de verdad dolía: el
-  divisor es la gente a la que le toca, así que la junta a la que fue la
-  plantilla entera salía **al 0% con todo el mundo habiéndola contestado**, y
-  de paso hundía el promedio de su clasificación y el de la empresa —una
-  clasificación con una auditoría al 80% y un pase de lista decía 40%—. Un
-  promedio no se puede sacar de lo que no puntúa: donde no hay puntaje se dice
-  «—» y «sin puntaje», que es lo que significa.
+  **Y una encuesta hecha sólo de éstas se mide por la entrega: vale 100.** Ahí
+  no hay nada que calificar, así que lo único que se le puede pedir a quien la
+  recibe es que la entregue, y eso o se hizo o no se hizo: **entregarla vale
+  100 y no entregarla vale 0**, sobre el mismo padrón que las demás. Su
+  porcentaje acaba siendo su participación, que es exactamente lo que de ella
+  se puede decir, y con eso vuelve a entrar en todas las cifras en lugar de
+  quedarse fuera.
 
-  Son dos piezas y hacen falta las dos, porque tapan dos agujeros distintos:
+  ```js
+  window.PUNTAJE_POR_ENTREGAR   // 100, en `1-config.js`
+  window.puntajeDeRespuesta(resp)   // la puerta por la que entra en todas las pantallas
+  ```
 
-  - **El divisor deja fuera lo que no se puede calificar**
+  **La puerta es `puntajeDeRespuesta`**, y por eso el resto del código no
+  necesita ningún caso aparte: de ella viven el resumen de la empresa
+  (`resumenDeEncuestaAdmin`), su gráfica, la tarjeta del panel de quien la
+  contesta, el historial de una clasificación, la cifra del encabezado de la
+  hoja de una encuesta y el badge de cada respuesta de su lista. Lo que sigue
+  valiendo `null` es lo **entregado y todavía sin calificar** de una encuesta
+  que sí puntúa: eso no dice nada de quien la contestó y su cero sería el
+  atraso del revisor.
+
+  Antes de esto la encuesta de constancia **salía al 0%** —el divisor era el
+  padrón y ninguna de sus respuestas sumaba, así que la junta a la que fue toda
+  la plantilla se leía como un cero y hundía el promedio de su clasificación y
+  el de la empresa—. El paso intermedio fue dejarla **sin cifra**, y tampoco
+  servía: una encuesta que se entrega sí dice algo, y sin cifra no entraba en
+  ninguna comparación.
+
+  Lo que se queda de aquel paso, y hace falta igual:
+
+  - **El divisor deja fuera lo contestado y sin calificar**
     (`window.baseDeEncuesta`, en `2b-core-dashboard.js`): la base es lo
-    calificado **más lo que falta por contestar**, y no el padrón entero. Con
-    eso, lo contestado y todavía sin revisar deja de contar como un cero —su
-    cero sería el atraso del revisor y no el de quien contestó—, que es la
-    misma regla que ya sostenía `baseDeCalificacion` en las estadísticas. Es lo
-    que sostiene el caso de participación total.
-  - **Y la encuesta dice si puntúa** (`window.encuestaPuntua`, en
-    `1-config.js`), porque con participación parcial lo anterior no basta: los
-    que faltaban seguían contando como ceros y los que fueron no contaban nada,
-    así que un pase de lista a medias salía al 0%. Una encuesta que no puntúa
-    no reparte nada, ni siquiera sobre quien no la ha contestado —contestándola
-    no habría sumado—.
-
-    Lo dicen **sus preguntas**, que es lo único que lo dice de verdad: una
-    respuesta sin calificar llega con `grades_json` vacío igual, y eso es otra
-    cosa. Se piden **una sola vez por sesión** y se guardan en una caché, como
+    calificado **más lo que falta por contestar**, y no el padrón entero. Es la
+    misma regla que `baseDeCalificacion` en las estadísticas.
+  - **Y la encuesta sigue diciendo si puntúa** (`window.encuestaPuntua`, en
+    `1-config.js`), porque es lo que separa «nadie la ha calificado todavía» de
+    «aquí no hay nada que calificar»: las dos llegan con `grades_json` vacío y
+    valen cosas distintas. Lo dicen **sus preguntas**, que es lo único que lo
+    dice de verdad, y se piden **una sola vez por sesión** en una caché, como
     las ventanas de asistencia y los revisores de una clasificación, porque
     quien pregunta lo hace sin poder esperar.
 
@@ -1472,36 +1483,36 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     ```
 
     **Mientras la caché no esté cargada, toda encuesta puntúa**, que es lo de
-    antes: equivocarse hacia el puntaje sólo enseña un 0% donde no lo hay,
-    mientras que equivocarse al revés esconde el resultado de una encuesta que
-    sí lo tiene. La piden `cargarEncuestasAsignadas`, la hoja de una encuesta
-    en modo administrador y `cargarStatsEncuestasGlobales`, y
-    `guardarNuevaEvaluacion` la rehace al guardar —ahí es donde se escriben las
-    preguntas, así que la encuesta puede haber dejado de puntuar o empezado a
-    hacerlo—. El tipo se decide en el cliente con `esPreguntaDeConstancia` y no
+    antes: sin ella una de constancia se queda sin cifra, que es preferible a
+    inventarle un 100 a algo que sí había que calificar. La piden
+    `cargarEncuestasAsignadas`, `abrirHistorialEvaluacion` —para toda la hoja,
+    no sólo en modo administrador— y `cargarStatsEncuestasGlobales`, y
+    `guardarNuevaEvaluacion` la rehace al guardar, que ahí es donde se escriben
+    las preguntas y la encuesta puede haber dejado de puntuar o empezado a
+    hacerlo. El tipo se decide en el cliente con `esPreguntaDeConstancia` y no
     con un filtro de la consulta: así hay una sola definición de qué deja
     constancia, y una pregunta antigua con el tipo en null —que un `not.in` de
     PostgREST dejaría fuera— cuenta como lo que es, una de texto que sí se
     califica.
 
-  En las estadísticas la misma regla son tres contadores nuevos, y **toda caché
-  que quiera dibujarse ahí tiene que traerlos**:
+  En las estadísticas la regla es la misma y entra por el motor:
+  `finalScoreCalculated` vale **100** cuando la respuesta no traía nada que
+  calificar **y su encuesta no puntúa**, y **`null`** cuando sí puntúa —ahí es
+  que nadie la ha revisado—. Antes valía 0 en los dos casos, y ese cero entraba
+  en el promedio de su departamento como si la hubieran fallado entera.
 
-  - **`puntuadas`**, las procesadas que traen algo calificado, que es el divisor
-    de «80% Líderes» en vez de `procesadasDe`. Una asistencia contaba como
-    procesada y nunca podía llegar al 80%, así que **quien pasó lista a una
-    junta dejaba de «cumplir en todas» por haber asistido**.
-  - **`assignedPuntuables` y `responsesPuntuables`**, que es lo que mira
-    `baseDeCalificacion`: sin ellos, una encuesta de constancia **sin
-    contestar** le cobraba un cero a esa persona.
+  Con eso **no hacen falta contadores aparte** para el divisor: una constancia
+  entregada entra en `countScore` como cualquier otra y no entregarla cuenta
+  como el cero que es, así que `baseDeCalificacion` mira `assignedCount` y
+  `responses` a secas. El que sí hace falta es **`puntuadas`** —las procesadas
+  que traen puntaje—, que es el divisor de «80% Líderes» en vez de
+  `procesadasDe`: sin él, una respuesta entregada y sin calificar contaba como
+  una encuesta que nunca llegaba al 80%. **Toda caché que quiera dibujarse ahí
+  tiene que traerlo.**
 
-  Y en el motor, `finalScoreCalculated` vale **`null`** cuando la respuesta no
-  traía nada que calificar —antes valía 0, y ese cero entraba en el promedio de
-  su departamento como si la hubiera fallado entera—. Lo procesado se sigue
-  contando igual, que de eso vive «Avance de revisión»: lo que no se cuenta es
-  el puntaje que no existe. Por eso `totalRevisadas` sigue diciendo cuántas se
-  procesaron —es lo que lee su pie— y el divisor de la «Calificación Promedio»
-  del encabezado es `totalPuntuadas`.
+  Lo procesado se sigue contando igual, que de eso vive «Avance de revisión»:
+  por eso `totalRevisadas` dice cuántas se procesaron —es lo que lee su pie— y
+  el divisor de la «Calificación Promedio» del encabezado es `totalPuntuadas`.
 
   Dos cosas más que hay que mantener:
 
