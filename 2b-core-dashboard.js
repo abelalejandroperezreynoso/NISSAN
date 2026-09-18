@@ -841,17 +841,34 @@ window.respuestasDelPeriodoDeTodos = async (encuestas, ahora, frecuencia) => {
     return { respuestas: filas, tope };
 };
 
-// El promedio de la empresa: **quien no contestó cuenta como cero**, así que el
-// divisor es el padrón y no las respuestas que llegaron. Es lo que separa «cómo
-// les fue a los que la hicieron» de «cómo va la empresa con esta encuesta», que
-// es lo que se viene a ver administrando: con 23 de 40 al 86%, el 86% dice que
-// va bien algo que lleva diecisiete personas sin hacer.
+// Sobre cuánta gente se reparte el puntaje de una encuesta: **lo calificado más
+// lo que falta por contestar**. Quien no contestó cuenta como cero —que es lo
+// que separa «cómo les fue a los que la hicieron» de «cómo va la empresa con
+// esta encuesta», y lo que se viene a ver administrando: con 23 de 40 al 86%,
+// el 86% dice que va bien algo que lleva diecisiete personas sin hacer—.
 //
-// Sin padrón —la encuesta llegó sin sus columnas de destinatarios— no hay sobre
-// qué repartir, y entonces se promedia lo calificado, que es lo de antes.
-window.promedioSobrePadron = (suma, calificadas, padron) => {
-    if (padron > 0) return Math.round(suma / padron);
-    return calificadas > 0 ? Math.round(suma / calificadas) : null;
+// **Lo que no se puede calificar queda fuera del divisor**, y eso incluye las
+// dos cosas que no son lo mismo pero se cuentan igual: lo contestado y
+// todavía sin revisar —su cero sería el atraso del revisor y no el de quien
+// contestó— y lo que **no puntúa en absoluto**, que es una encuesta hecha sólo
+// de las que dejan constancia: una asistencia o una evidencia fotográfica no
+// llevan calificación, así que su respuesta llega con `grades_json` vacío y
+// repartiendo su cero sobre el padrón la encuesta salía **al 0% con la
+// plantilla entera habiéndola contestado**. Es la misma regla que ya sostiene
+// `baseDeCalificacion` en las estadísticas, y por lo mismo.
+//
+// Sin nadie que la haya dejado sin contestar y sin nada calificado no hay
+// divisor, y entonces no hay promedio: se dice «—», como en una respuesta sin
+// calificar. Lo que sí sigue diciendo esa encuesta es cuánta gente la contestó,
+// que es de lo que habla de verdad.
+window.baseDeEncuesta = (calificadas, contestaron, total) =>
+    (calificadas || 0) + Math.max(0, (total || 0) - (contestaron || 0));
+
+// El promedio sobre esa base. Sin padrón —la encuesta llegó sin sus columnas de
+// destinatarios— la base es lo calificado a secas, así que se promedia lo
+// calificado, que es lo de antes.
+window.promedioSobrePadron = (suma, calificadas, base) => {
+    return base > 0 ? Math.round(suma / base) : null;
 };
 
 // Lo que se dice de una encuesta que en aquel periodo todavía no existía. Va
@@ -906,7 +923,7 @@ window.encuestaExistiaEn = (ev, referencia) => {
 // se promedian los promedios. Una encuesta de cuarenta personas y otra de tres
 // no pesan igual, y promediar sus dos cifras las iguala.
 window.totalDeEncuestasAdmin = (filas) => {
-    let suma = 0, calificadas = 0, total = 0, contestaron = 0, ajenos = 0;
+    let suma = 0, calificadas = 0, total = 0, contestaron = 0, ajenos = 0, base = 0;
     (filas || []).forEach(f => {
         if (!f.resumen) return;
         suma += f.resumen.suma;
@@ -914,9 +931,14 @@ window.totalDeEncuestasAdmin = (filas) => {
         total += f.resumen.total;
         ajenos += f.resumen.ajenos;
         contestaron += f.resumen.contestaron;
+        // La base se suma ya calculada de cada encuesta y no se rehace con los
+        // totales del grupo: una encuesta que no puntúa —toda de constancia—
+        // aporta cero a la base, y calculándola aquí de nuevo volvería a
+        // repartir su padrón entre nadie.
+        base += f.resumen.base;
     });
-    return { contestaron, total, ajenos, calificadas,
-             promedio: window.promedioSobrePadron(suma, calificadas, total) };
+    return { contestaron, total, ajenos, calificadas, base,
+             promedio: window.promedioSobrePadron(suma, calificadas, base) };
 };
 
 // **El promedio de la empresa pesa por clasificación, no por padrón.** Sumando
@@ -1016,11 +1038,25 @@ window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
     const ajenos = Object.keys(ultimaDeCadaUno).filter(id => !enPadron.has(id)).length;
     const total = padron.length + ajenos;
 
+    // Sobre cuánta gente se reparte: lo calificado más quien no la ha
+    // contestado. Lo contestado y sin calificar queda fuera, que su cero sería
+    // el atraso del revisor y no el de quien contestó.
+    //
+    // **Y una encuesta que no puntúa no reparte nada**: la hecha sólo de las que
+    // dejan constancia no tiene resultado ni lo va a tener, así que tampoco
+    // puede cobrarle el cero a quien no la ha contestado —contestándola no
+    // habría sumado—. Sin eso, una de asistencia a medio pasar lista salía al
+    // 0%: los que faltaban contaban como ceros y los que fueron no contaban
+    // nada. Mientras la caché de `encuestaPuntua` no esté cargada, toda
+    // encuesta puntúa y esto se comporta como antes.
+    const puntua = window.encuestaPuntua(ev);
+    const base = puntua ? window.baseDeEncuesta(puntajes.length, suyas.length, total) : 0;
+
     return {
         contestaron: suyas.length,
         calificadas: puntajes.length,
-        padron: padron.length, ajenos, total, suma,
-        promedio: window.promedioSobrePadron(suma, puntajes.length, total),
+        padron: padron.length, ajenos, total, suma, base, puntua,
+        promedio: window.promedioSobrePadron(suma, puntajes.length, base),
         // Lo que sacaron quienes sí la contestaron. No se dibuja: va en el globo
         // del renglón, que es donde cabe explicar de dónde sale el otro.
         promedioContestadas: puntajes.length === 0 ? null
@@ -1097,9 +1133,14 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             // esa cuenta no se sabe si un 49% es media plantilla al 100 o
             // la plantilla entera a la mitad.
             if (resumen) {
+                // Y una que no puntúa lo dice con esas palabras. «Sin calificar»
+                // sería pedirle a alguien que la califique, y no hay nada que
+                // calificar: una asistencia o una evidencia dejan constancia y
+                // ya. Lo que esa encuesta tiene que decir es cuánta gente la
+                // contestó, que va justo delante.
                 const cifra = puntaje !== null
                     ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
-                    : ' · sin calificar';
+                    : (resumen.puntua === false ? ' · sin puntaje' : ' · sin calificar');
                 resultado = ` · ${window.textoDeRespuestasAdmin(resumen)}${cifra}`;
             }
 
@@ -1118,9 +1159,11 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             // empresa al repartirlo sobre el padrón.
             const globo = existia === false
                 ? window.TEXTO_SIN_EXISTIR
-                : (resumen && resumen.promedioContestadas !== null
-                    ? `${resumen.promedioContestadas}% entre quienes la contestaron`
-                    : estado.texto);
+                : (resumen && resumen.puntua === false
+                    ? 'Esta encuesta no se califica: sólo deja constancia.'
+                    : (resumen && resumen.promedioContestadas !== null
+                        ? `${resumen.promedioContestadas}% entre quienes la contestaron`
+                        : estado.texto));
 
             return `
                 <div onclick="window.abrirEncuestaDesdeInicio('${ev.id}', '${safeTitle}')"
@@ -1349,6 +1392,11 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // que pasan lista se piden antes, porque `esEvaluacionPendiente` las
         // consulta sin poder esperar.
         await window.cargarVentanasDeAsistencia();
+
+        // Y qué encuestas puntúan, por lo mismo: `resumenDeEncuestaAdmin` lo
+        // pregunta sin poder esperar, y sin la caché una hecha sólo de
+        // asistencias o evidencias volvería a repartir su cero sobre el padrón.
+        await window.cargarEncuestasQuePuntuan();
 
         // Quién revisa puede venir de la clasificación, y `revisoresDeEncuesta`
         // lo pregunta sin poder esperar cuando se abre la hoja de detalle.
@@ -2279,7 +2327,7 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
     // son los totales del periodo que se está dibujando.
     const mediaDeClasificaciones = (porClave) => {
         const promedios = Object.values(porClave)
-            .map(a => window.promedioSobrePadron(a.suma, a.calificadas, a.divisor))
+            .map(a => window.promedioSobrePadron(a.suma, a.calificadas, a.base))
             .filter(p => p !== null);
         if (promedios.length === 0) return null;
         return Math.round(promedios.reduce((a, b) => a + b, 0) / promedios.length);
@@ -2288,7 +2336,11 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
     return periodos.slice().reverse().map(p => {
         const puntajes = [];
         let entregadas = 0;
-        let suma = 0, calificadas = 0, divisor = 0, contestaron = 0;
+        // `divisor` es gente —lo que se lee como «N de M respuestas»— y `base`
+        // es sobre cuánto se reparte el puntaje, que no es lo mismo: lo
+        // contestado y sin calificar, y lo que no puntúa nada, no entran en la
+        // segunda. Ver `baseDeEncuesta`.
+        let suma = 0, calificadas = 0, divisor = 0, contestaron = 0, base = 0;
         // Lo mismo, partido por clasificación, para cuando cada una pesa igual.
         // Las cuentas de arriba se siguen llevando enteras: son gente y
         // respuestas, y ahí cada persona cuenta una vez, se pondere como se
@@ -2327,14 +2379,15 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
                 suma += r.suma;
                 calificadas += r.calificadas;
                 divisor += r.total;
+                base += r.base;
                 contestaron += r.contestaron;
 
                 if (porClasificacion) {
                     const clave = window.normalizarClasificacion(ev.category || '');
-                    const acc = porClave[clave] || (porClave[clave] = { suma: 0, calificadas: 0, divisor: 0 });
+                    const acc = porClave[clave] || (porClave[clave] = { suma: 0, calificadas: 0, base: 0 });
                     acc.suma += r.suma;
                     acc.calificadas += r.calificadas;
-                    acc.divisor += r.total;
+                    acc.base += r.base;
                 }
                 return;
             }
@@ -2369,7 +2422,7 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
             divisor,
             promedio: sobrePadron
                 ? (porClasificacion ? mediaDeClasificaciones(porClave)
-                    : window.promedioSobrePadron(suma, calificadas, divisor))
+                    : window.promedioSobrePadron(suma, calificadas, base))
                 : (puntajes.length === 0 ? null
                     : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length))
         };

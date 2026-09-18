@@ -1434,6 +1434,75 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   empleado: sin puntaje no hay mínimo que exigir, igual que cuando la encuesta
   lo trae apagado.
 
+  **Y una encuesta hecha sólo de éstas no tiene resultado: no vale cero.**
+  `tieneCalificaciones` tapa la respuesta suelta, pero no alcanza a las cifras
+  que **reparten un puntaje sobre el padrón**, que es donde de verdad dolía: el
+  divisor es la gente a la que le toca, así que la junta a la que fue la
+  plantilla entera salía **al 0% con todo el mundo habiéndola contestado**, y
+  de paso hundía el promedio de su clasificación y el de la empresa —una
+  clasificación con una auditoría al 80% y un pase de lista decía 40%—. Un
+  promedio no se puede sacar de lo que no puntúa: donde no hay puntaje se dice
+  «—» y «sin puntaje», que es lo que significa.
+
+  Son dos piezas y hacen falta las dos, porque tapan dos agujeros distintos:
+
+  - **El divisor deja fuera lo que no se puede calificar**
+    (`window.baseDeEncuesta`, en `2b-core-dashboard.js`): la base es lo
+    calificado **más lo que falta por contestar**, y no el padrón entero. Con
+    eso, lo contestado y todavía sin revisar deja de contar como un cero —su
+    cero sería el atraso del revisor y no el de quien contestó—, que es la
+    misma regla que ya sostenía `baseDeCalificacion` en las estadísticas. Es lo
+    que sostiene el caso de participación total.
+  - **Y la encuesta dice si puntúa** (`window.encuestaPuntua`, en
+    `1-config.js`), porque con participación parcial lo anterior no basta: los
+    que faltaban seguían contando como ceros y los que fueron no contaban nada,
+    así que un pase de lista a medias salía al 0%. Una encuesta que no puntúa
+    no reparte nada, ni siquiera sobre quien no la ha contestado —contestándola
+    no habría sumado—.
+
+    Lo dicen **sus preguntas**, que es lo único que lo dice de verdad: una
+    respuesta sin calificar llega con `grades_json` vacío igual, y eso es otra
+    cosa. Se piden **una sola vez por sesión** y se guardan en una caché, como
+    las ventanas de asistencia y los revisores de una clasificación, porque
+    quien pregunta lo hace sin poder esperar.
+
+    ```js
+    await window.cargarEncuestasQuePuntuan()   // la llena; `true` la rehace
+    window.encuestaPuntua(ev)                  // o su id, sin esperar a nadie
+    ```
+
+    **Mientras la caché no esté cargada, toda encuesta puntúa**, que es lo de
+    antes: equivocarse hacia el puntaje sólo enseña un 0% donde no lo hay,
+    mientras que equivocarse al revés esconde el resultado de una encuesta que
+    sí lo tiene. La piden `cargarEncuestasAsignadas`, la hoja de una encuesta
+    en modo administrador y `cargarStatsEncuestasGlobales`, y
+    `guardarNuevaEvaluacion` la rehace al guardar —ahí es donde se escriben las
+    preguntas, así que la encuesta puede haber dejado de puntuar o empezado a
+    hacerlo—. El tipo se decide en el cliente con `esPreguntaDeConstancia` y no
+    con un filtro de la consulta: así hay una sola definición de qué deja
+    constancia, y una pregunta antigua con el tipo en null —que un `not.in` de
+    PostgREST dejaría fuera— cuenta como lo que es, una de texto que sí se
+    califica.
+
+  En las estadísticas la misma regla son tres contadores nuevos, y **toda caché
+  que quiera dibujarse ahí tiene que traerlos**:
+
+  - **`puntuadas`**, las procesadas que traen algo calificado, que es el divisor
+    de «80% Líderes» en vez de `procesadasDe`. Una asistencia contaba como
+    procesada y nunca podía llegar al 80%, así que **quien pasó lista a una
+    junta dejaba de «cumplir en todas» por haber asistido**.
+  - **`assignedPuntuables` y `responsesPuntuables`**, que es lo que mira
+    `baseDeCalificacion`: sin ellos, una encuesta de constancia **sin
+    contestar** le cobraba un cero a esa persona.
+
+  Y en el motor, `finalScoreCalculated` vale **`null`** cuando la respuesta no
+  traía nada que calificar —antes valía 0, y ese cero entraba en el promedio de
+  su departamento como si la hubiera fallado entera—. Lo procesado se sigue
+  contando igual, que de eso vive «Avance de revisión»: lo que no se cuenta es
+  el puntaje que no existe. Por eso `totalRevisadas` sigue diciendo cuántas se
+  procesaron —es lo que lee su pie— y el divisor de la «Calificación Promedio»
+  del encabezado es `totalPuntuadas`.
+
   Dos cosas más que hay que mantener:
 
   - **El radar las deja fuera sola**: `ejesPorPregunta` no dibuja eje de una

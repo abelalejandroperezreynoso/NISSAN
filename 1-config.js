@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-15-4';
+window.VERSION_APP = '2026-09-18-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -554,6 +554,80 @@ window.TIPOS_DE_CONSTANCIA = [
 ];
 window.esPreguntaDeConstancia = (pregunta) =>
     !!pregunta && window.TIPOS_DE_CONSTANCIA.includes(pregunta.question_type);
+
+// ==========================================
+// LA ENCUESTA QUE NO PUNTÚA
+// ==========================================
+// Una encuesta hecha **sólo** de las que dejan constancia no tiene resultado, y
+// eso no es lo mismo que sacar cero: una junta a la que fue toda la plantilla no
+// se «reprobó». `tieneCalificaciones` tapa el caso de una respuesta suelta, pero
+// no alcanza a las cifras que reparten un puntaje sobre el padrón: ahí el
+// divisor es la gente a la que le toca, así que la encuesta salía al **0% con
+// todo el mundo habiéndola contestado**, y de paso hundía el promedio de su
+// clasificación y el de la empresa.
+//
+// Para saberlo hay que mirar sus preguntas, que es lo único que lo dice de
+// verdad —una respuesta sin calificar también llega con `grades_json` vacío, y
+// eso es otra cosa: es que nadie la ha revisado todavía—. Se piden **una sola
+// vez por sesión** y se guardan en una caché, como las ventanas de asistencia y
+// los revisores de una clasificación, porque quien pregunta lo hace sin poder
+// esperar.
+//
+// **Mientras la caché no esté cargada, toda encuesta puntúa**, que es lo que
+// hacía antes: equivocarse hacia el puntaje sólo enseña un 0% donde no lo hay,
+// mientras que equivocarse al revés esconde el resultado de una encuesta que sí
+// lo tiene.
+window.MAX_PAGINAS_PREGUNTAS = 5;
+window.encuestasQuePuntuan = null;   // Set de ids, o null mientras no se sepa
+let promesaEncuestasQuePuntuan = null;
+
+window.cargarEncuestasQuePuntuan = (recargar = false) => {
+    if (recargar) { promesaEncuestasQuePuntuan = null; window.encuestasQuePuntuan = null; }
+    if (promesaEncuestasQuePuntuan) return promesaEncuestasQuePuntuan;
+
+    promesaEncuestasQuePuntuan = (async () => {
+        try {
+            const puntuan = new Set();
+            for (let pagina = 0; pagina < window.MAX_PAGINAS_PREGUNTAS; pagina++) {
+                // El tipo se decide aquí con `esPreguntaDeConstancia` y no con un
+                // filtro de la consulta: así hay una sola definición de qué deja
+                // constancia, y una pregunta antigua con el tipo en null —que un
+                // `not.in` de PostgREST dejaría fuera— cuenta como lo que es, una
+                // de texto que sí se califica.
+                const { data, error } = await sb.from('evaluation_questions')
+                    .select('evaluation_id, question_type')
+                    .range(pagina * 1000, pagina * 1000 + 999);
+                if (error || !data) return null;
+
+                data.forEach(q => {
+                    if (!window.esPreguntaDeConstancia(q)) puntuan.add(String(q.evaluation_id));
+                });
+
+                // La última página. Sólo aquí se da la caché por buena.
+                if (data.length < 1000) {
+                    window.encuestasQuePuntuan = puntuan;
+                    return puntuan;
+                }
+            }
+            // Se agotaron las páginas: faltan preguntas por mirar, así que hay
+            // encuestas que puntúan y no están en el Set. Sin caché, que es
+            // preferible a esconder su resultado.
+            return null;
+        } catch (e) {
+            return null;
+        }
+    })();
+
+    return promesaEncuestasQuePuntuan;
+};
+
+// ¿Esta encuesta tiene alguna pregunta que se califique? Ante la duda, sí.
+window.encuestaPuntua = (ev) => {
+    const id = ev && typeof ev === 'object' ? ev.id : ev;
+    const cache = window.encuestasQuePuntuan;
+    if (!cache || id === undefined || id === null) return true;
+    return cache.has(String(id));
+};
 
 // ==========================================
 // LA HORA DE UN REGISTRO DE ASISTENCIA

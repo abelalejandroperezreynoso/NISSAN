@@ -324,6 +324,12 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         const traidas = (empresaPendiente ? await empresaPendiente : null)
             || { respuestas: responses, tope: false };
 
+        // Qué encuestas puntúan: `resumenDeEncuestaAdmin` lo pregunta sin poder
+        // esperar, y sin la caché una hecha sólo de las que dejan constancia
+        // repartiría su cero sobre el padrón y saldría al 0% con la plantilla
+        // entera habiéndola contestado.
+        if (window.cargarEncuestasQuePuntuan) await window.cargarEncuestasQuePuntuan();
+
         // Sin la ficha de la encuesta no hay padrón que repartir, y ahí no se
         // cae al resultado personal: enseñarle al administrador su propio 100%
         // como el de la encuesta es justo lo que se vino a quitar.
@@ -361,10 +367,17 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             // Sin padrón no hay sobre qué repartir y la cifra sería la de lo
             // entregado, que no es lo que promete el rótulo: ahí se dice «—»,
             // como en una respuesta sin calificar.
+            //
+            // **Y una encuesta que no puntúa tampoco tiene cifra**, y ahí el
+            // «—» no significa lo mismo: no es que falte calificarla, es que no
+            // hay nada que calificar. Lo dice su etiqueta, que es lo que le
+            // queda a un número sin renglón.
             resultadoHoja = {
                 texto: resumen.promedio === null ? '—' : `${resumen.promedio}%`,
                 color: colorScore,
-                etiqueta: `Resultado de la empresa. Quien no contestó cuenta como 0.${resumen.promedioContestadas !== null ? ` ${resumen.promedioContestadas}% entre quienes la contestaron.` : ''}${resumen.ajenos > 0 ? ` ${resumen.ajenos} de las respuestas son de gente que ya no está en la lista de hoy y cuentan aparte.` : ''}`
+                etiqueta: resumen.puntua === false
+                    ? 'Esta encuesta no se califica: sólo deja constancia, así que no tiene resultado. Lo que dice es cuánta gente la contestó.'
+                    : `Resultado de la empresa. Quien no contestó cuenta como 0.${resumen.promedioContestadas !== null ? ` ${resumen.promedioContestadas}% entre quienes la contestaron.` : ''}${resumen.ajenos > 0 ? ` ${resumen.ajenos} de las respuestas son de gente que ya no está en la lista de hoy y cuentan aparte.` : ''}`
             };
 
             // Y lo que decía el renglón de debajo de la cifra —cuánta gente
@@ -6762,6 +6775,10 @@ window.publicarEncuestaDeLaHoja = async () => {
                 // asistencia nueva o con la hora movida, y de esa caché salen
                 // los pendientes.
                 await window.cargarVentanasDeAsistencia(true);
+                // Y por lo mismo puede haber cambiado si la encuesta puntúa:
+                // quitarle la única pregunta que se calificaba, o agregarle una,
+                // cambia la cifra de la tarjeta del panel y la de su hoja.
+                await window.cargarEncuestasQuePuntuan(true);
                 // Y la tarjeta del panel de detrás, que no se entera sola: se
                 // quedaba con las filas que trajo al cargar el inicio, así que
                 // el título, la clasificación, «Activa» o la fecha desde la que
