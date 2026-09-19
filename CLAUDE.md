@@ -5006,14 +5006,45 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   ritmo sigue saliendo de su encuesta más frecuente, que es lo de siempre: ese
   argumento no lo pasa nadie más.
 
-  **Elegir un periodo tocando un punto es cosa del administrador.** Ahí el punto
-  reescribe la lista (`verPeriodoDeLaTarjeta`, que resume cada encuesta con
-  `resumenDeEncuestaAdmin`); en la tarjeta de quien contesta, tocar un punto abre
-  su globo y nada más —lo que hacen las gráficas de una clasificación—. No es
-  timidez: el estado de cada renglón —«Sin contestar», «Vencida»— lo decide
-  `esEvaluacionPendiente` **con la fecha de hoy**, así que cambiarle sólo el
-  puntaje dejaría el renglón diciendo dos periodos a la vez. Por eso
-  `graficaDeLinea` recibe su `alElegir` sólo en modo administrador.
+  **Y tocando un punto la tarjeta entera habla de aquel periodo, también la de
+  quien contesta.** Fue cosa del administrador mientras `verPeriodoDeLaTarjeta`
+  sólo sabía resumir con `resumenDeEncuestaAdmin`, y no por timidez: en la
+  tarjeta de quien contesta no basta con reescribirle el puntaje al renglón,
+  porque su estado —«Sin contestar», «Vencida», «Al día»— lo decide
+  `esEvaluacionPendiente`, y con la fecha de hoy el renglón diría dos periodos a
+  la vez: el puntaje de junio con el estado de septiembre. Desde que esa regla
+  acepta la fecha del periodo (justo aquí abajo), la lista entera se reescribe y
+  `graficaDeLinea` recibe su `alElegir` en los dos modos.
+
+  **De quién es la tarjeta lo deja dicho quien la dibuja**
+  (`window.tarjetaDeEncuestasEsAdmin`), y al tocar el punto no se vuelve a
+  preguntar por `modoAdminActivo`: las filas se armaron de una manera o de otra
+  según ese modo, y reescribirlas con el otro criterio las dejaría a medias —con
+  el resumen de la empresa encima de un estado personal—.
+
+  **`esEvaluacionPendiente` acepta un instante**, su **séptimo** argumento, y con
+  él la pregunta deja de ser «¿está pendiente hoy?» para ser «¿lo estaba
+  entonces?». Hace dos cosas, y las dos hacen falta: decide con esa fecha —el
+  periodo vigente, la ventana de asistencia, el plazo de reintento, los días que
+  quedaban— y **descarta lo enviado después**, o abril diría que la encuesta
+  estaba contestada porque se contestó en septiembre. Es el mismo tope que
+  `respuestaDelPeriodo` le pone a las respuestas de un punto. Sin ese argumento
+  —que es lo que pasan las cuatro pantallas que deciden pendientes— no cambia
+  absolutamente nada.
+
+  **Y un periodo ya cerrado no «vence mañana».** Preguntado en el último instante
+  de agosto, lo que quedaba sin contestar salía como `por_vencer` —cierto
+  entonces, y una fecha que ya pasó cuando se lee en septiembre—. Mirando atrás,
+  `por_vencer` y `falta_periodo` se leen por lo que acabaron siendo: **vencido**.
+  La traducción vive en `verPeriodoDeLaTarjeta` y no en `estadoDeAsignada`, que
+  es quien nombra los estados y no quien decide desde cuándo se miran.
+
+  **Lo que en aquel periodo todavía no existía se queda en el neutro**, el mismo
+  círculo a rayas con el que el administrador ve lo que no es suyo: una palomita
+  verde diría que estaba «al día» de algo que no existía. Y lo que se cuenta en
+  los renglones de resumen —«N pendientes de M», «M encuestas al día»— son **las
+  que existían entonces**, no las de hoy, que es la misma regla del `cuantasAdmin`
+  del administrador.
 
   Por lo mismo **arma sus columnas como el badge** —`camposConRelanzamiento`
   sobre `camposConMinimo` sobre `camposConReintento`, más `mode`,
@@ -5496,21 +5527,31 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **Y cada punto se toca para ver aquel periodo.** El renglón del resumen y los
   renglones de cada clasificación pasan a decir cuánta gente había contestado
   entonces y cómo iba la empresa; el globo del punto queda abierto como marca de
-  qué se está mirando.
+  qué se está mirando. En la tarjeta de quien contesta es lo mismo con lo suyo
+  —su puntaje y su estado de aquel periodo—, y se cuenta arriba, con esa tarjeta.
 
   ```js
   window.verPeriodoDeLaTarjeta(indice)   // null, o el último punto, vuelve a hoy
   window.cuerpoTarjetaEncuestas(filas, esAdmin, topeRespuestas)  // { resumen, bloques }
   window.periodosDeLaTarjeta  window.filasDeLaTarjeta  window.padronesDeLaTarjeta
-  window.periodoElegidoTarjeta   // el índice elegido, o null
+  window.tarjetaDeEncuestasEsAdmin   // de quién es la tarjeta que se va a reescribir
+  window.referenciaElegidaTarjeta    // el instante elegido, o null
   ```
 
   **No consulta nada**: las respuestas de los seis periodos ya vinieron en la
   misma consulta, así que elegir un periodo es volver a preguntarle a
   `resumenDeEncuestaAdmin` con otra fecha. Y se le pasa **la `referencia` del
-  propio punto** —el instante con el que se dibujó, que por eso lo devuelve
-  `historialDeRevision`—, de modo que la lista dice exactamente la cifra del
-  globo y no una parecida.
+  propio punto** —el instante con el que se dibujó, que por eso lo devuelven
+  `historialDeRevision` y `historialDeClasificacion`—, de modo que la lista dice
+  exactamente la cifra del globo y no una parecida.
+
+  **Qué periodo se está mirando se apunta como instante y no como índice**, que
+  es lo que puede leer la hoja de detalle de una clasificación: su eje es el del
+  ritmo de la clasificación y el de la tarjeta va en meses a la fuerza, así que
+  el sexto punto de uno no es el sexto del otro y por índice enseñaba el periodo
+  equivocado en cuanto la clasificación no era mensual. Con el instante,
+  `cuerpoDetalleClasificacion` toma el último de los suyos que ya había terminado
+  entonces; si ninguno tenía resultado, no se inventa el de hoy.
 
   **Y lo que en aquel periodo todavía no existía no vale cero.** Es la misma
   regla que la gráfica ya aplicaba a sus puntos (`encuestaExistiaEn`, extraída

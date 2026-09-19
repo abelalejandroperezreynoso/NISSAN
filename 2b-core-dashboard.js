@@ -1195,18 +1195,23 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             ? window.getColorScore(promedioGrupo) : '#64748b';
 
         const cuantas = `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'}`;
+        // Lo que se cuenta son las que existían en el periodo que se mira, no
+        // las de hoy: mirando abril, una clasificación creada en julio no son
+        // tres encuestas al día, es que todavía no existía. Sin periodo elegido
+        // son todas, que es lo de siempre.
+        const cuantasVig = `${vigentes.length} encuesta${vigentes.length === 1 ? '' : 's'}`;
         // Ninguna de las suyas existía: el renglón se desvanece entero y dice
         // cuántas encuestas tiene, que es lo único suyo que no depende del
         // periodo. «0 respuestas», que es lo que daría `totalDeEncuestasAdmin`
         // sin filas que sumar, diría que nadie contestó algo que no se había
         // creado.
-        const sinExistir = esAdmin && vigentes.length === 0;
+        const sinExistir = vigentes.length === 0;
         const pie = sinExistir ? cuantas : [
             esAdmin
                 ? window.textoDeRespuestasAdmin(totalGrupo)
                 : (pendientesGrupo > 0
-                    ? `${pendientesGrupo} pendiente${pendientesGrupo === 1 ? '' : 's'} de ${g.filas.length}`
-                    : `${cuantas} al día`),
+                    ? `${pendientesGrupo} pendiente${pendientesGrupo === 1 ? '' : 's'} de ${vigentes.length}`
+                    : `${cuantasVig} al día`),
             promedioGrupo === null ? null
                 : `<span style="color:${colorGrupo}; font-weight:700;">${promedioGrupo}%</span>`
         ].filter(Boolean).join(' · ');
@@ -1260,7 +1265,8 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
     // cuatro que se crearon en julio no son cuatro encuestas al 0%, es que
     // todavía no existían. Así el renglón dice la misma cifra que el punto de
     // la gráfica, que ya las descartaba.
-    const cuantasAdmin = esAdmin ? filas.filter(f => f.existia !== false).length : 0;
+    const vigentesTarjeta = filas.filter(f => f.existia !== false);
+    const cuantasAdmin = vigentesTarjeta.length;
     //
     // Va sin la palabra «activas» —que es lo que son: las apagadas no se
     // listan— porque con ella el renglón se parte en dos y deja el
@@ -1274,8 +1280,8 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
           ].filter(Boolean).join(' · ')
         : [
             pendientes === 0
-                ? `Ninguna pendiente de ${filas.length}`
-                : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${filas.length}`,
+                ? `Ninguna pendiente de ${vigentesTarjeta.length}`
+                : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${vigentesTarjeta.length}`,
             promedio === null ? null : `promedio ${promedio}%`
           ].filter(Boolean).join(' · ');
 
@@ -1284,7 +1290,16 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
 
 // Tocar un punto de la gráfica deja la tarjeta hablando de **aquel periodo**:
 // el renglón del resumen y los renglones de cada clasificación pasan a decir
-// cuánta gente había contestado entonces y cómo iba la empresa.
+// cómo se iba entonces.
+//
+// **Y vale para las dos tarjetas**, que es lo que la hace completa. Administrando,
+// cada encuesta se vuelve a resumir con `resumenDeEncuestaAdmin` y el renglón
+// dice cuánta gente había contestado y cómo iba la empresa. Contestando, el
+// renglón es de quien mira, así que no basta con reescribirle el puntaje: el
+// estado —«Sin contestar», «Vencida», «Al día»— lo decide `esEvaluacionPendiente`,
+// y con la fecha de hoy el renglón diría dos periodos a la vez —el puntaje de
+// junio con el estado de septiembre—. Por eso se le pasa la referencia del punto
+// y decide como decidía entonces, sin ver lo enviado después.
 //
 // **No consulta nada.** Las respuestas de los seis periodos ya vinieron en la
 // misma consulta —el `gte` de `respuestasDelPeriodoDeTodos` llega al más viejo
@@ -1300,13 +1315,23 @@ window.verPeriodoDeLaTarjeta = (indice) => {
     const filas = window.filasDeLaTarjeta || [];
     if (filas.length === 0) return;
 
+    // De quién es la tarjeta lo dejó dicho quien la dibujó, y no se vuelve a
+    // preguntar por `modoAdminActivo`: las filas se armaron de una manera o de
+    // otra según ese modo, y reescribirlas con el otro criterio las dejaría a
+    // medias —con el resumen de la empresa encima de un estado personal—.
+    const esAdmin = !!window.tarjetaDeEncuestasEsAdmin;
+
     const punto = puntos[indice];
     // El último punto **es** el periodo que corre, así que elegirlo es volver a
     // hoy: no hay dos maneras de estar al día.
     const esHoy = !punto || indice === puntos.length - 1;
-    window.periodoElegidoTarjeta = esHoy ? null : indice;
-
     const referencia = esHoy ? new Date() : punto.referencia;
+
+    // Qué periodo se está mirando se apunta **como instante y no como índice**,
+    // que es lo que puede leer la hoja de detalle de una clasificación: ahí el
+    // eje es el de su ritmo y el de la tarjeta va en meses a la fuerza, así que
+    // el sexto punto de uno no es el sexto del otro.
+    window.referenciaElegidaTarjeta = esHoy ? null : referencia;
 
     // Se reescribe **sobre las mismas filas**, que son las que guarda
     // `clasificacionesAsignadas`: así la hoja de detalle de una clasificación
@@ -1320,14 +1345,54 @@ window.verPeriodoDeLaTarjeta = (indice) => {
         // esto, el renglón contaba trece encuestas donde el punto dibujaba
         // nueve, y las dos cifras no cuadraban.
         f.existia = window.encuestaExistiaEn(f.ev, referencia);
-        f.resumen = f.existia
-            ? window.resumenDeEncuestaAdmin(
-                f.ev, window.respuestasAsignadas, referencia, window.padronesDeLaTarjeta[f.ev.id])
-            : null;
-        f.puntaje = f.resumen ? f.resumen.promedio : null;
+
+        if (esAdmin) {
+            f.resumen = f.existia
+                ? window.resumenDeEncuestaAdmin(
+                    f.ev, window.respuestasAsignadas, referencia, window.padronesDeLaTarjeta[f.ev.id])
+                : null;
+            f.puntaje = f.resumen ? f.resumen.promedio : null;
+            return;
+        }
+
+        // Y en la de quien contesta, lo mismo con lo suyo: la respuesta que
+        // contaba en aquel periodo, su puntaje y —lo que no se puede saltar—
+        // el estado que tenía entonces.
+        if (!f.existia) {
+            // Pedirle cuentas de un periodo anterior a la encuesta no tiene
+            // sentido, y una palomita verde diría que estaba «al día» de algo
+            // que no existía: se queda con el círculo a rayas, el mismo neutro
+            // con el que el administrador ve lo que no es suyo.
+            f.resp = null;
+            f.puntaje = null;
+            f.vencimiento = { mostrar: false };
+            f.estado = { texto: window.TEXTO_SIN_EXISTIR, neutro: true, color: '#94a3b8', listo: true };
+            return;
+        }
+
+        const contestaQuienMira = (f.ev.mode || 'self') !== 'boss';
+        f.vencimiento = window.esEvaluacionPendiente(
+            window.respuestasAsignadas, f.ev.id, f.ev.frequency,
+            window.inicioDeEncuesta(f.ev), f.ev, contestaQuienMira, referencia);
+
+        // Mirando un periodo **ya cerrado**, «todavía tiene plazo» no puede ser
+        // la respuesta: ese plazo se agotó. Preguntado en el último instante de
+        // agosto lo que salía era «Vence mañana» —cierto entonces, y una fecha
+        // que ya pasó cuando se lee en septiembre—, así que lo que quedó sin
+        // contestar al cerrarse el mes se lee por lo que acabó siendo: vencido.
+        const aunConPlazo = f.vencimiento.mostrar
+            && (f.vencimiento.tipoAviso === 'por_vencer' || f.vencimiento.tipoAviso === 'falta_periodo');
+        if (!esHoy && aunConPlazo) {
+            f.vencimiento = Object.assign({}, f.vencimiento,
+                { tipoAviso: 'vencida', vencida: true, diasFaltantes: 0 });
+        }
+
+        f.estado = window.estadoDeAsignada(f.vencimiento);
+        f.resp = window.respuestaDelPeriodo(f.ev, window.respuestasAsignadas, referencia);
+        f.puntaje = window.puntajeDeRespuesta(f.resp);
     });
 
-    const { resumen, bloques } = window.cuerpoTarjetaEncuestas(filas, true, false);
+    const { resumen, bloques } = window.cuerpoTarjetaEncuestas(filas, esAdmin, false);
 
     const cajaResumen = document.getElementById('resumen-encuestas-tarjeta');
     const cajaBloques = document.getElementById('bloques-encuestas-tarjeta');
@@ -1502,6 +1567,11 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // frecuencias, y sin forzarlo una semanal lo pone en semanas y unas de
         // «única vez» lo dejan en un solo periodo, o sea sin gráfica.
         window.filasDeLaTarjeta = filas;
+        // De quién es la tarjeta, para que al elegir un periodo se reescriba
+        // con el mismo criterio con el que se armó. No se deduce de
+        // `modoAdminActivo` al tocar el punto: es lo que decidió cómo son
+        // estas filas, no lo que esté puesto un rato después.
+        window.tarjetaDeEncuestasEsAdmin = esAdmin;
         window.periodosDeLaTarjeta = topeRespuestas ? []
             : (esAdmin
                 ? window.historialDeRevision({ filas }, respuestas,
@@ -1509,7 +1579,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
                       porClasificacion: true })
                 : window.historialDeClasificacion({ filas }, window.PERIODOS_EN_LA_GRAFICA,
                     respuestas, window.RITMO_GRAFICA_EMPRESA));
-        window.periodoElegidoTarjeta = null;
+        window.referenciaElegidaTarjeta = null;
         // `padronDeLaEncuesta` recorre la plantilla entera: se pregunta una vez
         // por encuesta y no una vez por encuesta y toque.
         window.padronesDeLaTarjeta = {};
@@ -1517,15 +1587,15 @@ window.cargarEncuestasAsignadas = async (userId) => {
             window.padronesDeLaTarjeta[f.ev.id] = window.padronDeLaEncuesta(f.ev);
         });
 
-        // **Elegir un periodo es cosa del administrador**, que es de quien es la
-        // lista que se reescribe: `verPeriodoDeLaTarjeta` resume cada encuesta
-        // con `resumenDeEncuestaAdmin`. En la de quien contesta, tocar un punto
-        // abre su globo y nada más —lo que hacen las gráficas de una
-        // clasificación—: el estado de cada renglón —«Sin contestar»,
-        // «Vencida»— es el de hoy y no el de junio, así que cambiarle sólo el
-        // puntaje lo dejaría diciendo dos periodos a la vez.
+        // **Elegir un periodo vale en las dos tarjetas.** Fue cosa del
+        // administrador mientras `verPeriodoDeLaTarjeta` sólo sabía resumir con
+        // `resumenDeEncuestaAdmin`; en la de quien contesta no basta con
+        // reescribir el puntaje, porque el estado de cada renglón lo decide
+        // `esEvaluacionPendiente` y con la fecha de hoy el renglón diría dos
+        // periodos a la vez. Desde que esa regla acepta la fecha del periodo, la
+        // lista entera habla del punto que se tocó.
         const graficaHtml = window.graficaDeLinea(
-            window.periodosDeLaTarjeta, esAdmin ? 'window.verPeriodoDeLaTarjeta' : null);
+            window.periodosDeLaTarjeta, 'window.verPeriodoDeLaTarjeta');
 
         // Sin título: lo que la tarjeta es se ve —las clasificaciones— y el
         // renglón del resumen dice más en el mismo sitio.
@@ -1684,6 +1754,11 @@ window.historialDeClasificacion = (grupo, cuantos, respuestas, frecuenciaDelEje)
             corta: rotulos.corta,
             minima: rotulos.minima,
             actual: !!p.actual,
+            // El instante con el que se dibujó el punto, que es con el que hay
+            // que volver a preguntar para que la lista diga exactamente la
+            // cifra del globo y no una parecida. Lo usa
+            // `verPeriodoDeLaTarjeta`, igual que el de `historialDeRevision`.
+            referencia,
             calificadas: puntajes.length,
             total: encuestas.length,
             promedio: puntajes.length === 0 ? null
@@ -2156,14 +2231,20 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
     const conDato = historial.filter(p => p.promedio !== null);
     // Con un periodo elegido en la gráfica de la tarjeta, la hoja habla de ése y
     // no del último: sus renglones ya lo hacen —`verPeriodoDeLaTarjeta` les
-    // reescribe el puntaje— y un titular de septiembre encima de unas filas de
-    // junio es peor que no tener titular. El eje de la gráfica sigue enseñando
-    // los seis, que es lo que es.
-    const elegido = window.periodoElegidoTarjeta;
-    const delElegido = (elegido === null || elegido === undefined) ? null
-        : conDato.find(punto => historial.indexOf(punto) === elegido);
-    const ultimo = delElegido
-        || (conDato.length > 0 ? conDato[conDato.length - 1] : null);
+    // reescribe el puntaje y el estado— y un titular de septiembre encima de
+    // unas filas de junio es peor que no tener titular. El eje de la gráfica
+    // sigue enseñando los seis, que es lo que es.
+    //
+    // Se busca **por el instante del punto y no por su índice**: el eje de esta
+    // hoja es el del ritmo de la clasificación y el de la tarjeta va en meses a
+    // la fuerza, así que el sexto punto de uno no es el sexto del otro y por
+    // índice se enseñaba el periodo equivocado en cuanto la clasificación no
+    // era mensual. Se toma el último de los suyos que ya había terminado
+    // entonces; si ninguno tenía resultado, no se inventa el de hoy.
+    const elegida = window.referenciaElegidaTarjeta;
+    const ultimo = elegida
+        ? (conDato.filter(punto => punto.referencia && punto.referencia <= elegida).pop() || null)
+        : (conDato.length > 0 ? conDato[conDato.length - 1] : null);
 
     const colorUltimo = (ultimo && typeof window.getColorScore === 'function')
         ? window.getColorScore(ultimo.promedio) : '#94a3b8';

@@ -303,8 +303,26 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
     // resuelve nada, y del lado del jefe no aparecía: no había forma de
     // quitarlo. Lo demás —el periodo, la racha, «mal revisada»— no depende de
     // quién mire y se decide igual para los dos.
-    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia, fechaAlta, encuesta, contestaQuienMira = true) => {
-        const todas = respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [];
+    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia, fechaAlta, encuesta, contestaQuienMira = true, referencia = null) => {
+        // Con `referencia` la pregunta deja de ser «¿está pendiente hoy?» y
+        // pasa a ser «¿lo estaba entonces?», que es lo que hace falta al tocar
+        // un punto de la gráfica de la tarjeta del panel: el renglón tiene que
+        // decir el estado de aquel periodo y no el de hoy. Sin ella —que es lo
+        // normal, y lo que hacen las cuatro pantallas que deciden pendientes—
+        // no cambia absolutamente nada.
+        const hasta = referencia ? new Date(referencia) : null;
+        const mirandoAtras = !!(hasta && !isNaN(hasta));
+
+        // Y mirando atrás, **lo enviado después de ese instante todavía no
+        // había pasado**: contarlo dejaría a abril diciendo que la encuesta
+        // estaba contestada porque se contestó en septiembre. Es el mismo tope
+        // con el que `respuestaDelPeriodo` cuenta las respuestas de un punto.
+        const todas = (respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [])
+            .filter(r => {
+                if (!mirandoAtras) return true;
+                const enviada = new Date(r.submitted_at);
+                return isNaN(enviada) ? true : enviada <= hasta;
+            });
 
         // Relanzar la encuesta es un instante: lo contestado antes sigue en el
         // historial pero deja de cerrar el pendiente, así que aquí se aparta.
@@ -316,7 +334,7 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         const descartadas = relanzada ? todas.filter(r => !resps.includes(r)) : [];
 
         // Sin frecuencia repetitiva ('once', o sin dato) no hay periodos que contar.
-        const now = new Date();
+        const now = mirandoAtras ? hasta : new Date();
 
         // Una encuesta que pasa lista sólo se puede contestar en la hora de su
         // evento: antes no ha pasado nada que confirmar y después no haberla
