@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-19-3';
+window.VERSION_APP = '2026-09-19-4';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3076,8 +3076,28 @@ window.idEditandoEval = null;
 console.log("✅ Configuración cargada. Esperando sincronización global...");
 
 // =========================================================
-// --- MONITOR DE EGRESS (SOLO VISIBLE EN MODO ADMIN) ---
+// --- MONITOR DE EGRESS ---
 // =========================================================
+// Cuánto se lleva bajado de Supabase en esta pantalla, en la píldora de la
+// esquina de abajo. **Se enciende manteniendo pulsado «Cerrar Sesión» tres
+// segundos**, y con eso lo puede encender cualquiera.
+//
+// Lo veía sólo el administrador —un `setInterval` de medio segundo miraba
+// `modoAdminActivo`—, y eso es al revés de lo que hace falta: el dato que
+// interesa es cuánto gasta **un teléfono cualquiera en campo**, y ésos no
+// entran nunca en modo administrador. Con el modo encendido, además, salía
+// siempre, que es una píldora flotando sobre el panel todo el rato para
+// alguien que estaba administrando otra cosa.
+//
+// **Y es un conmutador**: volver a mantenerlo pulsado lo apaga, que si no no
+// habría manera de quitarlo. La marca va en `sessionStorage` —dura lo que la
+// pestaña y viaja entre las tres pantallas, como el modo administrador— así
+// que encendido en el panel se sigue viendo en refacciones y en el mapa,
+// que es justo donde hace falta mirarlo.
+//
+// El gesto vive aquí y no en `2a-core-nav.js` porque de aquí es la píldora, y
+// porque los tres documentos cargan este archivo: en los otros dos no hay
+// botón de cerrar sesión y el enganche simplemente no encuentra a nadie.
 (function() {
     // 1. Crear el elemento visual estilo "Píldora" (Oculto por defecto)
     const egressDiv = document.createElement('div');
@@ -3125,14 +3145,91 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
         egressDiv.style.background = bgColor;
     };
 
-    // 2. Loop de Visibilidad: Revisa si es Admin cada 500ms
-    setInterval(() => {
-        if (window.modoAdminActivo) {
-            if (egressDiv.style.display === 'none') egressDiv.style.display = 'block';
-        } else {
-            if (egressDiv.style.display !== 'none') egressDiv.style.display = 'none';
-        }
-    }, 500);
+    // 2. Visibilidad: la marca de la pestaña, y el gesto que la cambia.
+    const LLAVE = 'monitorDatos';
+    const SEGUNDOS = 3;
+
+    const encendido = () => {
+        try { return sessionStorage.getItem(LLAVE) === '1'; } catch (e) { return false; }
+    };
+    const aplicar = () => { egressDiv.style.display = encendido() ? 'block' : 'none'; };
+
+    window.monitorDeDatosEncendido = encendido;
+    window.alternarMonitorDeDatos = () => {
+        const nuevo = !encendido();
+        // Un navegador que no deje escribir ahí enciende igual, sólo que no
+        // sobrevive al salto a otra pantalla: es preferible a no encender.
+        try { sessionStorage.setItem(LLAVE, nuevo ? '1' : '0'); } catch (e) {}
+        egressDiv.style.display = nuevo ? 'block' : 'none';
+        if (nuevo) updateText();
+        // Lo único que puede decir que el gesto llegó en un teléfono, que ahí
+        // no hay puntero que cambie de forma. Donde no exista, no pasa nada.
+        try { if (navigator.vibrate) navigator.vibrate(nuevo ? [25, 60, 25] : 25); } catch (e) {}
+        return nuevo;
+    };
+
+    aplicar();
+
+    // --- El gesto: tres segundos sobre «Cerrar Sesión» ---
+    //
+    // Dos cosas que hay que mantener:
+    //
+    // - **La pulsación larga se come su click.** Si no, encender el monitor
+    //   cerraría además la sesión, que es lo contrario de lo que se vino a
+    //   hacer. Se traga en la fase de captura y **desde `document`**: un
+    //   oyente de captura sobre el propio botón no le gana a su `onclick`
+    //   —en el destino corren en el orden en que se registraron—, mientras
+    //   que `stopPropagation` desde `document` impide que el evento llegue
+    //   siquiera al botón. Y la marca **caduca a los 400 ms**, que es
+    //   exactamente lo que hace la del arrastre de las hojas y por lo mismo:
+    //   dejándola puesta hasta el siguiente click, una pulsación larga que
+    //   acabó con el dedo fuera del botón —y por tanto sin click— se comería
+    //   el toque de después, que puede llegar mucho más tarde y ser el cierre
+    //   de sesión de verdad. El click que sí sigue al gesto llega en el mismo
+    //   suspiro, así que 400 ms le sobran.
+    // - **Soltar antes de tiempo deja el botón intacto**: el temporizador se
+    //   cancela y el click cierra la sesión como siempre.
+    const btnSalir = document.getElementById('btn-logout');
+    if (btnSalir) {
+        let reloj = null;
+        let tragarClick = false;
+
+        const soltar = () => { if (reloj) { clearTimeout(reloj); reloj = null; } };
+        const agarrar = () => {
+            soltar();
+            reloj = setTimeout(() => {
+                reloj = null;
+                tragarClick = true;
+                setTimeout(() => { tragarClick = false; }, 400);
+                window.alternarMonitorDeDatos();
+            }, SEGUNDOS * 1000);
+        };
+
+        document.addEventListener('click', (ev) => {
+            if (!tragarClick || !btnSalir.contains(ev.target)) return;
+            tragarClick = false;
+            ev.stopPropagation();
+            ev.preventDefault();
+        }, true);
+
+        // Toque y ratón: lo primero es el teléfono y lo segundo, poder
+        // probarlo en un escritorio. El toque es pasivo a propósito —aquí no
+        // se cancela ningún desplazamiento—, y desplazar el dedo cancela la
+        // cuenta, que entonces el gesto era otro.
+        btnSalir.addEventListener('touchstart', agarrar, { passive: true });
+        btnSalir.addEventListener('touchend', soltar);
+        btnSalir.addEventListener('touchcancel', soltar);
+        btnSalir.addEventListener('touchmove', soltar, { passive: true });
+        btnSalir.addEventListener('mousedown', agarrar);
+        btnSalir.addEventListener('mouseup', soltar);
+        btnSalir.addEventListener('mouseleave', soltar);
+        // Manteniendo pulsado, iOS y el escritorio ofrecen su propio menú
+        // encima; sin esto el gesto acaba en «Copiar» en vez de en la píldora.
+        btnSalir.addEventListener('contextmenu', (ev) => ev.preventDefault());
+        btnSalir.style.webkitTouchCallout = 'none';
+        btnSalir.style.webkitUserSelect = 'none';
+        btnSalir.style.userSelect = 'none';
+    }
 
     // 3. Interceptar Fetch (Captura datos JSON de BD y Auth)
     const originalFetch = window.fetch;

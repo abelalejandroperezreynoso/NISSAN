@@ -5801,6 +5801,54 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `innerHTML`—, o la tarjeta se abriría sola durante la carga para cerrarse de
   golpe al llegar los datos.
 
+- **El contador de datos se enciende manteniendo pulsado «Cerrar Sesión».** La
+  píldora de la esquina de abajo (`#egress-monitor`, en `1-config.js`) dice
+  cuánto se lleva bajado de Supabase en esta pantalla: intercepta `fetch` y
+  observa los recursos, y suma lo que viene de `supabase.co`.
+
+  ```js
+  window.monitorDeDatosEncendido()   // ¿se está viendo?
+  window.alternarMonitorDeDatos()    // lo enciende y lo apaga
+  ```
+
+  **Lo veía sólo el administrador**, con un `setInterval` de medio segundo que
+  miraba `modoAdminActivo`, y eso es al revés de lo que hace falta: el dato que
+  interesa es cuánto gasta **un teléfono cualquiera en campo**, y ésos no entran
+  nunca en modo administrador. Con el modo encendido, además, salía siempre: una
+  píldora flotando sobre el panel todo el rato para quien estaba administrando
+  otra cosa. Hoy lo enciende cualquiera con **tres segundos** sobre «Cerrar
+  Sesión», y con el mismo gesto se apaga —si no, no habría manera de quitarlo—.
+
+  **La marca va en `sessionStorage` (`monitorDatos`)**, que dura lo que la
+  pestaña y viaja entre las tres pantallas, como el modo administrador:
+  encendido en el panel se sigue viendo en refacciones y en el mapa, que es
+  justo donde hay que mirarlo. El gesto, en cambio, sólo existe donde está el
+  botón; en los otros dos documentos el enganche no encuentra a nadie y no pasa
+  nada. Un navegador que no deje escribir ahí lo enciende igual, sólo que no
+  sobrevive al salto de pantalla.
+
+  Dos cosas que hay que mantener:
+
+  - **La pulsación larga se come su click**, o encender el monitor cerraría
+    además la sesión. Se traga en la fase de captura y **desde `document`**: un
+    oyente de captura sobre el propio botón no le gana a su `onclick` —en el
+    destino los oyentes corren en el orden en que se registraron, lleven la
+    marca de captura o no—, mientras que `stopPropagation` desde `document`
+    impide que el evento llegue siquiera al botón.
+  - **Y la marca de «aquí hubo una pulsación larga» caduca a los 400 ms**, que
+    es exactamente lo que hace la del arrastre de las hojas y por lo mismo:
+    dejándola puesta hasta el siguiente click, una pulsación larga que acabó con
+    el dedo fuera del botón —y por tanto sin click— se comería el toque de
+    después, que puede llegar mucho más tarde y ser el cierre de sesión de
+    verdad. El click que sí sigue al gesto llega en el mismo suspiro.
+
+  El gesto va con eventos de toque y de ratón —lo segundo para poder probarlo en
+  un escritorio—, y aquí el toque **sí es pasivo**: no se cancela ningún
+  desplazamiento, sólo se cuenta el tiempo, y desplazar el dedo lo cancela
+  porque entonces el gesto era otro. Lo que sí hace falta es apagarle el menú
+  contextual al botón (`contextmenu` y `-webkit-touch-callout`), o mantener
+  pulsado acaba en «Copiar» en vez de en la píldora.
+
 - **Un selector por atributo `style` se rompe en cuanto se toca ese estilo.**
   `setGrade` buscaba la tarjeta de la pregunta con
   `closest('div[style*="border-radius:16px"]')` y le pintaba el borde. Al
