@@ -4984,6 +4984,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Y **la tarjeta no lleva título**: lo que es se ve —clasificaciones con sus
   encuestas—, y en ese sitio el renglón del resumen dice más.
 
+  **Y debajo del resumen va su gráfica: la suya, no la de la empresa.** La
+  línea de la tarjeta fue un tiempo sólo del administrador —era
+  `historialDeRevision`, que reparte cada periodo sobre el padrón y habla de la
+  empresa entera—, así que quien contesta se quedaba con el renglón de hoy y sin
+  manera de saber si va a mejor, que es justo lo que la tarjeta viene a decir.
+  Hoy la dibujan las dos, cada una con lo suyo:
+
+  - Administrando, `historialDeRevision` sobre el padrón y ponderando por
+    clasificación (más abajo, con la tarjeta del administrador).
+  - Contestando, **`historialDeClasificacion` sobre sus propias respuestas**,
+    que es la misma regla del renglón —una respuesta por encuesta y periodo,
+    promediando lo calificado— y por eso el último punto es, por construcción,
+    el promedio que se lee encima.
+
+  **Con el eje en meses a la fuerza** (`RITMO_GRAFICA_EMPRESA`, el **cuarto**
+  argumento de `historialDeClasificacion`), y por la misma razón que en la
+  tarjeta del administrador: aquí se mezclan todas las frecuencias de quien
+  mira, así que una semanal pondría el eje en semanas y unas de «única vez» lo
+  dejarían en un solo periodo, o sea sin gráfica. En una clasificación suelta el
+  ritmo sigue saliendo de su encuesta más frecuente, que es lo de siempre: ese
+  argumento no lo pasa nadie más.
+
+  **Elegir un periodo tocando un punto es cosa del administrador.** Ahí el punto
+  reescribe la lista (`verPeriodoDeLaTarjeta`, que resume cada encuesta con
+  `resumenDeEncuestaAdmin`); en la tarjeta de quien contesta, tocar un punto abre
+  su globo y nada más —lo que hacen las gráficas de una clasificación—. No es
+  timidez: el estado de cada renglón —«Sin contestar», «Vencida»— lo decide
+  `esEvaluacionPendiente` **con la fecha de hoy**, así que cambiarle sólo el
+  puntaje dejaría el renglón diciendo dos periodos a la vez. Por eso
+  `graficaDeLinea` recibe su `alElegir` sólo en modo administrador.
+
   Por lo mismo **arma sus columnas como el badge** —`camposConRelanzamiento`
   sobre `camposConMinimo` sobre `camposConReintento`, más `mode`,
   `is_obligatory` y los tres destinatarios— y pide antes
@@ -5594,12 +5625,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     eso es una línea plana en la cifra de hoy; con él, cada punto trae sólo lo
     contestado hasta entonces y la línea sube según la va contestando la gente,
     que es lo que se quiere ver.
+
+    **Y hoy ese tope lo pone también `respuestaDelPeriodo`**, en `1-config.js`,
+    que es por donde mira la gráfica de quien contesta y la de una
+    clasificación: `resumenDeEncuestaAdmin` lo traía puesto y ellas no, así que
+    una encuesta de «única vez» les devolvía su última respuesta en **todos** los
+    periodos y la línea salía plana hacia atrás. Alcanza además a
+    `estadoCertificacion`, que al certificar un periodo cerrado ya no puede
+    tomar una respuesta posterior.
   - **El periodo que corre se pregunta con la hora de ahora**, no con su último
     instante, que todavía no ha llegado. Sólo importa cuando el eje va más
     grueso que alguna encuesta: preguntándole a una semanal por el 30 de
     septiembre, su periodo es la semana del 28 —que aún no empieza— y su punto
     salía vacío, de modo que el último punto de la línea no coincidía con el
-    renglón de encima.
+    renglón de encima. **Lo hacen las dos**: `historialDeRevision` y
+    `historialDeClasificacion`, que lo necesita desde que la tarjeta le fuerza
+    un eje más grueso que sus encuestas.
 
   **Y la hoja de detalle mide igual, o las dos pantallas darían cifras distintas
   del mismo periodo.** `cuerpoDetalleClasificacion` escoge `historialDeRevision`

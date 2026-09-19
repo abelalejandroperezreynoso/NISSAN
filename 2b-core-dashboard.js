@@ -1484,12 +1484,31 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // nada —las respuestas de los seis periodos vinieron en la misma
         // consulta—. De eso va `verPeriodoDeLaTarjeta`, y por eso los puntos, la
         // gráfica y las filas se quedan a mano.
+        // **Y la gráfica no es sólo del administrador.** Lo fue mientras la
+        // única manera de dibujarla era `historialDeRevision`, que reparte cada
+        // periodo sobre el padrón y habla de la empresa; quien contesta se
+        // quedaba con el renglón de hoy y sin manera de saber si va a mejor,
+        // que es justo lo que la tarjeta viene a decir. Cada quien ve **la
+        // suya**, con sus encuestas y sus respuestas:
+        //
+        // - Administrando, `historialDeRevision` sobre el padrón y ponderando
+        //   por clasificación, que es la cifra de la empresa.
+        // - Contestando, `historialDeClasificacion` sobre **sus** respuestas,
+        //   que es la misma regla del renglón —una respuesta por encuesta y
+        //   periodo, promediando lo calificado— y por eso el último punto es,
+        //   por construcción, el promedio que se lee encima.
+        //
+        // Las dos con el eje en meses a la fuerza: la tarjeta mezcla todas las
+        // frecuencias, y sin forzarlo una semanal lo pone en semanas y unas de
+        // «única vez» lo dejan en un solo periodo, o sea sin gráfica.
         window.filasDeLaTarjeta = filas;
-        window.periodosDeLaTarjeta = (esAdmin && !topeRespuestas)
-            ? window.historialDeRevision({ filas }, respuestas,
-                { sobrePadron: true, frecuencia: window.RITMO_GRAFICA_EMPRESA,
-                  porClasificacion: true })
-            : [];
+        window.periodosDeLaTarjeta = topeRespuestas ? []
+            : (esAdmin
+                ? window.historialDeRevision({ filas }, respuestas,
+                    { sobrePadron: true, frecuencia: window.RITMO_GRAFICA_EMPRESA,
+                      porClasificacion: true })
+                : window.historialDeClasificacion({ filas }, window.PERIODOS_EN_LA_GRAFICA,
+                    respuestas, window.RITMO_GRAFICA_EMPRESA));
         window.periodoElegidoTarjeta = null;
         // `padronDeLaEncuesta` recorre la plantilla entera: se pregunta una vez
         // por encuesta y no una vez por encuesta y toque.
@@ -1498,8 +1517,15 @@ window.cargarEncuestasAsignadas = async (userId) => {
             window.padronesDeLaTarjeta[f.ev.id] = window.padronDeLaEncuesta(f.ev);
         });
 
+        // **Elegir un periodo es cosa del administrador**, que es de quien es la
+        // lista que se reescribe: `verPeriodoDeLaTarjeta` resume cada encuesta
+        // con `resumenDeEncuestaAdmin`. En la de quien contesta, tocar un punto
+        // abre su globo y nada más —lo que hacen las gráficas de una
+        // clasificación—: el estado de cada renglón —«Sin contestar»,
+        // «Vencida»— es el de hoy y no el de junio, así que cambiarle sólo el
+        // puntaje lo dejaría diciendo dos periodos a la vez.
         const graficaHtml = window.graficaDeLinea(
-            window.periodosDeLaTarjeta, 'window.verPeriodoDeLaTarjeta');
+            window.periodosDeLaTarjeta, esAdmin ? 'window.verPeriodoDeLaTarjeta' : null);
 
         // Sin título: lo que la tarjeta es se ve —las clasificaciones— y el
         // renglón del resumen dice más en el mismo sitio.
@@ -1613,22 +1639,41 @@ window.etiquetasDeEje = (inicio, frecuencia) => {
 //
 // Un periodo sin nada calificado devuelve `promedio: null` —no un cero, que se
 // leería como haberlo hecho mal— y la gráfica se lo salta.
-window.historialDeClasificacion = (grupo, cuantos, respuestas) => {
+window.historialDeClasificacion = (grupo, cuantos, respuestas, frecuenciaDelEje) => {
     const encuestas = (grupo.filas || []).map(f => f.ev);
     // Las respuestas se pueden pasar: la hoja del panel de inicio lee las que
     // dejó `cargarEncuestasAsignadas`, y la pantalla de una clasificación de la
     // hoja de evaluaciones, las de su propia lista. Sin argumento, las del
     // panel, que es de donde salió esto.
     const suyas = respuestas || window.respuestasAsignadas || [];
-    const periodos = window.periodosDeClasificacion(encuestas, cuantos || window.PERIODOS_EN_LA_GRAFICA);
+
+    // **`frecuenciaDelEje` fuerza el ritmo**, como en `historialDeRevision` y
+    // por lo mismo: una clasificación lo saca de su encuesta más frecuente,
+    // pero la tarjeta del panel habla de **todas** las encuestas de quien mira
+    // a la vez y ahí ese criterio no vale —con una semanal dentro, el eje sale
+    // en semanas y las cuatro de un mes repiten el dato de la mensual—. Y con
+    // todas de «única vez» no habría más que un periodo, o sea ninguna gráfica.
+    const conRitmo = frecuenciaDelEje ? [{ frequency: frecuenciaDelEje }] : encuestas;
+    const periodos = window.periodosDeClasificacion(conRitmo, cuantos || window.PERIODOS_EN_LA_GRAFICA);
     // El ritmo del grupo, que es el que decide cómo se rotula el eje.
-    const ritmo = window.encuestaQueMarcaElRitmo(encuestas);
+    const ritmo = window.encuestaQueMarcaElRitmo(conRitmo);
     const frecuencia = (ritmo && ritmo.frequency) || 'once';
 
     return periodos.slice().reverse().map(p => {
+        // El periodo que corre se pregunta **con la hora de ahora** y no con su
+        // último instante, que todavía no ha llegado. Sólo importa cuando el eje
+        // va más grueso que alguna encuesta: preguntándole a una semanal por el
+        // 30 de septiembre, su periodo es la semana del 28 —que aún no empieza—
+        // y su punto salía vacío, de modo que el último punto de la línea no
+        // coincidía con el renglón de encima. Es lo mismo que hace
+        // `historialDeRevision`.
+        const ahora = Date.now();
+        const referencia = (p.actual && p.referencia && p.referencia.getTime() > ahora)
+            ? new Date(ahora) : p.referencia;
+
         const puntajes = encuestas
             .map(ev => window.puntajeDeRespuesta(
-                window.respuestaDelPeriodo(ev, suyas, p.referencia)))
+                window.respuestaDelPeriodo(ev, suyas, referencia)))
             .filter(n => n !== null);
 
         const rotulos = window.etiquetasDeEje(p.inicio, frecuencia);

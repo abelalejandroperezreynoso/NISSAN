@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-18-2';
+window.VERSION_APP = '2026-09-19-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -2379,13 +2379,24 @@ window.periodoDeEncuesta = (ev, fecha) => {
 // La respuesta que cuenta para una encuesta en el periodo que corre: la última
 // que se entregó dentro de él. Fuera del periodo no cuenta ninguna, que es lo
 // que impedía que el sello del mes pasado tapara el mes en curso.
+//
+// **Y nada de lo enviado después del instante que se mira.** Con `fecha` en el
+// presente no quita nada —del futuro no llegan respuestas—, pero una gráfica
+// pregunta por periodos de atrás y una encuesta de «única vez» **no tiene
+// `fin`**: sin este tope, su punto de abril traía lo contestado en septiembre y
+// los seis periodos salían iguales, o sea una línea plana en la cifra de hoy.
+// Con él, cada punto trae sólo lo contestado hasta entonces y la línea sube
+// según se va contestando. Es el mismo tope que `resumenDeEncuestaAdmin` ya
+// ponía por su cuenta, y por lo mismo.
 window.respuestaDelPeriodo = (ev, respuestas, fecha) => {
     const periodo = window.periodoDeEncuesta(ev, fecha);
+    const tope = fecha ? new Date(fecha) : null;
     const delPeriodo = (respuestas || []).filter(r => {
         if (String(r.evaluation_id) !== String(ev.id)) return false;
         const enviada = new Date(r.submitted_at);
         if (isNaN(enviada)) return false;
         if (enviada < periodo.inicio) return false;
+        if (tope && !isNaN(tope) && enviada > tope) return false;
         return periodo.fin ? enviada < periodo.fin : true;
     });
 
