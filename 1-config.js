@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-19-4';
+window.VERSION_APP = '2026-09-19-5';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3090,10 +3090,9 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
 // alguien que estaba administrando otra cosa.
 //
 // **Y es un conmutador**: volver a mantenerlo pulsado lo apaga, que si no no
-// habría manera de quitarlo. La marca va en `sessionStorage` —dura lo que la
-// pestaña y viaja entre las tres pantallas, como el modo administrador— así
-// que encendido en el panel se sigue viendo en refacciones y en el mapa,
-// que es justo donde hace falta mirarlo.
+// habría manera de quitarlo. **Recargar también lo apaga**: es una herramienta
+// de medir y no un ajuste, así que lo que vale por defecto es apagada y no hay
+// que acordarse de quitarla.
 //
 // El gesto vive aquí y no en `2a-core-nav.js` porque de aquí es la píldora, y
 // porque los tres documentos cargan este archivo: en los otros dos no hay
@@ -3145,30 +3144,29 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
         egressDiv.style.background = bgColor;
     };
 
-    // 2. Visibilidad: la marca de la pestaña, y el gesto que la cambia.
-    const LLAVE = 'monitorDatos';
+    // 2. Visibilidad: se apaga sola al recargar, y el gesto que la cambia.
+    //
+    // La marca es una variable y nada más: **recargar la apaga**. Es una
+    // herramienta de medir y no un ajuste, así que lo que tiene que valer por
+    // defecto es apagada; dejándola en `sessionStorage` se quedaba encendida
+    // el resto de la pestaña y había que acordarse de apagarla. La
+    // contrapartida es que ya no viaja a refacciones ni al mapa —el gesto
+    // vive donde está el botón, o sea sólo en el panel—, que es un salto de
+    // pantalla y no una recarga.
     const SEGUNDOS = 3;
 
-    const encendido = () => {
-        try { return sessionStorage.getItem(LLAVE) === '1'; } catch (e) { return false; }
-    };
-    const aplicar = () => { egressDiv.style.display = encendido() ? 'block' : 'none'; };
+    let visible = false;
 
-    window.monitorDeDatosEncendido = encendido;
+    window.monitorDeDatosEncendido = () => visible;
     window.alternarMonitorDeDatos = () => {
-        const nuevo = !encendido();
-        // Un navegador que no deje escribir ahí enciende igual, sólo que no
-        // sobrevive al salto a otra pantalla: es preferible a no encender.
-        try { sessionStorage.setItem(LLAVE, nuevo ? '1' : '0'); } catch (e) {}
-        egressDiv.style.display = nuevo ? 'block' : 'none';
-        if (nuevo) updateText();
+        visible = !visible;
+        egressDiv.style.display = visible ? 'block' : 'none';
+        if (visible) updateText();
         // Lo único que puede decir que el gesto llegó en un teléfono, que ahí
         // no hay puntero que cambie de forma. Donde no exista, no pasa nada.
-        try { if (navigator.vibrate) navigator.vibrate(nuevo ? [25, 60, 25] : 25); } catch (e) {}
-        return nuevo;
+        try { if (navigator.vibrate) navigator.vibrate(visible ? [25, 60, 25] : 25); } catch (e) {}
+        return visible;
     };
-
-    aplicar();
 
     // --- El gesto: tres segundos sobre «Cerrar Sesión» ---
     //
@@ -3176,31 +3174,42 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
     //
     // - **La pulsación larga se come su click.** Si no, encender el monitor
     //   cerraría además la sesión, que es lo contrario de lo que se vino a
-    //   hacer. Se traga en la fase de captura y **desde `document`**: un
-    //   oyente de captura sobre el propio botón no le gana a su `onclick`
+    //   hacer. Son dos frenos y hacen falta los dos: el `preventDefault` del
+    //   `touchend` —que en un teléfono impide que iOS sintetice el click— y,
+    //   para el ratón, tragarlo en la fase de captura y **desde `document`**:
+    //   un oyente de captura sobre el propio botón no le gana a su `onclick`
     //   —en el destino corren en el orden en que se registraron—, mientras
     //   que `stopPropagation` desde `document` impide que el evento llegue
-    //   siquiera al botón. Y la marca **caduca a los 400 ms**, que es
-    //   exactamente lo que hace la del arrastre de las hojas y por lo mismo:
-    //   dejándola puesta hasta el siguiente click, una pulsación larga que
-    //   acabó con el dedo fuera del botón —y por tanto sin click— se comería
-    //   el toque de después, que puede llegar mucho más tarde y ser el cierre
-    //   de sesión de verdad. El click que sí sigue al gesto llega en el mismo
-    //   suspiro, así que 400 ms le sobran.
+    //   siquiera al botón.
+    // - **Y la marca caduca a los 400 ms contados desde que se suelta**, no
+    //   desde que salta el gesto. Es lo mismo que hace la del arrastre de las
+    //   hojas —dejándola puesta hasta el siguiente click, una pulsación larga
+    //   que acabó con el dedo fuera del botón se comería el toque de después,
+    //   que puede llegar mucho más tarde y ser el cierre de sesión de
+    //   verdad—, pero el plazo **empieza al levantar el dedo**: contándolo
+    //   desde el gesto, quien mantiene cinco segundos lo tenía ya caducado al
+    //   soltar y el click le cerraba la sesión. El click que sigue al gesto
+    //   llega en el mismo suspiro, así que 400 ms le sobran.
     // - **Soltar antes de tiempo deja el botón intacto**: el temporizador se
     //   cancela y el click cierra la sesión como siempre.
     const btnSalir = document.getElementById('btn-logout');
     if (btnSalir) {
         let reloj = null;
+        let caducidad = null;
         let tragarClick = false;
 
-        const soltar = () => { if (reloj) { clearTimeout(reloj); reloj = null; } };
+        const soltar = (ev) => {
+            if (reloj) { clearTimeout(reloj); reloj = null; }
+            if (!tragarClick) return;
+            if (caducidad) clearTimeout(caducidad);
+            caducidad = setTimeout(() => { tragarClick = false; caducidad = null; }, 400);
+            if (ev && ev.type === 'touchend' && ev.cancelable) ev.preventDefault();
+        };
         const agarrar = () => {
-            soltar();
+            if (reloj) { clearTimeout(reloj); reloj = null; }
             reloj = setTimeout(() => {
                 reloj = null;
                 tragarClick = true;
-                setTimeout(() => { tragarClick = false; }, 400);
                 window.alternarMonitorDeDatos();
             }, SEGUNDOS * 1000);
         };

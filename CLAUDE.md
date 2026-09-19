@@ -5819,28 +5819,39 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   otra cosa. Hoy lo enciende cualquiera con **tres segundos** sobre «Cerrar
   Sesión», y con el mismo gesto se apaga —si no, no habría manera de quitarlo—.
 
-  **La marca va en `sessionStorage` (`monitorDatos`)**, que dura lo que la
-  pestaña y viaja entre las tres pantallas, como el modo administrador:
-  encendido en el panel se sigue viendo en refacciones y en el mapa, que es
-  justo donde hay que mirarlo. El gesto, en cambio, sólo existe donde está el
-  botón; en los otros dos documentos el enganche no encuentra a nadie y no pasa
-  nada. Un navegador que no deje escribir ahí lo enciende igual, sólo que no
-  sobrevive al salto de pantalla.
+  **Y recargar la página lo apaga.** La marca es una variable de la propia
+  función y nada más: es una herramienta de medir y no un ajuste, así que lo que
+  vale por defecto es apagada y nadie tiene que acordarse de quitarla. Estuvo en
+  `sessionStorage` —duraba lo que la pestaña y viajaba a refacciones y al mapa,
+  como el modo administrador— y la contrapartida de quitarlo es justo ésa: la
+  píldora ya no cruza de pantalla. El gesto tampoco lo hacía —sólo existe donde
+  está el botón, o sea en el panel; en los otros dos documentos el enganche no
+  encuentra a nadie y no pasa nada—, así que mirar el gasto de refacciones o
+  del mapa pide encenderlo desde el panel y llegar hasta allá, que es un salto y
+  no una recarga.
 
-  Dos cosas que hay que mantener:
+  Tres cosas que hay que mantener:
 
   - **La pulsación larga se come su click**, o encender el monitor cerraría
-    además la sesión. Se traga en la fase de captura y **desde `document`**: un
-    oyente de captura sobre el propio botón no le gana a su `onclick` —en el
-    destino los oyentes corren en el orden en que se registraron, lleven la
-    marca de captura o no—, mientras que `stopPropagation` desde `document`
-    impide que el evento llegue siquiera al botón.
-  - **Y la marca de «aquí hubo una pulsación larga» caduca a los 400 ms**, que
-    es exactamente lo que hace la del arrastre de las hojas y por lo mismo:
+    además la sesión. Son **dos frenos y hacen falta los dos**: el
+    `preventDefault` del `touchend` —que en un teléfono impide que iOS sintetice
+    el click siquiera— y, para el ratón, tragarlo en la fase de captura y
+    **desde `document`**: un oyente de captura sobre el propio botón no le gana a
+    su `onclick` —en el destino los oyentes corren en el orden en que se
+    registraron, lleven la marca de captura o no—, mientras que
+    `stopPropagation` desde `document` impide que el evento llegue siquiera al
+    botón.
+  - **La marca de «aquí hubo una pulsación larga» caduca a los 400 ms**, que es
+    exactamente lo que hace la del arrastre de las hojas y por lo mismo:
     dejándola puesta hasta el siguiente click, una pulsación larga que acabó con
     el dedo fuera del botón —y por tanto sin click— se comería el toque de
     después, que puede llegar mucho más tarde y ser el cierre de sesión de
     verdad. El click que sí sigue al gesto llega en el mismo suspiro.
+  - **Pero el plazo empieza al soltar, no al saltar el gesto.** Contándolo desde
+    el gesto, quien mantiene el dedo cinco segundos tenía la marca ya caducada al
+    levantarlo y el click le cerraba la sesión —que es exactamente lo que el
+    gesto venía a impedir, y no se nota probando con tres segundos y pico—. Tres
+    segundos es el mínimo, no la medida: nadie suelta en el instante justo.
 
   El gesto va con eventos de toque y de ratón —lo segundo para poder probarlo en
   un escritorio—, y aquí el toque **sí es pasivo**: no se cancela ningún
