@@ -4943,6 +4943,26 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   enseña promedio: un 0% ahí se leería como haberlo hecho mal en vez de no haber
   empezado.
 
+  **Y el promedio de arriba pesa por clasificación, no por encuesta**
+  (`window.promedioPorClasificacion`): el promedio de cada clasificación
+  primero —plano entre sus encuestas, que ahí miden lo mismo sobre la misma
+  persona— y el promedio de ésos después, de modo que cada programa pese igual
+  tenga una encuesta o tenga seis. Es la misma regla de
+  `promedioDeClasificaciones`, la del administrador, y por la misma razón:
+  promediando las ocho encuestas en plano, la clasificación más numerosa se
+  disfraza del número de la persona. Con seis encuestas de «Líder 5 reglas» al
+  100 de ocho en total, ésas se llevaban seis octavos del renglón y dos
+  clasificaciones enteras en rojo —11% y 48%— salían en verde al **82%**;
+  pesando por clasificación, (11+48+100)/3 = **53%**.
+
+  El promedio de cada clasificación se **redondea antes de promediarlo**, como
+  el del administrador: así la cifra de arriba es la media de las que se leen
+  debajo y la cuenta se puede seguir desde la pantalla, que es lo primero que
+  hace quien no se cree un número.
+
+  Una clasificación sin nada calificado **no cuenta como cero: no cuenta**, que
+  es lo mismo que hace el promedio de una sola.
+
   El renglón de la clasificación llevó un tiempo la insignia de
   `insigniaCertificacion` —«✅ Lista para certificar», «📉 1 por debajo de
   80%»—, la que enseñan el expediente y el panel de certificación, y aquí
@@ -4995,16 +5015,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     clasificación (más abajo, con la tarjeta del administrador).
   - Contestando, **`historialDeClasificacion` sobre sus propias respuestas**,
     que es la misma regla del renglón —una respuesta por encuesta y periodo,
-    promediando lo calificado— y por eso el último punto es, por construcción,
+    pesando por clasificación— y por eso el último punto es, por construcción,
     el promedio que se lee encima.
 
-  **Con el eje en meses a la fuerza** (`RITMO_GRAFICA_EMPRESA`, el **cuarto**
-  argumento de `historialDeClasificacion`), y por la misma razón que en la
-  tarjeta del administrador: aquí se mezclan todas las frecuencias de quien
-  mira, así que una semanal pondría el eje en semanas y unas de «única vez» lo
-  dejarían en un solo periodo, o sea sin gráfica. En una clasificación suelta el
-  ritmo sigue saliendo de su encuesta más frecuente, que es lo de siempre: ese
-  argumento no lo pasa nadie más.
+  **Y por eso `historialDeClasificacion` admite `porClasificacion`**, igual que
+  `historialDeRevision` y por lo mismo: es la tarjeta la única que habla de
+  varias clasificaciones a la vez. Por dentro es el mismo
+  `promedioPorClasificacion` del renglón, y **tiene que serlo**: con una regla
+  en el renglón y otra en la gráfica, el globo del último punto diría 53% encima
+  de un renglón que dice 82%. La gráfica de una clasificación suelta no la pasa
+  —ahí sólo hay una y lo que se compara son sus encuestas entre sí—.
+
+  **Con el eje en meses a la fuerza** (`RITMO_GRAFICA_EMPRESA`), y por la misma
+  razón que en la tarjeta del administrador: aquí se mezclan todas las
+  frecuencias de quien mira, así que una semanal pondría el eje en semanas y
+  unas de «única vez» lo dejarían en un solo periodo, o sea sin gráfica. En una
+  clasificación suelta el ritmo sigue saliendo de su encuesta más frecuente, que
+  es lo de siempre.
+
+  Las dos van en el **cuarto** argumento, que fue la frecuencia a secas y hoy
+  admite además un objeto de opciones —`{ frecuencia, porClasificacion }`—,
+  igual que el tercero de `historialDeRevision` y por lo mismo: hizo falta una
+  segunda cosa que decirle. Una cadena se sigue leyendo como `{ frecuencia }`.
 
   **Y tocando un punto la tarjeta entera habla de aquel periodo, también la de
   quien contesta.** Fue cosa del administrador mientras `verPeriodoDeLaTarjeta`

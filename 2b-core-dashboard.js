@@ -978,6 +978,41 @@ window.promedioDeClasificaciones = (filas) => {
     return Math.round(promedios.reduce((a, b) => a + b, 0) / promedios.length);
 };
 
+// Lo mismo del lado de quien contesta: el promedio de unas encuestas
+// **pesando por clasificación**. Primero el promedio de cada clasificación
+// —plano entre sus encuestas, que ahí miden lo mismo sobre la misma persona— y
+// después el promedio de ésos, de modo que cada programa pese igual tenga una
+// encuesta o tenga seis.
+//
+// Es la misma regla de `promedioDeClasificaciones`, y tiene que serlo por la
+// misma razón: promediando las encuestas en plano, la clasificación más
+// numerosa se disfraza del número de la persona. Con seis encuestas de «Líder 5
+// reglas» al 100 de ocho en total, ésas se llevaban seis octavos del renglón y
+// dos clasificaciones enteras en rojo —11% y 48%— salían en verde al 82%;
+// pesando por clasificación, (11+48+100)/3 = 53%.
+//
+// Cada fila es `{ ev, puntaje }`. Lo que no tiene puntaje no entra —un cero ahí
+// se leería como haberlo hecho mal en vez de no haber empezado—, y una
+// clasificación sin ninguna calificada no cuenta como cero: no cuenta.
+//
+// El promedio de cada clasificación se **redondea antes de promediarlo**, que
+// es lo que hace también el del administrador: así la cifra de arriba es la
+// media de las que se leen debajo y la cuenta se puede seguir desde la pantalla.
+window.promedioPorClasificacion = (filas) => {
+    const porClave = {};
+    (filas || []).forEach(f => {
+        if (!f || !f.ev || f.puntaje === null || f.puntaje === undefined) return;
+        const clave = window.normalizarClasificacion(f.ev.category || '');
+        (porClave[clave] = porClave[clave] || []).push(f.puntaje);
+    });
+
+    const promedios = Object.values(porClave)
+        .map(ps => Math.round(ps.reduce((a, b) => a + b, 0) / ps.length));
+
+    if (promedios.length === 0) return null;
+    return Math.round(promedios.reduce((a, b) => a + b, 0) / promedios.length);
+};
+
 // «23/40 respuestas», o sólo cuántas hay si no se pudo saber el padrón. El
 // divisor es `total` —el padrón de hoy más quien contestó y ya no está en él—,
 // que es lo único que no puede dar una fracción mayor que uno.
@@ -1248,7 +1283,12 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             </details>`;
     }).join('');
 
-    const promedio = esAdmin ? null : promedioDe(filas);
+    // **Pesando por clasificación**, no promediando las ocho encuestas en
+    // plano: el renglón habla de cómo va esta persona en todo lo que le toca, y
+    // en plano lo que dice es cómo va en la clasificación que más encuestas
+    // tenga. Cada clasificación de abajo sigue promediando las suyas en plano,
+    // que ahí sí miden lo mismo.
+    const promedio = esAdmin ? null : window.promedioPorClasificacion(filas);
     // Administrando, el renglón habla de la empresa y no de lo que le falta
     // a quien mira. La participación va aquí también: el promedio se reparte
     // sobre el padrón, así que un «0%» recién empezado el periodo tiene que
@@ -1578,7 +1618,8 @@ window.cargarEncuestasAsignadas = async (userId) => {
                     { sobrePadron: true, frecuencia: window.RITMO_GRAFICA_EMPRESA,
                       porClasificacion: true })
                 : window.historialDeClasificacion({ filas }, window.PERIODOS_EN_LA_GRAFICA,
-                    respuestas, window.RITMO_GRAFICA_EMPRESA));
+                    respuestas, { frecuencia: window.RITMO_GRAFICA_EMPRESA,
+                                  porClasificacion: true }));
         window.referenciaElegidaTarjeta = null;
         // `padronDeLaEncuesta` recorre la plantilla entera: se pregunta una vez
         // por encuesta y no una vez por encuesta y toque.
@@ -1709,7 +1750,23 @@ window.etiquetasDeEje = (inicio, frecuencia) => {
 //
 // Un periodo sin nada calificado devuelve `promedio: null` —no un cero, que se
 // leería como haberlo hecho mal— y la gráfica se lo salta.
-window.historialDeClasificacion = (grupo, cuantos, respuestas, frecuenciaDelEje) => {
+window.historialDeClasificacion = (grupo, cuantos, respuestas, opciones) => {
+    // El cuarto argumento fue la frecuencia del eje a secas y hoy admite además
+    // un objeto de opciones, igual que el tercero de `historialDeRevision` y por
+    // lo mismo: hizo falta una segunda cosa que decirle. Una cadena se sigue
+    // leyendo como `{ frecuencia }`.
+    const opts = (typeof opciones === 'string' || !opciones)
+        ? { frecuencia: opciones || null } : opciones;
+    const frecuenciaDelEje = opts.frecuencia || null;
+
+    // **Pesando por clasificación**, que sólo pide la tarjeta del panel: es la
+    // única que habla de varias clasificaciones a la vez, y sin esto su línea
+    // era la de la clasificación con más encuestas disfrazada de línea de la
+    // persona. Es la misma opción de `historialDeRevision` y la misma regla del
+    // renglón de encima (`promedioPorClasificacion`), y tiene que serlo: el
+    // último punto **es** la cifra que se lee ahí.
+    const porClasificacion = !!opts.porClasificacion;
+
     const encuestas = (grupo.filas || []).map(f => f.ev);
     // Las respuestas se pueden pasar: la hoja del panel de inicio lee las que
     // dejó `cargarEncuestasAsignadas`, y la pantalla de una clasificación de la
@@ -1741,10 +1798,12 @@ window.historialDeClasificacion = (grupo, cuantos, respuestas, frecuenciaDelEje)
         const referencia = (p.actual && p.referencia && p.referencia.getTime() > ahora)
             ? new Date(ahora) : p.referencia;
 
-        const puntajes = encuestas
-            .map(ev => window.puntajeDeRespuesta(
-                window.respuestaDelPeriodo(ev, suyas, referencia)))
-            .filter(n => n !== null);
+        // La encuesta se guarda al lado de su puntaje: sin ella no se puede
+        // saber de qué clasificación es, que es lo que decide el peso.
+        const conPuntaje = encuestas
+            .map(ev => ({ ev, puntaje: window.puntajeDeRespuesta(
+                window.respuestaDelPeriodo(ev, suyas, referencia)) }))
+            .filter(f => f.puntaje !== null);
 
         const rotulos = window.etiquetasDeEje(p.inicio, frecuencia);
 
@@ -1759,10 +1818,12 @@ window.historialDeClasificacion = (grupo, cuantos, respuestas, frecuenciaDelEje)
             // cifra del globo y no una parecida. Lo usa
             // `verPeriodoDeLaTarjeta`, igual que el de `historialDeRevision`.
             referencia,
-            calificadas: puntajes.length,
+            calificadas: conPuntaje.length,
             total: encuestas.length,
-            promedio: puntajes.length === 0 ? null
-                : Math.round(puntajes.reduce((a, b) => a + b, 0) / puntajes.length)
+            promedio: conPuntaje.length === 0 ? null
+                : (porClasificacion
+                    ? window.promedioPorClasificacion(conPuntaje)
+                    : Math.round(conPuntaje.reduce((a, f) => a + f.puntaje, 0) / conPuntaje.length))
         };
     });
 };
