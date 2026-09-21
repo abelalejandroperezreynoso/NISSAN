@@ -423,10 +423,24 @@ window.medirAlmacenamiento = (forzar) => {
 // ------------------------------------------------------------------
 // LA HOJA
 // ------------------------------------------------------------------
-// Abrir la hoja **no es pedir una medición**: es querer ver la última. Con una
-// ya tomada, la pantalla sale entera en el primer fotograma y el spinner se
-// queda para lo que de verdad hace esperar —la primera vez y el botón de volver
-// a medir—.
+// **Abrir la hoja no mide nada.** Medir es lo más caro que hace esta pantalla
+// —cuatro funciones de la base, los listados de seis buckets y, para saber qué
+// archivos no reclama nadie, hasta cuarenta páginas de respuestas—, y hacerlo al
+// abrir obligaba a esperarlo entero antes de ver una sola cifra. Abrir es querer
+// mirar, no pedir una medición: si hay una tomada sale en el primer fotograma, y
+// si no, la pantalla se queda en reposo con el botón que la empieza.
+//
+// El del encabezado hace lo mismo, así que hay dos puertas a lo mismo y ninguna
+// se dispara sola.
+// Sin rótulo: lo diría por segunda vez, que el título de la hoja ya pone
+// «Consumo» dos centímetros más arriba.
+window.pantallaEnReposo = () => `
+    <div class="consumo-tarjeta">
+        <div class="consumo-pie" style="margin-top:0;">Cuánto ocupa el proyecto en Supabase y cuántos datos se
+            bajan este mes. Tarda un momento: se le pregunta a la base y se recorren los buckets.</div>
+        <button type="button" class="consumo-boton-medir" onclick="window.remedirConsumo()">Medir el consumo</button>
+    </div>`;
+
 window.abrirConsumoAlmacenamiento = async (forzar) => {
     const hoja = document.getElementById('modal-almacenamiento');
     if (!hoja) return;
@@ -434,18 +448,26 @@ window.abrirConsumoAlmacenamiento = async (forzar) => {
     window.bucketAbierto = null;
     hoja.style.display = 'flex';
 
-    if (!forzar && window.consumoAlmacenamiento && !window.medicionDeConsumo) {
-        window.pintarConsumo();
+    if (!forzar && !window.medicionDeConsumo) {
+        // Lo ya medido, o el reposo. Ni una consulta en ninguno de los dos casos.
+        if (window.consumoAlmacenamiento) window.pintarConsumo();
+        else window.pintarConsumo(window.pantallaEnReposo());
         return;
     }
 
-    window.pintarConsumo(`<div class="consumo-cargando"><div class="spinner"></div>Midiendo los archivos…</div>`);
+    window.pintarConsumo(`<div class="consumo-cargando"><div class="spinner"></div>Midiendo el consumo…</div>`);
 
     try {
         await window.medirAlmacenamiento(forzar);
     } catch (e) {
         console.error(e);
-        window.pintarConsumo(`<div class="consumo-cargando">No se pudo medir: ${window.sanitizeForHTML(e.message || String(e))}</div>`);
+        // Con el botón debajo: un aviso sin salida deja la hoja muerta hasta
+        // cerrarla y volver a abrirla.
+        window.pintarConsumo(`<div class="consumo-tarjeta">
+                <div class="consumo-rotulo">No se pudo medir</div>
+                <div class="consumo-pie" style="margin-top:4px;">${window.sanitizeForHTML(e.message || String(e))}</div>
+                <button type="button" class="consumo-boton-medir" onclick="window.remedirConsumo()">Reintentar</button>
+            </div>`);
         return;
     }
     // La hoja pudo cerrarse mientras la medida venía de camino: lo medido queda
@@ -488,6 +510,16 @@ window.pintarConsumo = (html) => {
     const subtitulo = document.getElementById('subtitulo-almacenamiento');
     const volver = document.getElementById('btn-volver-almacenamiento');
     if (!cuerpo) return;
+
+    // El del encabezado no puede decir «volver a medir» antes de la primera
+    // medición: es un botón de icono, así que lo que hace lo cuentan su `title`
+    // y su `aria-label` y nada más.
+    const remedir = document.getElementById('btn-remedir-almacenamiento');
+    if (remedir) {
+        const etiqueta = window.consumoAlmacenamiento ? 'Volver a medir' : 'Medir el consumo';
+        remedir.title = etiqueta;
+        remedir.setAttribute('aria-label', etiqueta);
+    }
 
     if (html !== undefined) {
         if (volver) volver.hidden = true;

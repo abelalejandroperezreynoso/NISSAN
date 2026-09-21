@@ -2946,24 +2946,43 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.medirAlmacenamiento(forzar)   // la puerta: mide una vez y se la queda
   window.consumoAlmacenamiento    // lo medido; window.medicionDeConsumo, lo de camino
   window.abrirConsumoAlmacenamiento(forzar)  window.cerrarConsumoAlmacenamiento()
-  window.remedirConsumo()         // el botón de «Volver a medir» del encabezado
+  window.pantallaEnReposo()       // lo que se ve antes de medir: el botón y nada más
+  window.remedirConsumo()         // lo que hacen los dos botones que miden
   window.antiguedadDeLaMedida(fecha)   // «hace 46 min», o '' si es de ahora
   window.pintarConsumo(html)      // sin argumento, la pantalla que toque
   window.abrirBucket(i)  window.volverAConsumo()
   window.limpiarHuerfanos()
   ```
 
-  **Se mide una vez y la medida sobrevive a cerrar la hoja.** Medir es lo más
-  caro que hace esta pantalla —cuatro funciones de la base y, sin ellas, seis
-  listados de miles de archivos cada uno—, y abrirla lo repetía entero: entrar a
-  un bucket, salir y volver a entrar costaba dos mediciones completas para leer
-  el mismo número. Abrir la hoja **no es pedir una medición, es querer ver la
-  última**, así que la segunda vez se dibuja lo ya medido en el primer fotograma
-  y sin spinner. Lo listado de cada bucket va dentro de esa misma medida, de modo
-  que tampoco se vuelve a pedir.
+  **Abrir la hoja no mide nada.** Medir es lo más caro que hace esta pantalla
+  —cuatro funciones de la base, los listados de seis buckets y, para saber qué
+  archivos no reclama nadie, hasta cuarenta páginas de respuestas—, y hacerlo al
+  abrir obligaba a esperarlo entero antes de ver una sola cifra. Abrir es querer
+  mirar, no pedir una medición:
 
-  Volver a preguntarle a la base es el botón de **«Volver a medir»** del
-  encabezado, que es lo único que pasa `forzar` y lo que su nombre promete desde
+  - **Con una medida tomada**, la pantalla sale entera en el primer fotograma y
+    sin spinner; la medida sobrevive a cerrar la hoja, así que entrar a un
+    bucket, salir y volver a entrar ya no cuesta dos mediciones completas para
+    leer el mismo número. Lo listado de cada bucket va dentro de esa misma
+    medida, de modo que tampoco se vuelve a pedir.
+  - **Sin ninguna**, se queda en reposo (`window.pantallaEnReposo`) con el botón
+    que la empieza. El del encabezado hace lo mismo, así que hay dos puertas a lo
+    mismo y **ninguna se dispara sola**.
+
+  Tres cosas que hay que mantener:
+
+  - **El botón del encabezado no puede decir «volver a medir» antes de la
+    primera medición.** Es un botón de icono, así que lo que hace lo cuentan su
+    `title` y su `aria-label` y nada más; los escribe `pintarConsumo`, que es por
+    donde pasan las dos pantallas.
+  - **El aviso de un fallo lleva su botón debajo.** Sin él, la hoja se queda
+    muerta hasta cerrarla y volver a abrirla.
+  - **La pantalla en reposo no lleva rótulo**: lo diría por segunda vez, que el
+    título de la hoja ya pone «Consumo» dos centímetros más arriba.
+
+  Volver a preguntarle a la base son los dos botones —el del encabezado y el de
+  la pantalla en reposo, que llaman al mismo `remedirConsumo`—, lo único que pasa
+  `forzar` y lo que su nombre promete desde
   siempre; mientras lo hace **gira con `esta-actualizando` y se apaga**, como el
   botón de recargar del panel y por lo mismo —sin eso se ve igual que antes de
   pulsarlo, que es lo que lleva a pulsarlo otra vez—. Lo escribe

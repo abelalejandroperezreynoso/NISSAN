@@ -3119,6 +3119,26 @@ textarea:focus {
     margin-top: 4px;
 }
 
+/* El botón que empieza la medición, en la pantalla en reposo y en la de un
+   fallo. Es la acción principal de esas dos pantallas —lo único que hay que
+   tocar—, así que va en el azul de «Consumo» y a todo lo ancho, que en un
+   teléfono es lo que hace fácil el blanco del dedo. */
+.consumo-boton-medir {
+    width: 100%;
+    margin-top: 14px;
+    padding: 12px;
+    background: #0891b2;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.consumo-boton-medir:active { background: #0e7490; }
+
 .consumo-aviso-boton {
     width: 100%;
     margin-top: 10px;
