@@ -1613,6 +1613,48 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                     </span>
                 </label>`;
         }
+        else if (window.esPreguntaDeCursoPrevio(q)) {
+            // Dos filas, «Sí» y «No», con el mismo blanco grande del dedo que la
+            // casilla de asistencia. Con el «sí» salen debajo el instructor y la
+            // fecha —que es lo que hace de esto una constancia y no una casilla:
+            // «sí» a secas no lo dice nadie después—; con el «no» sale el aviso y
+            // **se frena la encuesta entera**.
+            //
+            // El aviso y los campos se dibujan siempre y se esconden con
+            // `hidden`: nacer sin ellos y meterlos al elegir dejaría el enunciado
+            // con nada debajo mientras no se toca nada, que es exactamente lo
+            // que no se distingue de un teléfono con el JavaScript viejo.
+            const hoy = new Date();
+            const maxFecha = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+            inputHtml = `
+                <div class="curso-previo" id="curso-previo-${q.id}">
+                    <label class="curso-opcion" for="curso-si-${q.id}">
+                        <input type="radio" id="curso-si-${q.id}" name="curso-${q.id}" value="si"
+                               class="resp-curso" data-id="${q.id}" onchange="window.pintarCursoPrevio(this)">
+                        <span class="curso-opcion-texto">Sí, ya lo tomé</span>
+                    </label>
+                    <label class="curso-opcion" for="curso-no-${q.id}">
+                        <input type="radio" id="curso-no-${q.id}" name="curso-${q.id}" value="no"
+                               class="resp-curso" data-id="${q.id}" onchange="window.pintarCursoPrevio(this)">
+                        <span class="curso-opcion-texto">Todavía no</span>
+                    </label>
+                    <div class="curso-datos" id="curso-datos-${q.id}" hidden>
+                        <label class="curso-campo">
+                            <span class="curso-campo-rotulo">Quién lo impartió <span style="color:#ef4444;">*</span></span>
+                            <input type="text" class="resp-curso-instructor" data-id="${q.id}"
+                                   placeholder="Nombre del instructor" autocomplete="off">
+                        </label>
+                        <label class="curso-campo">
+                            <span class="curso-campo-rotulo">Cuándo lo tomaste <span style="color:#ef4444;">*</span></span>
+                            <input type="date" class="resp-curso-fecha" data-id="${q.id}" max="${maxFecha}">
+                        </label>
+                    </div>
+                    <div class="curso-aviso" id="curso-aviso-${q.id}" hidden>
+                        <span class="curso-aviso-titulo">${window.TEXTO_SIN_CURSO}</span>
+                        <span class="curso-aviso-texto">Sin el curso no se puede contestar esta encuesta. En cuanto te lo impartan, vuelve a abrirla.</span>
+                    </div>
+                </div>`;
+        }
         else if (q.question_type === 'range') {
             let min = 0, step = 1;
             const max = window.maximoDeEscala(q);
@@ -1673,13 +1715,85 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             ? { valores: valoresDeLaEscala, nombre: `range-${q.id}`, id: q.id, max: maxDeLaEscala }
             : null);
 
-        container.insertAdjacentHTML('beforeend', `<div id="pregunta-card-${q.id}" class="pregunta-card" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${q.question_text}</label>${guiaHtml}${inputHtml}${comentarioHtml}</div>`);
+        container.insertAdjacentHTML('beforeend', `<div id="pregunta-card-${q.id}" class="pregunta-card${window.esPreguntaDeCursoPrevio(q) ? ' pregunta-curso' : ''}" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid #e2e8f0;"><label style="display:block; font-weight:700; color:#1e293b; margin-bottom:15px; font-size:1.1rem; line-height:1.4;">${index + 1}. ${window.enunciadoDePregunta(q)}</label>${guiaHtml}${inputHtml}${comentarioHtml}</div>`);
     });
 
     // Los lienzos de firma se enganchan cuando ya están en el documento: el
     // marcado se inserta de una vez con `insertAdjacentHTML` y un `onclick` no
     // sirve para dibujar.
     window.montarFirmasDePreguntas();
+    window.aplicarFrenoDeCurso();
+};
+
+// ==========================================
+// EL CURSO QUE HAY QUE HABER TOMADO ANTES
+// ==========================================
+// Con el «sí» salen el instructor y la fecha; con el «no», el aviso —y con él
+// **se frena el examen**: las demás preguntas se apagan y el botón de enviar
+// deja de poder pulsarse—. Es lo que separa esta pregunta de un filtro: no se
+// trata de saber quién tomó el curso, es que sin él lo que se conteste debajo
+// no mide lo que esa persona sabe.
+//
+// **El botón no es el guardia**: `enviarRespuestasEval` lo vuelve a comprobar,
+// como el plazo de una asistencia y por lo mismo —un `disabled` se quita desde
+// la consola—.
+window.pintarCursoPrevio = (radio) => {
+    if (!radio) return;
+    const qid = radio.dataset.id;
+    const datos = document.getElementById(`curso-datos-${qid}`);
+    const aviso = document.getElementById(`curso-aviso-${qid}`);
+    const dijoSi = radio.value === 'si' && radio.checked;
+    const dijoNo = radio.value === 'no' && radio.checked;
+    if (datos) datos.hidden = !dijoSi;
+    if (aviso) aviso.hidden = !dijoNo;
+    // Las dos filas se pintan como elegida y no elegida: el botón de radio es
+    // de 20px y no es lo que se ve desde lejos.
+    document.querySelectorAll(`.resp-curso[data-id="${qid}"]`).forEach(r => {
+        const fila = r.closest('.curso-opcion');
+        if (fila) fila.classList.toggle('esta-elegida', r.checked);
+    });
+    window.aplicarFrenoDeCurso();
+};
+
+// Los cursos que se dijeron no tomados. Es lo que miran el freno de la pantalla
+// y el envío, para que no puedan decir cosas distintas.
+window.cursosQueFaltan = () => {
+    const faltan = [];
+    document.querySelectorAll('.resp-curso:checked').forEach(r => {
+        if (r.value !== 'no') return;
+        const q = (window.preguntasCacheActual || []).find(p => String(p.id) === String(r.dataset.id));
+        faltan.push({ id: r.dataset.id, curso: window.cursoDeLaPregunta(q || {}) });
+    });
+    return faltan;
+};
+
+// El freno: con algún curso sin tomar, las demás preguntas se apagan —la del
+// curso no, que es donde hay que poder desdecirse— y el botón de enviar deja
+// de poder pulsarse, con el aviso debajo. Lo apaga y lo enciende la clase
+// `sin-curso` de `estilos.css`, no un estilo escrito a mano: el botón lleva el
+// suyo en el atributo y una regla de la hoja no le ganaría.
+window.aplicarFrenoDeCurso = () => {
+    const raiz = document.getElementById('dynamic-questions-root');
+    if (!raiz) return;
+    const faltan = window.cursosQueFaltan();
+    raiz.classList.toggle('sin-curso', faltan.length > 0);
+
+    const btn = document.getElementById('btn-enviar-respuestas');
+    if (btn) btn.disabled = faltan.length > 0;
+
+    let nota = document.getElementById('aviso-freno-curso');
+    if (faltan.length === 0) {
+        if (nota) nota.remove();
+        return;
+    }
+    if (!nota) {
+        nota = document.createElement('div');
+        nota.id = 'aviso-freno-curso';
+        nota.className = 'freno-curso';
+        if (btn && btn.parentElement) btn.parentElement.insertBefore(nota, btn.nextSibling);
+        else raiz.appendChild(nota);
+    }
+    nota.innerText = `${window.TEXTO_SIN_CURSO}: ${faltan.map(f => f.curso).join(', ')}.`;
 };
 
 // ==========================================
@@ -1945,6 +2059,7 @@ window.enviarRespuestasEval = async () => {
         const evidenciasPorSubir = [];
         const firmasPorSubir = [];
         const fueraDePlazo = [];
+        const sinCurso = [];
 
         window.preguntasCacheActual.forEach((q, indice) => {
             let val = null;
@@ -1991,6 +2106,27 @@ window.enviarRespuestasEval = async () => {
                             && window.estadoDeAsistencia(q).estado !== 'cerrada';
                 if (el && el.checked && enHora) val = window.TEXTO_ASISTENCIA;
                 if (el && el.checked && !enHora) fueraDePlazo.push({ numero: indice + 1, texto: q.question_text || '', id: q.id });
+            } else if (window.esPreguntaDeCursoPrevio(q)) {
+                // Un «no» no se guarda nunca: esa encuesta no se puede enviar,
+                // así que lo único que llega a `answers_json` es la constancia
+                // de quien sí lo tomó. Se comprueba también aquí y no sólo con el
+                // freno de la pantalla, que un `disabled` se quita desde la
+                // consola —es la misma regla que el plazo de una asistencia—.
+                const elegido = document.querySelector(`input[name="curso-${q.id}"]:checked`);
+                if (elegido && elegido.value === 'no') {
+                    sinCurso.push({ numero: indice + 1, texto: window.cursoDeLaPregunta(q), id: q.id });
+                } else if (elegido && elegido.value === 'si') {
+                    const campoInstructor = document.querySelector(`.resp-curso-instructor[data-id="${q.id}"]`);
+                    const campoFecha = document.querySelector(`.resp-curso-fecha[data-id="${q.id}"]`);
+                    // Sin instructor o sin fecha no hay constancia, así que `val`
+                    // se queda en null y la pregunta cae en «falta contestar»:
+                    // guardar un «sí» pelado no dice nada después.
+                    val = window.constanciaDeCurso({
+                        tomado: true,
+                        instructor: campoInstructor ? campoInstructor.value : '',
+                        fecha: campoFecha ? campoFecha.value : ''
+                    });
+                }
             }
             
             answersMap[q.id] = val;
@@ -2004,7 +2140,7 @@ window.enviarRespuestasEval = async () => {
                     : (val !== null && val !== "" && !(Array.isArray(val) && val.length === 0)));
 
             // Una encuesta a medias no dice nada: se contestan todas.
-            if (!contestada) faltanRespuestas.push({ numero: indice + 1, texto: q.question_text || '', id: q.id });
+            if (!contestada) faltanRespuestas.push({ numero: indice + 1, texto: window.enunciadoDePregunta(q), id: q.id });
 
             // El motivo se pide sólo de lo que sí se contestó: a lo que aún no
             // tiene opción marcada se le pide antes la respuesta, y sería
@@ -2014,7 +2150,7 @@ window.enviarRespuestasEval = async () => {
                 const motivo = campo ? campo.value.trim() : '';
                 if (contestada) {
                     if (!motivo && window.pideMotivo(q, val)) {
-                        faltanMotivos.push({ numero: indice + 1, texto: q.question_text || '', id: q.id, campo });
+                        faltanMotivos.push({ numero: indice + 1, texto: window.enunciadoDePregunta(q), id: q.id, campo });
                     } else if (motivo) {
                         motivos[q.id] = motivo;
                     }
@@ -2096,6 +2232,34 @@ window.enviarRespuestasEval = async () => {
             c.style.border = '1px solid #e2e8f0';
             c.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
         });
+
+        // Sin el curso previo la encuesta no se envía, y eso se para **lo
+        // primero**: lo que se conteste debajo no mide lo que esa persona sabe,
+        // así que reclamarle además lo que falta sería pedirle que termine algo
+        // que no debería haber empezado.
+        if (sinCurso.length > 0) {
+            sinCurso.forEach(f => {
+                const card = document.getElementById(`pregunta-card-${f.id}`);
+                if (card) {
+                    card.style.border = '2px solid #ef4444';
+                    card.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.12)';
+                }
+            });
+
+            alert(
+                `${window.TEXTO_SIN_CURSO}.\n\n` +
+                'Esta encuesta requiere haber tomado antes:\n' +
+                sinCurso.map(f => `   ${f.numero}. ${f.texto}`).join('\n') +
+                '\n\nEn cuanto te lo impartan, vuelve a abrirla.'
+            );
+
+            const card = document.getElementById(`pregunta-card-${sinCurso[0].id}`);
+            if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            if (btn) { btn.disabled = false; btn.innerText = "Enviar Respuestas"; }
+            window.aplicarFrenoDeCurso();
+            return;
+        }
 
         // Una asistencia marcada fuera de su plazo se para aquí y va antes que
         // lo que falta: no es un descuido de quien la llena, es que el plazo se

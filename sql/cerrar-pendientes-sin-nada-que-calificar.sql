@@ -59,7 +59,7 @@ and    not exists (
            select 1
            from   evaluation_questions q
            where  q.evaluation_id = r.evaluation_id
-           and    coalesce(q.question_type, '') not in ('photo', 'signature', 'attendance')
+           and    coalesce(q.question_type, '') not in ('photo', 'signature', 'attendance', 'prerequisite')
            and    not jsonb_exists(coalesce(r.grades_json::jsonb, '{}'::jsonb), q.id::text)
        )
 order  by r.submitted_at;
@@ -79,7 +79,7 @@ and    not exists (
            select 1
            from   evaluation_questions q
            where  q.evaluation_id = r.evaluation_id
-           and    coalesce(q.question_type, '') not in ('photo', 'signature', 'attendance')
+           and    coalesce(q.question_type, '') not in ('photo', 'signature', 'attendance', 'prerequisite')
            and    not jsonb_exists(coalesce(r.grades_json::jsonb, '{}'::jsonb), q.id::text)
        )
 returning r.id, r.evaluation_id, r.employee_id, r.submitted_at;

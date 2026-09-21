@@ -1401,20 +1401,21 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   del área** de las encuestas `evaluates_area`, que era un recuadro aparte y
   obligatorio: ver más abajo.
 
-- **Tres tipos dejan constancia y no puntúan, y a nadie le toca revisarlos.**
-  La **evidencia fotográfica**, la **firma** y el **registro de asistencia** no
-  se aciertan ni se fallan: lo que recogen es la constancia de algo —esto es lo
-  que había, ésta es mi firma, yo estuve—, y sobre eso no hay veredicto que dar.
+- **Cuatro tipos dejan constancia y no puntúan, y a nadie le toca revisarlos.**
+  La **evidencia fotográfica**, la **firma**, el **registro de asistencia** y el
+  **curso previo** no se aciertan ni se fallan: lo que recogen es la constancia
+  de algo —esto es lo que había, ésta es mi firma, yo estuve, este curso ya me
+  lo dieron—, y sobre eso no hay veredicto que dar.
   No se puede calificar mal una foto del área ni acertar una firma, así que
   pedirle esa decisión a quien revisa era pedirle una que no existe, y lo que
   salía de ahí entraba en el promedio y movía el puntaje de la persona.
 
   ```js
-  window.TIPOS_DE_CONSTANCIA          // ['photo', 'signature', 'attendance']
+  window.TIPOS_DE_CONSTANCIA   // ['photo', 'signature', 'attendance', 'prerequisite']
   window.esPreguntaDeConstancia(pregunta)
   ```
 
-  La regla es una sola y vale para las tres:
+  La regla es una sola y vale para las cuatro:
 
   - **No se les escribe calificación** —no entran en `grades_json`—, así que
     `calcularScoreRespuesta`, que promedia lo que hay ahí dentro, ni las ve.
@@ -1422,7 +1423,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     pendiente de revisión donde no hay nada que decidir. Una encuesta hecha sólo
     de éstas se guarda ya `'Revisado'`.
   - **La pantalla de calificar las enseña sin botones**: la insignia dice lo
-    único que hay que saber —CON EVIDENCIA, FIRMADA, REGISTRADA, o su negativa—
+    único que hay que saber —CON EVIDENCIA, FIRMADA, REGISTRADA, CON CURSO, o su
+    negativa—
     y nunca «PENDIENTE», que diría que alguien tiene algo que hacer con ellas.
     Su tarjeta se queda además con el **borde neutro**: ese borde sale del color
     de la insignia, y el verde de una asistencia registrada se leía como un
@@ -1961,6 +1963,100 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   delante. Y la fila entera es el blanco del dedo —una casilla de 20px no se
   acierta—, con el círculo de la marca a la derecha: lo que distingue a quien
   asistió no puede ser sólo el color del renglón.
+
+- **Una encuesta puede exigir un curso antes de contestarla.** Un examen del
+  dojo de mantenimiento hecho por quien no ha ido al dojo no mide lo que esa
+  persona sabe: mide que nadie se lo enseñó. El tipo de pregunta **«🎓 Curso
+  previo requerido»** lo comprueba antes de empezar y **frena la encuesta** si
+  la respuesta es que no.
+
+  El enunciado es **el nombre del curso** —«Dojo de mantenimiento»— y no una
+  pregunta; la pregunta la arma la aplicación alrededor: «Esta encuesta
+  requiere que hayas tomado el curso de «…». ¿Ya se te impartió?». Debajo van
+  dos filas, «Sí, ya lo tomé» y «Todavía no».
+
+  - **Sí** → salen dos campos, **quién lo impartió y cuándo**, y la encuesta
+    sigue como cualquier otra.
+  - **No** → sale el aviso de **«Solicita la capacitación a tu jefe
+    inmediato»**, el resto de las preguntas se apaga y el botón de enviar deja
+    de poder pulsarse.
+
+  ```js
+  window.TIPO_PREGUNTA_CURSO      // 'prerequisite'
+  window.TEXTO_SIN_CURSO          // «Solicita la capacitación a tu jefe inmediato»
+  window.esPreguntaDeCursoPrevio(pregunta)
+  window.cursoDeLaPregunta(pregunta)      // el nombre, o «el curso requerido»
+  window.enunciadoDePregunta(pregunta)    // lo que se lee encima de los controles
+  window.constanciaDeCurso(valor)         // { tomado, instructor, fecha }, o null
+  window.textoDeCursoTomado(valor)        // «Lo impartió Juan Pérez · 04/09/2026»
+
+  window.pintarCursoPrevio(radio)   // el sí y el no
+  window.cursosQueFaltan()          // los que se dijeron no tomados
+  window.aplicarFrenoDeCurso()      // apaga el examen y el botón
+  ```
+
+  **Es la cuarta que deja constancia y no puntúa** —la regla entera está más
+  arriba, con la evidencia—: haber tomado el curso no se acierta ni se falla,
+  así que no se le escribe nota, cuenta como resuelta (`autoGradedCount`) y la
+  pantalla de calificar la enseña sin botones, con la insignia **CON CURSO** o
+  **SIN CURSO** y nunca «PENDIENTE».
+
+  **Lo que se guarda no es un «sí»: es la constancia.** «Sí» a secas no lo dice
+  nadie después —ni quién lo impartió ni cuándo—, así que sin instructor y sin
+  fecha `constanciaDeCurso` devuelve null, la pregunta cuenta como sin contestar
+  y el envío la reclama. Va bajo la llave de su pregunta en `answers_json`, como
+  objeto: `{ tomado: true, instructor, fecha }`. **No hay columna nueva ni
+  script que correr** —`question_type` es texto libre—; lo único que hay que
+  tocar a mano es `sql/cerrar-pendientes-sin-nada-que-calificar.sql`, que nombra
+  los tipos de constancia uno a uno.
+
+  **Un «no» no llega nunca a la base**, y por eso la lectura es siempre la
+  constancia de quien sí lo tomó: esa encuesta no se puede enviar, así que no
+  hay qué guardar. Lo que el «no» deja es el pendiente en pie, que es lo que
+  pedía —hasta que le impartan el curso, esa encuesta le sigue tocando—.
+
+  Siete cosas que hay que mantener:
+
+  - **El enunciado se escribe en un solo sitio.** Toda pantalla que ponga un
+    enunciado pasa por `enunciadoDePregunta` —la de contestar, la de calificar
+    y las dos listas de lo que falta al enviar—, o la misma pregunta se leería
+    de dos maneras: el nombre del curso pelado en una y la pregunta armada en
+    la otra. Para los demás tipos devuelve `question_text` y no cambia nada.
+  - **El botón no es el guardia.** `enviarRespuestasEval` vuelve a mirar los
+    radios antes de mandar nada, igual que con el plazo de una asistencia y por
+    lo mismo: un `disabled` se quita desde la consola y la hoja pudo quedarse
+    abierta desde antes de elegir.
+  - **Y ese freno va el primero de todos**, antes que el de la asistencia y que
+    el de «falta contestar»: lo que se conteste debajo no mide lo que esa
+    persona sabe, así que reclamarle además lo que falta sería pedirle que
+    termine algo que no debería haber empezado.
+  - **La pregunta del curso no se apaga con las demás.** El freno es
+    `#dynamic-questions-root.sin-curso .pregunta-card:not(.pregunta-curso)`, y
+    esa clase se la pone su propia tarjeta: apagándola también, quien tocó «no»
+    por error no tendría desde dónde desdecirse.
+  - **Los dos campos y el aviso se dibujan siempre y se esconden con
+    `hidden`.** Meterlos al elegir dejaría el enunciado con nada debajo mientras
+    no se toca nada, que es exactamente lo que no se distingue de un teléfono
+    con el JavaScript viejo. Llevan su propia regla `[hidden] { display: none }`
+    porque tienen `display` de autor: es la trampa de `.tipos-pregunta`.
+  - **El botón de enviar lleva su color en el atributo `style`**, así que
+    apagarlo desde la hoja necesita `!important` (`#btn-enviar-respuestas:disabled`):
+    una regla de la hoja no le gana a uno escrito en el marcado.
+  - **Queda fuera de `TIPOS_EN_MODO_JEFE`**, como la asistencia y por lo mismo:
+    ahí quien contesta es el jefe sobre cada colaborador, y «¿ya se te
+    impartió?» no tiene a quién preguntarle —ni al jefe, que la contesta de
+    otros, ni al evaluado, que no la contesta—.
+
+  Ni en modo administrador aparece un campo para editar la constancia: lo que
+  se corregiría es si esa persona tomó el curso, y eso se arregla borrando la
+  respuesta. El valor sobrevive porque `guardarCalificacionAdmin` parte de una
+  copia de `answers_json`.
+
+  Es un tipo nuevo, así que **cae de lleno en la trampa del teléfono con el
+  JavaScript viejo** (la primera de esta lista): ese código no conoce
+  `prerequisite`, no entra en ninguna rama del `if` que dibuja los controles y
+  enseña el nombre del curso con nada debajo —y sin el enunciado armado, que
+  tampoco conoce—. Por eso la versión se sube en el mismo cambio.
 
 - **Una foto se encoge antes de subirla, y ya no hay ninguna foto del área.**
   Las encuestas con `evaluates_area` pidieron un tiempo **una fotografía del

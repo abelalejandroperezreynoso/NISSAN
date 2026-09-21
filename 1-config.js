@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-21-9';
+window.VERSION_APP = '2026-09-21-10';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -670,17 +670,90 @@ window.esPreguntaDeAsistencia = (pregunta) =>
     !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_ASISTENCIA;
 
 // ==========================================
+// EL CURSO QUE HAY QUE HABER TOMADO ANTES
+// ==========================================
+// Hay encuestas que no se pueden contestar sin haber pasado antes por su
+// capacitación: un examen del dojo de mantenimiento a quien no ha ido al dojo
+// no mide lo que sabe, mide que nadie se lo enseñó. Esta pregunta lo comprueba
+// antes de empezar y **frena la encuesta** si la respuesta es que no.
+//
+// El enunciado es **el nombre del curso** y no una pregunta —por eso su
+// `enunciado` del catálogo lo pide así—: la pregunta la escribe la aplicación
+// alrededor (`enunciadoDePregunta`), que es lo único que hace que las dos
+// mitades digan lo mismo, la que se contesta y la que se califica.
+//
+// Es la cuarta que deja constancia y no puntúa: haber tomado el curso no se
+// acierta ni se falla. Lo que se guarda es **quién lo impartió y cuándo**, que
+// es lo que la convierte en constancia y no en una casilla —«sí» a secas no lo
+// dice nadie después—.
+window.TIPO_PREGUNTA_CURSO = 'prerequisite';
+window.TEXTO_SIN_CURSO = 'Solicita la capacitaci\u00f3n a tu jefe inmediato';
+window.esPreguntaDeCursoPrevio = (pregunta) =>
+    !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_CURSO;
+
+// El nombre del curso: el enunciado tal cual lo escribió quien creó la
+// encuesta. Vacío se dice «el curso requerido», que la frase de abajo tiene que
+// poder armarse igual.
+window.cursoDeLaPregunta = (pregunta) => {
+    const texto = pregunta && pregunta.question_text ? String(pregunta.question_text).trim() : '';
+    return texto || 'el curso requerido';
+};
+
+// **Lo que se lee encima de los controles**, y no siempre es `question_text`.
+// Casi todos los tipos preguntan lo que se escribió; el curso previo guarda el
+// nombre del curso y la pregunta la arma la aplicaci\u00f3n, as\u00ed que toda pantalla
+// que escriba un enunciado pasa por aqu\u00ed —la de contestar, la de calificar y
+// las dos listas de lo que falta al enviar— o dir\u00edan cosas distintas de la
+// misma pregunta.
+//
+// Devuelve **texto pelado**: escaparlo es de quien lo escriba, que cada
+// pantalla lo hace a su manera.
+window.enunciadoDePregunta = (pregunta) => {
+    if (!pregunta) return '';
+    if (window.esPreguntaDeCursoPrevio(pregunta)) {
+        return `Esta encuesta requiere que hayas tomado el curso de \u00ab${window.cursoDeLaPregunta(pregunta)}\u00bb. \u00bfYa se te imparti\u00f3?`;
+    }
+    return pregunta.question_text || '';
+};
+
+// Lo guardado bajo la llave de la pregunta: `{ tomado, instructor, fecha }`.
+// **Un «no» no llega nunca a guardarse** —esa respuesta no se puede enviar—,
+// as\u00ed que lo que hay siempre es la constancia de quien s\u00ed lo tom\u00f3. Devuelve
+// null ante cualquier otra cosa, que es lo que separa «no contest\u00f3» de «dijo
+// que s\u00ed y con estos datos».
+window.constanciaDeCurso = (valor) => {
+    if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
+    if (valor.tomado !== true) return null;
+    const instructor = valor.instructor ? String(valor.instructor).trim() : '';
+    const fecha = valor.fecha ? String(valor.fecha).trim() : '';
+    if (!instructor || !fecha) return null;
+    return { tomado: true, instructor, fecha };
+};
+
+// «Lo imparti\u00f3 Juan P\u00e9rez \u00b7 04/09/2026». La fecha llega como 'YYYY-MM-DD' y se
+// arma con `fechaDeRegistro`, que la lee en local: `new Date('2026-09-04')` se
+// lee en UTC y la zona horaria la corre un d\u00eda hacia atr\u00e1s.
+window.textoDeCursoTomado = (valor) => {
+    const c = window.constanciaDeCurso(valor);
+    if (!c) return '';
+    const d = window.fechaDeRegistro(c.fecha);
+    const cuando = (d && !isNaN(d.getTime())) ? d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : c.fecha;
+    return `Lo imparti\u00f3 ${c.instructor} \u00b7 ${cuando}`;
+};
+
+// ==========================================
 // LAS QUE DEJAN CONSTANCIA Y NO PUNTÚAN
 // ==========================================
-// Tres tipos de pregunta no se aciertan ni se fallan: la **evidencia
-// fotográfica**, la **firma** y el **registro de asistencia**. Lo que recogen
-// es la constancia de algo —esto es lo que había, ésta es mi firma, yo estuve—,
-// y sobre eso no hay veredicto que dar: no se puede calificar mal una foto del
-// área ni acertar una firma. Poner ahí «Correcto» e «Incorrecto» le pedía a
+// Cuatro tipos de pregunta no se aciertan ni se fallan: la **evidencia
+// fotográfica**, la **firma**, el **registro de asistencia** y el **curso
+// previo**. Lo que recogen es la constancia de algo —esto es lo que había,
+// ésta es mi firma, yo estuve, este curso ya lo tomé—, y sobre eso no hay
+// veredicto que dar: no se puede calificar mal una foto del área ni acertar
+// una firma. Poner ahí «Correcto» e «Incorrecto» le pedía a
 // quien revisa una decisión que no existe, y el resultado era peor que inútil:
 // esa opinión entraba en el promedio y movía el puntaje de la persona.
 //
-// La regla, entonces, es una sola y vale para las tres:
+// La regla, entonces, es una sola y vale para las cuatro:
 //
 // - **No se les escribe calificación** —no entran en `grades_json`—, así que
 //   `calcularScoreRespuesta`, que promedia lo que hay ahí dentro, ni las ve.
@@ -704,7 +777,8 @@ window.esPreguntaDeAsistencia = (pregunta) =>
 window.TIPOS_DE_CONSTANCIA = [
     window.TIPO_PREGUNTA_FOTO,
     window.TIPO_PREGUNTA_FIRMA,
-    window.TIPO_PREGUNTA_ASISTENCIA
+    window.TIPO_PREGUNTA_ASISTENCIA,
+    window.TIPO_PREGUNTA_CURSO
 ];
 window.esPreguntaDeConstancia = (pregunta) =>
     !!pregunta && window.TIPOS_DE_CONSTANCIA.includes(pregunta.question_type);
@@ -1053,6 +1127,13 @@ window.TIPOS_DE_PREGUNTA = [
         nombre: 'Firma',
         detalle: 'Se firma con el dedo en la pantalla, como la de enterado de una difusi\u00f3n. Se pide escribir el primer nombre y no la firma oficial. Queda como constancia y no cuenta para la calificaci\u00f3n.',
         enunciado: 'De qu\u00e9 se deja constancia al firmar\u2026'
+    },
+    {
+        valor: window.TIPO_PREGUNTA_CURSO,
+        icono: '\u{1F393}',
+        nombre: 'Curso previo requerido',
+        detalle: 'El enunciado es el nombre del curso y se pregunta si ya se imparti\u00f3. Con un \u00abs\u00ed\u00bb se piden el instructor y la fecha; con un \u00abno\u00bb la encuesta no se puede enviar y se manda a pedirle la capacitaci\u00f3n al jefe inmediato. Queda como constancia y no cuenta para la calificaci\u00f3n.',
+        enunciado: 'Nombre del curso que hay que haber tomado\u2026'
     }
 ];
 

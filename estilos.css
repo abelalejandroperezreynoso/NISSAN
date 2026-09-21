@@ -6233,3 +6233,123 @@ html.fondo-anclado body {
 }
 
 .firma-borrar:active { transform: scale(0.96); }
+
+/* ==========================================
+   EL CURSO QUE HAY QUE HABER TOMADO ANTES
+   ==========================================
+   Dos filas, «Sí» y «No», con el mismo blanco grande del dedo que la casilla
+   de asistencia: el botón de radio mide 20px y no es lo que se ve desde lejos,
+   así que la fila entera se pinta como elegida. La clase la pone
+   `window.pintarCursoPrevio` y no un `:has()` de esta hoja, porque el radio es
+   hijo de la etiqueta y no su hermano —la misma razón que en la asistencia—. */
+.curso-previo { display: flex; flex-direction: column; gap: 10px; }
+
+.curso-opcion {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-sizing: border-box;
+    width: 100%;
+    padding: 16px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+    background: #f8fafc;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.curso-opcion.esta-elegida {
+    background: #ecfeff;
+    border-style: solid;
+    border-color: #67e8f9;
+}
+
+.curso-opcion input[type="radio"] {
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    accent-color: #0891b2;
+}
+
+.curso-opcion-texto { font-size: 1rem; font-weight: 600; color: #334155; }
+
+/* El instructor y la fecha. Los campos van a 16px clavados: por debajo de eso
+   Safari en iOS hace zoom al enfocarlos, que es la trampa de siempre. */
+.curso-datos {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 2px;
+    padding: 14px;
+    border: 1px solid #cffafe;
+    border-radius: 10px;
+    background: #f0fdff;
+}
+
+.curso-datos[hidden] { display: none; }
+
+.curso-campo { display: flex; flex-direction: column; gap: 6px; }
+
+.curso-campo-rotulo { font-size: 0.85rem; font-weight: 600; color: #155e75; }
+
+.curso-campo input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 16px;
+    font-family: inherit;
+    background: #fff;
+    color: #0f172a;
+}
+
+/* El aviso de que falta el curso. Va debajo de las dos filas y dice las dos
+   cosas: a quién pedírselo y que hasta entonces no hay encuesta que contestar. */
+.curso-aviso {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    background: #fff7ed;
+}
+
+.curso-aviso[hidden] { display: none; }
+
+.curso-aviso-titulo { font-size: 0.95rem; font-weight: 700; color: #9a3412; }
+.curso-aviso-texto { font-size: 0.85rem; color: #b45309; line-height: 1.4; }
+
+/* Sin el curso, el examen se apaga: las demás preguntas dejan de admitir el
+   dedo y se atenúan. La del curso no —es donde hay que poder desdecirse—, y por
+   eso el selector lleva `:not(.pregunta-curso)`. */
+#dynamic-questions-root.sin-curso .pregunta-card:not(.pregunta-curso) {
+    opacity: 0.45;
+    pointer-events: none;
+    filter: grayscale(0.4);
+}
+
+/* El botón de enviar lleva su color en el atributo `style`, así que apagarlo
+   desde aquí necesita `!important`: una regla de la hoja no le gana a uno
+   escrito en el marcado. Es la misma trampa que el relleno de la portada. */
+#btn-enviar-respuestas:disabled {
+    background: #cbd5e1 !important;
+    color: #f8fafc !important;
+    box-shadow: none !important;
+    cursor: not-allowed;
+}
+
+.freno-curso {
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #9a3412;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.4;
+    text-align: center;
+}

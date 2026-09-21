@@ -2229,6 +2229,13 @@ window.verDetalleRespuesta = async (resp) => {
             // firmada o no lo está.
             const firmada = typeof rawRespuesta === 'string' && rawRespuesta.trim() !== '';
             resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${firmada?'#f5f3ff':'#f1f5f9'}; color:${firmada?'#6d28d9':'#64748b'}; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${firmada?'FIRMADA':'SIN FIRMAR'}</span>`;
+        } else if (window.esPreguntaDeCursoPrevio(q)) {
+            // Tampoco aquí hay nada que acertar: o el curso se tomó o no. Y un
+            // «no» no llega nunca a guardarse —esa encuesta no se puede
+            // enviar—, así que «SIN CURSO» sólo sale en lo contestado antes de
+            // que esta pregunta existiera o si falta la constancia.
+            const conCurso = !!window.constanciaDeCurso(rawRespuesta);
+            resultBadge = `<span id="${resultBadgeId}" style="float:right; background:${conCurso?'#ecfeff':'#f1f5f9'}; color:${conCurso?'#0e7490':'#64748b'}; padding:3px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">${conCurso?'CON CURSO':'SIN CURSO'}</span>`;
         } else if (window.esPreguntaDeAsistencia(q)) {
             // Aquí no se acierta ni se falla: o se registró o no. «CORRECTO»
             // sobre una asistencia se lee como si hubiera habido algo que
@@ -2269,6 +2276,23 @@ window.verDetalleRespuesta = async (resp) => {
                        <span>Asistencia registrada${diaDeLaRespuesta ? ` · ${window.sanitizeForHTML(diaDeLaRespuesta)}` : ''}</span>
                    </div>`
                 : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin registrar)</div>`) + lineaEvento;
+        }
+        // Un curso previo se mira y ya: lo que deja es la constancia de quién lo
+        // impartió y cuándo, no algo que se acierte o se falle, así que va sin
+        // los botones de correcto e incorrecto. Ni en modo administrador se
+        // ofrece un campo para editarlo —lo que se corregiría es si esa persona
+        // tomó el curso, y eso se arregla borrando la respuesta—;
+        // `guardarCalificacionAdmin` parte de una copia de `answers_json`, así
+        // que los dos datos sobreviven intactos.
+        else if (window.esPreguntaDeCursoPrevio(q)) {
+            const constancia = window.constanciaDeCurso(rawRespuesta);
+            contentHtml = constancia
+                ? `<div style="display:flex; align-items:center; gap:10px; background:#ecfeff; border:1px solid #a5f3fc; padding:14px; border-radius:10px; color:#0e7490; font-weight:600;">
+                       <span style="font-size:1.2rem;">\u{1F393}</span>
+                       <span>${window.sanitizeForHTML(window.textoDeCursoTomado(rawRespuesta))}</span>
+                   </div>
+                   <div style="font-size:0.75rem; color:#94a3b8; margin-top:8px;">Curso declarado por quien contest\u00f3 &middot; no cuenta para la calificaci\u00f3n</div>`
+                : `<div style="background:#f8fafc; padding:15px; border-radius:8px; color:#94a3b8; font-size:0.95rem; border:1px solid #cbd5e1;">(Sin constancia del curso)</div>`;
         }
         // Una firma se mira y ya: es la constancia de que esa persona contestó,
         // no una respuesta que se acierte o se falle, así que va sin los
@@ -2491,7 +2515,7 @@ window.verDetalleRespuesta = async (resp) => {
         // contestó, así que la guía sale también aquí.
         const guiaHtml = window.bloqueGuiaEscala(q);
 
-        container.insertAdjacentHTML('beforeend', `<div class="pregunta-detalle" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid ${cardBorderColor};"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;"><label style="font-weight:700; color:#1e293b; font-size:1.1rem; line-height:1.4; flex:1;">${index+1}. ${q.question_text}</label>${resultBadge}</div>${guiaHtml}${contentHtml}${motivoHtml}</div>`);
+        container.insertAdjacentHTML('beforeend', `<div class="pregunta-detalle" style="margin-bottom:30px; background:white; padding:25px; border-radius:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); border:1px solid ${cardBorderColor};"><div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:15px;"><label style="font-weight:700; color:#1e293b; font-size:1.1rem; line-height:1.4; flex:1;">${index+1}. ${window.enunciadoDePregunta(q)}</label>${resultBadge}</div>${guiaHtml}${contentHtml}${motivoHtml}</div>`);
     });
     setTimeout(() => {
         document.querySelectorAll('.admin-edit-answer[data-type="text"], .auto-resize-text').forEach(ta => {
@@ -5938,6 +5962,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     const showPhotoInfo = (tp === 'photo');
     const showAttendanceInfo = (tp === window.TIPO_PREGUNTA_ASISTENCIA);
     const showSignatureInfo = (tp === window.TIPO_PREGUNTA_FIRMA);
+    const showCourseInfo = (tp === window.TIPO_PREGUNTA_CURSO);
     const optionsLabel = (tp === 'list_match') ? "Elementos Correctos (Respuesta Modelo):" : "Opciones:";
 
     d.innerHTML=`
@@ -5983,6 +6008,11 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
 
     <div class="signature-info-container" style="display:${showSignatureInfo?'block':'none'}; margin-top:15px; padding:10px; background:#f5f3ff; border:1px dashed #ddd6fe; border-radius:8px; font-size:0.85rem; color:#6d28d9;">
         🖊️ <b>Firma:</b> el enunciado de arriba dice de qué se deja constancia («Recibí la capacitación y entendí las reglas»). Debajo sale el recuadro donde se firma con el dedo, y lo que se pide escribir es <b>el primer nombre</b>, no la firma oficial: una rúbrica hecha con el dedo no vale como la del documento de identidad y un nombre escrito a mano sí se lee. <b>No cuenta para la calificación</b> y nadie tiene que revisarla.
+    </div>
+
+    <div class="course-info-container" style="display:${showCourseInfo?'block':'none'}; margin-top:15px; padding:10px; background:#ecfeff; border:1px dashed #a5f3fc; border-radius:8px; font-size:0.85rem; color:#0e7490;">
+        \u{1F393} <b>Curso previo:</b> el enunciado de arriba es <b>el nombre del curso</b> («Dojo de mantenimiento»), no una pregunta: la pregunta la arma la aplicaci\u00f3n alrededor \u2014«Esta encuesta requiere que hayas tomado el curso de \u00ab\u2026\u00bb. \u00bfYa se te imparti\u00f3?»\u2014.
+        Con un <b>s\u00ed</b> se piden el instructor y la fecha, que es lo que deja la constancia; con un <b>no</b> la encuesta <b>no se puede enviar</b>, el resto de las preguntas se apaga y se manda a pedirle la capacitaci\u00f3n al jefe inmediato. <b>No cuenta para la calificaci\u00f3n</b> y nadie tiene que revisarla.
     </div>
 
     <div class="attendance-info-container" style="display:${showAttendanceInfo?'block':'none'}; margin-top:15px;">
@@ -6417,6 +6447,7 @@ window.toggleTipoPregunta = (s) => {
     const fInfo = w.querySelector('.photo-info-container');
     const aInfo = w.querySelector('.attendance-info-container');
     const sInfo = w.querySelector('.signature-info-container');
+    const cInfo = w.querySelector('.course-info-container');
 
     if(o) o.style.display = 'none';
     if(t) t.style.display = 'none';
@@ -6424,6 +6455,7 @@ window.toggleTipoPregunta = (s) => {
     if(fInfo) fInfo.style.display = 'none';
     if(aInfo) aInfo.style.display = 'none';
     if(sInfo) sInfo.style.display = 'none';
+    if(cInfo) cInfo.style.display = 'none';
 
     if (s.value === 'text') {
         if(t) t.style.display = 'block';
@@ -6444,6 +6476,11 @@ window.toggleTipoPregunta = (s) => {
         // Ni la firma: el enunciado dice de qué se deja constancia y el
         // recuadro para firmar sale solo al contestarla.
         if(sInfo) sInfo.style.display = 'block';
+    } else if (s.value === window.TIPO_PREGUNTA_CURSO) {
+        // Ni el curso previo: el enunciado es el nombre del curso y los dos
+        // campos —instructor y fecha— salen solos al contestarla, sólo si se
+        // dice que sí.
+        if(cInfo) cInfo.style.display = 'block';
     } else {
         if(o) {
             o.style.display = 'block';
@@ -6756,6 +6793,13 @@ window.preguntasDeLaHoja = () => {
                 const fecha = new Date(cuando);
                 if (!isNaN(fecha.getTime())) ops[window.PLAZA_FECHA_EVENTO] = fecha.toISOString();
             }
+        } else if (tp === window.TIPO_PREGUNTA_CURSO) {
+            // Un curso previo no tiene opciones ni respuesta modelo: el
+            // enunciado es el nombre del curso y ya. El campo de «Respuesta
+            // Modelo» sigue en el marcado aunque esté escondido, así que se
+            // vacía a propósito —igual que en la firma y en la asistencia—.
+            corr = "";
+            ops = [];
         } else if (tp === window.TIPO_PREGUNTA_FIRMA) {
             // Una firma no tiene opciones ni respuesta modelo. El campo de
             // «Respuesta Modelo» sigue en el marcado aunque esté escondido, así
