@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-21-11';
+window.VERSION_APP = '2026-09-21-12';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -687,19 +687,16 @@ window.esPreguntaDeAsistencia = (pregunta) =>
 // es lo que la convierte en constancia y no en una casilla —«sí» a secas no lo
 // dice nadie después—.
 //
-// **El valor va corto a prop\u00f3sito.** Se llam\u00f3 `'prerequisite'` \u2014doce letras\u2014 y
-// la base lo rechazaba: el tipo m\u00e1s largo que exist\u00eda es `'attendance'`, de
-// diez, as\u00ed que la columna admit\u00eda todo lo que hab\u00eda y \u00e9ste era el primero que
-// no le cab\u00eda. La pregunta se perd\u00eda **en silencio**, porque el `insert` de las
-// preguntas no miraba su error \u2014eso ya se arregl\u00f3 aparte\u2014. **Un tipo nuevo se
-// nombra con una palabra corta**, y ante la duda se prueba a guardarlo antes de
-// darlo por bueno.
-//
-// `'prerequisite'` se sigue leyendo por si alguna fila lleg\u00f3 a guardarse con
-// \u00e9l: cuesta una l\u00ednea y es lo que evita que esa pregunta se quede sin dibujar
-// y, peor, puntuando. Lo que no hace la hoja de edici\u00f3n es ofrecerlo \u2014su
-// `<select>` s\u00f3lo tiene el de hoy\u2014, que para eso el valor viejo no existe en
-// ninguna parte.
+// **El valor va corto, y `'prerequisite'` se sigue leyendo.** Se llamó así
+// —doce letras— y se acortó investigando una pregunta que desaparecía al
+// guardarla: parecía que no le cabía a la columna, porque el tipo más largo que
+// existía es `'attendance'`, de diez. **Era falso**, y conviene saberlo: lo que
+// pasaba es que el enunciado se había dejado en blanco y el guardado descartaba
+// toda pregunta sin texto. `'course'` se queda —con seis letras esa duda no se
+// puede volver a plantear— y el valor viejo se sigue leyendo por si alguna fila
+// llegó a guardarse con él: cuesta una línea y evita que esa pregunta se quede
+// sin dibujar y, peor, puntuando. La hoja de edición no lo ofrece —su
+// `<select>` sólo tiene el de hoy—.
 window.TIPO_PREGUNTA_CURSO = 'course';
 window.TIPOS_DE_CURSO_PREVIO = ['course', 'prerequisite'];
 window.TEXTO_SIN_CURSO = 'Solicita la capacitaci\u00f3n a tu jefe inmediato';
@@ -716,9 +713,9 @@ window.cursoDeLaPregunta = (pregunta) => {
 
 // **Lo que se lee encima de los controles**, y no siempre es `question_text`.
 // Casi todos los tipos preguntan lo que se escribió; el curso previo guarda el
-// nombre del curso y la pregunta la arma la aplicaci\u00f3n, as\u00ed que toda pantalla
-// que escriba un enunciado pasa por aqu\u00ed —la de contestar, la de calificar y
-// las dos listas de lo que falta al enviar— o dir\u00edan cosas distintas de la
+// nombre del curso y la pregunta la arma la aplicación, así que toda pantalla
+// que escriba un enunciado pasa por aquí —la de contestar, la de calificar y
+// las dos listas de lo que falta al enviar— o dirían cosas distintas de la
 // misma pregunta.
 //
 // Devuelve **texto pelado**: escaparlo es de quien lo escriba, que cada
@@ -733,9 +730,9 @@ window.enunciadoDePregunta = (pregunta) => {
 
 // Lo guardado bajo la llave de la pregunta: `{ tomado, instructor, fecha }`.
 // **Un «no» no llega nunca a guardarse** —esa respuesta no se puede enviar—,
-// as\u00ed que lo que hay siempre es la constancia de quien s\u00ed lo tom\u00f3. Devuelve
-// null ante cualquier otra cosa, que es lo que separa «no contest\u00f3» de «dijo
-// que s\u00ed y con estos datos».
+// así que lo que hay siempre es la constancia de quien sí lo tomó. Devuelve
+// null ante cualquier otra cosa, que es lo que separa «no contestó» de «dijo
+// que sí y con estos datos».
 window.constanciaDeCurso = (valor) => {
     if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
     if (valor.tomado !== true) return null;
@@ -745,9 +742,9 @@ window.constanciaDeCurso = (valor) => {
     return { tomado: true, instructor, fecha };
 };
 
-// «Lo imparti\u00f3 Juan P\u00e9rez \u00b7 04/09/2026». La fecha llega como 'YYYY-MM-DD' y se
+// «Lo impartió Juan Pérez · 04/09/2026». La fecha llega como 'YYYY-MM-DD' y se
 // arma con `fechaDeRegistro`, que la lee en local: `new Date('2026-09-04')` se
-// lee en UTC y la zona horaria la corre un d\u00eda hacia atr\u00e1s.
+// lee en UTC y la zona horaria la corre un día hacia atrás.
 window.textoDeCursoTomado = (valor) => {
     const c = window.constanciaDeCurso(valor);
     if (!c) return '';
@@ -933,14 +930,14 @@ window.fechaYHoraLegible = (fecha) => !(fecha instanceof Date) || isNaN(fecha.ge
         day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
     });
 
-// S\u00f3lo la hora. Sacarla partiendo el texto de `fechaYHoraLegible` por la
+// Sólo la hora. Sacarla partiendo el texto de `fechaYHoraLegible` por la
 // coma funciona en es-MX y se rompe en cuanto el formato cambia.
 window.horaLegible = (fecha) => !(fecha instanceof Date) || isNaN(fecha.getTime())
     ? ''
     : fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
-// Lo que se le dice a quien la mira, seg\u00fan en qu\u00e9 momento llegue. Sin punto
-// final: en espa\u00f1ol la hora ya acaba en «a.m.» y se ve\u00edan dos seguidos.
+// Lo que se le dice a quien la mira, según en qué momento llegue. Sin punto
+// final: en español la hora ya acaba en «a.m.» y se veían dos seguidos.
 window.avisoDeAsistencia = (pregunta, ahora) => {
     const est = window.estadoDeAsistencia(pregunta, ahora);
     if (est.estado === 'sin-fecha') return '';

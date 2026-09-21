@@ -1269,15 +1269,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   cierra también la de edición: la hija no puede sobrevivir a la madre.
 - **Y una escritura cuyo error nadie mira miente igual.** Es la otra mitad de
   la trampa de aquí debajo y se confunde con ella: ahí la base responde con
-  éxito y cero filas, y aquí **sí** devuelve un error y no hay nadie
-  leyendo. El `insert` de `evaluation_questions` de `publicarEncuestaDeLaHoja`
-  iba sin comprobar nada, así que una pregunta que la base rechazaba —un tipo
-  que no le cabía en la columna— se perdía mientras la pantalla decía
-  «Guardado correctamente»: no hay manera de que nadie averigüe eso desde la
-  aplicación. Hoy las dos escrituras de preguntas lanzan con el mensaje de la
-  base, que es lo que el `catch` del guardado ya sabía decir. **Toda escritura
-  nueva comprueba su `error`**, y además cuenta las filas del `.select()` donde
-  importe: son dos comprobaciones distintas y hacen falta las dos.
+  éxito y cero filas, y aquí un rechazo **sí** viene con su error. El `insert`
+  de `evaluation_questions` de `publicarEncuestaDeLaHoja` iba sin comprobar
+  nada, así que cualquier cosa que la base rechazara se perdería mientras la
+  pantalla decía «Guardado correctamente»: no hay manera de que nadie averigüe
+  eso desde la aplicación. Hoy las dos escrituras de preguntas lanzan con el
+  mensaje de la base, que es lo que el `catch` del guardado ya sabía decir.
+  **Toda escritura nueva comprueba su `error`**, y además cuenta las filas del
+  `.select()` donde importe: son dos comprobaciones distintas y hacen falta las
+  dos.
 
 - **Una escritura que la base no permite no da error.** PostgREST responde
   con éxito a un `update` o un `delete` que las políticas de RLS rechazan:
@@ -2065,18 +2065,65 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   respuesta. El valor sobrevive porque `guardarCalificacionAdmin` parte de una
   copia de `answers_json`.
 
-  **Y el valor del tipo va corto a propósito: `'course'`.** Se llamó
-  `'prerequisite'` —doce letras— y **la base lo rechazaba**: el tipo más largo
-  que existía es `'attendance'`, de diez, así que esa columna admitía todo lo que
-  había y éste era el primero que no le cabía. Se veía como que la pregunta se
-  guardaba y **desaparecía**. **Un tipo nuevo se nombra con una palabra corta**,
-  y ante la duda se prueba a guardarlo antes de darlo por bueno; no hace falta
-  ningún script, que es lo que se gana no tocando la columna.
+  **El valor del tipo va corto, y `'prerequisite'` se sigue leyendo.** Se llamó
+  así —doce letras— y se acortó investigando una pregunta que desaparecía al
+  guardarla: parecía que no le cabía a la columna, porque el tipo más largo que
+  existía es `'attendance'`, de diez. **Era falso, y queda escrito para que
+  nadie vuelva a creerlo**: lo que pasaba es que el enunciado se había dejado en
+  blanco y el guardado descartaba toda pregunta sin texto —de ahí la regla del
+  título por defecto, justo aquí debajo—. `'course'` se queda porque con seis
+  letras esa duda no se puede volver a plantear, y `'prerequisite'` se sigue
+  leyendo (`TIPOS_DE_CURSO_PREVIO`) por si alguna fila llegó a guardarse con él:
+  cuesta una línea y evita que esa pregunta se quede sin dibujar y, peor,
+  puntuando. La hoja de edición no lo ofrece —su `<select>` sólo tiene el de
+  hoy—.
 
-  `'prerequisite'` se sigue leyendo (`TIPOS_DE_CURSO_PREVIO`) por si alguna fila
-  llegó a guardarse con él: cuesta una línea y evita que esa pregunta se quede
-  sin dibujar y, peor, puntuando. La hoja de edición no lo ofrece —su `<select>`
-  sólo tiene el de hoy—, que para eso el valor viejo no existe en ninguna parte.
+  **Y un curso sin nombre se llama como su encuesta.** El curso se llama casi
+  siempre igual que la encuesta que lo examina —«Dojo de mantenimiento»—, así
+  que escribirlo dos veces es trabajo de más; y dejarlo en blanco **no puede
+  significar «aquí no hay pregunta»**, que es lo que hacía el `if (!txt) return`
+  de `preguntasDeLaHoja`: la tarjeta estaba puesta en la hoja y se perdía al
+  guardar sin decir nada. Los demás tipos siguen igual —sin enunciado no hay
+  pregunta que hacer—; sólo el curso cae al título.
+
+  El campo lo dice antes de guardar: su marcador de posición enseña el título
+  que hay escrito en ese momento (`window.placeholderDeEnunciado`), y
+  `window.pintarPlaceholdersDeCurso` lo repinta con cada letra del título desde
+  el mismo oyente que rehace los renglones de resumen —si no, se quedaría
+  diciendo el de cuando se montó la tarjeta—.
+
+  **Y decir que no abre una hoja, no un renglón.** Contestar «Todavía no» es
+  salirse de la encuesta, y eso no se dice en un aviso que hay que ir a leer: se
+  dice delante, con la hoja de siempre (`#modal-sin-curso`), cuya acción
+  principal **cierra la encuesta**.
+
+  ```js
+  window.montarHojaSinCurso()   window.abrirHojaSinCurso(curso)
+  window.cerrarHojaSinCurso()   window.confirmarSinCurso()
+  window.salirDeLaEncuesta()    // la cruz que toque: la encuesta, o la previa
+  window.enVistaPreviaDeEncuesta
+  ```
+
+  Cuatro cosas que hay que mantener:
+
+  - **Se monta la primera vez que se pide**, como la hoja de la contraseña de
+    administrador: quien nunca conteste una encuesta con curso previo no carga
+    con ella.
+  - **Va por encima de la de responder** —que está en 999999— y no la esconde.
+    Son dos hojas apiladas, que es lo que esta aplicación evita en general;
+    aquí dura lo que un toque y lo que hay debajo es justo la encuesta de la que
+    se está hablando, así que esconderla sería quitar el contexto.
+  - **Cerrarla no desdice el «no».** Lo que esa persona contestó es un hecho y
+    no un estado de la pantalla: al volver se quedan el aviso de la tarjeta y el
+    botón de enviar apagado, que es lo mismo que decía la hoja. Para cambiar de
+    respuesta está «Sí, ya lo tomé», que es explícito. Y como la hoja no se
+    puede reabrir desde un radio que ya está marcado, **la salida se queda a la
+    vista en el aviso** (`.curso-aviso-salir`).
+  - **Se sale por la puerta que toque.** `salirDeLaEncuesta` mira
+    `enVistaPreviaDeEncuesta`: desde la previa se vuelve a la hoja de edición
+    con `cerrarVistaPrevia`, y desde una encuesta de verdad con
+    `cancelarRespuesta('main')`. Con una sola de las dos, la previa devolvería
+    al panel y se perdería lo que hubiera escrito en la hoja.
 
   Es un tipo nuevo, así que **cae de lleno en la trampa del teléfono con el
   JavaScript viejo** (la primera de esta lista): ese código no conoce `course`,

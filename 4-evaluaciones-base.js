@@ -1307,6 +1307,10 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
 // previa— y la cruz devuelve a la hoja de edición en lugar de al panel.
 window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc = null, explicitFreq = null, explicitEvaluatesArea = false, listaAreasOficiales = [], opciones = {}) => {
     const vistaPrevia = opciones && opciones.vistaPrevia === true;
+    // De qué pantalla se trata, para quien lo necesite desde fuera: la hoja de
+    // «te falta el curso» cierra por la puerta que corresponda, y de la previa
+    // se sale a la hoja de edición y no al panel.
+    window.enVistaPreviaDeEncuesta = vistaPrevia;
     window.evalIdRespondiendo = evalId;
     window.evalTituloRespondiendo = title;
 
@@ -1652,6 +1656,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                     <div class="curso-aviso" id="curso-aviso-${q.id}" hidden>
                         <span class="curso-aviso-titulo">${window.TEXTO_SIN_CURSO}</span>
                         <span class="curso-aviso-texto">Sin el curso no se puede contestar esta encuesta. En cuanto te lo impartan, vuelve a abrirla.</span>
+                        <button type="button" class="curso-aviso-salir" onclick="window.salirDeLaEncuesta()">Salir de la encuesta</button>
                     </div>
                 </div>`;
         }
@@ -1746,6 +1751,14 @@ window.pintarCursoPrevio = (radio) => {
     const dijoNo = radio.value === 'no' && radio.checked;
     if (datos) datos.hidden = !dijoSi;
     if (aviso) aviso.hidden = !dijoNo;
+    // Elegir «Todavía no» abre la hoja: es lo que se viene a decir, y en un
+    // renglón de la tarjeta se lee tarde o no se lee. Se abre sólo al elegirlo
+    // —este manejador sólo corre con el `change` de un radio—, no cada vez que
+    // se repinta.
+    if (dijoNo) {
+        const q = (window.preguntasCacheActual || []).find(p => String(p.id) === String(qid));
+        window.abrirHojaSinCurso(window.cursoDeLaPregunta(q || {}));
+    }
     // Las dos filas se pintan como elegida y no elegida: el botón de radio es
     // de 20px y no es lo que se ve desde lejos.
     document.querySelectorAll(`.resp-curso[data-id="${qid}"]`).forEach(r => {
@@ -1753,6 +1766,89 @@ window.pintarCursoPrevio = (radio) => {
         if (fila) fila.classList.toggle('esta-elegida', r.checked);
     });
     window.aplicarFrenoDeCurso();
+};
+
+// ==========================================
+// LA HOJA DE «TE FALTA EL CURSO»
+// ==========================================
+// Decir que no es salirse de la encuesta, y eso no se dice en un renglón que
+// hay que ir a leer: se dice delante, con la hoja de siempre. La acción
+// principal **cierra la encuesta**, que es lo único que queda por hacer hasta
+// que le impartan el curso.
+//
+// Vive aquí y no en el marcado porque sólo la abre esta pantalla, y se monta la
+// primera vez que se pide —como la hoja de la contraseña de administrador—:
+// quien nunca conteste una encuesta con curso previo no carga con ella.
+//
+// **Va por encima de la de responder** (z-index 999999) y por eso con un
+// número mayor. Son dos hojas apiladas, que es lo que esta aplicación evita en
+// general; aquí dura lo que un toque y lo que hay debajo es justo la encuesta
+// de la que se está hablando, así que esconderla sería quitar el contexto.
+window.montarHojaSinCurso = () => {
+    let overlay = document.getElementById('modal-sin-curso');
+    if (overlay) return overlay;
+
+    overlay = document.createElement('div');
+    overlay.id = 'modal-sin-curso';
+    overlay.className = 'hoja-overlay';
+    overlay.style.zIndex = '1000001';
+    overlay.innerHTML = `
+        <div class="form-content hoja-contenido" style="max-width:420px; overflow-y:auto; padding:12px 25px 25px;">
+            <div class="hoja-encabezado">
+                <div style="min-width:0;">
+                    <h3 class="hoja-titulo">Te falta el curso</h3>
+                    <div class="hoja-subtitulo" id="sin-curso-cual"></div>
+                </div>
+                <button onclick="window.cerrarHojaSinCurso()" class="ios-boton-icono ios-boton-cerrar"
+                        title="Volver a la encuesta" aria-label="Volver a la encuesta"></button>
+            </div>
+            <div style="padding-top:18px;">
+                <div class="curso-aviso" style="margin-bottom:18px;">
+                    <span class="curso-aviso-titulo">${window.TEXTO_SIN_CURSO}</span>
+                    <span class="curso-aviso-texto">Sin el curso no se puede contestar esta encuesta. En cuanto te lo impartan, vuelve a abrirla.</span>
+                </div>
+                <button type="button" onclick="window.confirmarSinCurso()"
+                        style="width:100%; background:#ea580c; color:white; padding:15px; border:none; border-radius:12px; font-size:1.05rem; font-weight:bold; cursor:pointer;">
+                    Entendido, salir de la encuesta
+                </button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    return overlay;
+};
+
+// Se abre al elegir «Todavía no». El nombre del curso va al subtítulo, que es
+// donde esta aplicación pone lo que sitúa al título.
+window.abrirHojaSinCurso = (curso) => {
+    const overlay = window.montarHojaSinCurso();
+    const cual = document.getElementById('sin-curso-cual');
+    if (cual) cual.innerText = curso || '';
+    overlay.style.display = 'flex';
+};
+
+// **Cerrarla no desdice el «no».** Lo que esa persona contestó es un hecho, no
+// un estado de la pantalla: al volver se queda el aviso de la tarjeta y el
+// botón de enviar apagado, que es lo mismo que dice la hoja. Para cambiar de
+// respuesta está «Sí, ya lo tomé», que es explícito.
+window.cerrarHojaSinCurso = () => {
+    const overlay = document.getElementById('modal-sin-curso');
+    if (overlay) overlay.style.display = 'none';
+};
+
+// Y confirmar cierra la encuesta entera. Se sale por la misma puerta que la
+// cruz del encabezado —la previa se cierra con la suya—, o desde la vista
+// previa se volvería al panel en vez de a la hoja de edición.
+window.salirDeLaEncuesta = () => {
+    if (window.enVistaPreviaDeEncuesta && window.cerrarVistaPrevia) {
+        window.cerrarVistaPrevia();
+        return;
+    }
+    window.cancelarRespuesta('main');
+};
+
+window.confirmarSinCurso = () => {
+    window.cerrarHojaSinCurso();
+    window.salirDeLaEncuesta();
 };
 
 // Los cursos que se dijeron no tomados. Es lo que miran el freno de la pantalla

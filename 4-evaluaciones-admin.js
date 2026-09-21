@@ -4740,9 +4740,33 @@ window.plegarGruposEval = (editando) => {
 (() => {
     const hoja = document.getElementById('modal-crear-eval');
     if (!hoja) return;
-    ['input', 'change', 'click'].forEach(evento =>
-        hoja.addEventListener(evento, () => window.pintarResumenGrupos()));
+    ['input', 'change', 'click'].forEach(evento => hoja.addEventListener(evento, () => {
+        window.pintarResumenGrupos();
+        window.pintarPlaceholdersDeCurso();
+    }));
 })();
+
+// **Un curso sin nombre se llama como la encuesta**, y el campo lo dice antes
+// de guardar: su marcador de posición enseña el título que hay escrito en ese
+// momento. Se repinta con cada letra del título —por el oyente de arriba—, que
+// si no se quedaría diciendo el de cuando se montó la tarjeta.
+window.placeholderDeEnunciado = (tipo) => {
+    if (tipo === window.TIPO_PREGUNTA_CURSO) {
+        const campo = document.getElementById('eval-title-input');
+        const titulo = campo ? campo.value.trim() : '';
+        if (titulo) return `El de la encuesta: ${titulo}`;
+    }
+    return window.enunciadoDeTipo(tipo);
+};
+
+window.pintarPlaceholdersDeCurso = () => {
+    document.querySelectorAll('.pregunta-wrapper').forEach(w => {
+        const tipo = w.querySelector('.inp-tipo');
+        const campo = w.querySelector('.inp-pregunta');
+        if (!tipo || !campo || tipo.value !== window.TIPO_PREGUNTA_CURSO) return;
+        campo.placeholder = window.placeholderDeEnunciado(tipo.value);
+    });
+};
 
 // ==========================================
 // EL MATERIAL, EN LA HOJA DE EDICIÓN
@@ -5977,7 +6001,7 @@ window.agregarCampoPregunta = (t="",c="",id=null,tp="text",op=[]) => {
     </div>
     <button type="button" class="tipo-pregunta-boton" onclick="window.alternarTiposPregunta(this)" aria-expanded="false"></button>
     <div class="tipos-pregunta" hidden></div>
-    <input type="text" class="inp-pregunta" value="${t}" placeholder="${window.enunciadoDeTipo(tp)}" style="width:100%;padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
+    <input type="text" class="inp-pregunta" value="${t}" placeholder="${window.placeholderDeEnunciado(tp)}" style="width:100%;padding:10px; border:1px solid #cbd5e1; border-radius:6px;">
     
     <div class="options-container" style="display:${showOptionsContainer?'block':'none'};margin-top:10px;">
         <label class="lbl-options" style="font-size:0.8rem; color:#64748b; margin-bottom:5px; display:block;">${optionsLabel}</label>
@@ -6495,7 +6519,7 @@ window.toggleTipoPregunta = (s) => {
     // fotografiar y una asistencia a qué se asistió. Lo dice el catálogo, y se
     // repone aquí porque antes sólo se ponía al montar la tarjeta.
     const campoEnunciado = w.querySelector('.inp-pregunta');
-    if (campoEnunciado) campoEnunciado.placeholder = window.enunciadoDeTipo(s.value);
+    if (campoEnunciado) campoEnunciado.placeholder = window.placeholderDeEnunciado(s.value);
 
     // Las casillas de «correcta» son de opción múltiple y checklist; en
     // «Recall» sobran, y al cambiar de tipo hay que apagarlas.
@@ -6746,6 +6770,10 @@ window.preguntasDeLaHoja = () => {
     const chkHalf = document.getElementById('eval-half-points');
     const paso = (chkHalf && chkHalf.checked) ? 0.5 : 1;
 
+    // El título de la encuesta, que es a lo que cae un curso sin nombre.
+    const campoTitulo = document.getElementById('eval-title-input');
+    const tituloDeLaEncuesta = campoTitulo ? campoTitulo.value.trim() : '';
+
     const preguntas = [];
     document.querySelectorAll('.pregunta-wrapper').forEach((d, i) => {
         const campoTexto = d.querySelector('.inp-pregunta');
@@ -6818,10 +6846,21 @@ window.preguntasDeLaHoja = () => {
             corr = campoCorrecta ? campoCorrecta.value.trim() : '';
         }
 
-        if (!txt) return;
+        // **El curso sin nombre es el de la propia encuesta.** Casi siempre el
+        // curso se llama como la encuesta que lo examina —«Dojo de
+        // mantenimiento»—, así que escribirlo dos veces es trabajo de más; y
+        // dejarlo en blanco no puede significar «no hay pregunta», que es lo
+        // que hacía el `if (!txt)` de aquí debajo: la tarjeta estaba puesta y
+        // se perdía al guardar sin decir nada. Los demás tipos siguen igual
+        // —sin enunciado no hay pregunta que hacer—.
+        const enunciado = (!txt && tp === window.TIPO_PREGUNTA_CURSO)
+            ? tituloDeLaEncuesta
+            : txt;
+
+        if (!enunciado) return;
         preguntas.push({
             id: d.getAttribute('data-id') || null,
-            question_text: txt,
+            question_text: enunciado,
             correct_answer_text: corr,
             question_type: tp,
             options: ops,
@@ -7064,14 +7103,13 @@ window.publicarEncuestaDeLaHoja = async () => {
             if (exId) { p.id = exId; ups.push(p); } else { ins.push(p); }
         });
         
-        // **El error de estas dos escrituras se mira.** No mirarlo es lo que
-                // dejó a una pregunta nueva desaparecer en silencio: la base
-                // rechazaba el `insert` —un tipo que no le cabía en la columna—,
-                // la pantalla decía «Guardado correctamente» y la encuesta se
-                // quedaba sin ella. No es la trampa de RLS de siempre, que
-                // responde con éxito y cero filas: aquí sí venía un error y no
-                // había nadie leyendo. Se lanza, que el `catch` de abajo ya lo
-                // dice con el mensaje de la base.
+        // **El error de estas dos escrituras se mira.** No es la trampa
+                // de RLS de siempre, que responde con éxito y cero filas: aquí
+                // un rechazo sí viene con su error, y no había nadie
+                // leyendo —la pantalla diría «Guardado correctamente» y la
+                // encuesta se quedaría sin la pregunta, sin manera de
+                // averiguar por qué desde la aplicación—. Se lanza, que el
+                // `catch` de abajo ya lo dice con el mensaje de la base.
                 if (ins.length) {
                     const { error } = await sb.from('evaluation_questions').insert(ins);
                     if (error) throw new Error(`No se pudieron guardar las preguntas nuevas: ${error.message}`);

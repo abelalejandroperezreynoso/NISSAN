@@ -6353,3 +6353,23 @@ html.fondo-anclado body {
     line-height: 1.4;
     text-align: center;
 }
+
+/* La salida, en el aviso de la tarjeta: la hoja de «Te falta el curso» se
+   cierra sin desdecir el «no», así que la acción principal tiene que quedar
+   a la vista en algún sitio —si no, la única salida sería la cruz de la hoja
+   de la encuesta—. */
+.curso-aviso-salir {
+    align-self: flex-start;
+    margin-top: 6px;
+    padding: 8px 14px;
+    border: 1px solid #fdba74;
+    border-radius: 8px;
+    background: #fff;
+    color: #9a3412;
+    font-family: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.curso-aviso-salir:active { transform: scale(0.97); }
