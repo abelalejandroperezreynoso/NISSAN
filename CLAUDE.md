@@ -2941,12 +2941,52 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.pedirALaBase(funcion)    // una rpc que puede no existir; null si no está
   window.falloDeLaBase            // { funcion: por qué no respondió }
   window.notaDeFallo(funcion)     // lo que se le dice a quien mira
-  window.medirAlmacenamiento()    // llena window.consumoAlmacenamiento
-  window.abrirConsumoAlmacenamiento()  window.cerrarConsumoAlmacenamiento()
+  window.tomarMedidaDeConsumo()   // la medida entera, sin guardarla
+  window.medirAlmacenamiento(forzar)   // la puerta: mide una vez y se la queda
+  window.consumoAlmacenamiento    // lo medido; window.medicionDeConsumo, lo de camino
+  window.abrirConsumoAlmacenamiento(forzar)  window.cerrarConsumoAlmacenamiento()
+  window.remedirConsumo()         // el botón de «Volver a medir» del encabezado
+  window.antiguedadDeLaMedida(fecha)   // «hace 46 min», o '' si es de ahora
   window.pintarConsumo(html)      // sin argumento, la pantalla que toque
   window.abrirBucket(i)  window.volverAConsumo()
   window.limpiarHuerfanos()
   ```
+
+  **Se mide una vez y la medida sobrevive a cerrar la hoja.** Medir es lo más
+  caro que hace esta pantalla —cuatro funciones de la base y, sin ellas, seis
+  listados de miles de archivos cada uno—, y abrirla lo repetía entero: entrar a
+  un bucket, salir y volver a entrar costaba dos mediciones completas para leer
+  el mismo número. Abrir la hoja **no es pedir una medición, es querer ver la
+  última**, así que la segunda vez se dibuja lo ya medido en el primer fotograma
+  y sin spinner. Lo listado de cada bucket va dentro de esa misma medida, de modo
+  que tampoco se vuelve a pedir.
+
+  Volver a preguntarle a la base es el botón de **«Volver a medir»** del
+  encabezado, que es lo único que pasa `forzar` y lo que su nombre promete desde
+  siempre; mientras lo hace **gira con `esta-actualizando` y se apaga**, como el
+  botón de recargar del panel y por lo mismo —sin eso se ve igual que antes de
+  pulsarlo, que es lo que lleva a pulsarlo otra vez—. Lo escribe
+  `remedirConsumo`, nunca con `innerText`: eso le borraría el `<svg>`.
+
+  Cuatro cosas que hay que mantener:
+
+  - **De camino se guarda la promesa y no el resultado**, como las demás cachés
+    de la aplicación: cerrar la hoja y volver a abrirla mientras se mide se
+    engancha a la que ya va. **Una medición en curso se comparte también al
+    forzar** —la que va es tan fresca como la que se lanzaría— y se suelta en un
+    `finally`, o un fallo de red dejaría la pantalla devolviendo para siempre
+    aquella promesa rota y sin manera de volver a medir.
+  - **Cuándo se midió va en el subtítulo, y con su antigüedad detrás**: «Medido a
+    las 07:24 a.m. · hace 46 min». La hora sola obliga a restarla contra el reloj
+    de arriba para darse cuenta de que lo que se lee es de hace rato, y eso sólo
+    empezó a pasar desde que la medida se guarda. Recién medida no se dice nada:
+    un «hace 0 min» es ruido donde no hay ninguna duda.
+  - **Después de quitar los huérfanos se vuelve a medir forzando.** La medida
+    guardada cuenta los archivos que se acaban de borrar, así que dibujarla otra
+    vez enseñaría el mismo total y los mismos huérfanos que ya no están.
+  - **Dura lo que la pantalla**: vive en memoria y recargar el documento la tira,
+    que es lo que tiene que pasar con una medida —es el dato de un instante, no
+    un ajuste—.
 
   **Lo que se enseña es lo que cobra Supabase, y por eso se lo pregunta a la
   base.** La primera versión medía los archivos listándolos desde el cliente y

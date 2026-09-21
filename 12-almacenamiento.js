@@ -36,8 +36,28 @@
 
 // Lo que se está mirando. Lo llena `window.medirAlmacenamiento` y lo leen las
 // dos pantallas de la hoja, que dibujan desde aquí sin volver a consultar.
+//
+// **Y sobrevive a cerrar la hoja.** Medir es lo más caro que hace esta pantalla
+// —cuatro funciones de la base y, sin ellas, seis listados de miles de archivos
+// cada uno—, y volver a abrirla lo repetía entero: quien entra a un bucket, sale
+// y vuelve a entrar pagaba dos veces la misma medida para leer el mismo número.
+// Lo que se viene a mirar aquí es un total que no cambia de un minuto para otro,
+// así que la segunda vez se dibuja lo ya medido y **cuándo se midió lo dice el
+// subtítulo**. Volver a preguntar es el botón de «Volver a medir» del
+// encabezado, que es exactamente lo que promete su nombre y lo único que lo
+// hace.
+//
+// Dura lo que la pantalla: recargar el documento la tira, que es lo que tiene
+// que pasar con una medida —es un dato de un instante, no un ajuste—.
 window.consumoAlmacenamiento = null;
 window.bucketAbierto = null;
+
+// La medición de camino, si la hay. Se guarda **la promesa y no el resultado**,
+// como las demás cachés de la aplicación: cerrar la hoja y volver a abrirla
+// mientras se está midiendo se engancha a la que ya va en vez de lanzar una
+// segunda en paralelo, que serían las mismas consultas y los mismos listados
+// otra vez —y desde un teléfono en 4G, la manera de que se caigan las dos—.
+window.medicionDeConsumo = null;
 
 // Todos los archivos de un bucket, entrando en sus carpetas.
 //
@@ -219,7 +239,10 @@ window.notaDeFallo = (funcion) => {
     return `La base rechazó <b>${funcion}()</b>: «${window.sanitizeForHTML(msg)}». La función existe, así que volver a correr el script no lo arregla.`;
 };
 
-window.medirAlmacenamiento = async () => {
+// La medida entera: los archivos, la base, sus tablas y los huérfanos. Devuelve
+// la ficha **sin guardarla en ningún lado**: quien la guarda —y quien decide si
+// hay que tomarla siquiera— es `window.medirAlmacenamiento`, que es la puerta.
+window.tomarMedidaDeConsumo = async () => {
     // Los archivos, contados por la base: una consulta en lugar de nueve vueltas
     // de listado, y es la cifra que suma Supabase para su página de uso.
     const porBucket = await window.pedirALaBase('tamano_buckets');
@@ -328,7 +351,7 @@ window.medirAlmacenamiento = async () => {
 
     await revisarBucket(window.BUCKET_FOTOS_EVAL, window.fotosUsadasEnRespuestas);
 
-    window.consumoAlmacenamiento = {
+    return {
         buckets: buckets,
         desdeLaBase: desdeLaBase,
         archivos: buckets.reduce((s, b) => s + b.bytes, 0),
@@ -341,28 +364,86 @@ window.medirAlmacenamiento = async () => {
         sinComprobar: sinComprobar,
         medidoEn: new Date()
     };
-    return window.consumoAlmacenamiento;
+};
+
+// La puerta: mide una vez y se queda con lo medido.
+//
+// `forzar` es lo que pasa el botón de «Volver a medir», y es el único camino que
+// vuelve a preguntarle a la base. Sin él, una medida ya tomada se devuelve tal
+// cual: abrir la hoja no es pedir una medición, es querer ver la última.
+//
+// **Una medición de camino se comparte pase lo que pase**, también al forzar: la
+// que ya va es tan fresca como la que se lanzaría, y dos a la vez son dos veces
+// las mismas consultas para acabar guardando una sola.
+window.medirAlmacenamiento = (forzar) => {
+    if (window.medicionDeConsumo) return window.medicionDeConsumo;
+    if (!forzar && window.consumoAlmacenamiento) return Promise.resolve(window.consumoAlmacenamiento);
+
+    window.medicionDeConsumo = (async () => {
+        try {
+            const medida = await window.tomarMedidaDeConsumo();
+            window.consumoAlmacenamiento = medida;
+            return medida;
+        } finally {
+            // Se suelta pase lo que pase. Soltándola sólo por el camino bueno,
+            // un fallo de red dejaría la pantalla devolviendo para siempre la
+            // promesa rota de aquella vez y no habría manera de volver a medir.
+            window.medicionDeConsumo = null;
+        }
+    })();
+    return window.medicionDeConsumo;
 };
 
 // ------------------------------------------------------------------
 // LA HOJA
 // ------------------------------------------------------------------
-window.abrirConsumoAlmacenamiento = async () => {
+// Abrir la hoja **no es pedir una medición**: es querer ver la última. Con una
+// ya tomada, la pantalla sale entera en el primer fotograma y el spinner se
+// queda para lo que de verdad hace esperar —la primera vez y el botón de volver
+// a medir—.
+window.abrirConsumoAlmacenamiento = async (forzar) => {
     const hoja = document.getElementById('modal-almacenamiento');
     if (!hoja) return;
 
     window.bucketAbierto = null;
     hoja.style.display = 'flex';
+
+    if (!forzar && window.consumoAlmacenamiento && !window.medicionDeConsumo) {
+        window.pintarConsumo();
+        return;
+    }
+
     window.pintarConsumo(`<div class="consumo-cargando"><div class="spinner"></div>Midiendo los archivos…</div>`);
 
     try {
-        await window.medirAlmacenamiento();
+        await window.medirAlmacenamiento(forzar);
     } catch (e) {
         console.error(e);
         window.pintarConsumo(`<div class="consumo-cargando">No se pudo medir: ${window.sanitizeForHTML(e.message || String(e))}</div>`);
         return;
     }
+    // La hoja pudo cerrarse mientras la medida venía de camino: lo medido queda
+    // guardado igual, y lo pinta la próxima vez que se abra.
+    if (hoja.style.display === 'none') return;
     window.pintarConsumo();
+};
+
+// El botón de «Volver a medir» del encabezado, que desde que abrir la hoja no
+// mide es el único camino que vuelve a preguntarle a la base.
+//
+// Mientras lo hace tiene que decirlo: gira con `esta-actualizando` y se apaga,
+// igual que el botón de recargar del panel y por lo mismo —un botón de icono no
+// tiene texto que atenuar, así que sin eso se ve igual que antes de pulsarlo,
+// que es lo que lleva a pulsarlo otra vez—. El estado va en el giro y en el
+// cuerpo de la hoja, nunca con `innerText`: eso le borraría el `<svg>`.
+window.remedirConsumo = async () => {
+    const btn = document.getElementById('btn-remedir-almacenamiento');
+    if (btn) { btn.disabled = true; btn.classList.add('esta-actualizando'); }
+    try {
+        await window.abrirConsumoAlmacenamiento(true);
+    } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('esta-actualizando'); }
+    }
 };
 
 window.cerrarConsumoAlmacenamiento = () => {
@@ -443,9 +524,26 @@ window.avisoDeHinchazon = (tablas) => {
         </div>`;
 };
 
+// Cuánto hace que se midió, y sale **sólo cuando ya no es de ahora mismo**.
+// Desde que la medida sobrevive a cerrar la hoja, la que se está leyendo puede
+// ser de hace media hora, y la hora sola obliga a restarla mentalmente contra el
+// reloj de arriba para darse cuenta. Recién medido no se dice nada: un «hace 0
+// min» sería ruido justo donde no hay ninguna duda.
+window.antiguedadDeLaMedida = (fecha) => {
+    if (!(fecha instanceof Date) || isNaN(fecha.getTime())) return '';
+    const minutos = Math.floor((Date.now() - fecha.getTime()) / 60000);
+    if (minutos < 1) return '';
+    if (minutos < 60) return `hace ${minutos} min`;
+    const horas = Math.floor(minutos / 60);
+    return `hace ${horas} h`;
+};
+
 window.pantallaDeConsumo = (c) => {
     const subtitulo = document.getElementById('subtitulo-almacenamiento');
-    if (subtitulo) subtitulo.innerText = `Medido a las ${window.horaLegible(c.medidoEn)}`;
+    if (subtitulo) subtitulo.innerText = [
+        `Medido a las ${window.horaLegible(c.medidoEn)}`,
+        window.antiguedadDeLaMedida(c.medidoEn)
+    ].filter(Boolean).join(' · ');
 
     // **Un total que puede quedarse corto no se dibuja como una cifra cerrada.**
     // Contando desde el cliente, un bucket cuya política no deje listarlo sale en
@@ -713,5 +811,8 @@ window.limpiarHuerfanos = async () => {
         ? `\n\nNo se pudo con los de: ${seResistieron.join(', ')}. Su bucket no deja borrar todavía; corre su script de sql/.`
         : '';
     alert((quitados === 1 ? "Se quitó 1 archivo." : `Se quitaron ${quitados} archivos.`) + resto);
-    await window.abrirConsumoAlmacenamiento();
+    // Aquí sí hay que volver a medir, y forzando: la medida que hay guardada
+    // cuenta los archivos que se acaban de quitar, así que dibujarla otra vez
+    // enseñaría el mismo total y los mismos huérfanos que ya no están.
+    await window.remedirConsumo();
 };
