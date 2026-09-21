@@ -759,8 +759,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   añade nada: «Semanal» ya es una frecuencia. Antes encabezaba el recuadro gris
   de información del cuerpo, y **ese recuadro ya no se dibuja si se queda
   vacío** —la frecuencia era lo único que siempre traía, así que sin ella la
-  condición pasó a mirar lo que de verdad le queda dentro: descripción, «✨
-  Opcional», «📍 Mide por Área» y quién la revisa—.
+  condición pasó a mirar lo que de verdad le queda dentro: la descripción y
+  «Mide por Área»—.
 
   El subtítulo **se escribe siempre, aunque sea para vaciarlo**, igual que el
   título y por lo mismo: es del título que tiene encima, y heredar el de la
@@ -950,8 +950,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   a recibir sólo el grupo.
 
   Y con los revisores fuera del recuadro gris, ése **puede quedarse sin nada que
-  decir**: la condición que lo dibuja mira ya sólo la descripción, «Opcional» y
-  «Mide por Área».
+  decir**: la condición que lo dibuja mira ya sólo la descripción y «Mide por
+  Área».
+
+  **Ahí iba además «Encuesta Opcional», en verde, y se quitó.** Es un rótulo de
+  color que le dice a quien viene a contestarla que **no hace falta**, justo
+  encima del botón de responder: no es un dato de la encuesta, es una
+  invitación a saltársela. Lo que `is_obligatory` significa se sigue leyendo
+  donde decide algo —en las estadísticas, con el aviso de «¡Faltan
+  Obligatorias!»— y donde se pone, en el renglón del grupo «Opciones» de la
+  hoja de edición. Con él se fue `obligHtml`, y una encuesta opcional sin
+  descripción y sin área deja hoy la hoja empezando en el botón.
 
   La lista de respuestas de una encuesta va plegada en un
   `<details class="hoja-plegable">`, y se abre sola sólo si hay algo esperando

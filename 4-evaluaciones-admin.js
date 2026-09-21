@@ -199,7 +199,14 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // la encuesta: es de la encuesta entera y ahí se lee sin gastar un
         // recuadro —ni la palabra «Frecuencia», que al lado del título sobra—.
         subtituloHoja = window.textoDeFrecuencia(evalData.frequency);
-        const obligHtml = (evalData.is_obligatory === false) ? `<div style="font-size:0.8rem; color:#22c55e; font-weight:bold; margin-top:4px;">Encuesta Opcional</div>` : '';
+        // Aquí iba «Encuesta Opcional», en verde, cuando `is_obligatory` estaba
+        // apagado. Se quitó: es un rótulo de color que le dice a quien viene a
+        // contestarla que **no hace falta**, justo encima del botón de
+        // responder, y eso no es un dato de la encuesta sino una invitación a
+        // saltársela. Lo que `is_obligatory` significa se sigue leyendo donde
+        // decide algo: en las estadísticas, con el aviso de «¡Faltan
+        // Obligatorias!», y en el renglón del grupo «Opciones» de la hoja de
+        // edición, que es donde se pone.
         const areaHtml = (evalData.evaluates_area === true) ? `<div style="font-size:0.8rem; color:#be185d; font-weight:bold; margin-top:4px;">Mide resultados por Área</div>` : '';
 
         // Quién la califica se enseña **como en la hoja de detalle de una
@@ -230,8 +237,8 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // Con la frecuencia en el subtítulo y los revisores en su propio
         // recuadro, éste puede quedarse sin nada que decir: entonces no se
         // dibuja, o sería una caja gris vacía.
-        if (desc || obligHtml || areaHtml) {
-            infoHtml = `<div style="font-size:0.9rem; color:#475569; margin-top:5px; margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0;">${desc}${obligHtml}${areaHtml}</div>`;
+        if (desc || areaHtml) {
+            infoHtml = `<div style="font-size:0.9rem; color:#475569; margin-top:5px; margin-bottom:15px; background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0;">${desc}${areaHtml}</div>`;
         }
     }
 
