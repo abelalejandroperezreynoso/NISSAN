@@ -6013,11 +6013,24 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     ritmo» de un ritmo que no existe, o dibujar una línea plana en el suelo, se
     lee como que no se está gastando nada. Ahí no se dibuja gráfica y se dice lo
     que de verdad ocurre.
-  - **El día de corte se acota a 28.** Uno el 31 se saltaría febrero. Supabase
-    cuenta por ciclo de facturación y no se puede preguntar desde el cliente, así
-    que `DIA_CORTE_CONSUMO` se escribe a mano —el 1 por defecto— y se cambia ahí
-    si el del proyecto resulta ser otro; su página de uso dice entre qué fechas
-    va.
+  - **El ciclo no empieza el día 1.** El corte es el del alta de la
+    organización: el de este proyecto es el **13** —su página de uso lo dice,
+    «13 Sep 2026 - 13 Oct 2026»— y no se puede preguntar desde el cliente, así
+    que `DIA_CORTE_CONSUMO` se escribe a mano y se cambia ahí. Se acota a 28,
+    que uno el 31 se saltaría febrero. De ahí sale además que **el eje lleve el
+    mes donde cambia**: un ciclo del 13 al 13 cruza a otro mes por la mitad, y
+    con el día a secas decía «22 27 2 7», que se lee como si volviera atrás.
+  - **La cifra es un suelo, y por eso lleva el «Al menos» de archivos.** Esto
+    suma lo que los navegadores se bajan de `supabase.co`, y deja fuera lo que
+    no pasa por un teléfono —Supabase cuenta también Realtime, Edge Functions,
+    el pooler y los log drains—, las cabeceras de cada respuesta y **lo que baje
+    un teléfono que todavía arrastre una versión anterior**, que no reporta nada
+    y puede tardar semanas en ponerse al día. Las tres tiran hacia abajo y
+    ninguna hacia arriba. La duda va pegada a la cifra y no en el pie, que fue
+    la lección del bucket de firmas, y aquí además es lo que evita que se
+    compare de tú a tú con la página de uso de Supabase y parezca que una de las
+    dos miente. Lo que no se resiente es para lo que está: la **pendiente** es
+    la misma aunque falte una parte constante.
 
   La gráfica **se dibuja a mano en SVG**, como la de una clasificación y por lo
   mismo: Chart mide el lienzo al dibujarlo y aquí la hoja está en `display:none`

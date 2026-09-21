@@ -577,6 +577,25 @@ window.antiguedadDeLaMedida = (fecha) => {
 // que ver es **cómo se va acumulando contra la cuota** y a qué ritmo: eso es lo
 // que avisa con tiempo de tomar contramedidas, que es a lo que se vino.
 
+// **La cifra es un suelo y se dibuja como tal.** Esto suma lo que los
+// navegadores se bajan de `supabase.co`, y eso deja fuera tres cosas: lo que no
+// pasa por un teléfono —Supabase cuenta también Realtime, Edge Functions, el
+// pooler y los log drains—, las cabeceras de cada respuesta, y **lo que baje un
+// teléfono que todavía arrastre una versión anterior**, que no reporta nada y
+// puede tardar semanas en ponerse al día. Las tres tiran hacia abajo y ninguna
+// hacia arriba, así que el número nunca puede pasarse: como mucho se queda
+// corto.
+//
+// Por eso lleva el «Al menos» de la tarjeta de archivos, y por lo mismo: la
+// duda va **pegada a la cifra** o no está en ningún sitio, que fue la lección
+// del bucket de firmas —el aviso llevaba meses en el pie y lo que se leía era
+// el número gordo—. Aquí, además, es lo que evita que se compare de tú a tú con
+// la página de uso de Supabase y parezca que una de las dos miente.
+//
+// Lo que no se resiente es para lo que está: la **pendiente** es la misma
+// aunque falte una parte constante, así que la proyección sigue avisando con
+// tiempo.
+
 // El ritmo del ciclo llevado hasta el final. Se divide por los días **corridos
 // de verdad**, con su fracción: contando hoy como un día entero cuando van tres
 // horas, la proyección sale optimista justo el día en que hay que reaccionar.
@@ -678,15 +697,24 @@ window.graficaDeConsumo = (puntos, ciclo, cuota) => {
                       font-size="8" fill="${esCuota ? '#dc2626' : '#94a3b8'}">${window.pesoLegible(v) || '0'}</text>`;
     }).join('');
 
-    // El eje de abajo: el día 1, el último y uno de cada cinco. Rotular los
+    // El eje de abajo: el primero, el último y uno de cada cinco. Rotular los
     // treinta deja una tira ilegible en un teléfono.
+    //
+    // **Y lleva el mes donde cambia**, que aquí no es un adorno: el ciclo de
+    // facturación no empieza el día 1 —el de este proyecto va del 13 al 13—, así
+    // que cruza a otro mes por la mitad y con el día a secas el eje decía
+    // «22 27 2 7», que se lee como si volviera hacia atrás.
     const paso = ciclo.dias > 20 ? 5 : (ciclo.dias > 10 ? 3 : 2);
     let ejeX = '';
+    let mesPuesto = -1;
     for (let i = 0; i < ciclo.dias; i++) {
         if (i !== 0 && i !== ciclo.dias - 1 && (i + 1) % paso !== 0) continue;
         const f = new Date(ciclo.inicio.getFullYear(), ciclo.inicio.getMonth(), ciclo.inicio.getDate() + i);
+        const conMes = f.getMonth() !== mesPuesto;
+        mesPuesto = f.getMonth();
         ejeX += `<text x="${x(i).toFixed(1)}" y="${H - 6}" text-anchor="middle"
-                       font-size="8" fill="#94a3b8">${f.getDate()}</text>`;
+                       font-size="8" fill="#94a3b8">${f.getDate()}${
+                           conMes ? ' ' + window.MESES_CORTOS[f.getMonth()] : ''}</text>`;
     }
 
     // La proyección: de donde se está hasta el cierre. A trazos porque no ha
@@ -781,6 +809,7 @@ window.tarjetaDeEgreso = (c) => {
     return `
         <div class="consumo-tarjeta">
             <div class="consumo-rotulo">Datos descargados</div>
+            <div class="consumo-incierto">Al menos</div>
             <div class="consumo-cifra">
                 <span class="consumo-cifra-numero">${window.pesoLegible(total) || '0 KB'}</span>
                 <span class="consumo-cifra-pct">${window.pctTexto(total, window.CUOTA_EGRESO)}% de ${window.pesoLegible(window.CUOTA_EGRESO)}</span>
@@ -788,7 +817,9 @@ window.tarjetaDeEgreso = (c) => {
             ${window.barraDeCuota(total, window.CUOTA_EGRESO)}
             ${window.graficaDeConsumo(puntos, ciclo, window.CUOTA_EGRESO)}
             <div class="consumo-pie">Del ${desde} al ${hasta}, día ${ciclo.transcurridos} de ${ciclo.dias}${
-                aparatos > 0 ? ` · ${aparatos} aparato${aparatos === 1 ? '' : 's'}` : ''}. ${cierre}</div>
+                aparatos > 0 ? ` · ${aparatos} aparato${aparatos === 1 ? '' : 's'}` : ''}. ${cierre}
+                Es lo que reportan los teléfonos que ya tienen esta versión; Supabase cuenta además lo que no
+                pasa por ellos, así que su página de uso dice algo más.</div>
         </div>`;
 };
 

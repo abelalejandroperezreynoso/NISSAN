@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-21-2';
+window.VERSION_APP = '2026-09-21-3';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1200,12 +1200,13 @@ window.CUOTA_BASE = 500 * 1024 * 1024;
 window.CUOTA_EGRESO = 5 * 1024 * 1024 * 1024;
 
 // **Qué día del mes se reinicia.** Supabase cuenta el tráfico por ciclo de
-// facturación y lo pone a cero al empezar el siguiente; en un proyecto gratuito
-// ese corte es el día 1, pero no se puede preguntar desde el cliente, así que se
-// escribe aquí y **se cambia aquí** si el del proyecto resulta ser otro —la
-// página de uso de Supabase dice entre qué fechas va el ciclo—. Se acota a 28
-// porque un corte el 31 se saltaría febrero.
-window.DIA_CORTE_CONSUMO = 1;
+// facturación y lo pone a cero al empezar el siguiente, y ese corte **no es el
+// día 1**: es el de alta de la organización. El de este proyecto es el **13**
+// —su página de uso lo dice con todas las letras, «13 Sep 2026 - 13 Oct 2026»—,
+// y no hay forma de preguntárselo desde el cliente, así que se escribe aquí y se
+// cambia aquí si algún día cambia. Se acota a 28 porque un corte el 31 se
+// saltaría febrero.
+window.DIA_CORTE_CONSUMO = 13;
 
 // El ciclo en el que cae una fecha: de su día de corte al siguiente, con el fin
 // **exclusivo**. `transcurridos` es el día del ciclo que se está viviendo —el
