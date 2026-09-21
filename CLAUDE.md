@@ -2945,6 +2945,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.tomarMedidaDeConsumo()   // la medida entera, sin guardarla
   window.medirAlmacenamiento(forzar)   // la puerta: mide una vez y se la queda
   window.consumoAlmacenamiento    // lo medido; window.medicionDeConsumo, lo de camino
+  window.medirEgreso(forzar)      // la otra puerta: el tráfico del ciclo, que es barato
+  window.consumoDelCiclo          // lo pedido; window.medicionDeEgreso, lo de camino
   window.abrirConsumoAlmacenamiento(forzar)  window.cerrarConsumoAlmacenamiento()
   window.pantallaEnReposo()       // lo que se ve antes de medir: el botón y nada más
   window.remedirConsumo()         // lo que hacen los dos botones que miden
@@ -2979,6 +2981,28 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     muerta hasta cerrarla y volver a abrirla.
   - **La pantalla en reposo no lleva rótulo**: lo diría por segunda vez, que el
     título de la hoja ya pone «Consumo» dos centímetros más arriba.
+
+  **Pero el tráfico sí se pide al abrir, porque no cuesta nada.** «Datos
+  descargados» salía dentro de la misma medida, así que para ver el gráfico del
+  ciclo había que pagar antes los seis listados de buckets y el barrido de
+  huérfanos —y con la hoja en reposo no se veía en absoluto—, cuando lo suyo es
+  **una consulta** (`consumo_por_dia`) que devuelve treinta filas. Son dos
+  medidas de dos cosas distintas y cada una tiene su puerta: `medirEgreso` la
+  del ciclo y `medirAlmacenamiento` la de los archivos y la base, cada una con
+  su caché y su promesa de camino, con las mismas reglas de arriba. La tarjeta
+  del ciclo va siempre la primera y debajo lo que toque: lo medido, o la
+  pantalla en reposo.
+
+  Tres cosas que hay que mantener:
+
+  - **`tomarMedidaDeConsumo` no pregunta por el tráfico.** Si vuelve a hacerlo,
+    el gráfico del ciclo se queda otra vez detrás de la parte cara.
+  - **Los dos botones fuerzan las dos**, que es lo que su nombre promete: quien
+    pulsa «Volver a medir» quiere el número de ahora, y el del ciclo es el más
+    barato de refrescar.
+  - **Mientras la consulta va, la tarjeta dice «Midiendo el ciclo…»** en vez de
+    no dibujarse: apareciendo de golpe un segundo después, empuja hacia abajo el
+    botón de medir justo cuando el dedo va hacia él.
 
   Volver a preguntarle a la base son los dos botones —el del encabezado y el de
   la pantalla en reposo, que llaman al mismo `remedirConsumo`—, lo único que pasa

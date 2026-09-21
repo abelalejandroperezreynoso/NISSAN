@@ -361,23 +361,7 @@ window.tomarMedidaDeConsumo = async () => {
 
     await revisarBucket(window.BUCKET_FOTOS_EVAL, window.fotosUsadasEnRespuestas);
 
-    // Lo que la aplicación se ha bajado en este ciclo, que es la tercera cuota
-    // y la única que se gasta sola. Se pide ya sumado por día: con ochenta
-    // aparatos el mes son miles de filas, y traérselas para dibujar treinta
-    // puntos sería gastar en la consulta justo lo que se está midiendo.
-    const ciclo = window.cicloDeConsumo();
-    const porDia = await window.pedirALaBase('consumo_por_dia', {
-        p_desde: window.diaLocal(ciclo.inicio),
-        p_hasta: window.diaLocal(ciclo.fin)
-    });
-
     return {
-        ciclo: ciclo,
-        egreso: Array.isArray(porDia)
-            ? porDia.map(f => ({ dia: String(f.dia).split('T')[0],
-                                 bytes: Number(f.bytes) || 0,
-                                 dispositivos: Number(f.dispositivos) || 0 }))
-            : null,
         buckets: buckets,
         desdeLaBase: desdeLaBase,
         archivos: buckets.reduce((s, b) => s + b.bytes, 0),
@@ -390,6 +374,52 @@ window.tomarMedidaDeConsumo = async () => {
         sinComprobar: sinComprobar,
         medidoEn: new Date()
     };
+};
+
+// ------------------------------------------------------------------
+// EL TRÁFICO DEL CICLO SE MIDE POR SU CUENTA
+// ------------------------------------------------------------------
+// **Es una consulta de treinta filas y no tiene por qué esperar a lo caro.**
+// Vivía dentro de la medición entera y era lo último que se pedía —detrás de
+// cuatro funciones de la base, los listados de seis buckets y hasta cuarenta
+// páginas de respuestas—, así que para leer la cifra del mes había que esperar
+// a que se midiera el proyecto completo. Y es justo la que se viene a mirar
+// todos los días: las otras dos cuotas crecen despacio, ésta se gasta sola.
+//
+// Por eso se pide **al abrir la hoja** y se dibuja en cuanto llega, mientras lo
+// demás sigue detrás de su botón. Y por eso tiene su propia caché: son dos
+// medidas de dos cosas, con dos costes muy distintos.
+window.consumoDelCiclo = null;
+window.medicionDeEgreso = null;
+
+window.medirEgreso = (forzar) => {
+    if (window.medicionDeEgreso) return window.medicionDeEgreso;
+    if (!forzar && window.consumoDelCiclo) return Promise.resolve(window.consumoDelCiclo);
+
+    window.medicionDeEgreso = (async () => {
+        try {
+            const ciclo = window.cicloDeConsumo();
+            // Ya sumado por día: con ochenta aparatos el mes son miles de filas,
+            // y traérselas para dibujar treinta puntos sería gastar en la
+            // consulta justo lo que se está midiendo.
+            const porDia = await window.pedirALaBase('consumo_por_dia', {
+                p_desde: window.diaLocal(ciclo.inicio),
+                p_hasta: window.diaLocal(ciclo.fin)
+            });
+            window.consumoDelCiclo = {
+                ciclo: ciclo,
+                egreso: Array.isArray(porDia)
+                    ? porDia.map(f => ({ dia: String(f.dia).split('T')[0],
+                                         bytes: Number(f.bytes) || 0,
+                                         dispositivos: Number(f.dispositivos) || 0 }))
+                    : null
+            };
+            return window.consumoDelCiclo;
+        } finally {
+            window.medicionDeEgreso = null;
+        }
+    })();
+    return window.medicionDeEgreso;
 };
 
 // La puerta: mide una vez y se queda con lo medido.
@@ -432,13 +462,16 @@ window.medirAlmacenamiento = (forzar) => {
 //
 // El del encabezado hace lo mismo, así que hay dos puertas a lo mismo y ninguna
 // se dispara sola.
-// Sin rótulo: lo diría por segunda vez, que el título de la hoja ya pone
-// «Consumo» dos centímetros más arriba.
+// **Habla sólo de lo que falta por medir.** Los datos del mes ya están
+// dibujados encima, así que nombrarlos aquí sería prometer lo que ya se está
+// viendo. Y sin rótulo, que el título de la hoja pone «Consumo» dos centímetros
+// más arriba.
 window.pantallaEnReposo = () => `
     <div class="consumo-tarjeta">
-        <div class="consumo-pie" style="margin-top:0;">Cuánto ocupa el proyecto en Supabase y cuántos datos se
-            bajan este mes. Tarda un momento: se le pregunta a la base y se recorren los buckets.</div>
-        <button type="button" class="consumo-boton-medir" onclick="window.remedirConsumo()">Medir el consumo</button>
+        <div class="consumo-pie" style="margin-top:0;">Cuánto ocupan los archivos de cada bucket y la base, y qué
+            archivos ya no reclama ninguna fila. Tarda un momento: se le pregunta a la base y se recorren los
+            buckets.</div>
+        <button type="button" class="consumo-boton-medir" onclick="window.remedirConsumo()">Medir el almacenamiento</button>
     </div>`;
 
 window.abrirConsumoAlmacenamiento = async (forzar) => {
@@ -448,14 +481,26 @@ window.abrirConsumoAlmacenamiento = async (forzar) => {
     window.bucketAbierto = null;
     hoja.style.display = 'flex';
 
+    // El tráfico del ciclo sí se pide al abrir: es **una** consulta de treinta
+    // filas, y es lo que se viene a mirar. Se dibuja en cuanto llega, sin
+    // esperar a nada más, y sólo si la hoja sigue abierta en esta pantalla.
+    if (forzar || !window.consumoDelCiclo) {
+        window.medirEgreso(forzar)
+            .then(() => {
+                if (hoja.style.display === 'none' || window.bucketAbierto) return;
+                if (!window.medicionDeConsumo) window.pintarConsumo();
+            })
+            .catch((e) => console.warn('Consumo: no se pudo medir el ciclo →', e));
+    }
+
     if (!forzar && !window.medicionDeConsumo) {
-        // Lo ya medido, o el reposo. Ni una consulta en ninguno de los dos casos.
-        if (window.consumoAlmacenamiento) window.pintarConsumo();
-        else window.pintarConsumo(window.pantallaEnReposo());
+        // Lo ya medido, o el reposo: ninguna de las dos pide la medición cara.
+        window.pintarConsumo();
         return;
     }
 
-    window.pintarConsumo(`<div class="consumo-cargando"><div class="spinner"></div>Midiendo el consumo…</div>`);
+    window.pintarConsumo(window.tarjetaDeEgreso() +
+        `<div class="consumo-cargando"><div class="spinner"></div>Midiendo el almacenamiento…</div>`);
 
     try {
         await window.medirAlmacenamiento(forzar);
@@ -464,7 +509,7 @@ window.abrirConsumoAlmacenamiento = async (forzar) => {
         // Con el botón debajo: un aviso sin salida deja la hoja muerta hasta
         // cerrarla y volver a abrirla.
         window.pintarConsumo(`<div class="consumo-tarjeta">
-                <div class="consumo-rotulo">No se pudo medir</div>
+                <div class="consumo-rotulo">No se pudo medir el almacenamiento</div>
                 <div class="consumo-pie" style="margin-top:4px;">${window.sanitizeForHTML(e.message || String(e))}</div>
                 <button type="button" class="consumo-boton-medir" onclick="window.remedirConsumo()">Reintentar</button>
             </div>`);
@@ -516,7 +561,7 @@ window.pintarConsumo = (html) => {
     // y su `aria-label` y nada más.
     const remedir = document.getElementById('btn-remedir-almacenamiento');
     if (remedir) {
-        const etiqueta = window.consumoAlmacenamiento ? 'Volver a medir' : 'Medir el consumo';
+        const etiqueta = window.consumoAlmacenamiento ? 'Volver a medir' : 'Medir el almacenamiento';
         remedir.title = etiqueta;
         remedir.setAttribute('aria-label', etiqueta);
     }
@@ -529,12 +574,17 @@ window.pintarConsumo = (html) => {
     }
 
     const c = window.consumoAlmacenamiento;
-    if (!c) return;
+    if (!c && subtitulo) subtitulo.innerText = '';
 
     if (volver) volver.hidden = !window.bucketAbierto;
-    cuerpo.innerHTML = window.bucketAbierto
-        ? window.pantallaDeBucket(window.bucketAbierto)
-        : window.pantallaDeConsumo(c);
+    if (window.bucketAbierto) { cuerpo.innerHTML = window.pantallaDeBucket(window.bucketAbierto); return; }
+
+    // **Las dos mitades se dibujan por separado**, que es lo que permite leer el
+    // tráfico del mes sin esperar —ni pedir— la medición del proyecto entero:
+    // arriba va siempre la tarjeta del ciclo, y debajo lo medido o el botón que
+    // lo mide.
+    cuerpo.innerHTML = window.tarjetaDeEgreso() +
+        (c ? window.pantallaDeConsumo(c) : window.pantallaEnReposo());
 };
 
 // La barra de una proporción, con su color: verde hasta el 70%, ámbar hasta el
@@ -802,7 +852,15 @@ window.graficaDeConsumo = (puntos, ciclo, cuota) => {
 // La tarjeta entera. Sin la función en la base no se dibuja ninguna cifra —un
 // «0 GB» diría que no se ha bajado nada, que es lo contrario de la verdad— y se
 // dice qué script falta, como hacen las otras dos.
-window.tarjetaDeEgreso = (c) => {
+window.tarjetaDeEgreso = () => {
+    const c = window.consumoDelCiclo;
+    // Todavía de camino: es una consulta y tarda un suspiro, pero dibujar la
+    // tarjeta vacía y rellenarla después da un salto donde va la cifra grande.
+    if (!c) return `<div class="consumo-tarjeta">
+                        <div class="consumo-rotulo">Datos descargados</div>
+                        <div class="consumo-pie" style="margin-top:4px;">Midiendo el ciclo…</div>
+                    </div>`;
+
     const ciclo = c.ciclo || window.cicloDeConsumo();
     const desde = window.diaCortoDeCiclo(window.diaLocal(ciclo.inicio));
     const hasta = window.diaCortoDeCiclo(window.diaLocal(new Date(ciclo.fin.getTime() - 86400000)));
@@ -997,8 +1055,7 @@ window.pantallaDeConsumo = (c) => {
     const sinMedida = c.sinMedida > 0
         ? ` ${c.sinMedida} sin tamaño registrado, que cuentan como cero.` : '';
 
-    return window.tarjetaDeEgreso(c) +
-           resumen('Archivos', c.archivos, window.CUOTA_ARCHIVOS,
+    return resumen('Archivos', c.archivos, window.CUOTA_ARCHIVOS,
                `${c.cuantos} archivo${c.cuantos === 1 ? '' : 's'} en ${c.buckets.length} buckets. ${origen}${sinMedida}`,
                !c.desdeLaBase) +
            huerfanosHtml +
