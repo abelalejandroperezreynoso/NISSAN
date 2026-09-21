@@ -7064,10 +7064,25 @@ window.publicarEncuestaDeLaHoja = async () => {
             if (exId) { p.id = exId; ups.push(p); } else { ins.push(p); }
         });
         
-        if(ins.length) await sb.from('evaluation_questions').insert(ins);
-                if(ups.length) {
-                    const updatePromises = ups.map(q => { const { id, ...dataToUpdate } = q; return sb.from('evaluation_questions').update(dataToUpdate).eq('id', id); });
-                    await Promise.all(updatePromises);
+        // **El error de estas dos escrituras se mira.** No mirarlo es lo que
+                // dejó a una pregunta nueva desaparecer en silencio: la base
+                // rechazaba el `insert` —un tipo que no le cabía en la columna—,
+                // la pantalla decía «Guardado correctamente» y la encuesta se
+                // quedaba sin ella. No es la trampa de RLS de siempre, que
+                // responde con éxito y cero filas: aquí sí venía un error y no
+                // había nadie leyendo. Se lanza, que el `catch` de abajo ya lo
+                // dice con el mensaje de la base.
+                if (ins.length) {
+                    const { error } = await sb.from('evaluation_questions').insert(ins);
+                    if (error) throw new Error(`No se pudieron guardar las preguntas nuevas: ${error.message}`);
+                }
+                if (ups.length) {
+                    const resultados = await Promise.all(ups.map(q => {
+                        const { id, ...dataToUpdate } = q;
+                        return sb.from('evaluation_questions').update(dataToUpdate).eq('id', id);
+                    }));
+                    const falla = resultados.find(r => r && r.error);
+                    if (falla) throw new Error(`No se pudieron guardar los cambios de las preguntas: ${falla.error.message}`);
                 }
                 
                 // **Guardar la hoja guarda también su material.** Lo que se

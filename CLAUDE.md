@@ -1267,6 +1267,18 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   sólo mientras está a la vista; funciones como `idInternoElegido()` los
   buscan por id y devuelven vacío si no están. `cerrarDetalleActivo()`
   cierra también la de edición: la hija no puede sobrevivir a la madre.
+- **Y una escritura cuyo error nadie mira miente igual.** Es la otra mitad de
+  la trampa de aquí debajo y se confunde con ella: ahí la base responde con
+  éxito y cero filas, y aquí **sí** devuelve un error y no hay nadie
+  leyendo. El `insert` de `evaluation_questions` de `publicarEncuestaDeLaHoja`
+  iba sin comprobar nada, así que una pregunta que la base rechazaba —un tipo
+  que no le cabía en la columna— se perdía mientras la pantalla decía
+  «Guardado correctamente»: no hay manera de que nadie averigüe eso desde la
+  aplicación. Hoy las dos escrituras de preguntas lanzan con el mensaje de la
+  base, que es lo que el `catch` del guardado ya sabía decir. **Toda escritura
+  nueva comprueba su `error`**, y además cuenta las filas del `.select()` donde
+  importe: son dos comprobaciones distintas y hacen falta las dos.
+
 - **Una escritura que la base no permite no da error.** PostgREST responde
   con éxito a un `update` o un `delete` que las políticas de RLS rechazan:
   simplemente afecta a cero filas. Comprobar `error` no basta, y el código
@@ -1411,7 +1423,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   salía de ahí entraba en el promedio y movía el puntaje de la persona.
 
   ```js
-  window.TIPOS_DE_CONSTANCIA   // ['photo', 'signature', 'attendance', 'prerequisite']
+  window.TIPOS_DE_CONSTANCIA   // ['photo', 'signature', 'attendance', 'course', …]
   window.esPreguntaDeConstancia(pregunta)
   ```
 
@@ -1982,7 +1994,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     de poder pulsarse.
 
   ```js
-  window.TIPO_PREGUNTA_CURSO      // 'prerequisite'
+  window.TIPO_PREGUNTA_CURSO      // 'course'
+  window.TIPOS_DE_CURSO_PREVIO    // ['course', 'prerequisite']: el de hoy y el que no cupo
   window.TEXTO_SIN_CURSO          // «Solicita la capacitación a tu jefe inmediato»
   window.esPreguntaDeCursoPrevio(pregunta)
   window.cursoDeLaPregunta(pregunta)      // el nombre, o «el curso requerido»
@@ -2052,9 +2065,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   respuesta. El valor sobrevive porque `guardarCalificacionAdmin` parte de una
   copia de `answers_json`.
 
+  **Y el valor del tipo va corto a propósito: `'course'`.** Se llamó
+  `'prerequisite'` —doce letras— y **la base lo rechazaba**: el tipo más largo
+  que existía es `'attendance'`, de diez, así que esa columna admitía todo lo que
+  había y éste era el primero que no le cabía. Se veía como que la pregunta se
+  guardaba y **desaparecía**. **Un tipo nuevo se nombra con una palabra corta**,
+  y ante la duda se prueba a guardarlo antes de darlo por bueno; no hace falta
+  ningún script, que es lo que se gana no tocando la columna.
+
+  `'prerequisite'` se sigue leyendo (`TIPOS_DE_CURSO_PREVIO`) por si alguna fila
+  llegó a guardarse con él: cuesta una línea y evita que esa pregunta se quede
+  sin dibujar y, peor, puntuando. La hoja de edición no lo ofrece —su `<select>`
+  sólo tiene el de hoy—, que para eso el valor viejo no existe en ninguna parte.
+
   Es un tipo nuevo, así que **cae de lleno en la trampa del teléfono con el
-  JavaScript viejo** (la primera de esta lista): ese código no conoce
-  `prerequisite`, no entra en ninguna rama del `if` que dibuja los controles y
+  JavaScript viejo** (la primera de esta lista): ese código no conoce `course`,
+  no entra en ninguna rama del `if` que dibuja los controles y
   enseña el nombre del curso con nada debajo —y sin el enunciado armado, que
   tampoco conoce—. Por eso la versión se sube en el mismo cambio.
 

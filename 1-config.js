@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-21-10';
+window.VERSION_APP = '2026-09-21-11';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -686,10 +686,25 @@ window.esPreguntaDeAsistencia = (pregunta) =>
 // acierta ni se falla. Lo que se guarda es **quién lo impartió y cuándo**, que
 // es lo que la convierte en constancia y no en una casilla —«sí» a secas no lo
 // dice nadie después—.
-window.TIPO_PREGUNTA_CURSO = 'prerequisite';
+//
+// **El valor va corto a prop\u00f3sito.** Se llam\u00f3 `'prerequisite'` \u2014doce letras\u2014 y
+// la base lo rechazaba: el tipo m\u00e1s largo que exist\u00eda es `'attendance'`, de
+// diez, as\u00ed que la columna admit\u00eda todo lo que hab\u00eda y \u00e9ste era el primero que
+// no le cab\u00eda. La pregunta se perd\u00eda **en silencio**, porque el `insert` de las
+// preguntas no miraba su error \u2014eso ya se arregl\u00f3 aparte\u2014. **Un tipo nuevo se
+// nombra con una palabra corta**, y ante la duda se prueba a guardarlo antes de
+// darlo por bueno.
+//
+// `'prerequisite'` se sigue leyendo por si alguna fila lleg\u00f3 a guardarse con
+// \u00e9l: cuesta una l\u00ednea y es lo que evita que esa pregunta se quede sin dibujar
+// y, peor, puntuando. Lo que no hace la hoja de edici\u00f3n es ofrecerlo \u2014su
+// `<select>` s\u00f3lo tiene el de hoy\u2014, que para eso el valor viejo no existe en
+// ninguna parte.
+window.TIPO_PREGUNTA_CURSO = 'course';
+window.TIPOS_DE_CURSO_PREVIO = ['course', 'prerequisite'];
 window.TEXTO_SIN_CURSO = 'Solicita la capacitaci\u00f3n a tu jefe inmediato';
 window.esPreguntaDeCursoPrevio = (pregunta) =>
-    !!pregunta && pregunta.question_type === window.TIPO_PREGUNTA_CURSO;
+    !!pregunta && window.TIPOS_DE_CURSO_PREVIO.includes(pregunta.question_type);
 
 // El nombre del curso: el enunciado tal cual lo escribió quien creó la
 // encuesta. Vacío se dice «el curso requerido», que la frase de abajo tiene que
@@ -778,7 +793,7 @@ window.TIPOS_DE_CONSTANCIA = [
     window.TIPO_PREGUNTA_FOTO,
     window.TIPO_PREGUNTA_FIRMA,
     window.TIPO_PREGUNTA_ASISTENCIA,
-    window.TIPO_PREGUNTA_CURSO
+    ...window.TIPOS_DE_CURSO_PREVIO
 ];
 window.esPreguntaDeConstancia = (pregunta) =>
     !!pregunta && window.TIPOS_DE_CONSTANCIA.includes(pregunta.question_type);
