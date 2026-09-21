@@ -492,7 +492,7 @@ window.montarHojaEvaluaciones = () => {
 // Devuelve además el `peso` con el que se ordena —lo vencido primero, lo neutro
 // al final— y si cuenta como pendiente de quien mira, que es lo que suma el pie
 // de la clasificación.
-window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalificar }) => {
+window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalificar, decidir, descartada }) => {
     // Una encuesta apagada no le pide nada a nadie —sólo llega hasta aquí en
     // modo administrador—, así que va con el estado neutro y al final de su
     // clasificación: pintarle «Sin contestar» en rojo sería reclamar una
@@ -502,6 +502,31 @@ window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalifica
             estado: { texto: 'Inactiva: sólo la ves en modo administrador', neutro: true, color: '#94a3b8' },
             pendiente: false,
             peso: 4
+        };
+    }
+
+    // **Todavía no ha dicho si le aplica.** La encuesta no es suya —hasta que
+    // conteste no está asignada— pero su pregunta sí es un pendiente, y se
+    // cuenta como tal: es la misma que le sale en el panel de pendientes y la
+    // misma que suma el badge. Va con las que urgen pero por detrás de lo
+    // vencido, que aquello sí es una respuesta que falta.
+    if (decidir) {
+        return {
+            estado: { texto: 'Falta decir si te aplica', color: '#0891b2', fondo: '#ecfeff', borde: '#a5f3fc' },
+            pendiente: true,
+            peso: 1.2
+        };
+    }
+
+    // **Dijo que no le aplica.** Se sigue listando a propósito: es la única
+    // puerta de vuelta —desde su pantalla se puede desdecir— y sin ella un
+    // toque en «No me aplica» la haría desaparecer para siempre. Va con el
+    // neutro y al final, como todo lo que no le pide nada a quien mira.
+    if (descartada) {
+        return {
+            estado: { texto: 'Marcaste que no te aplica', neutro: true, color: '#94a3b8', fondo: '#f8fafc', borde: '#e2e8f0' },
+            pendiente: false,
+            peso: 3.5
         };
     }
 
@@ -629,6 +654,11 @@ window.cargarVistaEvaluaciones = async () => {
     // estado está, y `esEvaluacionPendiente` consulta esa ventana sin poder
     // esperar. Sin ella no hay ventana y todo se comporta como antes.
     if (window.cargarVentanasDeAsistencia) await window.cargarVentanasDeAsistencia();
+
+    // Y lo que se contestó a «¿te aplica esta encuesta?»: de ahí salen tanto el
+    // renglón que pide decidirlo como el de la que se descartó, y
+    // `leTocaEstaEncuesta` lo mira sin poder esperar.
+    if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
 
     const misDirectos = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id));
     const tengoEquipo = misDirectos.length > 0;
@@ -783,6 +813,15 @@ window.cargarVistaEvaluaciones = async () => {
     // sigue contando sólo las que le tocan, que es de lo que habla.
     const laReviso = (ev) => window.revisoresDeEncuesta(ev).includes(String(user.id));
 
+    // Las dos mitades de «¿te aplica esta encuesta?». Se listan las dos: la que
+    // está preguntando, porque es un pendiente; y la que se descartó, porque
+    // esta lista es la única puerta de vuelta —su pantalla deja desdecirse— y
+    // sin ella un toque en «No me aplica» la borraría del mapa para siempre.
+    const meFaltaDecidir = (ev) => !!window.leTocaDecidirSiAplica &&
+        window.leTocaDecidirSiAplica(ev, user, tengoEquipo);
+    const laDescarte = (ev) => !!window.descartoLaEncuesta &&
+        window.descartoLaEncuesta(ev, user, tengoEquipo);
+
     // La lista va como la del panel de inicio: una clasificación por renglón,
     // plegada, con el estado a la izquierda y sus encuestas dentro. Antes era
     // una rejilla de iconos de 64px con el título debajo recortado a dos
@@ -836,13 +875,18 @@ window.cargarVistaEvaluaciones = async () => {
     grupos.forEach(g => {
         const visibles = window.modoAdminActivo
             ? g.encuestas
-            : g.encuestas.filter(ev => leTocaEstaEncuesta(ev) || laReviso(ev));
+            : g.encuestas.filter(ev => leTocaEstaEncuesta(ev) || laReviso(ev)
+                || meFaltaDecidir(ev) || laDescarte(ev));
 
         g.filas = visibles.map(ev => {
             const leToca = leTocaEstaEncuesta(ev);
             const porCalificar = pendingMap[ev.id] || 0;
             const lectura = window.estadoDeEncuestaEnLista(ev, {
-                leToca, revisor: laReviso(ev), respuestas: misRespuestas, porCalificar
+                leToca, revisor: laReviso(ev), respuestas: misRespuestas, porCalificar,
+                // En modo administrador la lista es la de todo el mundo, así que
+                // estas dos no hablan de nadie: ahí manda el neutro de siempre.
+                decidir: !window.modoAdminActivo && meFaltaDecidir(ev),
+                descartada: !window.modoAdminActivo && laDescarte(ev)
             });
             // El puntaje del periodo, como en la tarjeta del panel: es la misma
             // pregunta y la respuesta ya está en `misRespuestas`. La respuesta
@@ -1151,9 +1195,14 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
         // Las dos columnas de más son para el freno de «una sola respuesta» de
         // aquí abajo: la bandera y el instante del relanzamiento, que es lo que
         // decide qué respuestas de esa persona siguen contando.
-        const camposEval = await window.camposConUnaRespuesta(
+        //
+        // Y `pregunta_si_aplica`, por lo mismo: una encuesta que pregunta antes
+        // si le aplica no se abre hasta que esa persona diga que sí, y sin la
+        // columna el freno de aquí abajo no se enteraría —una que no se pidió
+        // llega `undefined`, que no es `true`—.
+        const camposEval = await window.camposConAplica(await window.camposConUnaRespuesta(
             await window.camposConRelanzamiento(
-                'range_labels, description, frequency, evaluates_area'));
+                'range_labels, description, frequency, evaluates_area, mode')));
 
         const p1 = sb.from('evaluation_questions').select('*').eq('evaluation_id', evalId).order('order_index');
         const p2 = sb.from('evaluations').select(camposEval).eq('id', evalId).single();
@@ -1185,6 +1234,28 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
                 const dia = new Date(ya.submitted_at).toLocaleDateString('es-ES',
                     { day: '2-digit', month: '2-digit', year: 'numeric' });
                 alert(`Esta encuesta se responde una sola vez y ya la contestaste el ${dia}.`);
+                return;
+            }
+        }
+
+        // **Y la que pregunta antes si le aplica no se abre hasta que lo diga.**
+        // El guardia es éste y no el botón, por las mismas tres razones: un
+        // `disabled` se quita desde la consola, la hoja pudo quedarse abierta
+        // desde antes de contestar la pregunta, y al panel de pendientes se
+        // llega por otras puertas. Quien no ha contestado no está asignado, así
+        // que abrirle el cuestionario le dejaría una respuesta en una encuesta
+        // que no es suya —y que ni siquiera cuenta en su padrón—.
+        //
+        // Sin la caché cargada —o sin el script corrido— `pasoDeAplica` dice
+        // siempre 'adelante' y esto no frena nada, que es lo de antes.
+        if (mode === 'self' && window.pasoDeAplica) {
+            if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+            const paso = window.pasoDeAplica({ ...resE.data, id: evalId }, user.id);
+            if (paso !== 'adelante') {
+                document.body.style.cursor = 'default';
+                alert(paso === 'fuera'
+                    ? 'Marcaste que esta encuesta no te aplica.\n\nSi te aplica, ábrela desde tu lista de encuestas y dilo ahí.'
+                    : 'Antes de contestarla hay que decir si te aplica.\n\nLa pregunta te sale en tus pendientes y en la pantalla de la encuesta.');
                 return;
             }
         }

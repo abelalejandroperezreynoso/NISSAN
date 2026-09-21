@@ -550,8 +550,14 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             // llena, el pendiente de revisión volvería al jefe inmediato.
             await window.cargarRevisoresDeClasificaciones();
 
-            const camposEvals = await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-                'id, title, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))))));
+            // Y lo que contestó cada quien a «¿te aplica esta encuesta?»: de
+            // eso depende que salga la pregunta, la encuesta o nada. Sin la
+            // caché —o sin el script corrido— no hay decisiones y la encuesta
+            // le toca a todos sus candidatos, que es lo de antes.
+            if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+
+            const camposEvals = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+                'id, title, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))))));
             const { data: activeEvalsDb } = await sb.from('evaluations')
                         .select(camposEvals)
                         .eq('active', true);
@@ -603,6 +609,25 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                 // Solo agregamos la encuesta si hace match
                                                 if (esObligatoria && esParaMi) {
+                                                    // Una encuesta que pregunta antes si le aplica no se
+                                                    // pide hasta que esta persona conteste: mientras no lo
+                                                    // haga, su pendiente **es la pregunta**, y si dijo que
+                                                    // no, no hay nada que pedirle. Lo decide
+                                                    // `window.pasoDeAplica`, que es el mismo camino que
+                                                    // sigue el badge del panel; sin la caché cargada —o sin
+                                                    // el script corrido— devuelve siempre 'adelante' y todo
+                                                    // se comporta como antes.
+                                                    const paso = window.pasoDeAplica ? window.pasoDeAplica(ev, user.id) : 'adelante';
+                                                    if (paso === 'fuera') return;
+                                                    if (paso === 'preguntar') {
+                                                        items.push({
+                                                            id: ev.id, title: ev.title,
+                                                            date: window.diaDeInicioDeEncuesta(ev),
+                                                            tipo: 'Encuesta', grado: 'Por decidir',
+                                                            original_data: ev, virtual_type: 'aplica'
+                                                        });
+                                                        return;
+                                                    }
                                                     const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss');
                                     if (requiereRespuesta.mostrar) {
     if (ev.mode === 'boss') {
@@ -735,6 +760,15 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                                         aplicaSub = aplicaPuesto && aplicaDepto;
                                                                     }
+
+                                                                    // Y si la encuesta pregunta antes si le aplica,
+                                                                    // sólo se le recuerda a quien dijo que sí: la que
+                                                                    // descartó no es un atraso suyo, y la que todavía
+                                                                    // no ha contestado es pendiente de él —la
+                                                                    // pregunta— y no algo que su jefe le tenga que
+                                                                    // recordar.
+                                                                    if (aplicaSub && window.pasoDeAplica &&
+                                                                        window.pasoDeAplica(ev, sub.id) !== 'adelante') return;
 
                                                                    if (aplicaSub) {
                                                     const subResps = teamResponsesEvals ? teamResponsesEvals.filter(r => String(r.employee_id) === String(sub.id)) : [];
@@ -919,7 +953,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
         // `{}` y las tarjetas se dibujan como siempre: una portada es lo que
         // ayuda a reconocer la encuesta, no lo que la hace funcionar.
         const idsConPortada = items
-            .filter(i => i.virtual_type === 'survey')
+            .filter(i => i.virtual_type === 'survey' || i.virtual_type === 'aplica')
             .map(i => i.id);
         const portadas = window.portadasDeEncuestas
             ? await window.portadasDeEncuestas(idsConPortada).catch(() => ({}))
@@ -1170,6 +1204,40 @@ if (item.virtual_type === 'waiting_boss') {
                         </div>
                         <div class="card-actions">
                             <button class="btn-firmar" onclick='window.verDetalleRespuesta(${jsonString})' style="color:${borderColor}; border-color:${borderColor};">Revisar</button>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            // **La encuesta que pregunta antes si le aplica.** Aquí no se
+            // contesta la encuesta: se contesta si le toca. Mientras no lo
+            // diga no está asignada, así que su tarjeta no lleva ni estado ni
+            // plazo —no hay nada vencido: no se le ha pedido nada todavía— y
+            // los dos botones van en el cuerpo y no en `.card-actions`, que
+            // ahí sólo cabe uno.
+            //
+            // La portada del material sí va, y es lo que más ayuda a decidir:
+            // el título de una capacitación dice menos de a quién le toca que
+            // su primera diapositiva.
+            if (item.virtual_type === 'aplica') {
+                const portadaAplica = portadas[String(item.id)];
+                const portadaAplicaHtml = portadaAplica ? `
+                    <button type="button" class="pendiente-portada"
+                            onclick="event.stopPropagation(); window.abrirVisorImagenes && window.abrirVisorImagenes(window.paginasDePortadaDePendiente('${item.id}'))"
+                            title="Ver el material de esta encuesta"
+                            aria-label="Ver el material de esta encuesta">
+                        <img src="${window.sanitizeForHTML(portadaAplica.url)}" alt=""
+                             onerror="window.portadaDePendienteRota(this)">
+                        ${portadaAplica.cuantas > 1 ? `<span class="pendiente-portada-paginas">${portadaAplica.cuantas} páginas</span>` : ''}
+                    </button>` : '';
+
+                return `
+                <div class="incident-card" style="border-left: 5px solid #0891b2;">
+                    ${portadaAplicaHtml}
+                    <div class="card-header" style="align-items: flex-start;">
+                        <div class="card-info" style="flex:1;">
+                            <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
+                            ${window.bloqueDePreguntaAplica(item.id)}
                         </div>
                     </div>
                 </div>`;

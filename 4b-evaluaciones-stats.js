@@ -282,6 +282,13 @@ window.cargarStatsEncuestasGlobales = async () => {
     container.innerHTML = '<div style="text-align:center; padding:50px; color:#64748b;"><div class="spinner"></div><br>Analizando datos históricos por lotes...</div>';
 
     try {
+        // A quién le toca cada encuesta lo decide `leTocaEstaEncuesta` en los
+        // cinco sitios donde esta pantalla cuenta asignadas, y en una encuesta
+        // que pregunta antes si le aplica eso sale de lo que contestó cada
+        // quien: sin la caché, el denominador vuelve a ser la plantilla entera
+        // y el porcentaje de esa encuesta no significa nada.
+        if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+
         const p1 = window.todosLosEmpleadosData && window.todosLosEmpleadosData.length > 0
             ? Promise.resolve(null)
             : window.cargarDatosEmpleados();

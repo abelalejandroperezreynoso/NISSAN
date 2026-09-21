@@ -5921,6 +5921,72 @@ html.fondo-anclado body {
     padding: 12px;
 }
 
+/* «¿Te aplica esta encuesta?». Sale en dos sitios —la pantalla de la encuesta y
+   la tarjeta del panel de pendientes— y lo dibuja una sola función
+   (`window.bloqueDePreguntaAplica`), así que los estilos también son unos
+   solos: dos copias acabarían diciendo lo mismo de dos maneras.
+
+   **Los dos botones pesan igual.** Una encuesta que no te aplica no es un
+   descuido ni la salida de emergencia —es la mitad de lo que se está
+   preguntando—, así que van del mismo tamaño y en la misma fila, y no un botón
+   de color con un enlace gris debajo. El azul es el del «sí» porque es lo que
+   sigue: de ahí sale un pendiente. */
+.aplica-pregunta {
+    background: #ecfeff;
+    border: 1px solid #a5f3fc;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+.aplica-pregunta-titulo {
+    font-weight: 700;
+    color: #0e7490;
+    font-size: 0.95rem;
+}
+
+.aplica-pregunta-texto {
+    color: #155e75;
+    font-size: 0.8rem;
+    margin-top: 2px;
+}
+
+/* En un teléfono la columna del texto de una tarjeta de pendiente anda por los
+   233px, así que los dos botones van a la mitad cada uno: con `1fr 1fr` no hay
+   uno que se lleve el renglón por tener el rótulo más largo. */
+.aplica-pregunta-botones {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.aplica-boton {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 10px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.aplica-boton--si {
+    background: #0891b2;
+    border: none;
+    color: white;
+    box-shadow: 0 4px 6px rgba(8, 145, 178, 0.25);
+}
+
+.aplica-boton--no {
+    background: white;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+}
+
 /* La gráfica sí conserva su recuadro: es un dibujo y necesita un fondo blanco
    detrás, al revés que los botones. */
 .eval-grafica {

@@ -41,6 +41,12 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     // del atajo de la caché de encuestas, que si no se saltaría con la primera.
     await window.cargarRevisoresDeClasificaciones();
 
+    // Y lo que contestó cada quien a «¿te aplica esta encuesta?», por lo mismo:
+    // de ello depende que salga el botón de responder o la pregunta, y
+    // `leTocaEstaEncuesta` lo mira sin poder esperar. Va también antes del
+    // atajo de la caché de encuestas, o se saltaría con la primera.
+    if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+
     const yaEsta = window.encuestaEnCache(evaluationId);
     if (yaEsta) return yaEsta;
 
@@ -77,10 +83,10 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     // vuelve a ofrecer el botón: una columna que no se pidió llega `undefined`,
     // que no es `true`, así que sin encadenarla la encuesta cerrada se dejaría
     // contestar otra vez desde esta puerta. Es la trampa de siempre.
-    const campos = await window.camposConUnaRespuesta(await window.camposConVigencia(
+    const campos = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(
         await window.camposConRelanzamiento(await window.camposConRevisores(
         'id, title, mode, category, frequency, created_at, description, evaluates_area, '
-        + 'is_obligatory, target_employees, target_positions, target_departments'))));
+        + 'is_obligatory, target_employees, target_positions, target_departments')))));
     const { data } = await sb.from('evaluations').select(campos).eq('id', evaluationId).single();
     if (data) window.cacheEncuestasRevision[String(evaluationId)] = data;
     return data || null;
@@ -244,6 +250,21 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     let actionButtonHtml = '';
     if (mode === 'boss') {
         actionButtonHtml = `<button onclick="window.abrirSeleccionSubordinado('${evalId}', '${safeTitle}', 'boss')" class="eval-accion eval-accion--jefe">Evaluar a un Colaborador...</button>`;
+    } else if (window.leTocaDecidirSiAplica(evalData, user, window.tieneEquipoDirecto(user.id))) {
+        // La encuesta pregunta antes si le aplica y esta persona todavía no lo
+        // ha dicho: hasta que conteste no está asignada, así que aquí no hay
+        // nada que responder. Es la misma pregunta que le sale en sus
+        // pendientes, y está aquí porque a la encuesta se llega también por la
+        // lista y por el panel de inicio, sin pasar por ahí.
+        actionButtonHtml = window.bloqueDePreguntaAplica(evalId);
+    } else if (window.descartoLaEncuesta(evalData, user, window.tieneEquipoDirecto(user.id))) {
+        // Dijo que no le aplica. La encuesta le sigue saliendo en la lista
+        // —apagada y al final de su clasificación— precisamente para poder
+        // llegar aquí: sin esta pantalla, un toque en «No me aplica» la habría
+        // hecho desaparecer para siempre sin manera de volver atrás.
+        actionButtonHtml = `
+            <div class="eval-aviso-revisar">Marcaste que esta encuesta no te aplica, así que no se te pide.</div>
+            <button onclick="window.responderSiAplica('${evalId}', true)" class="eval-accion-secundaria">Sí me aplica</button>`;
     } else if (window.leTocaEstaEncuesta(evalData, user, window.tieneEquipoDirecto(user.id))) {
         // Sin `modoAdminActivo ||` a propósito: administrando no se está
         // mirando la encuesta de nadie en particular, y ese «||» le ofrecía
@@ -269,6 +290,17 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         } else {
             const btnText = misRespuestas.length > 0 ? "Volver a Responder" : "Responder";
             actionButtonHtml = `<button onclick="window.targetUserForEval=null; window.responderDirecto('${evalId}', '${safeTitle}', 'self')" class="eval-accion eval-accion--responder">${btnText}</button>`;
+        }
+
+        // Quien dijo que sí puede desdecirse, y tiene que poder: la encuesta se
+        // asignó porque lo dijo él, no porque nadie lo decidiera, y quien se
+        // equivocó de botón —o cambió de trabajo— no tiene otra puerta. Va
+        // debajo de la acción y en secundario, que lo que se viene a hacer aquí
+        // es contestarla. Lo que ya hubiera contestado se queda en su historial:
+        // esto no borra ninguna respuesta.
+        if (window.preguntaSiAplica(evalData)) {
+            actionButtonHtml += `
+                <button onclick="window.responderSiAplica('${evalId}', false)" class="eval-accion-secundaria">Ya no me aplica</button>`;
         }
     } else if (window.revisoresDeEncuesta(evalData).includes(String(user.id))) {
         // Se está aquí para calificarla, no para contestarla: la encuesta no va
@@ -460,6 +492,16 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // revisa, que son quienes la imparten.
     const imparte = window.modoAdminActivo || (evalData && window.puedeEditarDestinatarios(evalData, user.id));
 
+    // El recuadro de «Le aplica a» cuenta candidatos sobre la plantilla, y a
+    // esta hoja se llega también desde el inicio sin haberla cargado. Sólo si
+    // la encuesta pregunta y quien mira la imparte: no se le cobra la consulta
+    // a nadie más.
+    if (imparte && window.preguntaSiAplica(evalData) &&
+        (window.todosLosEmpleadosData || []).length === 0 && window.cargarDatosEmpleados) {
+        await window.cargarDatosEmpleados();
+    }
+    const quienAplicaHtml = window.bloqueDeQuienAplica(evalData, imparte);
+
     // **Aquí el material sólo se lee.** Agregarlo y quitarlo se hace en la hoja
     // de editar la encuesta, que es donde se escribe todo lo demás de ella; en
     // ésta quedan la portada de arriba —que abre el visor con todo lo
@@ -488,6 +530,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
 
         ${bannerHtml}
         ${materialHtml}
+        ${quienAplicaHtml}
         ${paseDeListaHtml}
         <div id="stats-dashboard" style="display:none; margin-top:20px;"></div>
         <details id="lista-wrapper" class="hoja-plegable" ${cuantasMeTocan > 0 ? 'open' : ''}>
@@ -540,6 +583,153 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
 // lo van corrigiendo los toques, para que no haya que volver a consultar tras
 // cada marca.
 window.paseDeLista = null;
+
+// ==========================================
+// «¿TE APLICA ESTA ENCUESTA?»
+// ==========================================
+// La pregunta, tal y como se ve en la pantalla de la encuesta y en la tarjeta
+// del panel de pendientes. Se escribe **en un solo sitio** porque son dos
+// puertas a lo mismo: quien la conteste desde una tiene que ver lo mismo que
+// desde la otra, y dos copias acabarían diciendo cosas distintas.
+//
+// Las dos salidas pesan igual —una encuesta que no te aplica no es un descuido
+// y decirlo no es la opción de escape—, así que van como dos botones del mismo
+// tamaño y no como un botón y un enlace.
+window.bloqueDePreguntaAplica = (evalId) => `
+    <div class="aplica-pregunta">
+        <div class="aplica-pregunta-titulo">¿Te aplica esta encuesta?</div>
+        <div class="aplica-pregunta-texto">Si te aplica, queda asignada y te saldrá como pendiente. Si no, deja de pedírsete.</div>
+        <div class="aplica-pregunta-botones">
+            <button type="button" class="aplica-boton aplica-boton--si"
+                    onclick="event.stopPropagation(); window.responderSiAplica('${evalId}', true)">Sí me aplica</button>
+            <button type="button" class="aplica-boton aplica-boton--no"
+                    onclick="event.stopPropagation(); window.responderSiAplica('${evalId}', false)">No me aplica</button>
+        </div>
+    </div>`;
+
+// Guarda lo que contestó quien está mirando. Lo llaman los dos sitios donde
+// sale la pregunta y también los dos de volver atrás —«Sí me aplica» desde una
+// descartada y «Ya no me aplica» desde una asignada—, que es el mismo guardado
+// del revés.
+//
+// Cuatro cosas que hay que mantener:
+//
+//   - **Sólo el «no» pregunta dos veces, y sólo si ya contestó algo.** Decir
+//     que una encuesta no te aplica no destruye nada —lo contestado se queda en
+//     su historial— pero sí la retira, y de un toque en la lista de pendientes
+//     no se vuelve solo.
+//   - **El guardado cuenta las filas del `.select()`**, que es lo que hace
+//     `guardarDecisionDeAplica`: aquí escribe alguien que no es administrador y
+//     una política de RLS que lo rechace no da error.
+//   - **Se tira la caché del panel**, porque la decisión cambia el badge de
+//     pendientes y la tarjeta de encuestas asignadas de quien la tomó.
+//   - **Y se repinta lo que haya delante**: la pantalla de la encuesta si se
+//     contestó desde ahí, o el panel de pendientes si fue desde su tarjeta.
+window.responderSiAplica = async (evalId, aplica) => {
+    let user = null;
+    try { user = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null'); } catch (e) { user = null; }
+    if (!user || !user.id) return;
+
+    const ev = window.encuestaEnCache(evalId);
+    const misRespuestas = (window.respuestasCacheActual || [])
+        .filter(r => String(r.employee_id) === String(user.id));
+
+    if (!aplica) {
+        const yaContesto = misRespuestas.length > 0;
+        const aviso = yaContesto
+            ? 'Esta encuesta dejará de pedírsete. Lo que ya contestaste se queda en tu historial.\n\n¿Marcarla como que no te aplica?'
+            : '¿Seguro de que esta encuesta no te aplica? Dejará de pedírsete.';
+        if (!confirm(aviso)) return;
+    }
+
+    try {
+        await window.guardarDecisionDeAplica(evalId, user.id, aplica);
+    } catch (e) {
+        alert('No se pudo guardar tu respuesta.\n\n' + (e && e.message ? e.message : e));
+        return;
+    }
+
+    // El badge del panel y la tarjeta de encuestas asignadas cuentan otra cosa
+    // desde ahora mismo.
+    if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+    if (window.refrescarTarjetaDeEncuestas) window.refrescarTarjetaDeEncuestas();
+
+    // Y se repinta lo que se esté mirando. La hoja de la encuesta manda: si
+    // está abierta es desde donde se contestó, y ahí el botón de responder —o
+    // el aviso de que no aplica— es lo que acaba de cambiar.
+    const hoja = document.getElementById('modal-evaluaciones-flotante');
+    if (hoja && hoja.style.display !== 'none' && window.abrirHistorialEvaluacion) {
+        await window.abrirHistorialEvaluacion(evalId,
+            (ev && ev.title) || window.evalTituloRespondiendo || 'Encuesta', true);
+        return;
+    }
+    if (window.mostrandoPendientes && window.cargarVistaPendientes) {
+        await window.cargarVistaPendientes('PROPIOS');
+    }
+};
+
+// **A cuánta gente le aplica**, para quien la imparte. Una encuesta que
+// pregunta no tiene padrón hasta que la gente conteste, así que el «23 de 40»
+// de cualquier otra pantalla aquí sale de otra cuenta: los candidatos son a
+// quienes se les preguntó y el padrón, los que dijeron que sí. Sin este
+// recuadro no habría manera de saber si falta gente por contestar la pregunta o
+// es que de verdad la encuesta le aplica a cuatro personas.
+//
+// Los nombres son sólo de quien la imparte —el administrador y quien la
+// revisa—, como los del pase de lista y por lo mismo: la cifra es de la
+// encuesta y la lista es el acta.
+window.bloqueDeQuienAplica = (ev, verNombres) => {
+    if (!window.preguntaSiAplica(ev)) return '';
+    if (!verNombres) return '';
+    // Sin plantilla no hay candidatos que contar, y un «0 de 0» diría que no le
+    // aplica a nadie. Es la misma regla que el pase de lista.
+    if ((window.todosLosEmpleadosData || []).length === 0) return '';
+    // Y sin la caché de decisiones cargada tampoco: se leería a todo el mundo
+    // como que no ha contestado.
+    if (!window.DECISIONES_DE_APLICA) return '';
+
+    const conEquipo = new Set((window.todosLosEmpleadosData || [])
+        .map(e => e.supId).filter(Boolean).map(String));
+    const candidatos = (window.todosLosEmpleadosData || []).filter(emp =>
+        window.empleadoActivo(emp) &&
+        window.esCandidataDeEncuesta(ev, emp, conEquipo.has(String(emp.id))));
+    if (candidatos.length === 0) return '';
+
+    const si = [], no = [], sinDecidir = [];
+    candidatos.forEach(emp => {
+        const d = window.decisionDeAplica(ev.id, emp.id);
+        if (d === true) si.push(emp);
+        else if (d === false) no.push(emp);
+        else sinDecidir.push(emp);
+    });
+
+    const pct = window.pctTexto(si.length, candidatos.length);
+    const nota = sinDecidir.length > 0
+        ? `${sinDecidir.length} todavía no ${sinDecidir.length === 1 ? 'contesta' : 'contestan'} la pregunta`
+        : 'Ya contestaron todos';
+
+    const nombresHtml =
+        window.listaDePaseDeLista('Les aplica', si, 'asistio') +
+        window.listaDePaseDeLista('No les aplica', no, 'falto') +
+        window.listaDePaseDeLista('Sin decidir', sinDecidir, 'falto');
+
+    // Una barra de un solo color, como la del pase de lista y por lo mismo: no
+    // hay ningún mínimo de «a cuánta gente tiene que aplicarle», así que
+    // pintar de rojo un 40% sería inventarse un umbral que nadie definió.
+    return `
+        <div class="pase-tarjeta">
+            <div class="pase-rotulo">Le aplica a</div>
+            <div class="pase-evento">De ${candidatos.length} ${candidatos.length === 1 ? 'candidato' : 'candidatos'}, los que dijeron que sí</div>
+            <div class="pase-nota">${window.sanitizeForHTML(nota)}</div>
+            <div class="pase-cifra">
+                <span class="pase-cifra-numero">${si.length}</span>
+                <span class="pase-cifra-total">de ${candidatos.length}</span>
+                <span class="pase-cifra-pct">${pct}%</span>
+            </div>
+            <div class="pase-barra"><div class="pase-barra-relleno" style="width:${Math.round((si.length / candidatos.length) * 100)}%;"></div></div>
+            ${nombresHtml}
+        </div>`;
+};
 
 window.bloqueDePaseDeLista = (ev, preguntas, respuestas, verNombres) => {
     const deAsistencia = (preguntas || []).filter(q => window.esPreguntaDeAsistencia(q));
@@ -2805,6 +2995,10 @@ window.abrirExpedienteEmpleado = async (empId) => {
     if (!container) return;
     // El resumen por clasificación de más abajo lo pregunta sin poder esperar.
     await window.cargarCertificacionDeClasificaciones();
+    // Y qué encuestas le tocan de verdad: una que pregunta antes si le aplica
+    // sólo es suya si dijo que sí, y sin la caché el expediente le contaría
+    // como pendiente una que descartó.
+    if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
     // Estas pantallas llevan su propia flecha en el cuerpo; el encabezado de
     // la hoja vuelve al de la lista para no quedarse con el título de la
     // encuesta que se estuviera viendo.
@@ -2826,8 +3020,11 @@ window.abrirExpedienteEmpleado = async (empId) => {
     // necesita saber en qué periodo cae cada encuesta y cuáles ya no cuentan;
     // los de destinatarios, para no contarle a esta persona encuestas que no
     // van dirigidas a su puesto ni a su departamento.
-    const camposEvals = await window.camposConMinimo(
-        'id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
+    // `pregunta_si_aplica` va con ellos: sin la columna, una encuesta que esta
+    // persona descartó se le sigue contando como suya y el expediente le exige
+    // para certificar una que no le aplica.
+    const camposEvals = await window.camposConAplica(await window.camposConMinimo(
+        'id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments'));
     const { data: evaluaciones } = await sb.from('evaluations').select(camposEvals);
     const titulos = {};
     (evaluaciones || []).forEach(ev => {
@@ -3291,8 +3488,16 @@ window.abrirCertificacionPorClasificacion = async () => {
         if (window.cargarDatosEmpleados) await window.cargarDatosEmpleados();
     }
 
-    const camposParaCertificar = await window.camposConMinimo(
-        'id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments');
+    // Y lo que cada quien contestó a «¿te aplica esta encuesta?»: a quien la
+    // descartó no se le puede exigir para certificar su clasificación, y sin la
+    // caché aparecería como «1 sin contestar» para siempre.
+    if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+
+    // `pregunta_si_aplica` va en la consulta por lo mismo: una columna que no se
+    // pidió llega `undefined`, y `leTocaEstaEncuesta` la leería como que no
+    // pregunta nada. Es la trampa de `requires_min_score`.
+    const camposParaCertificar = await window.camposConAplica(await window.camposConMinimo(
+        'id, title, category, frequency, active, mode, is_obligatory, target_employees, target_positions, target_departments'));
     const { data: evaluaciones, error } = await sb.from('evaluations').select(camposParaCertificar);
 
     if (error) {
@@ -4403,6 +4608,7 @@ window.RESUMEN_DE_GRUPO = {
         const dias = parseInt((document.getElementById('eval-retry-days') || {}).value, 10);
         if (dias > 0) partes.push(`Repetir en ${dias} día${dias === 1 ? '' : 's'}`);
         if (marcada('chk-eval-una-respuesta')) partes.push('Una sola respuesta');
+        if (marcada('chk-eval-pregunta-aplica')) partes.push('Pregunta si le aplica');
         if (!marcada('chk-eval-activa')) partes.push('Inactiva');
         // La fecha desde la que aplica sólo se dice si se puso: vacía es «desde
         // que se creó», que es lo de siempre y no hay que contarlo.
@@ -4848,6 +5054,25 @@ window.avisarSiFaltaColumnaUnaRespuesta = async () => {
     if (fila) fila.style.opacity = hay ? '1' : '0.45';
 };
 
+// Y lo mismo para «Pregunta si le aplica», que además de la columna necesita la
+// tabla donde se guarda lo que conteste cada quien: las dos van en el mismo
+// script, así que basta con preguntar por la columna. Sin ella la casilla se
+// queda apagada y desmarcada —la encuesta le toca a todos sus candidatos, que
+// es lo de siempre— en vez de dejar marcar algo que no se podría guardar.
+window.avisarSiFaltaColumnaAplica = async () => {
+    const hay = await window.hayColumnaAplica();
+    const aviso = document.getElementById('aviso-pregunta-aplica-no-disponible');
+    if (aviso) aviso.style.display = hay ? 'none' : 'block';
+
+    const chk = document.getElementById('chk-eval-pregunta-aplica');
+    if (chk) {
+        chk.disabled = !hay;
+        if (!hay) chk.checked = false;
+    }
+    const fila = document.getElementById('opcion-pregunta-aplica');
+    if (fila) fila.style.opacity = hay ? '1' : '0.45';
+};
+
 window.verificarRestriccionesModo = () => {
     const modeEl = document.getElementById('eval-mode-input');
     const mode = modeEl ? modeEl.value : 'self';
@@ -5223,6 +5448,8 @@ window.abrirModalCrearEval = async (categoria) => {
 
     const chkUmbral = document.getElementById('chk-eval-umbral');
     if(chkUmbral) chkUmbral.checked = true;
+    const chkPreguntaAplica = document.getElementById('chk-eval-pregunta-aplica');
+    if(chkPreguntaAplica) chkPreguntaAplica.checked = false;
     const inpReintento = document.getElementById('eval-retry-days');
     if(inpReintento) inpReintento.value = 0;
     const inpVigencia = document.getElementById('eval-vigente-desde');
@@ -5230,6 +5457,7 @@ window.abrirModalCrearEval = async (categoria) => {
     await window.avisarSiFaltaColumnaCertificacion();
     await window.avisarSiFaltaColumnaVigencia();
     await window.avisarSiFaltaColumnaUnaRespuesta();
+    await window.avisarSiFaltaColumnaAplica();
 
     window.encuestaEnEdicion = null;
     window.asignacionesEnEdicion = {};
@@ -5432,6 +5660,13 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     // mes que viene también— y no un instante que se quede viejo al copiarla.
     const chkUnaRespuesta = document.getElementById('chk-eval-una-respuesta');
     if(chkUnaRespuesta) { chkUnaRespuesta.checked = window.esDeUnaSolaRespuesta(evaluacion); }
+    // Una copia **sí** la hereda, por lo mismo: preguntar quién trabaja en
+    // alturas es una forma de ser de la encuesta y no un instante que se quede
+    // viejo. Lo que no se hereda son las respuestas: la copia es otra encuesta
+    // y vuelve a preguntar, que para eso se hizo —quien cambió de trabajo desde
+    // la vuelta pasada contesta otra cosa—.
+    const chkPreguntaAplica = document.getElementById('chk-eval-pregunta-aplica');
+    if(chkPreguntaAplica) { chkPreguntaAplica.checked = window.preguntaSiAplica(evaluacion); }
     // **Una copia no hereda la fecha de vigencia**, y es lo mismo que hace con
     // el título: la copia es la vuelta de este mes, no la del año pasado, así
     // que arrastrarle aquella fecha la metería en periodos que no son suyos.
@@ -5445,6 +5680,7 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     await window.avisarSiFaltaColumnaCertificacion();
     await window.avisarSiFaltaColumnaVigencia();
     await window.avisarSiFaltaColumnaUnaRespuesta();
+    await window.avisarSiFaltaColumnaAplica();
 
     await window.prepararInputCategorias(evaluacion.category || 'General');
 
@@ -6697,6 +6933,13 @@ window.publicarEncuestaDeLaHoja = async () => {
                 const chkUnaRespuesta = document.getElementById('chk-eval-una-respuesta');
                 if (await window.hayColumnaUnaRespuesta()) {
                     payload.una_sola_respuesta = chkUnaRespuesta ? chkUnaRespuesta.checked : false;
+                }
+
+                // Si la encuesta pregunta antes si le aplica. Sin la columna no
+                // se puede guardar y la hoja ya lo dijo: el resto sí.
+                const chkPreguntaAplica = document.getElementById('chk-eval-pregunta-aplica');
+                if (await window.hayColumnaAplica()) {
+                    payload.pregunta_si_aplica = chkPreguntaAplica ? chkPreguntaAplica.checked : false;
                 }
 
                 const inpReintento = document.getElementById('eval-retry-days');

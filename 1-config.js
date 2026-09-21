@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-21-6';
+window.VERSION_APP = '2026-09-21-7';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -209,7 +209,7 @@ window.sanitizeForHTML = (str) => {
 // estadísticas para contar asignadas. Es una discrepancia que ya existía; se
 // respeta tal cual porque es la que decide lo que la gente ve en su panel, y
 // cambiarla movería las encuestas de sitio a todo el mundo.
-window.leTocaEstaEncuesta = (ev, empleado, tieneEquipo) => {
+window.esCandidataDeEncuesta = (ev, empleado, tieneEquipo) => {
     if (!ev || !empleado) return false;
     if (ev.mode === 'boss' && !tieneEquipo) return false;
 
@@ -251,6 +251,160 @@ window.leTocaEstaEncuesta = (ev, empleado, tieneEquipo) => {
     if (!acota(ev.target_departments, deptoDelEmpleado, 'SIN DEPARTAMENTO')) return false;
 
     return true;
+};
+
+// ==========================================
+// «¿TE APLICA ESTA ENCUESTA?»
+// ==========================================
+// A quién le toca una encuesta lo deciden hasta aquí tres cosas —el puesto, el
+// departamento y la lista de nombres—, y hay encuestas donde ninguna de las
+// tres lo sabe: quién trabaja en alturas, quién maneja montacargas, quién opera
+// la prensa. Esa lista no la tiene el catálogo y sí la tiene cada persona, así
+// que había que preguntárselo por fuera y escribirla a mano, encuesta por
+// encuesta y cada vez que alguien cambia de trabajo.
+//
+// Con la casilla puesta, la encuesta se dirige como siempre y **eso pasa a ser
+// la lista de candidatos**: a cada uno le sale la pregunta en sus pendientes y
+// su respuesta decide. El «sí» lo asigna; el «no» le quita el pendiente y la
+// encuesta deja de contar como suya —ni en su panel, ni en el padrón, ni en las
+// estadísticas—.
+//
+//   window.esCandidataDeEncuesta   a quién se le podría preguntar (la regla de siempre)
+//   window.leTocaEstaEncuesta      a quién le toca de verdad (ya con lo que contestó)
+//
+// El script es `sql/pregunta-si-aplica.sql` y se corre a mano. Sin él todo se
+// comporta como antes: la encuesta le toca a todos sus candidatos.
+// **El modo jefe se queda fuera**, y es la única pantalla donde la casilla no
+// hace nada: ahí quien contesta es el jefe sobre cada uno de sus colaboradores,
+// así que «¿te aplica?» no tiene a quién preguntarle —ni al jefe, que la
+// contesta de otros, ni al evaluado, que no la contesta—. Marcarla en una
+// encuesta de modo jefe no rompe nada; simplemente no pregunta.
+window.preguntaSiAplica = (ev) =>
+    !!ev && ev.pregunta_si_aplica === true && (ev.mode || 'self') !== 'boss';
+
+window.hayColumnaAplica = () => window.hayColumna('evaluations', 'pregunta_si_aplica');
+
+window.camposConAplica = (campos) =>
+    window.camposConColumna(campos, 'evaluations', 'pregunta_si_aplica');
+
+// Lo que contestó cada quien, por `encuesta|empleado`. Es null mientras nadie
+// lo haya pedido, que es lo que distingue «no se sabe» de «nadie ha decidido».
+window.DECISIONES_DE_APLICA = null;
+let promesaDecisionesAplica = null;
+
+// Se pide **una sola vez por sesión** —la promesa, no el resultado—, como las
+// ventanas de asistencia y los revisores de una clasificación, porque quien
+// pregunta lo hace sin poder esperar: `leTocaEstaEncuesta` es síncrona y la
+// llaman el badge del panel, los pendientes, el padrón y las estadísticas.
+window.cargarDecisionesDeAplica = (recargar) => {
+    if (recargar) { promesaDecisionesAplica = null; window.DECISIONES_DE_APLICA = null; }
+    if (promesaDecisionesAplica) return promesaDecisionesAplica;
+
+    promesaDecisionesAplica = sb.from('evaluaciones_aplica')
+        .select('evaluation_id, employee_id, aplica')
+        .then(({ data, error }) => {
+            if (error) {
+                // Sin la tabla —el script no se ha corrido— o sin red, el mapa
+                // se queda en null y todo se comporta como antes. Es preferible
+                // enseñarle la encuesta a alguien a quien quizá no le aplique
+                // que esconderle la suya a la plantilla entera porque una
+                // consulta no respondió.
+                window.DECISIONES_DE_APLICA = null;
+                return false;
+            }
+            const mapa = {};
+            (data || []).forEach(f => {
+                mapa[`${String(f.evaluation_id)}|${String(f.employee_id)}`] = f.aplica === true;
+            });
+            window.DECISIONES_DE_APLICA = mapa;
+            return true;
+        })
+        .catch(() => { window.DECISIONES_DE_APLICA = null; return false; });
+
+    return promesaDecisionesAplica;
+};
+
+// Lo que contestó esa persona de esa encuesta. Tiene **cuatro** respuestas y
+// las cuatro hacen falta:
+//
+//   true       dijo que sí: queda asignado.
+//   false      dijo que no: la encuesta deja de ser suya.
+//   null       todavía no lo ha dicho: ése es su pendiente.
+//   undefined  no se sabe, que la caché no está cargada.
+window.decisionDeAplica = (evaluationId, empleadoId) => {
+    const mapa = window.DECISIONES_DE_APLICA;
+    if (!mapa) return undefined;
+    const valor = mapa[`${String(evaluationId)}|${String(empleadoId)}`];
+    return valor === undefined ? null : valor;
+};
+
+// En qué punto está esa persona con esa encuesta, que es lo que miran las dos
+// pantallas que deciden pendientes con su propia copia del filtro de
+// destinatarios —el panel de pendientes y el badge— para no repetir la cadena
+// de casos:
+//
+//   'adelante'  la encuesta le toca y se comporta como cualquier otra.
+//   'preguntar' hay que preguntarle si le aplica: ése es el pendiente.
+//   'fuera'     dijo que no: no hay nada que pedirle.
+//
+// Sin la caché cargada devuelve siempre 'adelante', que es lo de antes.
+window.pasoDeAplica = (ev, empleadoId) => {
+    if (!window.preguntaSiAplica(ev)) return 'adelante';
+    const decision = window.decisionDeAplica(ev.id, empleadoId);
+    if (decision === undefined) return 'adelante';
+    if (decision === true) return 'adelante';
+    return decision === false ? 'fuera' : 'preguntar';
+};
+
+// Si a esta persona hay que preguntarle. Es candidata, la encuesta pregunta y
+// todavía no ha contestado.
+window.leTocaDecidirSiAplica = (ev, empleado, tieneEquipo) =>
+    !!empleado && window.preguntaSiAplica(ev) &&
+    window.esCandidataDeEncuesta(ev, empleado, tieneEquipo) &&
+    window.decisionDeAplica(ev.id, empleado.id) === null;
+
+// Si dijo que no le aplica. Lo mira la lista de encuestas, que la sigue
+// enseñando: sin eso, un toque en «No me aplica» la haría desaparecer para
+// siempre sin manera de volver atrás.
+window.descartoLaEncuesta = (ev, empleado, tieneEquipo) =>
+    !!empleado && window.preguntaSiAplica(ev) &&
+    window.esCandidataDeEncuesta(ev, empleado, tieneEquipo) &&
+    window.decisionDeAplica(ev.id, empleado.id) === false;
+
+// Guarda lo que contestó. **Cuenta las filas del `.select()`**: aquí escribe
+// alguien que no es administrador y una política de RLS que lo rechace no da
+// error, sólo afecta a cero filas, así que sin contarlas la pantalla diría que
+// quedó asignado mientras su pendiente vuelve en la siguiente recarga.
+window.guardarDecisionDeAplica = async (evaluationId, empleadoId, aplica) => {
+    const fila = {
+        evaluation_id: String(evaluationId),
+        employee_id: String(empleadoId),
+        aplica: !!aplica,
+        decidido_en: new Date().toISOString()
+    };
+    const { data, error } = await sb.from('evaluaciones_aplica')
+        .upsert(fila, { onConflict: 'evaluation_id,employee_id' })
+        .select();
+    if (error) throw error;
+    if (!data || data.length === 0) {
+        throw new Error('La base no guardó la respuesta. Falta correr sql/pregunta-si-aplica.sql o revisar sus políticas.');
+    }
+
+    // La caché se corrige en el acto: la pantalla no tiene que recargar y el
+    // resto de la aplicación —el badge, la lista, el padrón— ya lee lo nuevo.
+    if (window.DECISIONES_DE_APLICA) {
+        window.DECISIONES_DE_APLICA[`${String(evaluationId)}|${String(empleadoId)}`] = !!aplica;
+    }
+    return true;
+};
+
+// A quién le toca la encuesta de verdad: a quien es candidato y, si la encuesta
+// pregunta, dijo que sí. Quien no ha contestado todavía **no** está asignado
+// —lo suyo es la pregunta, no la encuesta—, así que no entra en el padrón ni
+// arrastra un pendiente de algo que quizá ni le aplique.
+window.leTocaEstaEncuesta = (ev, empleado, tieneEquipo) => {
+    if (!window.esCandidataDeEncuesta(ev, empleado, tieneEquipo)) return false;
+    return window.pasoDeAplica(ev, empleado.id) === 'adelante';
 };
 
 // Si esa persona tiene subordinados directos, que es lo que decide si le tocan
@@ -2844,6 +2998,10 @@ window.RASTROS_DEL_EMPLEADO = [
     { tabla: 'refacciones',           suyas: ['solicitante_id'], menciones: ['atendido_por_id', 'asignado_por_id'], que: 'solicitudes de refacciones' },
     { tabla: 'incident_signatures',   suyas: ['employee_id'],                                que: 'firmas de incidentes' },
     { tabla: 'evaluation_responses',  suyas: ['employee_id'],                                que: 'respuestas de encuestas' },
+    // Lo que contestó a «¿te aplica esta encuesta?». Es suyo y de nadie más, así
+    // que la fila entera se va con la ficha; si no, un alta futura con ese mismo
+    // número heredaría un «no me aplica» que nunca dijo.
+    { tabla: 'evaluaciones_aplica',   suyas: ['employee_id'],                                que: 'respuestas de «¿te aplica?»' },
     { tabla: 'scheduled_evaluations', suyas: ['employee_id'],                                que: 'encuestas programadas' },
     { tabla: 'objectives',            suyas: ['employee_id'],                                que: 'objetivos' },
     { tabla: 'hallazgos',             suyas: ['employee_id'], menciones: ['assigned_to'],    que: 'hallazgos' },

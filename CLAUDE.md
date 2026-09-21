@@ -1033,7 +1033,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   modo administrador, las de todo el mundo.
 
   ```js
-  window.estadoDeEncuestaEnLista(ev, { leToca, revisor, respuestas, porCalificar })
+  window.estadoDeEncuestaEnLista(ev, { leToca, revisor, respuestas, porCalificar,
+                                      decidir, descartada })
   // → { estado, pendiente, peso }
   ```
 
@@ -1056,6 +1057,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     así que sin esto una encuesta retirada pedía «Sin contestar» en rojo, o sea
     reclamaba una respuesta que ya no se puede dar. Que está apagada lo sigue
     diciendo su etiqueta «INACTIVA», y su renglón se va al final del grupo.
+
+  Los otros dos son de la encuesta que pregunta antes si le aplica —se cuenta
+  más abajo, con esa casilla— y son los únicos que no salen de las respuestas
+  sino de lo que dijo esa persona: **«Falta decir si te aplica»** es un pendiente
+  y se cuenta como tal, y **«Marcaste que no te aplica»** va con el neutro y al
+  final. Ese segundo es la razón de que la lista siga enseñando una encuesta que
+  ya no le toca a nadie: es la única puerta de vuelta, que desde su pantalla se
+  puede desdecir. En modo administrador no se dibujan ninguno de los dos —ahí la
+  lista es la de todo el mundo y no habla de quien mira—.
 
   Cinco cosas que hay que mantener:
 
@@ -3701,6 +3711,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   sobre todo lo demás), por puesto y por departamento; una lista vacía o con
   `'ALL'` no acota nada.
 
+  Esa acotación de tres reglas es hoy **`window.esCandidataDeEncuesta`**, y
+  `leTocaEstaEncuesta` es eso más lo que esa persona contestó a «¿te aplica esta
+  encuesta?» —se cuenta más abajo, con esa casilla—. Toda pantalla siguió
+  preguntando por `leTocaEstaEncuesta` y se enteró sola; quien necesite la lista
+  de **candidatos** —a quién se le preguntaría, que no es lo mismo que a quién le
+  toca— pregunta por la otra.
+
   **`is_obligatory` no tiene nada que ver con a quién le toca.** Significa que
   no se puede dejar sin contestar —así lo dice la casilla del formulario, «Si
   se desactiva, será opcional»—, y lo usan las estadísticas para el aviso de
@@ -3887,6 +3904,152 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   siempre— y **la casilla se queda apagada y desmarcada** diciendo qué falta
   (`avisarSiFaltaColumnaUnaRespuesta`), que es el mismo molde que la vigencia y
   el umbral.
+
+- **Una encuesta puede preguntar antes si le aplica a quien la recibe.** A quién
+  le toca lo deciden tres cosas —el puesto, el departamento y la lista de
+  nombres— y hay encuestas donde ninguna de las tres lo sabe: quién trabaja en
+  alturas, quién maneja montacargas, quién opera la prensa. Esa lista no la tiene
+  el catálogo y sí la tiene cada persona, así que había que preguntárselo por
+  fuera y escribirla a mano en «A quién va dirigida», encuesta por encuesta y
+  otra vez cada que alguien cambia de trabajo.
+
+  Es la casilla **«🙋 Pregunta si le aplica»** del grupo «Opciones» de la hoja de
+  crear y editar. Con ella puesta, la encuesta se dirige como siempre y **eso
+  pasa a ser la lista de candidatos**: a cada uno le sale la pregunta en sus
+  pendientes, y su respuesta decide.
+
+  - **Sí** → queda asignado, y de ahí en adelante la encuesta se comporta como
+    cualquier otra: le sale su pendiente, cuenta en su panel y entra en el padrón.
+  - **No** → se le quita el pendiente y la encuesta deja de ser suya: no cuenta
+    en su panel, ni en el padrón, ni en sus estadísticas, ni se le exige para
+    certificar su clasificación.
+
+  ```js
+  window.preguntaSiAplica(ev)                         // ¿esta encuesta pregunta?
+  window.esCandidataDeEncuesta(ev, emp, tieneEquipo)  // a quién se le preguntaría (la regla de siempre)
+  window.leTocaEstaEncuesta(ev, emp, tieneEquipo)     // a quién le toca de verdad
+  window.leTocaDecidirSiAplica(ev, emp, tieneEquipo)  // a quién le falta contestarla
+  window.descartoLaEncuesta(ev, emp, tieneEquipo)     // quién dijo que no
+  window.pasoDeAplica(ev, empleadoId)                 // 'adelante' | 'preguntar' | 'fuera'
+
+  await window.cargarDecisionesDeAplica()   // la caché; `true` la rehace
+  window.decisionDeAplica(evId, empId)      // true | false | null | undefined
+  await window.guardarDecisionDeAplica(evId, empId, aplica)
+  window.responderSiAplica(evId, aplica)    // los botones, en las dos pantallas
+  ```
+
+  **`leTocaEstaEncuesta` se partió en dos, y ahí está todo.** Lo que antes era
+  esa función es hoy `esCandidataDeEncuesta` —el puesto, el departamento y la
+  lista de nombres, sin tocar una coma— y `leTocaEstaEncuesta` es eso **más** lo
+  que contestó esa persona. Por eso no hubo que ir pantalla por pantalla: el
+  panel, la lista, el padrón, la certificación, el expediente y los cinco sitios
+  donde las estadísticas cuentan asignadas preguntan todos por ahí, y todos se
+  enteraron a la vez.
+
+  **Quien no ha contestado todavía no está asignado**, y eso es lo que separa
+  esta casilla de un simple filtro: lo suyo es la pregunta, no la encuesta. Si
+  contara como asignado, una encuesta dirigida a toda la plantilla arrastraría
+  455 personas en el padrón hasta que el último contestara, y su porcentaje no
+  diría nada.
+
+  **La decisión va en su propia tabla y no en `target_employees`.** Escribir ahí
+  a quien dice que sí parecería lo natural —es la columna de a quién va dirigida,
+  y es lo que hace el pase de lista al agregar a alguien— y rompería la encuesta
+  por dos lados. Una lista de nombres **manda sobre el puesto y el departamento**,
+  así que el primer «sí» de una encuesta dirigida a «todo PRODUCCION» la
+  congelaría en esa sola persona y nadie más volvería a verla —es la misma trampa
+  que el pase de lista avisa antes de congelar—. Y aquí escribe **cada empleado
+  la suya**: una columna de la fila de la encuesta la escriben todos a la vez y
+  el último en guardar se lleva por delante lo que contestaron los demás, que es
+  la lección de `consumo_por_dia`. Una fila por persona no se pisa.
+
+  **Se pregunta una vez, no por periodo.** Que la encuesta de alturas te aplique
+  es cosa de en qué trabajas, no del mes que corre: volver a preguntarlo cada
+  periodo sería un pendiente nuevo para repetir la misma respuesta. Por eso la
+  tabla no guarda periodo ninguno.
+
+  **Y por eso hay que poder desdecirse**, que es lo que evita el callejón sin
+  salida: un toque en «No me aplica» retira la encuesta para siempre, y sin
+  vuelta atrás quien se equivocó de botón —o cambió de trabajo— se queda sin
+  ella. La vuelta vive en **la pantalla de la encuesta**, y para llegar a ella
+  **la lista la sigue enseñando**: con el neutro, el renglón «Marcaste que no te
+  aplica» y al final de su clasificación. Al revés también —«Ya no me aplica»,
+  debajo del botón de responder— porque la asignación la pidió esa persona y no
+  la decidió nadie más. Lo contestado **no se borra**: se queda en su historial.
+
+  Seis cosas que hay que mantener:
+
+  - **La pregunta se dibuja en un solo sitio.** Sale en dos —la tarjeta del panel
+    de pendientes y la pantalla de la encuesta— y las dos llaman a
+    `window.bloqueDePreguntaAplica`: dos copias acabarían diciendo cosas
+    distintas de lo mismo. Sus dos botones **pesan igual** y van en la misma
+    fila: una encuesta que no te aplica no es un descuido ni la salida de
+    emergencia, es la mitad de lo que se está preguntando.
+  - **La caché se pide una vez por sesión** —la promesa, no el resultado—, como
+    las ventanas de asistencia y los revisores de una clasificación, porque
+    `leTocaEstaEncuesta` es síncrona y la llaman el badge del panel, los
+    pendientes y el padrón sin poder esperar. La piden
+    `cargarVistaPendientes`, `calcularPendientesBatch`, `cargarEncuestasAsignadas`,
+    `cargarVistaEvaluaciones`, `encuestaDeLaRespuesta`, `abrirExpedienteEmpleado`,
+    `abrirCertificacionPorClasificacion` y `cargarStatsEncuestasGlobales`.
+
+    **Mientras no esté cargada, la encuesta le toca a todos sus candidatos**, que
+    es lo de antes: `decisionDeAplica` devuelve `undefined` y `pasoDeAplica` dice
+    'adelante'. Equivocarse hacia enseñar la encuesta es preferible a esconderle
+    la suya a la plantilla entera porque una consulta no respondió —y es además
+    lo que deja la aplicación en pie sin el script corrido—.
+  - **Toda consulta que decida un pendiente encadena `camposConAplica`.** Es la
+    trampa de `requires_min_score` otra vez, y aquí muerde de los dos lados: sin
+    la columna, la encuesta que pregunta se le asigna a quien ni siquiera ha
+    dicho que le aplique, y la que alguien descartó le vuelve a salir. La
+    encadenan `cargarVistaPendientes`, `calcularPendientesBatch`,
+    `cargarEncuestasAsignadas`, `encuestaDeLaRespuesta`, `responderDirecto`, el
+    expediente y la pantalla de certificar.
+  - **El botón no es el guardia.** `responderDirecto` vuelve a preguntarlo antes
+    de abrir el cuestionario, igual que con «una sola respuesta» y por lo mismo:
+    un `disabled` se quita desde la consola, la hoja pudo quedarse abierta desde
+    antes y al panel de pendientes se llega por otras puertas.
+  - **El badge cuenta la pregunta como el pendiente que es.** Pasa por el mismo
+    `pasoDeAplica` que el panel de pendientes, así que las dos cifras no pueden
+    discrepar: la de quien no ha decidido suma uno, la de quien dijo que no no
+    suma nada.
+  - **Y el jefe no hereda lo que no es suyo.** Los dos sitios que hablan del
+    equipo —«Encuesta Atrasada» del panel de pendientes y el `countPorCalificar`
+    del badge— llevan el mismo freno: la encuesta que un colaborador descartó no
+    es un atraso de nadie, y la que todavía no ha contestado es pendiente suyo
+    —la pregunta— y no algo que su jefe le tenga que recordar. Los dos tienen su
+    propia copia del filtro de destinatarios, así que hay que ponérselo a mano:
+    no pasan por `leTocaEstaEncuesta`.
+  - **El modo jefe se queda fuera**, y lo decide `preguntaSiAplica` de una sola
+    línea: ahí quien contesta es el jefe sobre cada uno de sus colaboradores, así
+    que «¿te aplica?» no tiene a quién preguntarle —ni al jefe, que la contesta
+    de otros, ni al evaluado, que no la contesta—. Marcarla en una encuesta de
+    modo jefe no rompe nada; simplemente no pregunta.
+
+  **Y la pantalla de la encuesta dice a cuánta gente le aplica**, en el recuadro
+  «Le aplica a» (`window.bloqueDeQuienAplica`), con la misma forma que el pase de
+  lista: la cifra, la barra de un solo color —no hay ningún mínimo de «a cuánta
+  gente tiene que aplicarle», así que pintar de rojo un 40% sería inventarse un
+  umbral que nadie definió— y las tres listas de nombres. Hace falta porque una
+  encuesta que pregunta no tiene padrón hasta que la gente conteste: sin ese
+  recuadro no habría manera de saber si falta gente por contestar la pregunta o
+  es que de verdad le aplica a cuatro personas. **Es de quien la imparte** —el
+  administrador y quien la revisa, el mismo `puedeEditarDestinatarios` que decide
+  los nombres del pase de lista—, y sólo entonces se carga la plantilla: no se le
+  cobra la consulta a quien abre la encuesta a contestarla.
+
+  **Una copia sí hereda la casilla**, como «una sola respuesta» y al revés que la
+  fecha de vigencia: es una forma de ser de la encuesta. Lo que no hereda son las
+  respuestas —la copia es otra encuesta y vuelve a preguntar, que para eso se
+  hizo: quien cambió de trabajo desde la vuelta pasada contesta otra cosa—.
+
+  La tabla es `evaluaciones_aplica` y **está en `RASTROS_DEL_EMPLEADO`**, que es
+  lo que impide que un alta futura con el mismo número herede un «no me aplica»
+  que nunca dijo. El script es `sql/pregunta-si-aplica.sql` —la columna y la
+  tabla van juntas— y se corre a mano; se puede correr las veces que haga falta.
+  Sin él todo se comporta como antes y **la casilla se queda apagada y
+  desmarcada** diciendo qué falta (`avisarSiFaltaColumnaAplica`), que es el mismo
+  molde que la vigencia y el umbral.
 
 - **Desde cuándo aplica una encuesta se puede corregir a mano.** La aplicación
   la hacía empezar el día que se dio de alta, y eso no siempre es verdad. La

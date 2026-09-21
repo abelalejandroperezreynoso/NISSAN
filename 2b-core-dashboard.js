@@ -1487,9 +1487,14 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // revisa en la hoja de detalle: sin la columna, `revisoresDeEncuesta`
         // sólo vería los de la clasificación y enseñaría los heredados en una
         // encuesta que nombra a los suyos. Es la trampa de `requires_min_score`.
-        const campos = await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRevisores(
+        //
+        // Y `pregunta_si_aplica`, que es lo que decide si la encuesta es suya o
+        // todavía le está preguntando: sin la columna, `leTocaEstaEncuesta`
+        // se la cuenta como asignada a quien ni siquiera ha contestado que le
+        // aplique. La trampa de siempre.
+        const campos = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRevisores(
             await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(
-                'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments'))))));
+                'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments')))))));
 
         // Igual que en el panel de pendientes: las ventanas de las encuestas
         // que pasan lista se piden antes, porque `esEvaluacionPendiente` las
@@ -1504,6 +1509,11 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // Quién revisa puede venir de la clasificación, y `revisoresDeEncuesta`
         // lo pregunta sin poder esperar cuando se abre la hoja de detalle.
         await window.cargarRevisoresDeClasificaciones();
+
+        // Y lo que se contestó a «¿te aplica esta encuesta?», que es lo que
+        // separa la encuesta asignada de la que todavía está preguntando:
+        // `leTocaEstaEncuesta` lo mira sin poder esperar.
+        if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
 
         const { data: encuestas, error } = await sb.from('evaluations')
             .select(campos)
@@ -3279,8 +3289,14 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
         // llena antes de contar nada.
         await window.cargarRevisoresDeClasificaciones();
 
-        const camposEvals = await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
-            'id, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at'))))));
+        // Y lo que cada quien contestó a «¿te aplica esta encuesta?»: el badge
+        // cuenta la pregunta como el pendiente que es, y no cuenta la encuesta
+        // de quien dijo que no. Es la misma caché que mira el panel de
+        // pendientes, así que las dos cifras no pueden discrepar.
+        if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+
+        const camposEvals = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
+            'id, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))))));
         const { data: activeEvalsDb } = await sb.from('evaluations')
             .select(camposEvals)
             .eq('active', true);
@@ -3333,7 +3349,13 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                     const targetsNormDeptos = targetsDeptos.map(t => String(t).toUpperCase().trim());
                     const matchDepto = targetsDeptos.length === 0 || targetsDeptos.includes('ALL') || targetsNormDeptos.includes(deptoEmpleado);
 
-                    return matchPuesto && matchDepto;
+                    if (!(matchPuesto && matchDepto)) return false;
+
+                    // Quien dijo que no le aplica no tiene nada pendiente de
+                    // esta encuesta; quien no lo ha dicho todavía, sí: la
+                    // pregunta. Las dos las decide `window.pasoDeAplica`, que
+                    // es por donde pasa también el panel de pendientes.
+                    return !window.pasoDeAplica || window.pasoDeAplica(ev, empStrId) !== 'fuera';
                 });
 
                 if (evalsQueLeTocan.length > 0) {
@@ -3346,6 +3368,9 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                         .in('evaluation_id', idsEvals);
                     
                     countEvals = evalsQueLeTocan.filter(ev => {
+                                            // Todavía no ha dicho si le aplica: ése es el
+                                            // pendiente, y se cuenta como uno.
+                                            if (window.pasoDeAplica && window.pasoDeAplica(ev, empStrId) === 'preguntar') return true;
                                             if (window.esEvaluacionPendiente) {
                                                 // Usamos la nueva lógica unificada (Retorna un objeto, por lo que leemos .mostrar)
                                                 return window.esEvaluacionPendiente(respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss').mostrar;
@@ -3479,6 +3504,14 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                                                             const subPuesto = (sub.puesto || "").trim().toUpperCase();
                                                             aplicaSub = targets.length === 0 || targets.includes('ALL') || targetsNorm.includes(subPuesto);
                                                         }
+
+                                                        // Y si la encuesta pregunta antes si le aplica, sólo
+                                                        // cuenta la de quien dijo que sí: la que ese
+                                                        // colaborador descartó no es trabajo de nadie, y la
+                                                        // que todavía no ha contestado es pendiente suyo
+                                                        // —la pregunta— y no de su jefe.
+                                                        if (aplicaSub && window.pasoDeAplica &&
+                                                            window.pasoDeAplica(ev, sub.id) !== 'adelante') return;
 
                                                         if(aplicaSub) {
                                                             const subResps = teamResps ? teamResps.filter(r => String(r.employee_id) === String(sub.id)) : [];

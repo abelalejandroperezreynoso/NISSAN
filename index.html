@@ -18,7 +18,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-09-21-6">
+    <link rel="stylesheet" href="estilos.css?v=2026-09-21-7">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -611,6 +611,18 @@
                         </span>
                     </label>
                     <p id="aviso-una-respuesta-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/una-sola-respuesta.sql</code> en Supabase para poder usarla.</p>
+                    <!-- Quien la recibe dice antes si le aplica. La encuesta se
+                         dirige como siempre y eso pasa a ser la lista de
+                         candidatos; sólo queda asignado quien conteste que sí.
+                         Ver `window.pasoDeAplica` en 1-config.js. -->
+                    <label class="eval-opcion" id="opcion-pregunta-aplica">
+                        <input type="checkbox" id="chk-eval-pregunta-aplica">
+                        <span class="eval-opcion-texto">
+                            <span class="eval-opcion-titulo">🙋 Pregunta si le aplica</span>
+                            <span class="eval-opcion-ayuda">Antes de pedirla se le pregunta a cada quien si le aplica. Sólo queda asignado el que diga que sí; al que diga que no se le quita el pendiente.</span>
+                        </span>
+                    </label>
+                    <p id="aviso-pregunta-aplica-no-disponible" class="form-ayuda" style="display:none; color:#b45309;">Falta correr <code>sql/pregunta-si-aplica.sql</code> en Supabase para poder usarla.</p>
                     <label class="eval-opcion">
                         <input type="checkbox" id="chk-eval-activa" checked>
                         <span class="eval-opcion-texto">
@@ -1097,22 +1109,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-09-21-6"></script>
-    <script src="2a-core-nav.js?v=2026-09-21-6"></script>
-    <script src="2b-core-dashboard.js?v=2026-09-21-6"></script>
-    <script src="3-incidentes.js?v=2026-09-21-6"></script>
-    <script src="4-evaluaciones-base.js?v=2026-09-21-6"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-09-21-6"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-09-21-6"></script>
-    <script src="5-objetivos.js?v=2026-09-21-6"></script>
-    <script src="6-calendario.js?v=2026-09-21-6"></script>
-    <script src="7-pendientes.js?v=2026-09-21-6"></script>
-    <script src="8-hallazgos.js?v=2026-09-21-6"></script>
-    <script src="9-estadisticas.js?v=2026-09-21-6"></script>
+    <script src="1-config.js?v=2026-09-21-7"></script>
+    <script src="2a-core-nav.js?v=2026-09-21-7"></script>
+    <script src="2b-core-dashboard.js?v=2026-09-21-7"></script>
+    <script src="3-incidentes.js?v=2026-09-21-7"></script>
+    <script src="4-evaluaciones-base.js?v=2026-09-21-7"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-09-21-7"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-09-21-7"></script>
+    <script src="5-objetivos.js?v=2026-09-21-7"></script>
+    <script src="6-calendario.js?v=2026-09-21-7"></script>
+    <script src="7-pendientes.js?v=2026-09-21-7"></script>
+    <script src="8-hallazgos.js?v=2026-09-21-7"></script>
+    <script src="9-estadisticas.js?v=2026-09-21-7"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-09-21-6"></script>
-    <script src="13-gestion.js?v=2026-09-21-6"></script>
-    <script src="10-refacciones.js?v=2026-09-21-6"></script> 
+    <script src="12-almacenamiento.js?v=2026-09-21-7"></script>
+    <script src="13-gestion.js?v=2026-09-21-7"></script>
+    <script src="10-refacciones.js?v=2026-09-21-7"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {
