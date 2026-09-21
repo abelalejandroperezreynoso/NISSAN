@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-21-7';
+window.VERSION_APP = '2026-09-21-8';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -2264,6 +2264,99 @@ window.nombresDeEmpleados = (ids) => (ids || []).map(id => {
     return emp && emp.name ? emp.name : `ID ${id}`;
 }).join(', ');
 
+// ==========================================
+// QUIÉN REVISÓ UNA RESPUESTA
+// ==========================================
+// Una respuesta calificada decía qué sacó y en qué estado quedó, pero no quién
+// dio ese veredicto: un «Mal Revisada» acusaba a alguien sin decir a quién, y
+// con varios revisores nombrados no había manera de saber cuál de ellos la
+// calificó. Se apunta al guardar la revisión, en `evaluation_responses`.
+//
+// El script es `sql/quien-reviso.sql` y se corre a mano. Sin él no se apunta a
+// nadie y la pantalla no dice quién revisó, que es lo de antes.
+window.hayColumnaRevisor = () => window.hayColumna('evaluation_responses', 'reviewed_by');
+
+// Las dos columnas viajan juntas, como la lista de revisores y su apunte: una
+// firma sin fecha no dice cuándo se dio el veredicto, y una fecha sin firma no
+// dice de quién es.
+window.camposConRevisor = async (campos) =>
+    window.camposConColumna(
+        await window.camposConColumna(campos, 'evaluation_responses', 'reviewed_by'),
+        'evaluation_responses', 'reviewed_at');
+
+// Si esta respuesta se calificó ella sola. Lo dicen **sus propias notas**: el
+// envío las escribe con `auto: true` cuando la pregunta se puntúa sola —una
+// escala, unas opciones con su respuesta marcada— y una hecha sólo de las que
+// dejan constancia llega sin ninguna nota, que es el mismo caso: ahí tampoco
+// hubo nadie que decidiera nada.
+//
+// Hace falta para no llamar «se calificó sola» a lo que revisó una persona
+// antes de que existiera la columna, que es todo lo que hay guardado hoy.
+window.respuestaSeCalificoSola = (resp) => {
+    let grades = resp ? resp.grades_json : null;
+    if (typeof grades === 'string') { try { grades = JSON.parse(grades); } catch (e) { grades = null; } }
+    if (!grades || typeof grades !== 'object') return true;
+    const notas = Object.values(grades).filter(g => g && typeof g === 'object');
+    return notas.every(g => g.auto === true);
+};
+
+// Quién revisó una respuesta, para decirlo en pantalla. Devuelve siempre un
+// objeto con su `estado`, porque **las cuatro respuestas significan cosas
+// distintas** y cada pantalla decide cuáles enseña:
+//
+//   'firmada'     la revisó alguien y quedó apuntado: `nombre`, `id`, `fecha`.
+//   'sola'        se calificó sola; no hay revisor que apuntar.
+//   'sin-apunte'  la revisó una persona antes de que se guardara quién.
+//   'sin-revisar' todavía no la ha revisado nadie, y su estado ya lo dice.
+//
+// Un id que ya no esté en la plantilla se enseña tal cual —«ID 123»— en vez de
+// desaparecer, igual que en `nombresDeEmpleados`: esa firma es el registro de
+// quien dio el veredicto y vale aunque esa persona se haya dado de baja.
+window.selloDeRevision = (resp) => {
+    const revisada = !!resp && (resp.review_status === 'Revisado'
+        || resp.review_status === 'Certificada' || resp.review_status === 'Mal Revisada');
+    if (!revisada) return { estado: 'sin-revisar' };
+
+    const quien = resp.reviewed_by === null || resp.reviewed_by === undefined
+        ? '' : String(resp.reviewed_by).trim();
+    if (!quien) {
+        return { estado: window.respuestaSeCalificoSola(resp) ? 'sola' : 'sin-apunte' };
+    }
+
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === quien);
+    const cuando = resp.reviewed_at ? new Date(resp.reviewed_at) : null;
+    return {
+        estado: 'firmada',
+        id: quien,
+        nombre: (emp && emp.name) || (window.employeeNameMap || {})[quien] || `ID ${quien}`,
+        fecha: (cuando && !isNaN(cuando)) ? cuando : null
+    };
+};
+
+// El sello en una línea, que es lo que escriben las pantallas. `conFecha` en
+// false lo deja en el nombre a secas, para donde no cabe más —el renglón de
+// una lista—.
+window.textoDeRevision = (resp, conFecha = true) => {
+    const sello = window.selloDeRevision(resp);
+    if (sello.estado === 'sin-revisar') return '';
+    if (sello.estado === 'sola') return 'Se calificó sola';
+    if (sello.estado === 'sin-apunte') return 'Sin registro de quién la revisó';
+    const dia = (conFecha && sello.fecha)
+        ? ` · ${sello.fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+        : '';
+    return `Revisó ${sello.nombre}${dia}`;
+};
+
+// Lo que se le escribe a una respuesta al guardar su revisión. Va aquí y no en
+// la pantalla porque lo escriben **dos sitios** —la hoja de calificar y el
+// cierre en lote de una certificación— y dos copias acabarían apuntando cosas
+// distintas. Sin la columna devuelve `{}` y no se escribe nada, que es lo de
+// antes.
+window.selloParaGuardar = async (revisorId) => {
+    if (!(await window.hayColumnaRevisor())) return {};
+    return { reviewed_by: String(revisorId), reviewed_at: new Date().toISOString() };
+};
+
 // De todas las encuestas, las que esta persona revisa por nombramiento. Es lo
 // que convierte a alguien en revisor sin ser jefe de nadie.
 window.encuestasQueRevisa = (encuestas, revisorId) =>
@@ -2997,7 +3090,10 @@ window.normalizarIdsLineas = (valor) => {
 window.RASTROS_DEL_EMPLEADO = [
     { tabla: 'refacciones',           suyas: ['solicitante_id'], menciones: ['atendido_por_id', 'asignado_por_id'], que: 'solicitudes de refacciones' },
     { tabla: 'incident_signatures',   suyas: ['employee_id'],                                que: 'firmas de incidentes' },
-    { tabla: 'evaluation_responses',  suyas: ['employee_id'],                                que: 'respuestas de encuestas' },
+    // `reviewed_by` va en `menciones` y no en `suyas`: la respuesta es de quien
+    // la contestó, así que borrar la ficha del revisor no puede llevarse por
+    // delante el trabajo de un tercero —sólo se le desliga la firma—.
+    { tabla: 'evaluation_responses',  suyas: ['employee_id'], menciones: ['reviewed_by'], que: 'respuestas de encuestas' },
     // Lo que contestó a «¿te aplica esta encuesta?». Es suyo y de nadie más, así
     // que la fila entera se va con la ficha; si no, un alta futura con ese mismo
     // número heredaría un «no me aplica» que nunca dijo.

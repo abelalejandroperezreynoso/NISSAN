@@ -1887,7 +1887,16 @@ window.renderizarListaRespuestas = () => {
                          (isMalRevisada ? '<span style="color:#7e22ce; font-weight:bold; font-size:0.75rem;">Mal Revisada</span>' : 
                          '<span style="color:#ea580c; font-weight:bold; font-size:0.75rem;">En espera</span>')));
         
-        return `<div class="incident-card" style="border-left: 5px solid ${colorBorde}; padding: 15px; cursor:pointer;" onclick='verDetalleRespuesta(${safeJson})'><div style="display:flex; justify-content:space-between; align-items:center;"><div><div style="color:#334155; font-size:1rem; margin-bottom:4px;">${tituloCard} ${scoreBadge}</div><div class="card-meta">${fecha} • ${textoEstado}</div></div><div style="color:#cbd5e1; font-size:1.4rem; line-height:1;">&rsaquo;</div></div></div>`;
+        // Quién la revisó, detrás del estado. Sólo la firmada: en una lista,
+        // «Se calificó sola» y «Sin registro» no ayudan a encontrar nada y se
+        // llevarían el renglón entero. Por el nombre de pila —`split(' ')[0]`,
+        // como bajo los avatares del equipo— que ahí no sobra ancho.
+        const selloFila = window.selloDeRevision(r);
+        const revisorEnLista = selloFila.estado === 'firmada'
+            ? ` • <span style="color:#166534;">Revisó ${window.sanitizeForHTML(String(selloFila.nombre).split(' ')[0])}</span>`
+            : '';
+
+        return `<div class="incident-card" style="border-left: 5px solid ${colorBorde}; padding: 15px; cursor:pointer;" onclick='verDetalleRespuesta(${safeJson})'><div style="display:flex; justify-content:space-between; align-items:center;"><div><div style="color:#334155; font-size:1rem; margin-bottom:4px;">${tituloCard} ${scoreBadge}</div><div class="card-meta">${fecha} • ${textoEstado}${revisorEnLista}</div></div><div style="color:#cbd5e1; font-size:1.4rem; line-height:1;">&rsaquo;</div></div></div>`;
     };
 
     const pendientesDeRevisar = responses.filter(r =>
@@ -1944,6 +1953,33 @@ window.verDetalleRespuesta = async (resp) => {
                 : 'Solo el supervisor directo puede calificar';
              dateInputHtml += `<div style="margin-top:10px; padding:10px; background:#fef3c7; color:#b45309; border-radius:6px; font-size:0.85rem;">Nota: ${quien}.</div>`;
         }
+    }
+
+    // **Quién revisó esta respuesta**, debajo de la fecha: son los dos datos de
+    // cuándo pasó cada cosa —cuándo se contestó y cuándo se calificó— y aquí
+    // están juntos. No va en el encabezado, que ya lleva de quién es la
+    // respuesta, su departamento y la cifra: medido a 375px, un nombre más ahí
+    // echa la cruz fuera de la hoja.
+    //
+    // Los cuatro estados de `selloDeRevision` se reparten así: la firmada
+    // dice el nombre y la fecha, las otras dos dicen lo que pasó con todas las
+    // letras —«Se calificó sola», «Sin registro de quién la revisó»— y la que
+    // nadie ha revisado no dibuja nada, que eso ya lo dice el resto de la hoja.
+    const selloRevision = window.selloDeRevision(resp);
+    let selloRevisionHtml = '';
+    if (selloRevision.estado !== 'sin-revisar') {
+        const firmada = selloRevision.estado === 'firmada';
+        const dicho = firmada
+            ? `Revisó <b>${window.sanitizeForHTML(selloRevision.nombre)}</b>`
+            : window.sanitizeForHTML(window.textoDeRevision(resp));
+        const cuando = (firmada && selloRevision.fecha)
+            ? `<span class="sello-revision-fecha">${selloRevision.fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>`
+            : '';
+        selloRevisionHtml = `
+            <div class="sello-revision${firmada ? ' sello-revision--firmada' : ''}">
+                <span class="sello-revision-texto">${dicho}</span>
+                ${cuando}
+            </div>`;
     }
 
     if (esAdminTotal) {
@@ -2105,6 +2141,7 @@ window.verDetalleRespuesta = async (resp) => {
             <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
                 <div style="margin-bottom:20px;">
                     ${dateInputHtml}
+                    ${selloRevisionHtml}
                 </div>
                 ${fotoAreaHtml}
                 ${descHtml}
@@ -2660,9 +2697,17 @@ window.guardarCalificacionAdmin = async () => {
             if (g && typeof g === 'object' && q.question_text) g.question = q.question_text;
         });
 
+        // **Y quién la revisó.** Sin esta firma, un «Mal Revisada» acusa a
+        // alguien sin decir a quién y una encuesta con varios revisores
+        // nombrados no dice cuál de ellos la calificó. Se apunta a quien tiene
+        // la sesión abierta —el que pulsó el botón—, y sin la columna
+        // `selloParaGuardar` devuelve `{}` y no se escribe nada, que es lo de
+        // antes: la trampa de siempre, resuelta donde no se puede olvidar.
+        const quienRevisa = JSON.parse(localStorage.getItem("usuarioLogueado"));
         const updates = {
             grades_json: window.gradesTemp,
-            review_status: 'Revisado'
+            review_status: 'Revisado',
+            ...(await window.selloParaGuardar(quienRevisa.id))
         };
         
         if (window.modoAdminActivo) {
@@ -2705,8 +2750,7 @@ window.guardarCalificacionAdmin = async () => {
         
         if(window.invalidarCacheDashboard) window.invalidarCacheDashboard();
         
-        const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
-        if (user && window.calcularPendientesBatch) await window.calcularPendientesBatch([user.id]);
+        if (quienRevisa && window.calcularPendientesBatch) await window.calcularPendientesBatch([quienRevisa.id]);
 
         alert("Calificación guardada correctamente.");
         window.evalCache = null;

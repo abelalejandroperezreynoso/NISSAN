@@ -2264,6 +2264,88 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   lo pone con `window.ajustarMaximoDeEscala`, que devuelve a su sitio las
   etiquetas ya escritas: `renderConfiguracionEscala` rehace esos campos vacíos.
 
+- **Y quién la revisó queda firmado en la respuesta.** Una respuesta calificada
+  decía qué sacó y en qué estado quedó, pero no quién dio ese veredicto: un «Mal
+  Revisada» acusaba a alguien sin decir a quién, y con varios revisores
+  nombrados no había manera de saber cuál de ellos la calificó. Son dos columnas
+  de `evaluation_responses` —`reviewed_by` y `reviewed_at`— que escribe
+  «Guardar Revisión», y su script es `sql/quien-reviso.sql`, que se corre a mano.
+
+  ```js
+  window.selloDeRevision(resp)      // { estado, id, nombre, fecha }
+  window.textoDeRevision(resp, conFecha)
+  window.respuestaSeCalificoSola(resp)
+  await window.selloParaGuardar(revisorId)   // lo que se le escribe; {} sin la columna
+  window.hayColumnaRevisor()  window.camposConRevisor(campos)
+  ```
+
+  **Una columna nula significa algo, y hay tres cosas distintas que la dejan
+  así.** De ahí que `selloDeRevision` no devuelva un nombre o `null` sino un
+  `estado`, que es lo que separa los casos que cada pantalla tiene que decir con
+  palabras distintas:
+
+  - **`'firmada'`** — la revisó alguien y quedó apuntado. Es la única que dice un
+    nombre.
+  - **`'sola'`** — se calificó sola. Lo dicen **sus propias notas**: el envío las
+    escribe con `auto: true` cuando la pregunta se puntúa sola —una escala, unas
+    opciones con su respuesta marcada—, y una hecha sólo de las que dejan
+    constancia llega sin ninguna nota, que es el mismo caso. Ahí no hay revisor
+    que apuntar y por eso el envío **no sella**.
+  - **`'sin-apunte'`** — la revisó una persona antes de que existiera la columna,
+    que es **todo lo que hay guardado hoy**. Sin este caso, cada respuesta
+    anterior al cambio diría «Se calificó sola», que es falso y además borra el
+    trabajo de quien sí la revisó. Se distingue mirando si alguna de sus notas
+    **no** trae `auto`.
+  - **`'sin-revisar'`** — nadie la ha revisado todavía, y eso ya lo dice su
+    `review_status`: aquí no se dibuja nada.
+
+  Cinco cosas que hay que mantener:
+
+  - **Cambiar el estado no toca la firma.** «Mal Revisada» significa que quien
+    la calificó lo hizo mal, así que borrar ahí su nombre sería quitar justo el
+    dato que le da sentido al estado; y anular o certificar es otro veredicto, no
+    una revisión —certificar ya deja su propia acta, con su `certificado_por`—.
+    Por eso `cambiarEstadoRespuesta` y el cierre en lote de una certificación no
+    escriben estas dos columnas.
+  - **Se sella en un solo sitio** (`selloParaGuardar`), y es a propósito: lo
+    escribe quien guarda la revisión y nadie más, así que no hay dos maneras de
+    apuntar lo mismo. Sin la columna devuelve `{}` y el guardado sigue como
+    antes.
+  - **Las dos columnas viajan juntas** (`camposConRevisor`), como la lista de
+    revisores y su apunte: una firma sin fecha no dice cuándo se dio el veredicto
+    y una fecha sin firma no dice de quién es. La encadenan las dos consultas de
+    pendientes de revisión de `7-pendientes.js` —es desde donde se abre una «Mal
+    Revisada», que llega a esa lista precisamente para ver quién la calificó
+    mal—; las de la hoja de una encuesta van con `select('*')` y ya la traen.
+  - **`reviewed_by` va en la mitad de `menciones` de `RASTROS_DEL_EMPLEADO`**, no
+    en `suyas`: la respuesta es de quien la contestó, así que borrar la ficha del
+    revisor sólo le desliga la firma y no se lleva por delante el trabajo de un
+    tercero.
+  - **Un revisor dado de baja se enseña por su id** —«ID 123»— en vez de
+    desaparecer, igual que en `nombresDeEmpleados`: esa firma es el registro de
+    quien dio el veredicto y vale aunque esa persona ya no esté.
+
+  **Se enseña en dos sitios y de dos maneras.** En la hoja de detalle de la
+  respuesta va **debajo de la fecha** (`.sello-revision`), que es donde están
+  juntos los dos datos de cuándo pasó cada cosa —cuándo se contestó y cuándo se
+  calificó—; no en el encabezado, que ya lleva de quién es la respuesta, su
+  departamento y la cifra, y medido a 375px un nombre más ahí echa la cruz fuera
+  de la hoja. Ahí salen los tres estados, con el nombre recortado con «…» antes
+  que partir el renglón. En el **renglón de la lista de respuestas** va detrás
+  del estado y **sólo la firmada**: en una lista, «Se calificó sola» y «Sin
+  registro» no ayudan a encontrar nada y se llevarían el renglón entero. Por el
+  nombre de pila, que ahí no sobra ancho.
+
+  **`reviewed_at` no es `submitted_at`**, y por eso se guarda: el plazo de
+  reintento se cuenta hoy desde el envío precisamente porque la base no guardaba
+  cuándo se calificó (se cuenta más arriba, con `retry_days`). Con esta columna
+  ya existe el dato, aunque el plazo siga contándose como antes —cambiarlo
+  movería de sitio los pendientes de todo el mundo—.
+
+  Sin correr el script todo se comporta como antes: no se apunta a nadie, las
+  consultas no piden las columnas y las respuestas ya revisadas caen en
+  `'sin-apunte'`, que lo dice con esas palabras.
+
 - **Quién califica una respuesta.** Tampoco lo dice ninguna tabla por defecto:
   la califica el **jefe inmediato** de quien contestó, y esa regla la sostiene
   el código. Una encuesta puede en cambio nombrar a sus propios revisores en

@@ -803,8 +803,15 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                 // Lo del equipo directo. Cuáles de éstas siguen siendo suyas
                 // lo decide `agregarPendientesDeRevision`.
+                //
+                // Con la firma de quién revisó, que es lo que enseña la hoja de
+                // detalle al abrirla desde aquí: una «Mal Revisada» llega a esta
+                // lista precisamente para saber quién la calificó mal, y sin la
+                // columna en la consulta ese renglón no se dibujaría. Lo arma
+                // `camposConRevisor`, que la deja fuera mientras el script no se
+                // haya corrido.
                 const { data: evalsPorRevisar } = await sb.from('evaluation_responses')
-                    .select('id, submitted_at, employee_id, evaluation_id, answers_json, grades_json, review_status, evaluations(title, category, active)')
+                    .select(await window.camposConRevisor('id, submitted_at, employee_id, evaluation_id, answers_json, grades_json, review_status, evaluations(title, category, active)'))
                     .in('review_status', ['Pendiente', 'Mal Revisada'])
                     .in('employee_id', equipoDirectoIds)
                     .order('submitted_at', { ascending: true });
@@ -820,7 +827,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
             if (encuestasQueRevisoYo.length > 0) {
                 const { data: porNombramiento } = await sb.from('evaluation_responses')
-                    .select('id, submitted_at, employee_id, evaluation_id, answers_json, grades_json, review_status, evaluations(title, category, active)')
+                    .select(await window.camposConRevisor('id, submitted_at, employee_id, evaluation_id, answers_json, grades_json, review_status, evaluations(title, category, active)'))
                     .in('review_status', ['Pendiente', 'Mal Revisada'])
                     .in('evaluation_id', encuestasQueRevisoYo.map(ev => ev.id))
                     .neq('employee_id', user.id)
