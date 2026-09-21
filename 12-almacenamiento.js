@@ -208,8 +208,8 @@ window.fotosUsadasEnRespuestas = async () => {
 // tabla, un valor no convierte— y no cuesta nada guardarlo.
 window.falloDeLaBase = {};
 
-window.pedirALaBase = async (funcion) => {
-    const { data, error } = await sb.rpc(funcion);
+window.pedirALaBase = async (funcion, argumentos) => {
+    const { data, error } = argumentos ? await sb.rpc(funcion, argumentos) : await sb.rpc(funcion);
     if (error) {
         window.falloDeLaBase[funcion] = error.message || String(error);
         console.warn(`Consumo: ${funcion}() no respondió →`, error);
@@ -222,11 +222,21 @@ window.pedirALaBase = async (funcion) => {
 // Lo que se le dice a quien mira cuando una de esas funciones no respondió.
 // PostgREST distingue el «no existe» de todo lo demás con su propio código, y
 // son dos consejos distintos: uno se arregla corriendo el script y el otro no.
+// **De qué script es cada función**, que ya no son todas del mismo. Mandar a
+// correr el que no es se parece demasiado a lo que esta nota vino a evitar: una
+// vuelta perdida al editor SQL de Supabase. Lo que no esté aquí es del de
+// siempre, que es donde nacieron las cuatro primeras.
+window.SCRIPT_DE_FUNCION = {
+    consumo_por_dia: 'sql/consumo-datos.sql',
+    sumar_consumo: 'sql/consumo-datos.sql'
+};
+
 window.notaDeFallo = (funcion) => {
     const msg = window.falloDeLaBase[funcion];
-    if (!msg) return `Corre <b>sql/consumo-almacenamiento.sql</b> en Supabase para que la cuente la base.`;
+    const script = window.SCRIPT_DE_FUNCION[funcion] || 'sql/consumo-almacenamiento.sql';
+    if (!msg) return `Corre <b>${script}</b> en Supabase para que la cuente la base.`;
     if (/could not find|does not exist|schema cache/i.test(msg))
-        return `Falta la función <b>${funcion}()</b>: corre <b>sql/consumo-almacenamiento.sql</b> en Supabase.`;
+        return `Falta la función <b>${funcion}()</b>: corre <b>${script}</b> en Supabase.`;
     // Un tiempo agotado no es un permiso ni un script que falte: la consulta
     // empezó y no acabó a tiempo. En `tamano_buckets` eso significa que
     // `storage.objects` tiene demasiadas filas para recorrerlas dentro del plazo
@@ -351,7 +361,23 @@ window.tomarMedidaDeConsumo = async () => {
 
     await revisarBucket(window.BUCKET_FOTOS_EVAL, window.fotosUsadasEnRespuestas);
 
+    // Lo que la aplicación se ha bajado en este ciclo, que es la tercera cuota
+    // y la única que se gasta sola. Se pide ya sumado por día: con ochenta
+    // aparatos el mes son miles de filas, y traérselas para dibujar treinta
+    // puntos sería gastar en la consulta justo lo que se está midiendo.
+    const ciclo = window.cicloDeConsumo();
+    const porDia = await window.pedirALaBase('consumo_por_dia', {
+        p_desde: window.diaLocal(ciclo.inicio),
+        p_hasta: window.diaLocal(ciclo.fin)
+    });
+
     return {
+        ciclo: ciclo,
+        egreso: Array.isArray(porDia)
+            ? porDia.map(f => ({ dia: String(f.dia).split('T')[0],
+                                 bytes: Number(f.bytes) || 0,
+                                 dispositivos: Number(f.dispositivos) || 0 }))
+            : null,
         buckets: buckets,
         desdeLaBase: desdeLaBase,
         archivos: buckets.reduce((s, b) => s + b.bytes, 0),
@@ -538,6 +564,234 @@ window.antiguedadDeLaMedida = (fecha) => {
     return `hace ${horas} h`;
 };
 
+// ------------------------------------------------------------------
+// LO QUE SE BAJA CADA MES
+// ------------------------------------------------------------------
+// Es la tercera cuota y **la única con reloj**: los archivos y la base crecen
+// despacio y se quedan donde estén, mientras que el tráfico se reinicia cada
+// ciclo y se gasta solo, a razón de lo que la plantilla abra la aplicación. Por
+// eso su tarjeta va la primera: es la que puede reventar este mes.
+//
+// Y por eso lleva gráfica y las otras dos no. Un total a mitad de mes no dice
+// nada —2 GB el día 5 es un problema y el día 28 no lo es—, así que lo que hay
+// que ver es **cómo se va acumulando contra la cuota** y a qué ritmo: eso es lo
+// que avisa con tiempo de tomar contramedidas, que es a lo que se vino.
+
+// El ritmo del ciclo llevado hasta el final. Se divide por los días **corridos
+// de verdad**, con su fracción: contando hoy como un día entero cuando van tres
+// horas, la proyección sale optimista justo el día en que hay que reaccionar.
+//
+// Los primeros días no se proyecta: con medio día corrido, una foto de más
+// multiplica por sesenta y el número diría cualquier cosa. Ahí lo que se lee es
+// la línea.
+window.MINIMO_PARA_PROYECTAR = 1.5;   // días corridos
+
+window.proyeccionDeConsumo = (total, ciclo, ahora) => {
+    if (!ciclo || !(total > 0)) return null;
+    const dia = 24 * 60 * 60 * 1000;
+    const corridos = ((ahora instanceof Date ? ahora : new Date()) - ciclo.inicio) / dia;
+    if (!(corridos >= window.MINIMO_PARA_PROYECTAR)) return null;
+    return total * (ciclo.dias / corridos);
+};
+
+// El color de una cifra contra su cuota, que es el de `barraDeCuota`: verde
+// hasta el 70%, ámbar hasta el 90 y rojo de ahí. Vive aparte porque la
+// proyección lo necesita sin barra que pintar.
+window.colorDeCuota = (bytes, cuota) => {
+    const parte = cuota > 0 ? bytes / cuota : 0;
+    return parte >= 0.9 ? '#dc2626' : (parte >= 0.7 ? '#d97706' : '#16a34a');
+};
+
+// Un día del ciclo en corto: «12 sep».
+window.diaCortoDeCiclo = (iso) => {
+    const f = window.fechaDeRegistro(iso);
+    if (!f) return String(iso || '');
+    return `${f.getDate()} ${window.MESES_CORTOS[f.getMonth()]}`;
+};
+
+// La acumulación del ciclo: un punto por día corrido, cada uno con lo suyo y
+// con lo que se lleva sumado.
+//
+// **Sólo hasta hoy.** Dibujar los días que faltan con el acumulado de hoy
+// trazaría una línea plana hasta fin de mes, que se lee como que la aplicación
+// dejó de bajar datos; lo que va del otro lado es la proyección, y ésa va a
+// trazos porque no ha pasado.
+window.acumuladoDelCiclo = (egreso, ciclo) => {
+    if (!ciclo) return [];
+    const porDia = {};
+    (egreso || []).forEach(f => { porDia[f.dia] = f; });
+
+    const puntos = [];
+    let suma = 0;
+    for (let i = 0; i < ciclo.transcurridos; i++) {
+        const f = new Date(ciclo.inicio.getFullYear(), ciclo.inicio.getMonth(), ciclo.inicio.getDate() + i);
+        const iso = window.diaLocal(f);
+        const fila = porDia[iso] || { bytes: 0, dispositivos: 0 };
+        suma += fila.bytes;
+        puntos.push({ dia: iso, fecha: f, bytes: fila.bytes,
+                      dispositivos: fila.dispositivos, acumulado: suma });
+    }
+    return puntos;
+};
+
+// La gráfica: el área que sube, la cuota a trazos y la proyección desde hoy
+// hasta el cierre del ciclo.
+//
+// **Se dibuja a mano en SVG**, como la de una clasificación y por lo mismo:
+// Chart mide el lienzo al dibujarlo y aquí la hoja está en `display:none` hasta
+// el instante anterior. Lo que no hace falta es la maquinaria de medir y
+// redibujar de `graficaDeLinea`: aquella vive en la tarjeta del panel, que en
+// una laptop se estira hasta 890px; ésta va dentro de una hoja topada a 560, así
+// que con el `max-width` de `.consumo-grafica` el trazo no crece más de lo que
+// crecía allí y no hay nada que volver a medir.
+window.ALTO_GRAFICA_CONSUMO = 150;
+
+window.graficaDeConsumo = (puntos, ciclo, cuota) => {
+    if (!ciclo || !puntos || puntos.length < 2) return '';
+
+    const A = 320, H = window.ALTO_GRAFICA_CONSUMO;
+    const izq = 40, der = 8, arriba = 12, abajo = 20;
+    const ancho = A - izq - der, alto = H - arriba - abajo;
+
+    const total = puntos[puntos.length - 1].acumulado;
+    const proyeccion = window.proyeccionDeConsumo(total, ciclo);
+    const techo = Math.max(cuota, total, proyeccion || 0) * 1.04;
+
+    // Un día por paso: el primero pegado al eje y el último en el borde, que es
+    // el cierre del ciclo y donde va a parar la proyección.
+    const x = (i) => izq + (ciclo.dias <= 1 ? 0 : (i / (ciclo.dias - 1)) * ancho);
+    const y = (b) => arriba + alto - (techo > 0 ? Math.min(1, b / techo) : 0) * alto;
+
+    const linea = puntos.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.acumulado).toFixed(1)}`).join(' ');
+    const area = `${linea} L${x(puntos.length - 1).toFixed(1)},${(arriba + alto).toFixed(1)} L${x(0).toFixed(1)},${(arriba + alto).toFixed(1)} Z`;
+
+    // Las referencias: 0, la mitad de la cuota y la cuota. La de la cuota va
+    // con su color y su rótulo, que es contra lo que se lee todo lo demás.
+    const refs = [0, cuota / 2, cuota].map(v => {
+        const yy = y(v);
+        if (yy < arriba - 1 || yy > arriba + alto + 1) return '';
+        const esCuota = v === cuota;
+        return `<line x1="${izq}" y1="${yy.toFixed(1)}" x2="${A - der}" y2="${yy.toFixed(1)}"
+                      stroke="${esCuota ? '#dc2626' : '#e2e8f0'}" stroke-width="1"
+                      ${esCuota ? 'stroke-dasharray="4 3"' : ''} />
+                <text x="${izq - 5}" y="${(yy + 3).toFixed(1)}" text-anchor="end"
+                      font-size="8" fill="${esCuota ? '#dc2626' : '#94a3b8'}">${window.pesoLegible(v) || '0'}</text>`;
+    }).join('');
+
+    // El eje de abajo: el día 1, el último y uno de cada cinco. Rotular los
+    // treinta deja una tira ilegible en un teléfono.
+    const paso = ciclo.dias > 20 ? 5 : (ciclo.dias > 10 ? 3 : 2);
+    let ejeX = '';
+    for (let i = 0; i < ciclo.dias; i++) {
+        if (i !== 0 && i !== ciclo.dias - 1 && (i + 1) % paso !== 0) continue;
+        const f = new Date(ciclo.inicio.getFullYear(), ciclo.inicio.getMonth(), ciclo.inicio.getDate() + i);
+        ejeX += `<text x="${x(i).toFixed(1)}" y="${H - 6}" text-anchor="middle"
+                       font-size="8" fill="#94a3b8">${f.getDate()}</text>`;
+    }
+
+    // La proyección: de donde se está hasta el cierre. A trazos porque no ha
+    // pasado, y del color que le toque a donde va a parar —es lo único de la
+    // tarjeta que puede salir en rojo antes de que el problema ocurra, que es
+    // para lo que está—.
+    const iHoy = puntos.length - 1;
+    const proy = proyeccion && ciclo.transcurridos < ciclo.dias
+        ? `<line x1="${x(iHoy).toFixed(1)}" y1="${y(total).toFixed(1)}"
+                 x2="${x(ciclo.dias - 1).toFixed(1)}" y2="${y(proyeccion).toFixed(1)}"
+                 stroke="${window.colorDeCuota(proyeccion, cuota)}" stroke-width="2"
+                 stroke-dasharray="5 4" stroke-linecap="round" opacity="0.85" />
+           <circle cx="${x(ciclo.dias - 1).toFixed(1)}" cy="${y(proyeccion).toFixed(1)}" r="3"
+                   fill="${window.colorDeCuota(proyeccion, cuota)}" opacity="0.85" />`
+        : '';
+
+    // Un globo por día, en un rectángulo transparente que sí se puede señalar:
+    // la línea es de dos píxeles y el punto de tres, y ninguno de los dos se
+    // acierta con el ratón. Es un `<title>`, como el resto de los globos de la
+    // aplicación, así que no hace falta ninguna función colgada de `window`.
+    const mitad = ciclo.dias > 1 ? (ancho / (ciclo.dias - 1)) / 2 : ancho;
+    const globos = puntos.map((p, i) => `
+        <rect x="${(x(i) - mitad).toFixed(1)}" y="${arriba}" width="${(mitad * 2).toFixed(1)}" height="${alto}"
+              fill="transparent"><title>${window.sanitizeForHTML(
+                  `${window.diaCortoDeCiclo(p.dia)} · ${window.pesoLegible(p.bytes) || '0 KB'}`
+                  + ` · acumulado ${window.pesoLegible(p.acumulado) || '0 KB'}`
+                  + (p.dispositivos ? ` · ${p.dispositivos} aparato${p.dispositivos === 1 ? '' : 's'}` : ''))}</title></rect>`).join('');
+
+    return `
+        <div class="consumo-grafica">
+            <svg viewBox="0 0 ${A} ${H}" role="img"
+                 aria-label="Datos bajados acumulados en el ciclo, contra la cuota mensual">
+                ${refs}
+                <path d="${area}" fill="#0891b2" opacity="0.12" />
+                <path d="${linea}" fill="none" stroke="#0891b2" stroke-width="2"
+                      stroke-linejoin="round" stroke-linecap="round" />
+                ${proy}
+                <circle cx="${x(iHoy).toFixed(1)}" cy="${y(total).toFixed(1)}" r="3" fill="#0891b2" />
+                ${ejeX}
+                ${globos}
+            </svg>
+        </div>`;
+};
+
+// La tarjeta entera. Sin la función en la base no se dibuja ninguna cifra —un
+// «0 GB» diría que no se ha bajado nada, que es lo contrario de la verdad— y se
+// dice qué script falta, como hacen las otras dos.
+window.tarjetaDeEgreso = (c) => {
+    const ciclo = c.ciclo || window.cicloDeConsumo();
+    const desde = window.diaCortoDeCiclo(window.diaLocal(ciclo.inicio));
+    const hasta = window.diaCortoDeCiclo(window.diaLocal(new Date(ciclo.fin.getTime() - 86400000)));
+
+    if (!c.egreso) {
+        return `<div class="consumo-tarjeta">
+                    <div class="consumo-rotulo">Datos descargados</div>
+                    <div class="consumo-pie">No se puede medir todavía. ${window.notaDeFallo('consumo_por_dia')}
+                        Mientras tanto cada teléfono sigue apuntando lo suyo, así que en cuanto exista la función
+                        llegará también lo de estos días.</div>
+                </div>`;
+    }
+
+    const puntos = window.acumuladoDelCiclo(c.egreso, ciclo);
+    const total = puntos.length ? puntos[puntos.length - 1].acumulado : 0;
+
+    // **Cero no es lo mismo que «todavía es pronto».** Con el script corrido y
+    // sin un solo byte apuntado, lo que pasa es que ningún teléfono ha
+    // reportado aún —acaba de correrse, o ninguno ha abierto la aplicación
+    // desde entonces—, y decir «a este ritmo» de un ritmo que no existe, o
+    // dibujar una línea plana en el suelo, se lee como que no se está gastando
+    // nada. Se dice lo que de verdad ocurre.
+    if (!(total > 0)) {
+        return `<div class="consumo-tarjeta">
+                    <div class="consumo-rotulo">Datos descargados</div>
+                    <div class="consumo-pie">Del ${desde} al ${hasta}: todavía no ha reportado ningún aparato.
+                        Cada teléfono manda lo suyo mientras se usa la aplicación, así que la cifra aparece
+                        en cuanto alguien la abra.</div>
+                </div>`;
+    }
+
+    const proyeccion = window.proyeccionDeConsumo(total, ciclo);
+    const aparatos = Math.max(0, ...(c.egreso.map(f => f.dispositivos) || [0]));
+
+    // El pie dice las tres cosas que hacen falta para decidir: entre qué fechas
+    // va el ciclo, cuántos aparatos lo llenaron y a dónde va a parar el mes. Lo
+    // último, con todas las letras cuando se va a pasar: es el aviso.
+    const cierre = proyeccion === null
+        ? 'Todavía es pronto para proyectar el cierre del ciclo.'
+        : (proyeccion > window.CUOTA_EGRESO
+            ? `<b style="color:#dc2626;">A este ritmo el ciclo cierra en ${window.pesoLegible(proyeccion)}, por encima de la cuota.</b>`
+            : `A este ritmo el ciclo cierra en ${window.pesoLegible(proyeccion)}.`);
+
+    return `
+        <div class="consumo-tarjeta">
+            <div class="consumo-rotulo">Datos descargados</div>
+            <div class="consumo-cifra">
+                <span class="consumo-cifra-numero">${window.pesoLegible(total) || '0 KB'}</span>
+                <span class="consumo-cifra-pct">${window.pctTexto(total, window.CUOTA_EGRESO)}% de ${window.pesoLegible(window.CUOTA_EGRESO)}</span>
+            </div>
+            ${window.barraDeCuota(total, window.CUOTA_EGRESO)}
+            ${window.graficaDeConsumo(puntos, ciclo, window.CUOTA_EGRESO)}
+            <div class="consumo-pie">Del ${desde} al ${hasta}, día ${ciclo.transcurridos} de ${ciclo.dias}${
+                aparatos > 0 ? ` · ${aparatos} aparato${aparatos === 1 ? '' : 's'}` : ''}. ${cierre}</div>
+        </div>`;
+};
+
 window.pantallaDeConsumo = (c) => {
     const subtitulo = document.getElementById('subtitulo-almacenamiento');
     if (subtitulo) subtitulo.innerText = [
@@ -671,7 +925,8 @@ window.pantallaDeConsumo = (c) => {
     const sinMedida = c.sinMedida > 0
         ? ` ${c.sinMedida} sin tamaño registrado, que cuentan como cero.` : '';
 
-    return resumen('Archivos', c.archivos, window.CUOTA_ARCHIVOS,
+    return window.tarjetaDeEgreso(c) +
+           resumen('Archivos', c.archivos, window.CUOTA_ARCHIVOS,
                `${c.cuantos} archivo${c.cuantos === 1 ? '' : 's'} en ${c.buckets.length} buckets. ${origen}${sinMedida}`,
                !c.desdeLaBase) +
            huerfanosHtml +

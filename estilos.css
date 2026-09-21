@@ -3003,6 +3003,29 @@ textarea:focus {
     margin-top: 8px;
 }
 
+/* La gráfica de cómo se van acumulando los datos bajados en el ciclo.
+
+   Va a lo ancho de su tarjeta con un tope, que es lo que evita que el trazo
+   crezca sin medida: un SVG con `viewBox` no mide nada —se estira con su
+   contenedor y lo escala TODO en bloque, la letra de 8px incluida—. La hoja de
+   «Consumo» está topada a 560px, así que aquí bastan un `max-width` y ya;
+   `graficaDeLinea` necesita medirse y redibujarse porque vive en la tarjeta del
+   panel, que en una laptop se estira hasta 890.
+
+   A la izquierda y no centrada: cae a plomo con la cifra y con la barra de
+   arriba, que es la columna a la que pertenece. */
+.consumo-grafica {
+    margin-top: 14px;
+}
+
+.consumo-grafica svg {
+    display: block;
+    width: 100%;
+    max-width: 512px;
+    height: auto;
+    overflow: visible;
+}
+
 .consumo-lista {
     background: white;
     border: 1px solid #e2e8f0;

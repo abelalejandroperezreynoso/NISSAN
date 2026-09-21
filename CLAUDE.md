@@ -2938,7 +2938,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.BUCKETS_DE_LA_APP        // en 1-config.js: [{ id, nombre, borrable }, …]
   window.CUOTA_ARCHIVOS  window.CUOTA_BASE
   window.archivosDelBucket(bucket, tope)
-  window.pedirALaBase(funcion)    // una rpc que puede no existir; null si no está
+  window.pedirALaBase(funcion, args)   // una rpc que puede no existir; null si no está
+  window.SCRIPT_DE_FUNCION        // de qué script de sql/ es cada una
   window.falloDeLaBase            // { funcion: por qué no respondió }
   window.notaDeFallo(funcion)     // lo que se le dice a quien mira
   window.tomarMedidaDeConsumo()   // la medida entera, sin guardarla
@@ -3004,6 +3005,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   tamano_tablas()     las tablas de public, una por una
   tamano_buckets()    los archivos, contados sobre storage.objects
   ```
+
+  Y en `sql/consumo-datos.sql`, aparte, las dos del tráfico del mes
+  —`sumar_consumo` y `consumo_por_dia`—, que se cuentan más abajo.
 
   **La base no es la suma de sus tablas.** Supabase cobra el archivo de base
   entero: los esquemas de sistema —`storage`, `auth`, `realtime`—, los catálogos
@@ -5899,6 +5903,136 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   porque entonces el gesto era otro. Lo que sí hace falta es apagarle el menú
   contextual al botón (`contextmenu` y `-webkit-touch-callout`), o mantener
   pulsado acaba en «Copiar» en vez de en la píldora.
+
+- **Y lo que se baja se apunta siempre, lo mire alguien o no.** La píldora dice
+  lo de **esta pantalla** y se apaga al recargar, así que por sí sola no
+  contesta la única pregunta que esa cuota tiene: si la aplicación entera se va
+  a pasar de los **5 GB al mes** del plan gratuito. Eso es la suma de lo que
+  bajan todos los teléfonos, y cada uno, por separado, no puede saberlo.
+
+  Por eso lo bajado se apunta siempre —la píldora es sólo el cristal por el que
+  se mira— y se le manda a la base: una fila por **aparato y día**, que la
+  pantalla de «Consumo» pide ya sumada para dibujar el ciclo.
+
+  ```js
+  window.CUOTA_EGRESO          // 5 GB, en 1-config.js
+  window.DIA_CORTE_CONSUMO     // el día del mes en que Supabase pone el contador a cero
+  window.cicloDeConsumo(fecha) // { inicio, fin, dias, transcurridos }; `fin` exclusivo
+  window.diaLocal(fecha)       // 'YYYY-MM-DD' local, que no es el de toISOString()
+  window.idDeDispositivo()     // el identificador al azar de este aparato
+  window.datosDeLaPantalla()   // lo que lleva bajado esta pantalla: la píldora
+  window.reportarConsumo(forzado)
+  ```
+
+  **Quien baja los datos es un aparato, no una persona.** La pregunta que esto
+  contesta es cuánto gasta la aplicación, no quién; guardar el número de empleado
+  obligaría además a meter la tabla en `RASTROS_DEL_EMPLEADO` —y a barrerla al
+  eliminar a alguien— a cambio de un dato que no se vino a buscar. El
+  identificador es al azar, vive en `localStorage` y no dice nada de nadie.
+
+  **Reportar no puede costar lo que se está midiendo**: una llamada por minuto
+  como mucho, sólo si hay algo que contar y por encima de 100 KB —un día ya
+  cerrado se manda aunque sea poco, que no va a crecer más—, y lo que devuelve
+  son unos bytes. Esa llamada se cuenta también, que tráfico es.
+
+  Seis cosas que hay que mantener:
+
+  - **El almacén es la verdad, y en memoria sólo va lo que falta por sumarle.**
+    Con el mapa entero en memoria y escribiéndolo tal cual, dos pantallas
+    abiertas a la vez —son tres documentos distintos, y saltar de una a otra es
+    cargar otro— se pisaban: la última en escribir se llevaba por delante lo que
+    la otra llevaba apuntado. **Toda escritura relee, suma y vuelve a escribir**,
+    así que lo único que puede perderse es lo que caiga dentro de esa vuelta.
+  - **Se descuenta antes de mandarlo y se devuelve si falla.** Al revés, lo que
+    se apuntara mientras la petición va de camino se borraría con ella al
+    confirmarla.
+  - **El envío va con `keepalive`**, y por `pagehide` **y** `visibilitychange`:
+    sin lo primero el navegador cancela la petición al descargar el documento y
+    lo de la última sesión no llega nunca; sin lo segundo, una aplicación
+    instalada que se *esconde* en vez de descargarse no cierra su cuenta. Lo que
+    quedó de la vez anterior se manda al arrancar, que puede ser de un día que ya
+    cerró.
+  - **Sin la función en la base no se insiste.** PostgREST contesta a una rpc que
+    no existe con su propio código, y ahí el script no está corrido: seguir
+    llamando cada minuto sería gastar justo lo que se viene a medir. Se apunta lo
+    bajado igual, y el día que se corra se manda entero.
+  - **El día se comprueba, no se le mira la forma.** `2026-13-45` la tiene y no
+    existe: la base rechaza esa fecha, el envío se planta ahí y el bucle se para
+    en ella cada vez, así que una sola llave estropeada dejaría a ese teléfono
+    sin reportar nunca más. Se arma la fecha y se comprueba que vuelva a decir lo
+    mismo. Con eso y la poda a siete días, el mapa no puede crecer sin freno.
+  - **Nadie escribe la tabla directamente, ni para sumar.** Se entra por
+    `sumar_consumo`, que es `security definer` y lo único que sabe hacer es
+    sumarle a una fila. Sin eso, cualquiera con la clave `anon` podría poner el
+    consumo del mes a cero —y un `update` que la RLS rechaza **no da error**, así
+    que la pantalla diría que vamos sobrados—. Comprobado: con la política
+    puesta, `anon` lee, y su `update`, su `delete` y su `insert` no tocan nada.
+
+  El script es `sql/consumo-datos.sql` y se corre a mano; se puede correr las
+  veces que haga falta. Trae la tabla, `sumar_consumo` y `consumo_por_dia`, que
+  devuelve **una fila por día y no una por aparato y día**: con ochenta teléfonos
+  el mes son dos mil cuatrocientas filas, y traérselas al navegador para dibujar
+  treinta puntos es gastar en la consulta justo lo que se está midiendo.
+
+- **La tarjeta de «Datos descargados» va la primera y es la única con gráfica.**
+  Es la tercera cuota y **la única con reloj**: los archivos y la base crecen
+  despacio y se quedan donde estén, mientras que el tráfico se reinicia cada
+  ciclo y se gasta solo. Por eso encabeza la hoja: es la que puede reventar este
+  mes.
+
+  Y por eso lleva gráfica y las otras dos no. Un total a mitad de mes no dice
+  nada —2 GB el día 5 es un problema y el día 28 no lo es—, así que lo que hay
+  que ver es **cómo se va acumulando contra la cuota** y a qué ritmo.
+
+  ```js
+  window.acumuladoDelCiclo(egreso, ciclo)   // un punto por día corrido
+  window.proyeccionDeConsumo(total, ciclo, ahora)
+  window.graficaDeConsumo(puntos, ciclo, cuota)
+  window.colorDeCuota(bytes, cuota)   // los umbrales de `barraDeCuota`, sin barra
+  window.tarjetaDeEgreso(c)
+  window.MINIMO_PARA_PROYECTAR        // 1.5 días corridos
+  ```
+
+  Cinco cosas que hay que mantener:
+
+  - **La línea sólo llega hasta hoy.** Dibujar los días que faltan con el
+    acumulado de hoy trazaría una recta plana hasta fin de mes, que se lee como
+    que la aplicación dejó de bajar datos. Lo que va del otro lado es la
+    proyección, y ésa va **a trazos** porque no ha pasado.
+  - **El aviso lo lleva la proyección, no la cifra.** La barra de arriba se pinta
+    con lo que hay hoy, como las otras dos tarjetas; la proyección se pinta con
+    **a dónde va a parar**, así que es lo único de la pantalla que sale en rojo
+    *antes* de que el problema ocurra —que es para lo que está— y el pie lo dice
+    además con todas las letras.
+  - **Se divide por los días corridos de verdad, con su fracción.** Contando hoy
+    como un día entero cuando van tres horas, la proyección sale optimista justo
+    el día en que hay que reaccionar. Y **los primeros días no se proyecta**: con
+    medio día corrido, una foto de más multiplica por sesenta.
+  - **Cero no es «todavía es pronto».** Con el script corrido y sin un byte
+    apuntado, lo que pasa es que ningún teléfono ha reportado aún; decir «a este
+    ritmo» de un ritmo que no existe, o dibujar una línea plana en el suelo, se
+    lee como que no se está gastando nada. Ahí no se dibuja gráfica y se dice lo
+    que de verdad ocurre.
+  - **El día de corte se acota a 28.** Uno el 31 se saltaría febrero. Supabase
+    cuenta por ciclo de facturación y no se puede preguntar desde el cliente, así
+    que `DIA_CORTE_CONSUMO` se escribe a mano —el 1 por defecto— y se cambia ahí
+    si el del proyecto resulta ser otro; su página de uso dice entre qué fechas
+    va.
+
+  La gráfica **se dibuja a mano en SVG**, como la de una clasificación y por lo
+  mismo: Chart mide el lienzo al dibujarlo y aquí la hoja está en `display:none`
+  hasta el instante anterior. Lo que no hace falta es la maquinaria de medir y
+  redibujar de `graficaDeLinea` —esa vive en la tarjeta del panel, que en una
+  laptop se estira hasta 890px—: ésta va dentro de una hoja topada a 560, así que
+  con el `max-width` de `.consumo-grafica` el trazo no crece más de lo que crecía
+  allí y no hay nada que volver a medir. Cada día lleva su globo en un `<rect>`
+  transparente con un `<title>` dentro: la línea mide dos píxeles y no se acierta
+  con el ratón.
+
+  **Y `notaDeFallo` ya no manda a un solo script.** Lo dice
+  `window.SCRIPT_DE_FUNCION`, porque `consumo_por_dia` es de
+  `sql/consumo-datos.sql` y las otras cuatro del de siempre: mandar a correr el
+  que no es se parece demasiado a lo que esa nota vino a evitar.
 
 - **Un selector por atributo `style` se rompe en cuanto se toca ese estilo.**
   `setGrade` buscaba la tarjeta de la pregunta con

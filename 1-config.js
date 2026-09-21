@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-21-1';
+window.VERSION_APP = '2026-09-21-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1192,6 +1192,68 @@ window.BUCKETS_DE_LA_APP = [
 // que se escribe aquí y se cambia aquí si el plan cambia.
 window.CUOTA_ARCHIVOS = 1024 * 1024 * 1024;
 window.CUOTA_BASE = 500 * 1024 * 1024;
+
+// **Y lo que se baja cada mes, que es la tercera cuota y la única con reloj.**
+// Los archivos y la base crecen despacio y se quedan donde estén; el tráfico
+// **se reinicia** cada ciclo y se gasta solo, a razón de lo que la plantilla
+// abra la aplicación. Son 5 GB en el plan gratuito.
+window.CUOTA_EGRESO = 5 * 1024 * 1024 * 1024;
+
+// **Qué día del mes se reinicia.** Supabase cuenta el tráfico por ciclo de
+// facturación y lo pone a cero al empezar el siguiente; en un proyecto gratuito
+// ese corte es el día 1, pero no se puede preguntar desde el cliente, así que se
+// escribe aquí y **se cambia aquí** si el del proyecto resulta ser otro —la
+// página de uso de Supabase dice entre qué fechas va el ciclo—. Se acota a 28
+// porque un corte el 31 se saltaría febrero.
+window.DIA_CORTE_CONSUMO = 1;
+
+// El ciclo en el que cae una fecha: de su día de corte al siguiente, con el fin
+// **exclusivo**. `transcurridos` es el día del ciclo que se está viviendo —el
+// primero es 1—, que es lo que divide para proyectar a qué ritmo va el mes.
+window.cicloDeConsumo = (fecha) => {
+    const ahora = fecha instanceof Date ? new Date(fecha) : new Date();
+    const corte = Math.min(28, Math.max(1, Number(window.DIA_CORTE_CONSUMO) || 1));
+    const inicio = new Date(ahora.getFullYear(), ahora.getMonth(), corte, 0, 0, 0, 0);
+    if (ahora.getDate() < corte) inicio.setMonth(inicio.getMonth() - 1);
+    const fin = new Date(inicio);
+    fin.setMonth(fin.getMonth() + 1);
+    const dia = 24 * 60 * 60 * 1000;
+    return {
+        inicio: inicio,
+        fin: fin,
+        dias: Math.round((fin - inicio) / dia),
+        transcurridos: Math.min(Math.round((fin - inicio) / dia),
+                                Math.floor((ahora - inicio) / dia) + 1)
+    };
+};
+
+// Una fecha en `'YYYY-MM-DD'` **local**. `toISOString()` da la de UTC, que en
+// este huso corre el día hacia atrás en cuanto pasa de las 18:00: lo que se
+// apunta como consumo de hoy acabaría en la fila de ayer.
+window.diaLocal = (fecha) => {
+    const f = fecha instanceof Date ? fecha : new Date(fecha);
+    if (isNaN(f.getTime())) return '';
+    return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}-${String(f.getDate()).padStart(2, '0')}`;
+};
+
+// **Quién baja los datos es un aparato, no una persona.** La pregunta que esta
+// medida contesta es cuánto gasta la aplicación, no quién; guardar el número de
+// empleado obligaría además a meter la tabla en `RASTROS_DEL_EMPLEADO` —y a
+// barrerla al eliminar a alguien— a cambio de un dato que no se vino a buscar.
+// Es un identificador al azar que vive en `localStorage` y no dice nada de
+// nadie; si el navegador no deja escribir ahí, se usa uno de esta carga y ese
+// aparato cuenta como uno nuevo cada vez, que es preferible a no contarlo.
+window.idDeDispositivo = () => {
+    if (window.__idDispositivo) return window.__idDispositivo;
+    let id = '';
+    try { id = localStorage.getItem('idDispositivo') || ''; } catch (e) { /* sin almacén */ }
+    if (!id) {
+        id = 'd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        try { localStorage.setItem('idDispositivo', id); } catch (e) { /* sin almacén */ }
+    }
+    window.__idDispositivo = id;
+    return id;
+};
 
 // --- LAS LIBRERÍAS DE CONVERSIÓN, PEDIDAS CUANDO HACEN FALTA ---
 //
@@ -3125,6 +3187,186 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
 
     let totalBytes = 0;
 
+    // ----------------------------------------------------------------
+    // LO QUE SE BAJA SE APUNTA, LO VEA ALGUIEN O NO
+    // ----------------------------------------------------------------
+    // La píldora dice lo de **esta pantalla** y se apaga al recargar, así que
+    // por sí sola no contesta la pregunta que importa: si la aplicación entera
+    // va a pasarse de los 5 GB del mes. Eso es la suma de lo que bajan todos
+    // los teléfonos, y cada uno sólo sabe lo suyo.
+    //
+    // Por eso lo bajado se apunta **siempre** —la píldora es sólo el cristal
+    // por el que se mira— y se le manda a la base cada tanto: una fila por
+    // aparato y día (`sumar_consumo`, en `sql/consumo-datos.sql`), que es lo
+    // que la pantalla de «Consumo» suma para dibujar el ciclo.
+    //
+    // **Reportar no puede costar lo que se está midiendo**: va una llamada por
+    // minuto como mucho, sólo si hay algo que contar, y lo que devuelve son
+    // unos bytes. Se cuenta también esa llamada, que tráfico es.
+    const MINIMO_REPORTE = 100 * 1024;      // por debajo no vale la llamada
+    const CADA_CUANTO = 60 * 1000;
+
+    // Lo bajado y todavía sin reportar, **por día**: `{ '2026-09-21': 12345 }`.
+    // Vive en `localStorage` porque el teléfono está en el campo y sin señal —o
+    // se cierra la aplicación— antes de poder mandarlo, y eso no se puede
+    // perder: al volver a abrirla se reintenta.
+    //
+    // **El almacén es la verdad y en memoria sólo va lo que falta por sumarle.**
+    // Teniendo el mapa entero en memoria y escribiéndolo tal cual, dos pantallas
+    // de la aplicación abiertas a la vez —son tres documentos distintos, y
+    // saltar de una a otra es cargar otro— se pisaban la una a la otra: la
+    // última en escribir se llevaba por delante lo que la otra llevaba apuntado.
+    // Por eso **toda escritura relee, suma y vuelve a escribir**, y así lo
+    // único que puede perderse es lo que caiga dentro de esa vuelta.
+    const LLAVE_PENDIENTE = 'consumoPendiente';
+    const DIAS_QUE_SE_GUARDAN = 7;          // lo más viejo que se reintenta
+
+    const leerPendiente = () => {
+        let m = null;
+        try { m = JSON.parse(localStorage.getItem(LLAVE_PENDIENTE) || '{}'); } catch (e) { m = null; }
+        if (!m || typeof m !== 'object' || Array.isArray(m)) m = {};
+        // Nada que no sea un día de verdad con un número de verdad, y sólo lo
+        // de la última semana: sin esta poda, un navegador que no pueda
+        // reportar —porque el script no está corrido— se llevaría un mapa que
+        // crece para siempre.
+        //
+        // **Y el día se comprueba, no se le mira la forma.** `2026-13-45` la
+        // tiene y no existe: la base rechaza esa fecha, el envío se planta ahí
+        // y **el bucle se para en ella cada vez**, así que una sola llave
+        // estropeada —de un almacén corrupto, que es lo único que puede
+        // escribirla— dejaría a ese teléfono sin reportar nunca más. Se arma la
+        // fecha y se comprueba que vuelva a decir lo mismo.
+        const limite = window.diaLocal(new Date(Date.now() - DIAS_QUE_SE_GUARDAN * 86400000));
+        const manana = window.diaLocal(new Date(Date.now() + 86400000));
+        const limpio = {};
+        Object.keys(m).forEach(d => {
+            const n = Number(m[d]);
+            if (!isFinite(n) || n <= 0 || d < limite || d > manana) return;
+            const f = window.fechaDeRegistro(d);
+            if (!f || window.diaLocal(f) !== d) return;
+            limpio[d] = n;
+        });
+        return limpio;
+    };
+
+    const escribirPendiente = (m) => {
+        try { localStorage.setItem(LLAVE_PENDIENTE, JSON.stringify(m)); } catch (e) { /* sin almacén */ }
+    };
+
+    // Lo apuntado desde la última escritura. Escribir en `localStorage` en cada
+    // respuesta que llega sería escribir decenas de veces por pantalla, así que
+    // se junta y se vuelca dentro de un momento; al irse la página se vuelca a
+    // secas, que ahí no hay momento que esperar.
+    let sinVolcar = {};
+    let relojVolcar = null;
+
+    const volcar = () => {
+        if (relojVolcar) { clearTimeout(relojVolcar); relojVolcar = null; }
+        const m = leerPendiente();
+        Object.keys(sinVolcar).forEach(d => { m[d] = (Number(m[d]) || 0) + sinVolcar[d]; });
+        sinVolcar = {};
+        escribirPendiente(m);
+        return m;
+    };
+
+    const volcarLuego = () => {
+        if (relojVolcar) return;
+        relojVolcar = setTimeout(() => { relojVolcar = null; volcar(); }, 5000);
+    };
+
+    // **Sin la función en la base no se insiste.** PostgREST contesta a una
+    // rpc que no existe con su propio código, y ahí el script no está corrido:
+    // seguir llamando cada minuto sería gastar justo lo que se viene a medir.
+    // Se apunta lo bajado igual, que el día que se corra se manda entero.
+    let sinFuncion = false;
+    let ultimoEnvio = 0;
+    let enviando = null;
+
+    window.reportarConsumo = (forzado) => {
+        if (enviando) return enviando;
+        if (sinFuncion) return Promise.resolve(false);
+        const ahora = Date.now();
+        if (!forzado && ahora - ultimoEnvio < CADA_CUANTO) return Promise.resolve(false);
+
+        const pendiente = volcar();
+        const hoy = window.diaLocal(new Date());
+        // Un día ya cerrado se manda aunque sea poco: no va a crecer más.
+        const dias = Object.keys(pendiente)
+            .filter(d => forzado || d < hoy || pendiente[d] >= MINIMO_REPORTE);
+        if (dias.length === 0) return Promise.resolve(false);
+
+        ultimoEnvio = ahora;
+        enviando = (async () => {
+            for (const dia of dias) {
+                // Se descuenta del almacén **antes** de mandarlo y se devuelve
+                // si falla: al revés, lo que se apuntara mientras la petición va
+                // de camino se borraría con ella al confirmarla.
+                const m = volcar();
+                const bytes = Math.round(Number(m[dia]) || 0);
+                if (!(bytes > 0)) continue;
+                delete m[dia];
+                escribirPendiente(m);
+                try {
+                    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/sumar_consumo`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        },
+                        // Lo que hace que el último envío salga aunque la página
+                        // se esté yendo: sin esto el navegador cancela la
+                        // petición al descargar el documento y lo de la última
+                        // sesión no llega nunca.
+                        keepalive: true,
+                        body: JSON.stringify({ p_dispositivo: window.idDeDispositivo(), p_dia: dia, p_bytes: bytes })
+                    });
+                    if (!r.ok) {
+                        const texto = await r.text().catch(() => '');
+                        if (r.status === 404 || /PGRST202|could not find/i.test(texto)) sinFuncion = true;
+                        throw new Error(texto || `HTTP ${r.status}`);
+                    }
+                } catch (e) {
+                    sinVolcar[dia] = (sinVolcar[dia] || 0) + bytes;
+                    volcar();
+                    break;   // sin red, los demás días esperan a la próxima
+                }
+            }
+            enviando = null;
+            return true;
+        })();
+        return enviando;
+    };
+
+    // Lo que llega, venga de `fetch` o de una imagen. Lo apunta en el día de
+    // **hoy**: lo que se estuviera bajando al cruzar la medianoche cuenta en el
+    // día en que se terminó de bajar, que es lo más cerca que se puede estar.
+    const anotar = (bytes) => {
+        const n = Number(bytes);
+        if (!isFinite(n) || n <= 0) return;
+        totalBytes += n;
+        const dia = window.diaLocal(new Date());
+        sinVolcar[dia] = (sinVolcar[dia] || 0) + n;
+        volcarLuego();
+        updateText();
+        window.reportarConsumo();
+    };
+
+    // Lo que lleva bajado esta pantalla, que es lo que dice la píldora.
+    window.datosDeLaPantalla = () => totalBytes;
+
+    // **Al irse la página se manda lo que quede**, que es cuando de verdad se
+    // cierra la cuenta de una sesión: una aplicación instalada puede pasarse
+    // horas abierta y el minuto del temporizador no llega a saltar con algo
+    // dentro. Van los dos avisos porque ninguno se dispara siempre: en iOS lo
+    // normal es que la aplicación se *esconda* y no que se descargue.
+    const alIrse = () => { volcar(); window.reportarConsumo(true); };
+    window.addEventListener('pagehide', alIrse);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) alIrse(); });
+    // Y lo que quedó de la vez anterior se manda al arrancar, sin esperar al
+    // primer minuto: puede ser de un día que ya cerró.
+    setTimeout(() => window.reportarConsumo(true), 4000);
+
     // Función para actualizar el texto
     const updateText = () => {
         const mb = totalBytes / (1024 * 1024);
@@ -3247,10 +3489,7 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
             const response = await originalFetch(...args);
             const clone = response.clone();
             clone.blob().then(blob => {
-                if(response.url.includes('supabase.co')) {
-                    totalBytes += blob.size;
-                    updateText();
-                }
+                if(response.url.includes('supabase.co')) anotar(blob.size);
             }).catch(() => {});
             return response;
         } catch (err) { throw err; }
@@ -3262,11 +3501,7 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
             list.getEntries().forEach((entry) => {
                 if (entry.name.includes('supabase.co') &&
                    (entry.initiatorType === 'img' || entry.initiatorType === 'css' || entry.initiatorType === 'fetch')) {
-                    const size = entry.transferSize > 0 ? entry.transferSize : entry.decodedBodySize;
-                    if(size > 0) {
-                        totalBytes += size;
-                        updateText();
-                    }
+                    anotar(entry.transferSize > 0 ? entry.transferSize : entry.decodedBodySize);
                 }
             });
         });
