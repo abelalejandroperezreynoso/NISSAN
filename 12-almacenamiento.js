@@ -577,14 +577,22 @@ window.antiguedadDeLaMedida = (fecha) => {
 // que ver es **cómo se va acumulando contra la cuota** y a qué ritmo: eso es lo
 // que avisa con tiempo de tomar contramedidas, que es a lo que se vino.
 
-// **La cifra es un suelo y se dibuja como tal.** Esto suma lo que los
-// navegadores se bajan de `supabase.co`, y eso deja fuera tres cosas: lo que no
-// pasa por un teléfono —Supabase cuenta también Realtime, Edge Functions, el
-// pooler y los log drains—, las cabeceras de cada respuesta, y **lo que baje un
-// teléfono que todavía arrastre una versión anterior**, que no reporta nada y
-// puede tardar semanas en ponerse al día. Las tres tiran hacia abajo y ninguna
-// hacia arriba, así que el número nunca puede pasarse: como mucho se queda
-// corto.
+// **La cifra es un suelo y se dibuja como tal.** Esta aplicación no tiene
+// servidor —ni Realtime, ni Edge Functions, ni pooler: se comprobó—, así que
+// todo su tráfico nace en un navegador y en principio se puede ver entero. Lo
+// que se escapa son otras tres cosas:
+//
+//   - **Las cabeceras de cada respuesta**, que no se pueden medir desde el
+//     navegador salvo que el servidor mande `Timing-Allow-Origin`. Sobre la
+//     respuesta medida eran 300 bytes de 1.705, o sea casi una quinta parte.
+//   - **Las fotos, las firmas y las páginas del material**, que las pide el
+//     navegador por su cuenta y sin esa misma cabecera **no dejan medirse de
+//     ninguna manera**. Son lo que más pesa, así que si faltan, faltan de
+//     verdad: `window.calidadDeLaMedida().sinMedir` dice cuántas fueron.
+//   - **Lo que baje un teléfono con una versión anterior**, que no reporta nada
+//     y puede tardar semanas en ponerse al día.
+//
+// Las tres tiran hacia abajo, así que el número se queda corto y no al revés.
 //
 // Por eso lleva el «Al menos» de la tarjeta de archivos, y por lo mismo: la
 // duda va **pegada a la cifra** o no está en ningún sitio, que fue la lección
@@ -818,8 +826,9 @@ window.tarjetaDeEgreso = (c) => {
             ${window.graficaDeConsumo(puntos, ciclo, window.CUOTA_EGRESO)}
             <div class="consumo-pie">Del ${desde} al ${hasta}, día ${ciclo.transcurridos} de ${ciclo.dias}${
                 aparatos > 0 ? ` · ${aparatos} aparato${aparatos === 1 ? '' : 's'}` : ''}. ${cierre}
-                Es lo que reportan los teléfonos que ya tienen esta versión; Supabase cuenta además lo que no
-                pasa por ellos, así que su página de uso dice algo más.</div>
+                Es lo que reportan los teléfonos que ya tienen esta versión, y se queda corto: las cabeceras de
+                cada respuesta no se pueden medir desde el navegador, y las fotos tampoco si el almacén no lo
+                permite. La página de uso de Supabase es la que factura.</div>
         </div>`;
 };
 

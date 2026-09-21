@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-21-3';
+window.VERSION_APP = '2026-09-21-4';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3483,27 +3483,83 @@ console.log("✅ Configuración cargada. Esperando sincronización global...");
         btnSalir.style.userSelect = 'none';
     }
 
-    // 3. Interceptar Fetch (Captura datos JSON de BD y Auth)
+    // ----------------------------------------------------------------
+    // CUÁNTO PESÓ DE VERDAD UNA RESPUESTA
+    // ----------------------------------------------------------------
+    // **Supabase cobra los bytes que van por el cable, y eso no es el tamaño
+    // del JSON.** PostgREST responde comprimido, así que `blob.size` —que es el
+    // cuerpo ya descomprimido, que es lo que esto contaba— infla la cifra
+    // muchísimo: medido con una respuesta de doscientas filas de
+    // `evaluation_responses`, **45.981 bytes de blob contra 1.705 por el
+    // cable**, veintisiete veces más. Sobre eso se estaba dibujando el mes.
+    //
+    // Lo que sí mide el cable, con sus cabeceras incluidas, es el
+    // `transferSize` de la entrada de rendimiento, **pero sólo si el servidor
+    // manda `Timing-Allow-Origin`**: sin esa cabecera vale cero entre orígenes
+    // distintos, y entonces esta medida no ve nada. Comprobado con las cuatro
+    // combinaciones:
+    //
+    //                                   content-length  transfer  blob
+    //     sin TAO, comprimido                     null         0  45981
+    //     con TAO, comprimido                     null      1705  45981
+    //     sin TAO, comprimido + Content-Length    1405         0  45981
+    //
+    // El respaldo es **`Content-Length`**, que sí se puede leer entre orígenes
+    // —es una de las cabeceras que CORS deja ver sin permiso— y que con la
+    // respuesta comprimida trae los bytes comprimidos: 1.405 contra 1.705
+    // reales, o sea a un 18% del cable en vez de a veintisiete veces.
+    //
+    // De mejor a peor: el cable, el cuerpo comprimido, y sólo si no hay nada
+    // más el cuerpo descomprimido, que se cuenta porque quedarse sin contar una
+    // respuesta es peor, pero **sabiendo que es un techo y no una medida**.
+    let respuestasEstimadas = 0;   // contadas por el cuerpo descomprimido
+    let recursosSinMedir = 0;      // imágenes que no dejaron medirse
+
+    window.calidadDeLaMedida = () => ({
+        estimadas: respuestasEstimadas,
+        sinMedir: recursosSinMedir
+    });
+
+    // 3. Lo que pide la aplicación: la base, el almacén y la autenticación.
+    //
+    // **Aquí se cuenta el fetch y nada más**, y el observador de abajo se queda
+    // con lo que no lo es. Antes el observador miraba también `initiatorType ===
+    // 'fetch'`, o sea lo mismo que ya había contado esta función: con
+    // `Timing-Allow-Origin` puesto, cada consulta se contaba dos veces.
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
-        try {
-            const response = await originalFetch(...args);
-            const clone = response.clone();
-            clone.blob().then(blob => {
-                if(response.url.includes('supabase.co')) anotar(blob.size);
-            }).catch(() => {});
-            return response;
-        } catch (err) { throw err; }
+        const response = await originalFetch(...args);
+        if (!String(response.url || '').includes('supabase.co')) return response;
+
+        const largo = Number(response.headers.get('content-length'));
+        if (isFinite(largo) && largo > 0) { anotar(largo); return response; }
+
+        // Sin `Content-Length` no queda más que el cuerpo, y llega
+        // descomprimido: se cuenta para no perder la respuesta, y se apunta que
+        // esa cifra va por encima de lo que se cobró.
+        response.clone().blob().then(blob => {
+            if (blob.size > 0) { respuestasEstimadas++; anotar(blob.size); }
+        }).catch(() => {});
+        return response;
     };
 
-    // 4. Monitor de Recursos (Captura Imágenes)
+    // 4. Lo que pide el navegador por su cuenta: las imágenes, sobre todo —las
+    //    fotos, las firmas y las páginas del material, que son lo que más pesa—.
+    //
+    // Aquí no hay respuesta que leer, sólo lo que diga la entrada de
+    // rendimiento, y **sin `Timing-Allow-Origin` no dice nada**: ahí esas
+    // imágenes no se pueden medir desde el navegador de ninguna manera, y lo
+    // único honrado es no inventarse un número y dejar constancia de cuántas
+    // fueron.
     if (window.PerformanceObserver) {
         const observer = new PerformanceObserver((list) => {
             list.getEntries().forEach((entry) => {
-                if (entry.name.includes('supabase.co') &&
-                   (entry.initiatorType === 'img' || entry.initiatorType === 'css' || entry.initiatorType === 'fetch')) {
-                    anotar(entry.transferSize > 0 ? entry.transferSize : entry.decodedBodySize);
-                }
+                if (!String(entry.name || '').includes('supabase.co')) return;
+                if (entry.initiatorType === 'fetch' || entry.initiatorType === 'xmlhttprequest') return;
+                const bytes = entry.transferSize > 0 ? entry.transferSize
+                            : (entry.encodedBodySize > 0 ? entry.encodedBodySize : 0);
+                if (bytes > 0) anotar(bytes);
+                else recursosSinMedir++;
             });
         });
         try { observer.observe({ type: 'resource', buffered: true }); } catch (e) {}

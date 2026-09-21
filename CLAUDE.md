@@ -5930,6 +5930,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   eliminar a alguien— a cambio de un dato que no se vino a buscar. El
   identificador es al azar, vive en `localStorage` y no dice nada de nadie.
 
+  **Y lo que se mide son los bytes del cable, no el tamaño del JSON.** Supabase
+  cobra lo que va comprimido, y esto contaba `blob.size`, que es el cuerpo ya
+  descomprimido: medido con doscientas filas de `evaluation_responses`, **45.981
+  bytes de blob contra 1.705 por el cable, veintisiete veces más**. Sobre eso se
+  dibujaba el mes.
+
+  De mejor a peor, y comprobado con las cuatro combinaciones de cabeceras:
+
+  | | `content-length` | `transferSize` | `blob.size` |
+  |---|---|---|---|
+  | sin TAO, comprimido | null | **0** | 45981 |
+  | con TAO, comprimido | null | **1705** | 45981 |
+  | sin TAO, comprimido + `Content-Length` | **1405** | 0 | 45981 |
+
+  - **`transferSize`** es el cable con sus cabeceras, y es lo exacto, **pero
+    sólo si el servidor manda `Timing-Allow-Origin`**: sin esa cabecera vale
+    cero entre orígenes distintos.
+  - **`Content-Length`** sí se lee entre orígenes —CORS la deja ver sin
+    permiso— y con la respuesta comprimida trae los bytes comprimidos: 1.405
+    contra 1.705, a un 18% en vez de a veintisiete veces.
+  - **El cuerpo descomprimido** es el último recurso: se cuenta para no perder
+    la respuesta, sabiendo que es un techo. `window.calidadDeLaMedida()` dice
+    cuántas fueron así.
+
+  **Y el fetch lo cuenta una sola función.** El observador miraba también
+  `initiatorType === 'fetch'`, o sea lo mismo que ya contaba el interceptor: con
+  `Timing-Allow-Origin` puesto, cada consulta se habría contado dos veces. Hoy
+  el observador se queda con lo que no es fetch —las imágenes, que son lo que
+  más pesa— y **sin esa cabecera no las puede medir de ninguna manera**: ahí no
+  se inventa un número, se cuentan aparte en `calidadDeLaMedida().sinMedir`.
+
   **Reportar no puede costar lo que se está midiendo**: una llamada por minuto
   como mucho, sólo si hay algo que contar y por encima de 100 KB —un día ya
   cerrado se manda aunque sea poco, que no va a crecer más—, y lo que devuelve
@@ -6020,17 +6051,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     que uno el 31 se saltaría febrero. De ahí sale además que **el eje lleve el
     mes donde cambia**: un ciclo del 13 al 13 cruza a otro mes por la mitad, y
     con el día a secas decía «22 27 2 7», que se lee como si volviera atrás.
-  - **La cifra es un suelo, y por eso lleva el «Al menos» de archivos.** Esto
-    suma lo que los navegadores se bajan de `supabase.co`, y deja fuera lo que
-    no pasa por un teléfono —Supabase cuenta también Realtime, Edge Functions,
-    el pooler y los log drains—, las cabeceras de cada respuesta y **lo que baje
-    un teléfono que todavía arrastre una versión anterior**, que no reporta nada
-    y puede tardar semanas en ponerse al día. Las tres tiran hacia abajo y
-    ninguna hacia arriba. La duda va pegada a la cifra y no en el pie, que fue
-    la lección del bucket de firmas, y aquí además es lo que evita que se
-    compare de tú a tú con la página de uso de Supabase y parezca que una de las
-    dos miente. Lo que no se resiente es para lo que está: la **pendiente** es
-    la misma aunque falte una parte constante.
+  - **La cifra es un suelo, y por eso lleva el «Al menos» de archivos.** Esta
+    aplicación no tiene servidor —ni Realtime, ni Edge Functions, ni pooler—,
+    así que todo su tráfico nace en un navegador; lo que se escapa son las
+    cabeceras de cada respuesta, las imágenes que no dejan medirse (justo
+    debajo) y **lo que baje un teléfono con una versión anterior**, que no
+    reporta nada y puede tardar semanas en ponerse al día. Las tres tiran hacia
+    abajo. La duda va pegada a la cifra y no en el pie, que fue la lección del
+    bucket de firmas, y aquí además evita que se compare de tú a tú con la
+    página de uso de Supabase y parezca que una de las dos miente. Lo que no se
+    resiente es para lo que está: la **pendiente** es la misma aunque falte una
+    parte constante.
 
   La gráfica **se dibuja a mano en SVG**, como la de una clasificación y por lo
   mismo: Chart mide el lienzo al dibujarlo y aquí la hoja está en `display:none`
