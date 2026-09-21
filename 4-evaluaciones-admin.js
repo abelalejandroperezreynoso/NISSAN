@@ -1891,7 +1891,7 @@ window.renderizarListaRespuestas = () => {
         // «Se calificó sola» y «Sin registro» no ayudan a encontrar nada y se
         // llevarían el renglón entero. Por el nombre de pila —`split(' ')[0]`,
         // como bajo los avatares del equipo— que ahí no sobra ancho.
-        const selloFila = window.selloDeRevision(r);
+        const selloFila = window.selloDeRevision(resp);
         const revisorEnLista = selloFila.estado === 'firmada'
             ? ` • <span style="color:#166534;">Revisó ${window.sanitizeForHTML(String(selloFila.nombre).split(' ')[0])}</span>`
             : '';
