@@ -4273,6 +4273,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     `pasoDeAplica` que el panel de pendientes, así que las dos cifras no pueden
     discrepar: la de quien no ha decidido suma uno, la de quien dijo que no no
     suma nada.
+  - **Y la pregunta va por delante de `is_obligatory`.** Una encuesta opcional no
+    se exige, así que ni el badge ni la hoja de pendientes la pedían nunca —y con
+    el freno de «¿te aplica?» dentro de ese `if`, tampoco preguntaban—: la
+    encuesta de alturas marcada como opcional no le salía a nadie y su recuadro
+    «Le aplica a» se quedaba en nadie para siempre, sin ninguna puerta desde la
+    que decir que sí. Son dos cosas distintas: la casilla dice **si se puede
+    dejar sin contestar** y la pregunta dice **a quién le toca** —de ella viven
+    el padrón, «Le aplica a» y el divisor de la certificación—, y eso una
+    opcional lo necesita igual. Por eso `cargarVistaPendientes` y
+    `calcularPendientesBatch` miran `pasoDeAplica` **antes** del gate de
+    obligatoriedad —y sólo lo que venga después, la encuesta misma, sigue
+    dependiendo de él—: quien dijo que sí a una opcional vuelve a no tener nada
+    pendiente, que es lo de siempre.
   - **Y el jefe no hereda lo que no es suyo.** Los dos sitios que hablan del
     equipo —«Encuesta Atrasada» del panel de pendientes y el `countPorCalificar`
     del badge— llevan el mismo freno: la encuesta que un colaborador descartó no

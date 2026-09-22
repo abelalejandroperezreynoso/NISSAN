@@ -3326,8 +3326,6 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
             let countEvals = 0;
             if (activeEvals && activeEvals.length > 0) {
                 const evalsQueLeTocan = activeEvals.filter(ev => {
-                    if (ev.is_obligatory === false || String(ev.is_obligatory) === 'false') return false;
-
                     let targetEmps = ev.target_employees;
                     if (typeof targetEmps === 'string') { try { targetEmps = JSON.parse(targetEmps); } catch(e) { targetEmps = ['ALL']; } }
                     if (!Array.isArray(targetEmps)) targetEmps = ['ALL'];
@@ -3355,7 +3353,15 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                     // esta encuesta; quien no lo ha dicho todavía, sí: la
                     // pregunta. Las dos las decide `window.pasoDeAplica`, que
                     // es por donde pasa también el panel de pendientes.
-                    return !window.pasoDeAplica || window.pasoDeAplica(ev, empStrId) !== 'fuera';
+                    const paso = window.pasoDeAplica ? window.pasoDeAplica(ev, empStrId) : 'adelante';
+                    if (paso === 'fuera') return false;
+                    // La pregunta va por delante de `is_obligatory`: decide a
+                    // quién le toca la encuesta —el padrón, «Le aplica a», el
+                    // divisor de la certificación—, y eso una encuesta opcional
+                    // lo necesita igual. Lo que se exige después sí depende de
+                    // la casilla.
+                    if (paso === 'preguntar') return true;
+                    return !(ev.is_obligatory === false || String(ev.is_obligatory) === 'false');
                 });
 
                 if (evalsQueLeTocan.length > 0) {

@@ -607,16 +607,20 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                                     esParaMi = esParaMiPuesto && esParaMiDepto;
                                                 }
 
-                                                // Solo agregamos la encuesta si hace match
-                                                if (esObligatoria && esParaMi) {
-                                                    // Una encuesta que pregunta antes si le aplica no se
-                                                    // pide hasta que esta persona conteste: mientras no lo
-                                                    // haga, su pendiente **es la pregunta**, y si dijo que
-                                                    // no, no hay nada que pedirle. Lo decide
-                                                    // `window.pasoDeAplica`, que es el mismo camino que
-                                                    // sigue el badge del panel; sin la caché cargada —o sin
-                                                    // el script corrido— devuelve siempre 'adelante' y todo
-                                                    // se comporta como antes.
+                                                // Una encuesta que pregunta antes si le aplica no se
+                                                // pide hasta que esta persona conteste: mientras no lo
+                                                // haga, su pendiente **es la pregunta**, y si dijo que
+                                                // no, no hay nada que pedirle. Lo decide
+                                                // `window.pasoDeAplica`, que es el mismo camino que
+                                                // sigue el badge del panel; sin la caché cargada —o sin
+                                                // el script corrido— devuelve siempre 'adelante' y todo
+                                                // se comporta como antes.
+                                                // Va FUERA de `esObligatoria`: la pregunta es de
+                                                // asignación —a quién le toca la encuesta— y no de
+                                                // cumplimiento, así que una encuesta opcional la hace
+                                                // igual. Con el freno dentro, el badge la contaba y la
+                                                // hoja no la enseñaba.
+                                                if (esParaMi) {
                                                     const paso = window.pasoDeAplica ? window.pasoDeAplica(ev, user.id) : 'adelante';
                                                     if (paso === 'fuera') return;
                                                     if (paso === 'preguntar') {
@@ -628,6 +632,10 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                                         });
                                                         return;
                                                     }
+                                                }
+
+                                                // Solo agregamos la encuesta si hace match
+                                                if (esObligatoria && esParaMi) {
                                                     const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss');
                                     if (requiereRespuesta.mostrar) {
     if (ev.mode === 'boss') {
