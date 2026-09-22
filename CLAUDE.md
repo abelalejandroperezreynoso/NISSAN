@@ -2231,6 +2231,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   —nombre largo, «MANTENIMIENTO INDUSTRIAL», la cifra del resultado y el
   desplegable de área del administrador—, el encabezado no desborda ni echa la
   cruz fuera de la hoja.
+- **El detalle de una respuesta se descarga en Excel.** El botón de la flecha
+  hacia abajo del encabezado, entre la cifra y la cruz, baja un `.xlsx` con una
+  fila por pregunta —enunciado, lo contestado, la puntuación («3/5», «0/1»), su
+  porcentaje, el estado y el comentario— y al final el resultado de la
+  respuesta entera. Encima van la encuesta, la persona, su departamento, el
+  área, la fecha y el estado.
+
+  ```js
+  window.descargarRespuestaExcel()            // el botón
+  window.respuestaEnDetalle                   // la respuesta que está a la vista
+  window.puntuacionDePregunta(q, nota, valor) // { puntos, pct, estado }
+  window.respuestaEnTexto(q, valor)
+  window.LIBRERIA_EXCEL                       // SheetJS, del CDN y sin `?v=`
+  ```
+
+  Cuatro cosas que hay que mantener:
+
+  - **Sale de lo que se ve**: las preguntas con el mismo filtro de la hoja (las
+    agregadas después de contestar y sin respuesta no cuentan) y las notas de
+    `gradesTemp`, así que si quien califica cambió algo sin guardar el Excel
+    dice lo que tiene delante. El resultado final es `calcularScoreRespuesta`,
+    el mismo de la cifra del encabezado, y sin nada calificado dice «Sin
+    calificar» en vez de un 0%.
+  - **Las cuatro que dejan constancia dicen «No puntúa»** y su estado
+    («Firmada», «Con evidencia»…), nunca una puntuación.
+  - **SheetJS se pide al pulsar**, con `cargarLibreria`, como pdf.js: son 900 KB
+    que no tiene por qué pagar quien sólo mira.
+  - **El nombre del archivo va sin acentos**, y el enlace se arma a mano: con
+    un acento Chromium descarta el nombre entero y guarda «download». Dentro del
+    libro sí van.
+
 - **Una encuesta se entrega completa.** No se puede enviar dejando preguntas en
   blanco: `enviarRespuestasEval` reúne lo que falta —lo sin contestar y los
   motivos sin escribir—, lo dice todo junto en un solo aviso, señala en rojo

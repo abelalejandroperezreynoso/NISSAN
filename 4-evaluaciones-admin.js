@@ -1925,6 +1925,7 @@ window.renderizarListaRespuestas = () => {
 
 window.verDetalleRespuesta = async (resp) => {
     window.gradingResponseId = resp.id;
+    window.respuestaEnDetalle = resp;
     window.gradesTemp = resp.grades_json || {};
     const modal = document.getElementById('modal-responder-eval');
     const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
@@ -2142,6 +2143,9 @@ window.verDetalleRespuesta = async (resp) => {
                 </div>
                 <div class="hoja-acciones">
                     ${badgeCalificacionHtml}
+                    <button id="btn-excel-respuesta" onclick="window.descargarRespuestaExcel()" class="ios-boton-icono" title="Descargar en Excel" aria-label="Descargar en Excel">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
+                    </button>
                     <button onclick="cancelarRespuesta('history')" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                 </div>
             </div>
@@ -2530,6 +2534,157 @@ window.verDetalleRespuesta = async (resp) => {
             ta.style.height = ta.scrollHeight + 'px';
         });
     }, 150);
+};
+
+// --- DESCARGAR EL DETALLE EN EXCEL ---
+//
+// Una fila por pregunta con su enunciado, lo que se contestó, la puntuación
+// («3/5», «1/3 aciertos»), su porcentaje y el comentario, y al final el
+// resultado de la respuesta entera. Sale de lo mismo que se ve en la hoja:
+// las preguntas de `preguntasCacheActual` con el mismo filtro de las creadas
+// después de contestar, y las notas de `gradesTemp` —así, si quien califica
+// cambió algo sin guardar, el Excel dice lo que tiene delante—.
+//
+// SheetJS se pide la primera vez que alguien descarga, como pdf.js: son
+// 900 KB que no tiene por qué pagar quien sólo mira.
+window.LIBRERIA_EXCEL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+
+// La puntuación de una pregunta tal y como la dice su insignia.
+// → { puntos: '3/5', pct: 60 | null, estado: '' }
+window.puntuacionDePregunta = (q, grade, raw) => {
+    if (window.esPreguntaDeConstancia(q)) {
+        let estado = '';
+        if (window.esPreguntaDeFoto(q)) estado = raw ? 'Con evidencia' : 'Sin evidencia';
+        else if (window.esPreguntaDeFirma(q)) estado = raw ? 'Firmada' : 'Sin firmar';
+        else if (window.esPreguntaDeCursoPrevio(q)) estado = window.constanciaDeCurso(raw) ? 'Con curso' : 'Sin curso';
+        else if (window.esPreguntaDeAsistencia(q)) estado = raw === window.TEXTO_ASISTENCIA ? 'Registrada' : 'Sin registrar';
+        return { puntos: 'No puntúa', pct: null, estado };
+    }
+    if (grade && grade.type === 'numeric_score') {
+        const max = grade.max || window.maximoDeEscala(q);
+        return { puntos: `${grade.value}/${max}`, pct: grade.percentage ?? null, estado: '' };
+    }
+    if (grade && grade.type === 'list_match' && Array.isArray(grade.items)) {
+        const ok = grade.items.filter(i => i.status === 'correct').length;
+        const tot = grade.totalExpected || Math.max(grade.items.length, 1);
+        return { puntos: `${ok}/${tot}`, pct: Math.round(ok / tot * 100), estado: 'Aciertos' };
+    }
+    const st = (typeof grade === 'string') ? grade : (grade && grade.status);
+    if (st === 'correct') return { puntos: '1/1', pct: 100, estado: 'Correcto' };
+    if (st === 'incorrect') return { puntos: '0/1', pct: 0, estado: 'Incorrecto' };
+    // Una escala todavía sin nota: lo elegido sobre su máximo, sin porcentaje
+    // que nadie haya dado.
+    if (q.question_type === 'range' && raw !== undefined && raw !== null && raw !== '') {
+        return { puntos: `${raw}/${window.maximoDeEscala(q)}`, pct: null, estado: 'Pendiente' };
+    }
+    return { puntos: '', pct: null, estado: 'Pendiente' };
+};
+
+// Lo contestado, en texto plano para una celda.
+window.respuestaEnTexto = (q, raw) => {
+    if (raw === undefined || raw === null || raw === '') return '';
+    if (window.esPreguntaDeCursoPrevio(q)) return window.textoDeCursoTomado(raw) || '';
+    if (Array.isArray(raw)) return raw.join(q.question_type === 'list_match' ? '\n' : ', ');
+    if (typeof raw === 'object') return JSON.stringify(raw);
+    return String(raw);
+};
+
+window.descargarRespuestaExcel = async () => {
+    const resp = window.respuestaEnDetalle;
+    if (!resp) return;
+    const btn = document.getElementById('btn-excel-respuesta');
+    if (btn) btn.disabled = true;
+    try {
+        await window.cargarLibreria(window.LIBRERIA_EXCEL);
+        if (!window.XLSX) throw new Error('sin XLSX');
+
+        let preguntas = window.preguntasCacheActual;
+        if (!preguntas || !preguntas.length || preguntas[0].evaluation_id !== resp.evaluation_id) {
+            const { data, error } = await sb.from('evaluation_questions').select('*')
+                .eq('evaluation_id', resp.evaluation_id).order('order_index');
+            if (error) throw error;
+            preguntas = data || [];
+        }
+
+        const ev = await window.encuestaDeLaRespuesta(resp.evaluation_id);
+        const respuestas = resp.answers_json || {};
+        const notas = window.gradesTemp || resp.grades_json || {};
+        const enviada = new Date(resp.submitted_at);
+        const ficha = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(resp.employee_id));
+        const nombre = (window.employeeNameMap || {})[resp.employee_id] || (ficha && ficha.name) || String(resp.employee_id);
+        const depto = (ficha && ficha.dept) || (window.employeeDeptMap || {})[String(resp.employee_id)] || '';
+
+        const filas = [
+            ['Encuesta', (ev && ev.title) || ''],
+            ['Empleado', nombre],
+            ['Departamento', depto],
+            ...(resp.employee_area ? [['Área', resp.employee_area]] : []),
+            ['Fecha', isNaN(enviada.getTime()) ? '' : enviada.toLocaleDateString('es-MX')],
+            ['Estado', resp.review_status || ''],
+            [],
+            ['#', 'Pregunta', 'Respuesta', 'Puntuación', '%', 'Estado', 'Comentario']
+        ];
+        const inicioTabla = filas.length;
+
+        let n = 0;
+        preguntas.forEach(q => {
+            // El mismo filtro de la hoja: una pregunta agregada después de
+            // contestar y sin respuesta no era parte de lo contestado.
+            if (q.created_at && new Date(q.created_at).getTime() > enviada.getTime() + 60000 && !respuestas[q.id]) return;
+            n++;
+            const raw = respuestas[q.id];
+            const p = window.puntuacionDePregunta(q, notas[q.id], raw);
+            filas.push([
+                n,
+                window.enunciadoDePregunta(q),
+                window.respuestaEnTexto(q, raw),
+                p.puntos,
+                p.pct === null ? '' : p.pct / 100,
+                p.estado,
+                window.motivoDePregunta(resp, q.id) || ''
+            ]);
+        });
+
+        const calificada = window.tieneCalificaciones({ grades_json: notas });
+        const final = calificada ? window.calcularScoreRespuesta({ grades_json: notas }) : null;
+        filas.push([]);
+        filas.push(['', 'Resultado final', '', '', final === null ? '' : final / 100, final === null ? 'Sin calificar' : '', '']);
+
+        const XLSX = window.XLSX;
+        const hoja = XLSX.utils.aoa_to_sheet(filas);
+        hoja['!cols'] = [{ wch: 5 }, { wch: 50 }, { wch: 30 }, { wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 50 }];
+        // La columna del porcentaje va como número con formato, para que se
+        // pueda sumar y ordenar en Excel.
+        for (let r = inicioTabla; r < filas.length; r++) {
+            const celda = hoja[XLSX.utils.encode_cell({ r, c: 4 })];
+            if (celda && celda.t === 'n') celda.z = '0%';
+        }
+
+        const libro = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(libro, hoja, 'Respuesta');
+        // Sin acentos en el nombre del archivo: Chromium descarta el nombre
+        // entero ante uno y lo guarda como «download». Dentro sí van.
+        const limpio = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^\x20-\x7e]+/g, '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+        const dia = isNaN(enviada.getTime()) ? '' : window.diaLocal(enviada);
+        const archivo = [limpio(ev && ev.title) || 'Respuesta', limpio(nombre), dia].filter(Boolean).join(' - ') + '.xlsx';
+        // El enlace se arma a mano en vez de con `XLSX.writeFile`, que no
+        // siempre respeta el nombre: sin él se descarga un «download» a secas.
+        const datos = XLSX.write(libro, { bookType: 'xlsx', type: 'array' });
+        const url = URL.createObjectURL(new Blob([datos], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+        const enlace = document.createElement('a');
+        enlace.href = url;
+        enlace.download = archivo;
+        document.body.appendChild(enlace);
+        enlace.click();
+        enlace.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+        console.error(e);
+        alert('No se pudo generar el Excel. Revisa la conexión e inténtalo de nuevo.');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 };
 
 // Funciones Helper para agregar y recalcular en List Match Dinámico
