@@ -8,6 +8,29 @@ window.evalCache = null;
 window.targetUserForEval = null;
 window.evalModeRespondiendo = 'self';
 
+// ==========================================
+// DE QUIÉN ES LA RESPUESTA QUE SE ESTÁ ESCRIBIENDO
+// ==========================================
+// Hay tres maneras de contestar una encuesta y las tres escriben una fila de
+// `evaluation_responses`, así que lo único que hay que tener claro siempre es
+// **de quién es**:
+//
+//   'self'      — la contesta quien inició sesión, sobre sí mismo.
+//   'boss'      — la contesta el jefe **sobre** un colaborador: es su juicio,
+//                 y por eso se guarda ya calificada ('Revisado').
+//   'prestado'  — la contesta el colaborador **sobre sí mismo**, tecleando su
+//                 contraseña, en el teléfono de su jefe. Es una respuesta suya
+//                 como cualquier otra: se guarda 'Pendiente' y la califica
+//                 quien la tenga que calificar.
+//
+// Los dos últimos comparten `targetUserForEval` —la fila no es de quien
+// sostiene el teléfono— y **no se pueden confundir**: en modo jefe la encuesta
+// se autocalifica y en prestado no, así que tomar uno por el otro sería dar
+// por revisado lo que nadie ha revisado. De ahí que el modo se pregunte por
+// nombre y no por «¿hay alguien apuntado?», que es lo que hacía este archivo
+// cuando sólo había dos.
+window.esModoPrestado = () => window.evalModeRespondiendo === 'prestado';
+
 // --- HELPER 1: OBTENER JERARQUÍA COMPLETA ---
 window.obtenerJerarquiaCompletaEvaluaciones = (liderId) => {
     const all = window.todosLosEmpleadosData || [];
@@ -1168,6 +1191,43 @@ window.abrirSeleccionSubordinado = (evalId, title, mode) => {
     document.body.appendChild(div);
 };
 
+// ==========================================
+// CONTESTAR EN EL TELÉFONO DE OTRO
+// ==========================================
+// Un jefe ve en sus pendientes las encuestas que sus colaboradores no han
+// contestado, y lo único que podía hacer con ellas era un aviso que le decía
+// que se lo recordara. Pero el colaborador suele estar delante —en la línea,
+// en la junta— y sin teléfono a mano o sin la aplicación instalada, así que
+// ese recordatorio no lo cobraba nadie y la encuesta seguía sin contestarse
+// durante meses.
+//
+// Aquí se le presta el teléfono: **la encuesta la contesta él, de sí mismo, y
+// la respuesta queda a su nombre**. Lo único que cambia respecto de
+// contestarla en el suyo es que antes teclea su contraseña, que es lo que
+// impide que la conteste el jefe por él.
+//
+//     window.responderPorColaborador(evalId, titulo, empId, empName)
+//
+// Tres cosas que hay que mantener:
+//
+//   - **La contraseña la comprueba la hoja de `1-config.js`, no esto.** Es la
+//     misma pregunta del login y se compara igual —contra el número de
+//     empleado—, sin consultar nada y sin guardarla en ningún sitio.
+//   - **El modo es `prestado` y no `boss`.** Los dos apuntan a otra persona,
+//     pero el del jefe se guarda ya calificada: tomar uno por el otro daría
+//     por revisado lo que nadie ha revisado. De eso vive `esModoPrestado`.
+//   - **Y los frenos de `responderDirecto` se preguntan del colaborador.** Es
+//     su encuesta: si la contesta una sola vez, o si tenía que decir antes si
+//     le aplica, eso se mira de él y no de quien sostiene el teléfono.
+window.responderPorColaborador = (evalId, title, empId, empName) => {
+    if (!window.abrirClaveEmpleado) return;
+
+    window.abrirClaveEmpleado({ id: empId, name: empName }, () => {
+        window.targetUserForEval = { id: empId, name: empName };
+        window.responderDirecto(evalId, title, 'prestado');
+    });
+};
+
 window.confirmarEvaluacionSub = (evalId, title, empId, empName, mode) => {
     const modal = document.getElementById('modal-select-sub');
     if (modal) modal.remove();
@@ -1190,6 +1250,19 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
     }
 
     window.evalModeRespondiendo = mode;
+
+    // **En modo `self` no hay nadie apuntado, y hay que decirlo aquí.** A
+    // quién pertenece la respuesta lo decide `targetUserForEval`, que se
+    // queda puesto hasta que alguien lo borre: hoy lo borran el envío y el
+    // cancelar, pero basta con que una hoja se cierre por un camino que no
+    // pase por ellos para que la siguiente encuesta que abra esa persona se
+    // guarde a nombre del colaborador anterior. Los dos sitios que abren una
+    // encuesta propia ya lo limpiaban a mano desde su `onclick`; el panel de
+    // pendientes no, y desde que desde ahí se puede contestar la de otro ese
+    // descuido tiene por dónde morder. Se limpia en la única puerta por la
+    // que se pasa siempre.
+    if (mode === 'self') window.targetUserForEval = null;
+
     document.body.style.cursor = 'wait';
     try {
         // Las dos columnas de más son para el freno de «una sola respuesta» de
@@ -1213,6 +1286,18 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
 
         const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
 
+        // De quién va a ser la respuesta. En modo prestado no es de quien
+        // sostiene el teléfono, y los dos frenos de aquí abajo hablan de ella:
+        // preguntados contra el jefe, le negarían a un colaborador la encuesta
+        // que el jefe ya contestó —y le dejarían contestar la que él mismo ya
+        // había cerrado—.
+        const esPrestado = (mode === 'prestado');
+        const quienContesta = esPrestado && window.targetUserForEval
+            ? window.targetUserForEval.id : user.id;
+        const nombreQuienContesta = esPrestado && window.targetUserForEval
+            ? String(window.targetUserForEval.name || '').trim().split(' ')[0]
+            : '';
+
         // **El botón no es el guardia: éste lo es.** Un `disabled` se quita
         // desde la consola, la hoja de la encuesta pudo quedarse abierta desde
         // antes de contestarla, y al panel de pendientes se llega por otras
@@ -1220,20 +1305,24 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
         //
         // La consulta extra **sólo se hace si la encuesta lo pide**: a las
         // demás no se les cobra una vuelta más a la base por un freno que no
-        // les toca. Y sólo en modo `self`: en modo jefe quien contesta es el
-        // jefe sobre cada colaborador, que es otra cuenta —se dice en CLAUDE.md—.
-        if (mode === 'self' && window.esDeUnaSolaRespuesta(resE.data)) {
+        // les toca. Y en todo modo que no sea el del jefe: ahí quien contesta
+        // es el jefe sobre cada colaborador, que es otra cuenta —se dice en
+        // CLAUDE.md—, pero en `self` y en `prestado` la fila es de una sola
+        // persona y el freno es exactamente el mismo.
+        if (mode !== 'boss' && window.esDeUnaSolaRespuesta(resE.data)) {
             const { data: mias } = await sb.from('evaluation_responses')
                 .select('id, submitted_at')
                 .eq('evaluation_id', evalId)
-                .eq('employee_id', user.id);
+                .eq('employee_id', quienContesta);
             const ya = window.respuestaQueYaCuenta(
                 { ...resE.data, id: evalId }, mias || []);
             if (ya) {
                 document.body.style.cursor = 'default';
                 const dia = new Date(ya.submitted_at).toLocaleDateString('es-ES',
                     { day: '2-digit', month: '2-digit', year: 'numeric' });
-                alert(`Esta encuesta se responde una sola vez y ya la contestaste el ${dia}.`);
+                alert(esPrestado
+                    ? `Esta encuesta se responde una sola vez y ${nombreQuienContesta} ya la contestó el ${dia}.`
+                    : `Esta encuesta se responde una sola vez y ya la contestaste el ${dia}.`);
                 return;
             }
         }
@@ -1248,14 +1337,23 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
         //
         // Sin la caché cargada —o sin el script corrido— `pasoDeAplica` dice
         // siempre 'adelante' y esto no frena nada, que es lo de antes.
-        if (mode === 'self' && window.pasoDeAplica) {
+        if (mode !== 'boss' && window.pasoDeAplica) {
             if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
-            const paso = window.pasoDeAplica({ ...resE.data, id: evalId }, user.id);
+            const paso = window.pasoDeAplica({ ...resE.data, id: evalId }, quienContesta);
             if (paso !== 'adelante') {
                 document.body.style.cursor = 'default';
-                alert(paso === 'fuera'
-                    ? 'Marcaste que esta encuesta no te aplica.\n\nSi te aplica, ábrela desde tu lista de encuestas y dilo ahí.'
-                    : 'Antes de contestarla hay que decir si te aplica.\n\nLa pregunta te sale en tus pendientes y en la pantalla de la encuesta.');
+                if (esPrestado) {
+                    // Aquí la decisión es de quien va a contestar y se toma
+                    // desde su propio panel: nadie puede decir por otro que
+                    // una encuesta le aplica.
+                    alert(paso === 'fuera'
+                        ? `${nombreQuienContesta} marcó que esta encuesta no le aplica.\n\nSi sí le aplica, tiene que decirlo desde su panel.`
+                        : `Antes de contestarla, ${nombreQuienContesta} tiene que decir si le aplica.\n\nLa pregunta le sale en sus pendientes, en su propio panel.`);
+                } else {
+                    alert(paso === 'fuera'
+                        ? 'Marcaste que esta encuesta no te aplica.\n\nSi te aplica, ábrela desde tu lista de encuestas y dilo ahí.'
+                        : 'Antes de contestarla hay que decir si te aplica.\n\nLa pregunta te sale en tus pendientes y en la pantalla de la encuesta.');
+                }
                 return;
             }
         }
@@ -1444,10 +1542,32 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
     // cuál se está contestando —ahí el título de la hoja es la persona—.
     let subTitle = currentDesc || '';
     let headerStyle = "color:#1e293b;";
+    // El renglón de «contesta Fulano» del modo prestado. Vacío en todo lo
+    // demás, que es cuando el teléfono es de quien contesta.
+    let avisoPrestadoHtml = '';
 
     // En una previa nadie está evaluando a nadie, aunque hubiera quedado puesto
     // a quién se evaluaba: lo que se enseña es la encuesta.
-    if (!vistaPrevia && window.targetUserForEval) {
+    //
+    // **Y «evaluando a» es del modo jefe y sólo de él.** Los dos modos que
+    // apuntan a otra persona comparten `targetUserForEval`, así que mirar sólo
+    // eso ponía «Evaluando a: Juan Carlos» encima de una encuesta que está
+    // contestando Juan Carlos de sí mismo: justo al revés de lo que pasa, y en
+    // la pantalla donde peor se puede entender.
+    if (!vistaPrevia && window.targetUserForEval && window.esModoPrestado()) {
+        // Prestado: la encuesta es la suya y la contesta él, así que el título
+        // sigue siendo el de la encuesta —cambiarlo por un nombre escondería
+        // qué se está contestando—. Lo que hace falta decir es de quién va a
+        // ser la respuesta, porque el teléfono es de otro: va en un renglón
+        // propio, encima de la descripción y a todo lo ancho, que es donde se
+        // lee antes de empezar a contestar.
+        avisoPrestadoHtml = `
+                <div class="aviso-prestado">
+                    <span class="aviso-prestado-rotulo">Contesta</span>
+                    <span class="aviso-prestado-nombre">${window.sanitizeForHTML(window.targetUserForEval.name || '')}</span>
+                    <span class="aviso-prestado-nota">La respuesta se guarda a su nombre, no al de quien prestó el teléfono.</span>
+                </div>`;
+    } else if (!vistaPrevia && window.targetUserForEval) {
         headerTitle = `Evaluando a: <span style="color:#be185d;">${window.targetUserForEval.name}</span>`;
         subTitle = currentDesc ? `<b>Instrucciones:</b> ${currentDesc}` : `Encuesta: <b>${title}</b>. Los resultados se guardarán en el perfil del colaborador.`;
         headerStyle = "color:#334155; border-left: 4px solid #be185d; padding-left: 10px;";
@@ -1456,8 +1576,9 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
     // El bloque de arriba no se dibuja si no tiene nada que decir: con los dos
     // textos fuera, una encuesta sin descripción y sin área dejaba un hueco de
     // 25px por encima de la primera pregunta.
-    const introHtml = (subTitle || areaBadgeHtml)
+    const introHtml = (avisoPrestadoHtml || subTitle || areaBadgeHtml)
         ? `<div style="margin-bottom:18px; ${headerStyle}">
+                ${avisoPrestadoHtml}
                 ${subTitle ? `<p style="color:#64748b; margin:0 0 14px; font-size:0.95rem;">${subTitle}</p>` : ''}
                 ${areaBadgeHtml}
            </div>`
@@ -2114,18 +2235,33 @@ window.enviarRespuestasEval = async () => {
         if (!user) throw new Error("Sesión expirada");
 
         const targetEmployeeId = window.targetUserForEval ? window.targetUserForEval.id : user.id;
+        // El modo se pregunta **por nombre**. Los dos modos que apuntan a otra
+        // persona dejan puesto `targetUserForEval`, así que deducirlo de ahí
+        // daría por calificada —'Revisado', sin que nadie la mire— una
+        // respuesta que el colaborador acaba de contestar de sí mismo en el
+        // teléfono de su jefe. Prestado es una respuesta suya como cualquier
+        // otra: se guarda 'Pendiente' y la califica quien le toque.
         const isBossMode = (window.evalModeRespondiendo === 'boss');
+        const esPrestado = window.esModoPrestado();
 
         // Extraemos el NOMBRE del área para enviarlo a la tabla de historial (evaluation_responses)
+        //
+        // El área que se guarda es la de **quien firma la respuesta**, y sólo
+        // se cae a la de la sesión cuando son la misma persona: en prestado
+        // —como en modo jefe— el teléfono es de otro, y sin esta guarda una
+        // respuesta del colaborador se archivaba con el área de su jefe. Esa
+        // columna es el registro histórico de dónde estaba quien contestó, así
+        // que equivocarla desplaza la respuesta de área en las estadísticas.
+        const laFirmaOtro = isBossMode || esPrestado;
         let targetAreaName = 'Sin Área';
         if (window.todosLosEmpleadosData) {
             const empData = window.todosLosEmpleadosData.find(e => String(e.id) === String(targetEmployeeId));
             if (empData && empData.area) {
                 targetAreaName = empData.area;
-            } else if (!isBossMode && user.area) {
+            } else if (!laFirmaOtro && user.area) {
                 targetAreaName = user.area;
             }
-        } else if (!isBossMode && user.area) {
+        } else if (!laFirmaOtro && user.area) {
             targetAreaName = user.area;
         }
 
@@ -2458,6 +2594,14 @@ window.enviarRespuestasEval = async () => {
         let successMsg = "Respuestas enviadas correctamente. Pendiente de revisión.";
         if (isBossMode) {
             successMsg = `✅ Evaluación CALIFICADA AUTOMÁTICAMENTE para ${window.targetUserForEval ? window.targetUserForEval.name : 'el colaborador'}.`;
+        } else if (esPrestado) {
+            // Se dice a nombre de quién quedó, que es lo único que quien
+            // sostiene el teléfono no puede comprobar mirando su propia
+            // pantalla: el pendiente que se cierra es el del colaborador.
+            const suNombre = window.targetUserForEval ? window.targetUserForEval.name : 'el colaborador';
+            successMsg = finalStatus === 'Revisado'
+                ? `Encuesta enviada y registrada a nombre de ${suNombre}.`
+                : `Encuesta enviada a nombre de ${suNombre}. Queda pendiente de revisión.`;
         } else if (finalStatus === 'Revisado') {
             successMsg = "✅ Autoevaluación completada y registrada automáticamente en tu desempeño.";
         }

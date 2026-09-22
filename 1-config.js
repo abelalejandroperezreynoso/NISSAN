@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-22-2';
+window.VERSION_APP = '2026-09-22-3';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -4401,141 +4401,217 @@ window.sostenerModoAdmin = (activo) => {
 window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === 'true';
 
 // ==========================================
-// CONTRASEÑA DEL MODO ADMINISTRADOR
+// HOJAS DE CONTRASEÑA
 // ==========================================
-// La misma hoja para las dos pantallas que encienden el modo administrador.
-// Vive aquí, y no en el marcado de cada documento, porque `10-refacciones.html`
-// e `index.html` no comparten más JavaScript que este archivo: es la razón por
-// la que aquí viven también los permisos de refacciones.
+// Dos hojas salen de aquí, y las dos preguntan lo mismo de dos maneras:
+//
+//     window.abrirClaveAdmin(() => { ...encender el modo administrador... })
+//     window.abrirClaveEmpleado(emp, () => { ...contestar lo suyo... })
+//
+// La primera la comparten `index.html` y `10-refacciones.html`, que no tienen
+// más JavaScript en común que este archivo —es la razón por la que aquí viven
+// también los permisos de refacciones—. La segunda es la que pide su
+// contraseña a quien va a contestar una encuesta desde el teléfono de su jefe.
+//
+// **Y salen de la misma fábrica a propósito.** Son el mismo control: un campo
+// de contraseña con su botón de ojo, su renglón de error y sus dos botones.
+// Dos copias del mismo marcado acabarían discrepando —la de una pantalla
+// aprendería algo que la otra no—, y el botón del ojo es además el sitio donde
+// se mira cómo se hace aquí un campo de contraseña. Lo único que cambia de una
+// a otra lo dice la receta: qué dice el encabezado, contra qué se compara lo
+// tecleado y qué pasa al acertar.
+//
+// Ninguna se monta hasta que se pide, así que una pantalla que nunca las abra
+// no carga con su marcado. Que se creen sobre la marcha no las deja fuera de
+// nada: el observador de más arriba y el bloque del teclado miran el documento
+// vivo.
+//
+// Y ninguna guarda la contraseña en ningún sitio: se compara y se borra el
+// campo. Lo que se recuerda es sólo que se acertó, y eso lo decide quien la
+// abrió.
 //
 // El panel principal la pedía con `prompt()`, que no vale para una contraseña:
-// iOS capitaliza la primera letra —y la nuestra va en minúsculas—, no deja
-// ocultar lo tecleado y se dibuja como un aviso del navegador encima de la
-// aplicación instalada.
-//
-// Lo único que cambia de una pantalla a otra es qué pasa al acertar, y eso lo
-// pone quien la abre:
-//
-//     window.abrirClaveAdmin(() => { ...encender el modo administrador... });
-//
-// La hoja se monta la primera vez que se pide, así que una pantalla que nunca
-// la abra no carga con su marcado. Que se cree sobre la marcha no la deja
-// fuera de nada: el observador de más arriba y el bloque del teclado miran el
-// documento vivo.
+// iOS capitaliza la primera letra —y la del administrador va en minúsculas—,
+// no deja ocultar lo tecleado y se dibuja como un aviso del navegador encima
+// de la aplicación instalada.
 (() => {
-    let alAcertar = null;
+    // Una hoja por receta. `nombres` son las funciones que cuelgan de `window`,
+    // porque el marcado es una cadena y sus `onclick` no pueden ver un closure.
+    const crearHojaDeClave = ({ id, sufijo, nombres, acierta }) => {
+        let alAcertar = null;
+        let contexto = null;
 
-    const MARCADO = `
-    <div id="modal-clave-admin" class="hoja-overlay" style="z-index:5300;">
+        const idCampo = `inp-clave-${sufijo}`;
+        const idError = `error-clave-${sufijo}`;
+        const idOjo = `btn-ver-clave-${sufijo}`;
+
+        const campo = () => document.getElementById(idCampo);
+
+        const montarHoja = () => {
+            let hoja = document.getElementById(id);
+            if (hoja) return hoja;
+            const envoltorio = document.createElement('div');
+            envoltorio.innerHTML = `
+    <div id="${id}" class="hoja-overlay" style="z-index:5300;">
         <div class="hoja-contenido" style="max-width: 420px; overflow: hidden; padding: 12px 20px 20px;">
             <div class="hoja-encabezado">
-                <h3 class="hoja-titulo">Modo administrador</h3>
-                <button onclick="window.cerrarClaveAdmin()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
+                <div style="min-width:0;">
+                    <h3 class="hoja-titulo" id="titulo-clave-${sufijo}"></h3>
+                    <div class="hoja-subtitulo" id="subtitulo-clave-${sufijo}"></div>
+                </div>
+                <button onclick="window.${nombres.cerrar}()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
             </div>
 
             <div class="form-group">
-                <label>Contraseña</label>
+                <label for="${idCampo}">Contraseña</label>
                 <div style="display:flex; gap:8px; align-items:stretch;">
-                    <input type="password" id="inp-clave-admin" placeholder="Contraseña"
+                    <input type="password" id="${idCampo}" placeholder="Contraseña"
                            autocapitalize="none" autocorrect="off" autocomplete="current-password"
                            spellcheck="false" enterkeyhint="go"
-                           onkeypress="window.manejarEnterClave(event)"
+                           onkeypress="window.${nombres.enter}(event)"
                            style="flex:1; min-width:0;">
-                    <button type="button" id="btn-ver-clave" onclick="window.alternarVisibilidadClave()" style="flex-shrink:0; width:44px; border:none; border-radius:10px; background:#f2f2f7; color:#007aff; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;"></button>
+                    <button type="button" id="${idOjo}" class="clave-ojo" onclick="window.${nombres.alternar}()" style="flex-shrink:0; width:44px; border:none; border-radius:10px; background:#f2f2f7; color:#007aff; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;"></button>
                 </div>
-                <div id="error-clave-admin" style="visibility:hidden; margin-top:6px; font-size:0.78rem; color:#ff3b30; font-weight:500;">Contraseña incorrecta.</div>
+                <div id="${idError}" style="visibility:hidden; margin-top:6px; font-size:0.78rem; color:#ff3b30; font-weight:500;">Contraseña incorrecta.</div>
             </div>
 
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">
-                <button onclick="window.cerrarClaveAdmin()" style="padding:10px 18px; background:#f2f2f7; color:#1c1c1e; border:none; border-radius:10px; font-weight:600; cursor:pointer; font-family:inherit; font-size:0.95rem;">Cancelar</button>
-                <button onclick="window.confirmarClaveAdmin()" style="padding:10px 20px; background:#007aff; color:white; border:none; border-radius:10px; font-weight:600; cursor:pointer; font-family:inherit; font-size:0.95rem;">Entrar</button>
+                <button onclick="window.${nombres.cerrar}()" style="padding:10px 18px; background:#f2f2f7; color:#1c1c1e; border:none; border-radius:10px; font-weight:600; cursor:pointer; font-family:inherit; font-size:0.95rem;">Cancelar</button>
+                <button onclick="window.${nombres.confirmar}()" style="padding:10px 20px; background:#007aff; color:white; border:none; border-radius:10px; font-weight:600; cursor:pointer; font-family:inherit; font-size:0.95rem;">Entrar</button>
             </div>
         </div>
-    </div>`;
+    </div>`.trim();
+            hoja = envoltorio.firstElementChild;
+            document.body.appendChild(hoja);
+            return hoja;
+        };
 
-    const montarHoja = () => {
-        let hoja = document.getElementById('modal-clave-admin');
-        if (hoja) return hoja;
-        const envoltorio = document.createElement('div');
-        envoltorio.innerHTML = MARCADO.trim();
-        hoja = envoltorio.firstElementChild;
-        document.body.appendChild(hoja);
-        return hoja;
+        // El botón del ojo no lleva texto, así que lo que dice va al
+        // `aria-label` y al `title`; el icono se reescribe entero porque es el
+        // propio dibujo el que cambia.
+        window[nombres.icono] = () => {
+            const c = campo();
+            const btn = document.getElementById(idOjo);
+            if (!c || !btn) return;
+
+            const visible = c.type === 'text';
+            const etiqueta = visible ? 'Ocultar contraseña' : 'Mostrar contraseña';
+            btn.setAttribute('aria-label', etiqueta);
+            btn.setAttribute('title', etiqueta);
+            btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
+            btn.innerHTML = visible
+                ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.4 5.2A9.6 9.6 0 0 1 12 4.9c5 0 9 4.6 9 7.1 0 1-.7 2.3-1.8 3.5"/><path d="M6.3 6.9C4.2 8.4 3 10.6 3 12c0 2.5 4 7.1 9 7.1 1.4 0 2.7-.3 3.8-.9"/></svg>`
+                : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12c0-2.5 4-7.1 9-7.1s9 4.6 9 7.1-4 7.1-9 7.1S3 14.5 3 12z"/><circle cx="12" cy="12" r="2.6"/></svg>`;
+        };
+
+        window[nombres.alternar] = () => {
+            const c = campo();
+            if (!c) return;
+            c.type = c.type === 'password' ? 'text' : 'password';
+            window[nombres.icono]();
+            c.focus();
+        };
+
+        window[nombres.cerrar] = () => {
+            alAcertar = null;
+            contexto = null;
+            const hoja = document.getElementById(id);
+            if (hoja) hoja.style.display = 'none';
+            const c = campo();
+            if (c) c.value = '';
+        };
+
+        window[nombres.confirmar] = () => {
+            const c = campo();
+            if (!c) return;
+
+            if (!acierta(c.value, contexto)) {
+                const error = document.getElementById(idError);
+                if (error) error.style.visibility = 'visible';
+                c.value = '';
+                c.focus();
+                return;
+            }
+
+            // Se guarda antes de cerrar, que es lo que lo borra.
+            const seguir = alAcertar;
+            window[nombres.cerrar]();
+            if (seguir) seguir();
+        };
+
+        window[nombres.enter] = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                window[nombres.confirmar]();
+            }
+        };
+
+        // `datos` es lo que la hoja necesita saber de esta vez: el rótulo que
+        // enseña y contra qué comparar. Lo guarda el closure y lo borra el
+        // cierre, así que una hoja cerrada no puede acertarle a nadie.
+        return (datos, seguirAlAcertar) => {
+            const hoja = montarHoja();
+            alAcertar = typeof seguirAlAcertar === 'function' ? seguirAlAcertar : null;
+            contexto = datos || null;
+
+            document.getElementById(`titulo-clave-${sufijo}`).innerText = (datos && datos.titulo) || '';
+            const sub = document.getElementById(`subtitulo-clave-${sufijo}`);
+            sub.innerText = (datos && datos.subtitulo) || '';
+
+            const c = campo();
+            c.value = '';
+            c.type = 'password';
+            document.getElementById(idError).style.visibility = 'hidden';
+            window[nombres.icono]();
+            hoja.style.display = 'flex';
+
+            // El foco se retrasa: en iOS enfocar un campo que todavía no se ha
+            // pintado no levanta el teclado.
+            requestAnimationFrame(() => setTimeout(() => c.focus(), 60));
+        };
     };
 
-    window.abrirClaveAdmin = (seguirAlAcertar) => {
-        const hoja = montarHoja();
-        alAcertar = typeof seguirAlAcertar === 'function' ? seguirAlAcertar : null;
+    // --- La del modo administrador ---
+    const pedirClaveAdmin = crearHojaDeClave({
+        id: 'modal-clave-admin',
+        sufijo: 'admin',
+        nombres: {
+            cerrar: 'cerrarClaveAdmin', confirmar: 'confirmarClaveAdmin',
+            enter: 'manejarEnterClave', alternar: 'alternarVisibilidadClave',
+            icono: 'actualizarIconoClave'
+        },
+        acierta: (escrito) => escrito === window.PASSWORD_ADMIN
+    });
 
-        const campo = document.getElementById('inp-clave-admin');
-        campo.value = '';
-        campo.type = 'password';
-        document.getElementById('error-clave-admin').style.visibility = 'hidden';
-        window.actualizarIconoClave();
-        hoja.style.display = 'flex';
+    window.abrirClaveAdmin = (seguirAlAcertar) =>
+        pedirClaveAdmin({ titulo: 'Modo administrador' }, seguirAlAcertar);
 
-        // El foco se retrasa: en iOS enfocar un campo que todavía no se ha
-        // pintado no levanta el teclado.
-        requestAnimationFrame(() => setTimeout(() => campo.focus(), 60));
-    };
+    const pedirClaveEmpleado = crearHojaDeClave({
+        id: 'modal-clave-empleado',
+        sufijo: 'empleado',
+        nombres: {
+            cerrar: 'cerrarClaveEmpleado', confirmar: 'confirmarClaveEmpleado',
+            enter: 'manejarEnterClaveEmpleado', alternar: 'alternarVisibilidadClaveEmpleado',
+            icono: 'actualizarIconoClaveEmpleado'
+        },
+        acierta: (escrito, datos) => !!datos && escrito.trim() === datos.esperada
+    });
 
-    window.cerrarClaveAdmin = () => {
-        alAcertar = null;
-        const hoja = document.getElementById('modal-clave-admin');
-        if (hoja) hoja.style.display = 'none';
-        const campo = document.getElementById('inp-clave-admin');
-        if (campo) campo.value = '';
-    };
-
-    window.alternarVisibilidadClave = () => {
-        const campo = document.getElementById('inp-clave-admin');
-        if (!campo) return;
-        campo.type = campo.type === 'password' ? 'text' : 'password';
-        window.actualizarIconoClave();
-        campo.focus();
-    };
-
-    // El botón no lleva texto, así que lo que dice va al `aria-label` y al
-    // `title`; el icono se reescribe entero porque es el propio dibujo el que
-    // cambia.
-    window.actualizarIconoClave = () => {
-        const campo = document.getElementById('inp-clave-admin');
-        const btn = document.getElementById('btn-ver-clave');
-        if (!campo || !btn) return;
-
-        const visible = campo.type === 'text';
-        const etiqueta = visible ? 'Ocultar contraseña' : 'Mostrar contraseña';
-        btn.setAttribute('aria-label', etiqueta);
-        btn.setAttribute('title', etiqueta);
-        btn.setAttribute('aria-pressed', visible ? 'true' : 'false');
-        btn.innerHTML = visible
-            ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.4 5.2A9.6 9.6 0 0 1 12 4.9c5 0 9 4.6 9 7.1 0 1-.7 2.3-1.8 3.5"/><path d="M6.3 6.9C4.2 8.4 3 10.6 3 12c0 2.5 4 7.1 9 7.1 1.4 0 2.7-.3 3.8-.9"/></svg>`
-            : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12c0-2.5 4-7.1 9-7.1s9 4.6 9 7.1-4 7.1-9 7.1S3 14.5 3 12z"/><circle cx="12" cy="12" r="2.6"/></svg>`;
-    };
-
-    window.confirmarClaveAdmin = () => {
-        const campo = document.getElementById('inp-clave-admin');
-        if (!campo) return;
-
-        if (campo.value !== window.PASSWORD_ADMIN) {
-            const error = document.getElementById('error-clave-admin');
-            if (error) error.style.visibility = 'visible';
-            campo.value = '';
-            campo.focus();
-            return;
-        }
-
-        // Se guarda antes de cerrar, que es lo que lo borra.
-        const seguir = alAcertar;
-        window.cerrarClaveAdmin();
-        if (seguir) seguir();
-    };
-
-    window.manejarEnterClave = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            window.confirmarClaveAdmin();
-        }
+    // --- La de una persona de la plantilla ---
+    // La contraseña de cada quien es su número de empleado, que es lo que
+    // compara el login: aquí se pregunta lo mismo y se compara igual, sin
+    // consultar nada —el número ya viene en la ficha que se le pasa—.
+    //
+    // El encabezado lleva el nombre de quien tiene que teclear, no el de quien
+    // sostiene el teléfono: lo que esta hoja impide es exactamente que lo
+    // conteste otro.
+    window.abrirClaveEmpleado = (emp, seguirAlAcertar) => {
+        if (!emp || emp.id === undefined || emp.id === null) return;
+        pedirClaveEmpleado({
+            titulo: emp.name || 'Identifícate',
+            subtitulo: 'Escribe tu contraseña para contestar tu encuesta',
+            esperada: String(emp.id).trim()
+        }, seguirAlAcertar);
     };
 })();
 

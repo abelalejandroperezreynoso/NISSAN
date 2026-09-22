@@ -756,7 +756,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                                                 misDirectosFull.forEach(sub => {
                                                                     // Un subordinado dado de baja ya no va a responder ni
                                                                     // se le va a evaluar: ni «Encuesta Atrasada» con su
-                                                                    // botón de recordar, ni «Evaluar a …».
+                                                                    // botón de responder, ni «Evaluar a …».
                                                                     if (!window.empleadoActivo(sub)) return;
 
                                                                     let aplicaSub = false;
@@ -800,6 +800,11 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                                         } else {
                                                             items.push({
                                                                 id: `missing_survey_${ev.id}_${sub.id}`, title: ev.title,
+                                                                // El id de la encuesta y el de quien la debe
+                                                                // viajan aparte del `id` compuesto: de ellos
+                                                                // vive el botón de responder, que se la abre
+                                                                // al colaborador en este mismo teléfono.
+                                                                real_eval_id: ev.id, sub_id: sub.id,
                                                                 date: window.diaDeInicioDeEncuesta(ev),
                                                                 tipo: 'Encuesta Atrasada',
                                                                 grado: 'Atrasada', sub_name: sub.name, sub_puesto: sub.puesto || 'Colaborador',
@@ -935,6 +940,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                                                 items.push({
                                                                     id: `hierarchy_missing_${ev.id}_${sub.id}`,
                                                                     title: ev.title,
+                                                                    real_eval_id: ev.id, sub_id: sub.id,
                                                                     date: window.diaDeInicioDeEncuesta(ev),
                                                                     tipo: 'Encuesta Atrasada', grado: 'Atrasada', sub_name: sub.name,
                                                                     sub_puesto: sub.puesto || 'Colaborador', virtual_type: 'team_missing_survey',
@@ -981,7 +987,14 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
         // abrir sin volver a consultar y sin meter catorce urls en un atributo.
         window.portadasDePendientes = portadas;
 
-        const htmlPromises = items.map(async (item) => {
+        // Y a quién le falta cada encuesta del equipo, por el mismo motivo: el
+        // botón de responder necesita el nombre del colaborador y un nombre no
+        // puede ir dentro de un atributo —un apellido con apóstrofo parte el
+        // `onclick`, que es lo que le pasa a la tarjeta del usuario desde
+        // siempre—. Se guarda por índice de la lista, que es lo que sí cabe.
+        window.pendientesDeColaborador = {};
+
+        const htmlPromises = items.map(async (item, indice) => {
             
            // 🔥 SE CALCULA Y GENERA LA ETIQUETA DE TIEMPO TRANSCURRIDO 🔥
             const textoTiempo = obtenerTiempoTranscurrido(item.date);
@@ -1063,7 +1076,45 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 // vez, que es lo que da por hecho el resto de la aplicación.
                 const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
                 const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">${freqText}</span>`;
-                
+
+                // **El botón abre la encuesta, no manda un recordatorio.** Ahí
+                // estuvo «Recordar», que no avisaba a nadie: era un `alert`
+                // que le decía al jefe que se lo dijera él. Como el
+                // colaborador suele estar delante y sin teléfono a mano, ese
+                // recado no lo cobraba nadie y la encuesta seguía sin
+                // contestarse. Hoy se le presta el teléfono: teclea su
+                // contraseña y la contesta él, de sí mismo, y la respuesta
+                // queda a su nombre.
+                //
+                // Hace falta saber a quién y de qué encuesta, y lo segundo no
+                // se puede sacar del `id` de la tarjeta —es compuesto—, así
+                // que los dos viajan en el item. Sin ellos —una lista armada
+                // por un camino que todavía no los ponga— no se dibuja botón:
+                // uno que no sabe a quién le abre la encuesta es peor que
+                // ninguno.
+                const puedePrestarse = !!(item.real_eval_id && item.sub_id && window.responderPorColaborador);
+                if (puedePrestarse) {
+                    window.pendientesDeColaborador[indice] = {
+                        evalId: item.real_eval_id, titulo: item.title,
+                        empId: item.sub_id, empName: item.sub_name
+                    };
+                }
+
+                // **Y el botón dice de quién es la encuesta.** A un jefe al que
+                // le toca la misma encuesta le salen dos tarjetas con el mismo
+                // título, una encima de otra: la suya y la de su colaborador.
+                // Con «Responder» a secas en las dos, lo único que las separa
+                // es el color del botón, y lo que se toca es el botón. El
+                // nombre va con el mismo primer trozo que ya usaba el aviso de
+                // esta tarjeta —aquí los nombres empiezan por los apellidos—,
+                // que es de sobra para distinguirlas teniendo el completo dos
+                // renglones más arriba.
+                const suNombre = window.sanitizeForHTML(
+                    String(item.sub_name || '').trim().split(' ')[0] || 'el colaborador');
+                const accionHtml = puedePrestarse
+                    ? `<button class="btn-firmar" onclick="window.responderPendienteDeColaborador(${indice})" style="color:white; background:#ef4444; border:none;">Responder · ${suNombre}</button>`
+                    : '';
+
                 return `
                 <div class="incident-card" style="border-left: 5px solid #ef4444;">
                     <div class="card-header" style="align-items: flex-start;">
@@ -1088,9 +1139,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                 </div>
                             </div>
                         </div>
-                        <div class="card-actions" style="align-self: center;">
-                            <button class="btn-firmar" onclick="alert('Pídele a ${item.sub_name.split(' ')[0]} que complete esta encuesta desde su panel de pendientes.')" style="color:#ef4444; border-color:#ef4444; background:white;">Recordar</button>
-                        </div>
+                        ${accionHtml ? `<div class="card-actions" style="align-self: center;">${accionHtml}</div>` : ''}
                     </div>
                 </div>`;
             }
@@ -1450,6 +1499,23 @@ window.paginasDePortadaDePendiente = (evaluationId) => {
 window.portadaDePendienteRota = (img) => {
     const caja = img && img.closest('.pendiente-portada');
     if (caja) caja.remove();
+};
+
+// A quién le falta cada encuesta del equipo. Lo deja puesto
+// `cargarVistaPendientes` al dibujar, por la misma razón que las portadas: el
+// nombre de una persona no cabe dentro de un atributo sin romperlo el día que
+// alguien se apellide O'Brien.
+window.pendientesDeColaborador = {};
+
+// El botón «Responder» de una encuesta del equipo. Le presta el teléfono al
+// colaborador: pide su contraseña y le abre **su** encuesta, de modo que la
+// respuesta queda a su nombre y pendiente de revisión, igual que si la hubiera
+// contestado en el suyo. Lo demás lo hace `responderPorColaborador`, en
+// `4-evaluaciones-base.js`, que es donde vive todo lo de contestar.
+window.responderPendienteDeColaborador = (indice) => {
+    const p = window.pendientesDeColaborador[indice];
+    if (!p || !window.responderPorColaborador) return;
+    window.responderPorColaborador(p.evalId, p.titulo, p.empId, p.empName);
 };
 
 window.pintarCuentaPendientes = (cuantos) => {

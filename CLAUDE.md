@@ -4401,6 +4401,132 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - **Sin la columna, el campo se queda vacío y apagado** diciendo qué script
     falta (`avisarSiFaltaColumnaVigencia`), y todo se comporta como antes: manda
     `created_at`. Es el mismo molde que el umbral y los revisores.
+- **Un jefe puede prestarle el teléfono a su colaborador para que conteste su
+  encuesta.** En los pendientes del jefe salen las encuestas que su gente no ha
+  contestado, y lo único que se podía hacer con ellas era un botón «Recordar»
+  que **no avisaba a nadie**: era un `alert` diciéndole al jefe que se lo
+  dijera él. Como el colaborador suele estar delante —en la línea, en la
+  junta— pero sin teléfono a mano o sin la aplicación instalada, ese recado no
+  lo cobraba nadie y la encuesta seguía sin contestarse durante meses. Hoy el
+  botón dice **«Responder · Fulano»** y le abre la encuesta ahí mismo.
+
+  **La contesta él, de sí mismo, y la respuesta queda a su nombre.** Lo único
+  que cambia respecto de contestarla en su propio teléfono es que antes teclea
+  su contraseña, que es lo que impide que la conteste el jefe por él.
+
+  ```js
+  window.responderPorColaborador(evalId, titulo, empId, empName)  // 4-evaluaciones-base.js
+  window.abrirClaveEmpleado(emp, alAcertar)                       // 1-config.js
+  window.esModoPrestado()
+  window.pendientesDeColaborador  window.responderPendienteDeColaborador(indice)
+  ```
+
+  **Es un tercer modo de contestar, y tiene nombre propio.** Había dos —`self`,
+  uno sobre sí mismo, y `boss`, el jefe **sobre** un colaborador— y los dos que
+  apuntan a otra persona comparten `window.targetUserForEval`, así que el
+  código deducía el modo de «¿hay alguien apuntado?». Con un tercero eso deja
+  de valer: la de modo jefe se guarda ya calificada (`'Revisado'`) y **la
+  prestada no**, que es una respuesta suya como cualquier otra y la califica
+  quien le toque. Confundirlos sería dar por revisado lo que nadie ha revisado,
+  así que el modo se pregunta por nombre —`evalModeRespondiendo === 'prestado'`,
+  vía `esModoPrestado`— y nunca por si hay alguien apuntado.
+
+  Siete cosas que hay que mantener:
+
+  - **La contraseña de cada quien es su número de empleado**, que es lo que
+    compara el login (`e.name === n && e.id == p`). Aquí se pregunta lo mismo y
+    se compara igual, **sin consultar nada** —el número viene en la ficha que
+    se le pasa— y sin guardarlo en ningún sitio: se compara y se borra el
+    campo. La contrapartida es que quien sepa el número de un compañero puede
+    contestar por él; eso ya era cierto en la pantalla de login y esto no abre
+    ninguna puerta nueva, pero sí la pone más a mano. **Por eso el número de
+    empleado no se enseña en ninguna de estas pantallas**, y una tarjeta nueva
+    del panel de pendientes tampoco puede enseñarlo.
+  - **Los dos frenos de `responderDirecto` se preguntan del colaborador.** Eran
+    `mode === 'self'` y hoy son «todo lo que no sea el modo jefe», contra
+    `quienContesta`: es su encuesta, así que si se contesta una sola vez, o si
+    tenía que decir antes si le aplica, eso se mira **de él**. Preguntados
+    contra quien sostiene el teléfono le negarían al colaborador la encuesta
+    que el jefe ya contestó, y le dejarían pasar la que él mismo ya cerró.
+  - **Y esos dos avisos hablan en tercera persona** cuando el teléfono es
+    prestado: «Marcaste que no te aplica» en la pantalla de otro no se
+    entiende, y además la decisión de si le aplica **no se puede tomar aquí**
+    —esa se toma desde su propio panel, que es donde la pregunta es suya—.
+  - **«Evaluando a: Fulano» es del modo jefe y sólo de él.** Ese encabezado
+    colgaba de `targetUserForEval` a secas, así que en prestado ponía
+    «Evaluando a: Juan Carlos» encima de una encuesta que está contestando Juan
+    Carlos de sí mismo: justo al revés de lo que pasa, y en la pantalla donde
+    peor se puede entender. En prestado el título sigue siendo **el de la
+    encuesta** —cambiarlo por un nombre escondería qué se está contestando— y
+    lo que hace falta decir va en un renglón propio encima de la primera
+    pregunta (`.aviso-prestado`, en `estilos.css`): de quién va a ser la
+    respuesta y que se guarda a su nombre.
+  - **El área que se guarda es la suya.** `employee_area` es el registro
+    histórico de dónde estaba quien contestó, y se caía a la de la sesión
+    cuando la ficha no traía área: sin la guarda de `laFirmaOtro` —que hoy
+    cubre prestado igual que el modo jefe— la respuesta del colaborador se
+    archivaba con el área de su jefe y se desplazaba de área en las
+    estadísticas. Si no tiene área y la encuesta la pide, la elige en la misma
+    hoja: `guardarAreaEnEvaluacion` ya escribe sobre la ficha de quien contesta
+    y sólo toca `usuarioLogueado` cuando son la misma persona.
+  - **`responderDirecto` limpia a quien quedara apuntado en modo `self`.** A
+    quién pertenece la respuesta lo decide `targetUserForEval`, que se queda
+    puesto hasta que alguien lo borre —hoy lo borran el envío y el cancelar—.
+    Los dos sitios que abren una encuesta propia lo limpiaban a mano desde su
+    `onclick`; **el panel de pendientes no**, y desde que desde ahí se contesta
+    también la de otro, ese descuido tiene por dónde morder: una hoja cerrada
+    por un camino que no pase por esos dos dejaría la siguiente encuesta del
+    jefe guardada a nombre del colaborador anterior. Se limpia en la única
+    puerta por la que se pasa siempre.
+  - **El botón dice de quién es la encuesta.** A un jefe al que le toca la
+    misma encuesta le salen dos tarjetas con el mismo título, una encima de
+    otra —la suya y la de su colaborador—, y con «Responder» a secas en las dos
+    lo único que las separa es el color del botón; lo que se toca es el botón.
+    El nombre va con el mismo primer trozo que ya usaba el aviso de esta
+    tarjeta (`split(' ')[0]`; aquí los nombres empiezan por los apellidos), que
+    basta teniendo el completo dos renglones más arriba.
+
+  **Y el item de la tarjeta lleva `real_eval_id` y `sub_id`.** El `id` de un
+  `team_missing_survey` es compuesto (`missing_survey_<ev>_<sub>`), así que de
+  ahí no se puede sacar a quién ni de qué encuesta. Los ponen **los dos**
+  sitios que arman esa tarjeta —el del equipo directo, en «Mis Pendientes», y
+  el de la jerarquía completa, en «Pendientes de mi Equipo»—, y sin ellos **no
+  se dibuja botón**: uno que no sabe a quién le abre la encuesta es peor que
+  ninguno.
+
+  El nombre no viaja en el `onclick`: se guarda por índice en
+  `window.pendientesDeColaborador`, como las portadas y por lo mismo —un
+  apellido con apóstrofo parte el atributo, que es lo que le pasa a la tarjeta
+  del usuario desde siempre—.
+
+  La hoja de la contraseña **se apila sobre la de pendientes**, que es lo que
+  esta aplicación evita en general; es la misma excepción que `#modal-sin-curso`
+  y por lo mismo: dura lo que un toque y lo que hay debajo es justo el
+  pendiente del que se está hablando, así que esconderlo sería quitar el
+  contexto.
+
+- **Las dos hojas de contraseña salen de la misma fábrica.** La del modo
+  administrador y la de una persona de la plantilla son el mismo control —un
+  campo de contraseña con su botón de ojo, su renglón de error y sus dos
+  botones—, así que las construye una sola receta en `1-config.js` en vez de
+  haber dos copias del marcado: la de una pantalla acabaría aprendiendo algo
+  que la otra no. Lo único que cambia lo dice la receta —qué dice el
+  encabezado, contra qué se compara lo tecleado y qué pasa al acertar—.
+
+  Las funciones siguen colgando de `window` una por hoja
+  (`cerrarClaveAdmin`/`cerrarClaveEmpleado`, `confirmarClave…`,
+  `manejarEnterClave…`, `alternarVisibilidadClave…`, `actualizarIconoClave…`)
+  porque el marcado es una cadena y sus `onclick` no pueden ver un closure.
+  Desde fuera **sólo se llaman las dos puertas**, `abrirClaveAdmin` y
+  `abrirClaveEmpleado`, que es lo que ya hacían `2a-core-nav.js` y
+  `10-refacciones.html`.
+
+  Ninguna se monta hasta que se pide, así que una pantalla que nunca las abra
+  no carga con su marcado. Y como el encabezado lleva ahora subtítulo —la del
+  empleado dice qué se le pide—, la regla de «sin subtítulo no hay renglón» de
+  `estilos.css` se generalizó de aquel id suelto a **`.hoja-subtitulo:empty`**:
+  vale para toda hoja que escriba el suyo siempre, aunque sea para vaciarlo.
+
 - **La hoja de pendientes va sin emojis y con la cuenta en un círculo.**
   El encabezado llevaba tres chapas debajo del título —«Total: 14», «Vencidos /
   Urgentes: 14» y «Anticipados: 0»— que se comían renglón y medio para repartir

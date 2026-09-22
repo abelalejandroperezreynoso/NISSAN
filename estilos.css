@@ -2076,7 +2076,11 @@ textarea:focus {
 }
 
 /* Sin subtítulo no hay renglón: su hueco de 2px separaría el título de la
-   línea del encabezado sin decir nada. */
+   línea del encabezado sin decir nada. Vale para toda hoja que escriba el
+   suyo siempre —aunque sea para vaciarlo—, que es lo que hacen la de
+   evaluaciones y las dos de contraseña: el id que había aquí sólo cubría la
+   primera. */
+.hoja-subtitulo:empty,
 #subtitulo-hoja-evaluaciones:empty { display: none; }
 
 .hoja-subtitulo {
@@ -6373,3 +6377,58 @@ html.fondo-anclado body {
 }
 
 .curso-aviso-salir:active { transform: scale(0.97); }
+
+/* ==========================================================================
+   CONTESTAR EN EL TELÉFONO DE OTRO
+   ========================================================================== */
+/* El renglón que dice de quién va a ser la respuesta, encima de la primera
+   pregunta. Sólo sale en modo prestado, que es el único donde el teléfono no
+   es de quien contesta: ahí el título de la hoja sigue siendo el de la
+   encuesta —cambiarlo por un nombre escondería qué se está contestando—, así
+   que lo que hay que decir se dice aquí.
+
+   Va a todo lo ancho y con el nombre a su propio tamaño: es lo único de esta
+   pantalla que quien presta el teléfono tiene que leer antes de dárselo. */
+.aviso-prestado {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+}
+
+.aviso-prestado-rotulo {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #1d4ed8;
+}
+
+.aviso-prestado-nombre {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #1e3a8a;
+}
+
+.aviso-prestado-nota {
+    font-size: 0.78rem;
+    font-weight: 400;
+    line-height: 1.35;
+    color: #475569;
+}
+
+/* El botón del ojo de una hoja de contraseña. El dibujo se reescribe entero al
+   alternar —es el propio icono el que cambia—, así que el tamaño no puede ir
+   en el `<svg>`: va aquí. Estuvo en `10-refacciones.html` y apuntando al id,
+   de cuando la hoja era una sola; con dos —la del administrador y la de una
+   persona de la plantilla— los ids dejan de servir y el panel principal se
+   quedaba sin la regla, con el icono a su tamaño natural. */
+.clave-ojo svg {
+    width: 20px;
+    height: 20px;
+}
