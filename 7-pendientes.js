@@ -579,7 +579,11 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                 const myDeptoEval = (user.department || user.dept || "GENERAL").trim().toUpperCase();
 
                 activeEvals.forEach(ev => {
-                                                const esObligatoria = (ev.is_obligatory !== false && String(ev.is_obligatory) !== 'false');
+                                                // Obligatoria, o bien opcional y esta persona dijo que
+                                                // sí le aplica: ese «sí» se la asigna ella misma.
+                                                const esObligatoria = window.seExigeLaEncuesta
+                                                    ? window.seExigeLaEncuesta(ev, user.id)
+                                                    : (ev.is_obligatory !== false && String(ev.is_obligatory) !== 'false');
 
                                                 let targetEmps = ev.target_employees;
                                                 if (typeof targetEmps === 'string') { try { targetEmps = JSON.parse(targetEmps); } catch(e) { targetEmps = ['ALL']; } }

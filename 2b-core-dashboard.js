@@ -3361,7 +3361,9 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                     // lo necesita igual. Lo que se exige después sí depende de
                     // la casilla.
                     if (paso === 'preguntar') return true;
-                    return !(ev.is_obligatory === false || String(ev.is_obligatory) === 'false');
+                    // Y quien dijo que sí le aplica se la asignó él mismo, así
+                    // que se le exige aunque la encuesta sea opcional.
+                    return window.seExigeLaEncuesta(ev, empStrId);
                 });
 
                 if (evalsQueLeTocan.length > 0) {

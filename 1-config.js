@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-22-1';
+window.VERSION_APP = '2026-09-22-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -354,6 +354,22 @@ window.pasoDeAplica = (ev, empleadoId) => {
     if (decision === undefined) return 'adelante';
     if (decision === true) return 'adelante';
     return decision === false ? 'fuera' : 'preguntar';
+};
+
+// ¿Se le exige contestarla a esta persona? Lo normal lo dice `is_obligatory`:
+// una encuesta opcional no se le pide a nadie, y por eso no sale en pendientes
+// ni cuenta en el badge. Pero quien contestó «sí, me aplica» se asignó la
+// encuesta él mismo, y ahí esconderla después es dejar la pregunta sin
+// consecuencia: se pregunta, se contesta que sí y no pasa nada. Ese «sí» es más
+// explícito que el valor por defecto de la casilla, así que manda.
+//
+// Los otros dos casos los resuelve antes `pasoDeAplica`: quien no ha decidido
+// tiene de pendiente la pregunta y quien dijo que no no tiene nada.
+window.seExigeLaEncuesta = (ev, empleadoId) => {
+    if (!ev) return false;
+    if (ev.is_obligatory !== false && String(ev.is_obligatory) !== 'false') return true;
+    return window.preguntaSiAplica(ev) &&
+           window.decisionDeAplica(ev.id, empleadoId) === true;
 };
 
 // Si a esta persona hay que preguntarle. Es candidata, la encuesta pregunta y

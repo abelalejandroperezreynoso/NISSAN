@@ -4283,9 +4283,25 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     el padrón, «Le aplica a» y el divisor de la certificación—, y eso una
     opcional lo necesita igual. Por eso `cargarVistaPendientes` y
     `calcularPendientesBatch` miran `pasoDeAplica` **antes** del gate de
-    obligatoriedad —y sólo lo que venga después, la encuesta misma, sigue
-    dependiendo de él—: quien dijo que sí a una opcional vuelve a no tener nada
-    pendiente, que es lo de siempre.
+    obligatoriedad.
+  - **Y decir que sí se la asigna, aunque la encuesta sea opcional**
+    (`window.seExigeLaEncuesta(ev, empleadoId)`). Con la pregunta ya delante del
+    gate quedaba la mitad del camino hecho y se leía peor que antes: salía la
+    pregunta, se contestaba «sí, me aplica» y la encuesta **desaparecía sin
+    dejar nada** —la pregunta sin consecuencia—. Ese «sí» es más explícito que
+    el valor por defecto de una casilla: quien lo dio se asignó la encuesta él
+    mismo, así que se le pide contestarla. Es el único sitio donde una encuesta
+    opcional genera un pendiente, y por eso la regla vive en un ayudante y no
+    repetida: la miran el panel de pendientes y el badge, que no pueden
+    discrepar. Los otros dos casos los resuelve antes `pasoDeAplica` —sin
+    decidir, el pendiente es la pregunta; con un «no», no hay nada—.
+
+    Lo que **no** cambió es el equipo: «Encuesta Atrasada» y el
+    `countPorCalificar` del badge siguen filtrando las obligatorias de un
+    plumazo, antes de saber de qué colaborador se habla, así que a un jefe no le
+    sale como atraso la opcional que uno de los suyos aceptó. Es coherente con
+    lo de arriba —la pregunta tampoco se hereda— y además esa lista nunca tuvo
+    encuestas opcionales.
   - **Y el jefe no hereda lo que no es suyo.** Los dos sitios que hablan del
     equipo —«Encuesta Atrasada» del panel de pendientes y el `countPorCalificar`
     del badge— llevan el mismo freno: la encuesta que un colaborador descartó no
