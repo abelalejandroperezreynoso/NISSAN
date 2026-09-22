@@ -4738,6 +4738,18 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   pasa por `sanitizeForHTML`, que va dentro de un `<span>` y un apellido puede
   traer un apóstrofo.
 
+  **Y con el nombre arriba, el recuadro gris se quedó sin nada que decir.** Lo
+  llevaba en negrita y ahí salía **tres veces** en la misma tarjeta —la
+  etiqueta, el recuadro y el botón—, así que se fue de él; lo que quedaba
+  dentro era el puesto y «Última vez», que es una fecha, o sea una etiqueta más
+  en letra pequeña a media tarjeta en vez de en la fila donde se leen las
+  demás. Hoy **«Última vez» es la misma pastilla que la tarjeta propia** —y la
+  misma función, `window.badgeUltimaVezHtml(fecha)`, que es lo que evita que
+  dos copias acaben discrepando— y **el puesto es un renglón gris a secas**: un
+  recuadro con borde alrededor de la palabra «Tecnico» es un marco alrededor de
+  lo que menos dice de la tarjeta. Son 18px menos en una nunca contestada y
+  10px en una que ya se contestó (375px).
+
   `team_missing_eval` —«Evaluar a …»— no se tocó: ahí el título **es** la
   persona.
 

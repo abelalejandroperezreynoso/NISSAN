@@ -1094,15 +1094,13 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                 // este renglón gris— encima de un botón que ya dice
                 // «Responder». Lo que sí dice algo es **desde cuándo**, y eso
                 // sólo existe si ya se contestó una vez. Es la misma regla que
-                // la tarjeta de la encuesta propia, que la estrenó.
-                let textoUltima = '';
-                if (item.vencimiento && item.vencimiento.ultimaFecha) {
-                    const fechaUltima = new Date(item.vencimiento.ultimaFecha);
-                    const d = String(fechaUltima.getDate()).padStart(2, '0');
-                    const m = String(fechaUltima.getMonth() + 1).padStart(2, '0');
-                    const y = fechaUltima.getFullYear();
-                    textoUltima = `Última vez: ${d}/${m}/${y}`;
-                }
+                // la tarjeta de la encuesta propia, que la estrenó, y **la
+                // misma pastilla**: iba como un renglón dentro del recuadro
+                // gris, que es donde menos se lee —debajo de la fila de
+                // etiquetas, en letra pequeña y a media tarjeta—, así que hoy
+                // va donde van las demás.
+                const badgeUltimaHtml = window.badgeUltimaVezHtml(
+                    item.vencimiento && item.vencimiento.ultimaFecha);
 
                 // **El botón abre la encuesta, no manda un recordatorio.** Ahí
                 // estuvo «Recordar», que no avisaba a nadie: era un `alert`
@@ -1153,18 +1151,10 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                 <span class="badge-type" style="background-color:#ef4444">Falta Contestar · ${nombreCompleto}</span>
                                 ${item.vencimiento && item.vencimiento.tipoAviso === 'nunca' ? '' : badgeTiempoHtml}
                                 ${badgeOmisionesHtml}
+                                ${badgeUltimaHtml}
                             </div>
-                            
-                            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; display:flex; flex-direction:column; gap:6px;">
-                                <div style="display:flex; align-items:center; gap:6px; font-size:0.85rem; color:#334155;">
-                                    <span style="font-weight:bold;">${item.sub_name}</span>
-                                    <span style="color:#94a3b8;">|</span>
-                                    <span>${item.sub_puesto}</span>
-                                </div>
-                                ${textoUltima ? `<div style="font-size:0.75rem; color:#64748b; display:flex; align-items:center; gap:4px;">
-                                    <span style="font-weight:600;">${textoUltima}</span>
-                                </div>` : ''}
-                            </div>
+
+                            <div style="font-size:0.8rem; color:#64748b;">${window.sanitizeForHTML(String(item.sub_puesto || ''))}</div>
                         </div>
                         ${accionHtml ? `<div class="card-actions" style="align-self: center;">${accionHtml}</div>` : ''}
                     </div>
@@ -1361,11 +1351,8 @@ if (item.virtual_type === 'waiting_boss') {
                 // —hablan de un tercero, y ahí es un reproche que se le
                 // traslada—.
                 const nuncaContestada = !!(item.vencimiento && item.vencimiento.tipoAviso === 'nunca');
-                const ultima = item.vencimiento && item.vencimiento.ultimaFecha
-                    ? new Date(item.vencimiento.ultimaFecha) : null;
-                const badgeUltimaHtml = (ultima && !isNaN(ultima))
-                    ? `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; border:1px solid #e2e8f0;">Última vez: ${String(ultima.getDate()).padStart(2, '0')}/${String(ultima.getMonth() + 1).padStart(2, '0')}/${ultima.getFullYear()}</span>`
-                    : '';
+                const badgeUltimaHtml = window.badgeUltimaVezHtml(
+                    item.vencimiento && item.vencimiento.ultimaFecha);
 
                 // Las etiquetas heredadas traen un `margin-left` de cuando iban
                 // detrás de la de frecuencia; sin ella, la primera quedaría
@@ -1521,6 +1508,19 @@ window.portadaDePendienteHtml = (evaluationId) => {
                              onerror="window.portadaDePendienteRota(this)">
                         ${p.cuantas > 1 ? `<span class="pendiente-portada-paginas">${p.cuantas} páginas</span>` : ''}
                     </button>`;
+};
+
+// La pastilla de «Última vez», que es la misma en la tarjeta de la encuesta
+// propia y en la de un colaborador. Dice **desde cuándo** falta, que es lo
+// único que «Nunca contestada» no decía; sin fecha anterior no se dibuja, que
+// es el caso por defecto de un pendiente.
+window.badgeUltimaVezHtml = (ultimaFecha) => {
+    if (!ultimaFecha) return '';
+    const f = new Date(ultimaFecha);
+    if (isNaN(f)) return '';
+    const d = String(f.getDate()).padStart(2, '0');
+    const m = String(f.getMonth() + 1).padStart(2, '0');
+    return `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; border:1px solid #e2e8f0;">Última vez: ${d}/${m}/${f.getFullYear()}</span>`;
 };
 
 window.paginasDePortadaDePendiente = (evaluationId) => {
