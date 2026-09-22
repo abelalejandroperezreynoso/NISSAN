@@ -1071,7 +1071,31 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
             if (item.virtual_type === 'team_missing_survey') {
                 
-                let textoUltima = "Nunca contestada";
+                // **El nombre va en la etiqueta de estado.** Con la portada
+                // arriba, dos tarjetas de la misma encuesta se distinguían sólo
+                // por el recuadro gris de más abajo; dicho en la etiqueta roja
+                // —que es lo primero que se lee debajo del título— cada tarjeta
+                // se sabe de quién es sin bajar la vista. Va el nombre
+                // **completo**, que es el que identifica a una persona: el
+                // primer trozo del botón basta para no equivocarse de toque,
+                // pero no para saber de quién se está hablando.
+                const nombreCompleto = window.sanitizeForHTML(
+                    String(item.sub_name || '').trim() || 'el colaborador');
+
+                // **Y la frecuencia no va.** Es de la encuesta y no de lo que
+                // hay que hacer con ella —se lee en su hoja, en el subtítulo
+                // del encabezado—, y en una columna de 233px se llevaba el
+                // sitio de delante de la que sí urge. Es lo mismo que ya se
+                // quitó de la tarjeta de la encuesta propia.
+
+                // **Nunca contestada no se dice: es el estado por defecto.** La
+                // tarjeta está en esta lista precisamente porque falta, y el
+                // rótulo salía **dos veces** —la etiqueta roja de arriba y
+                // este renglón gris— encima de un botón que ya dice
+                // «Responder». Lo que sí dice algo es **desde cuándo**, y eso
+                // sólo existe si ya se contestó una vez. Es la misma regla que
+                // la tarjeta de la encuesta propia, que la estrenó.
+                let textoUltima = '';
                 if (item.vencimiento && item.vencimiento.ultimaFecha) {
                     const fechaUltima = new Date(item.vencimiento.ultimaFecha);
                     const d = String(fechaUltima.getDate()).padStart(2, '0');
@@ -1079,14 +1103,6 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     const y = fechaUltima.getFullYear();
                     textoUltima = `Última vez: ${d}/${m}/${y}`;
                 }
-
-                // Cómo se llama cada frecuencia lo dice `1-config.js`: aquí
-                // había tres copias del mismo mapa y ninguna traducía `once`,
-                // así que una encuesta de única vez enseñaba «⏱️ once», el
-                // valor crudo de la base. Sin frecuencia también es de única
-                // vez, que es lo que da por hecho el resto de la aplicación.
-                const freqText = window.textoDeFrecuencia(item.original_data && item.original_data.frequency);
-                const badgeFreqHtml = `<span style="background:#f1f5f9; color:#475569; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:2px; border: 1px solid #e2e8f0;">${freqText}</span>`;
 
                 // **El botón abre la encuesta, no manda un recordatorio.** Ahí
                 // estuvo «Recordar», que no avisaba a nadie: era un `alert`
@@ -1134,9 +1150,8 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                             <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
                             
                             <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:8px; margin-top:0;">
-                                <span class="badge-type" style="background-color:#ef4444">Falta Contestar</span>
-                                ${badgeFreqHtml}
-                                ${badgeTiempoHtml}
+                                <span class="badge-type" style="background-color:#ef4444">Falta Contestar · ${nombreCompleto}</span>
+                                ${item.vencimiento && item.vencimiento.tipoAviso === 'nunca' ? '' : badgeTiempoHtml}
                                 ${badgeOmisionesHtml}
                             </div>
                             
@@ -1146,9 +1161,9 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                     <span style="color:#94a3b8;">|</span>
                                     <span>${item.sub_puesto}</span>
                                 </div>
-                                <div style="font-size:0.75rem; color:#64748b; display:flex; align-items:center; gap:4px;">
+                                ${textoUltima ? `<div style="font-size:0.75rem; color:#64748b; display:flex; align-items:center; gap:4px;">
                                     <span style="font-weight:600;">${textoUltima}</span>
-                                </div>
+                                </div>` : ''}
                             </div>
                         </div>
                         ${accionHtml ? `<div class="card-actions" style="align-self: center;">${accionHtml}</div>` : ''}

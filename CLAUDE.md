@@ -4722,11 +4722,24 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   «Repetir plazo vencido», la racha de periodos omitidos—: ésos no son el
   estado por defecto, dicen qué pasó con el plazo.
 
-  **Las tres cosas se quedan en la tarjeta del equipo**, que es lo que las
-  separa: `team_missing_survey` y `team_missing_eval` hablan de un tercero y
-  son desde donde se le recuerda un pendiente a un colaborador, así que ahí
-  «Nunca contestada», «Última vez» y la frecuencia son justo lo que hay que
-  decirle.
+  **Y la tarjeta del equipo acabó igual, con el nombre en la etiqueta.** Se
+  quedaron un tiempo ahí las tres —hablaba de un tercero y es desde donde se le
+  recuerda un pendiente a un colaborador—, y con la portada encima dejaron de
+  caber: «Nunca contestada» salía **dos veces** en la misma tarjeta —la etiqueta
+  roja y el renglón gris del recuadro— encima de un botón que ya dice
+  «Responder». Hoy va como la propia: la frecuencia fuera, «Nunca contestada»
+  fuera —el estado por defecto de un pendiente— y «Última vez» sólo cuando la
+  hay. Lo que sí es suyo y no de la propia es **de quién es la encuesta**, y eso
+  va en la etiqueta de estado: **«Falta Contestar · Ruiz Gil Juan Carlos»**, que
+  es lo primero que se lee debajo del título.
+
+  Va el nombre **completo** y no el primer trozo del botón: ése basta para no
+  equivocarse de toque entre dos tarjetas, no para saber de quién se habla. Y
+  pasa por `sanitizeForHTML`, que va dentro de un `<span>` y un apellido puede
+  traer un apóstrofo.
+
+  `team_missing_eval` —«Evaluar a …»— no se tocó: ahí el título **es** la
+  persona.
 
   Tres cosas que hay que mantener:
 
