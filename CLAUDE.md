@@ -4571,6 +4571,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   ```js
   await window.portadasDeEncuestas(ids)   // { id: { url, cuantas, paginas } }
   window.portadasDePendientes             // lo que dejó puesto la carga
+  window.portadaDePendienteHtml(idEncuesta)   // el botón, o '' si no hay material
   window.paginasDePortadaDePendiente(id)
   window.portadaDePendienteRota(img)
   ```
@@ -4580,6 +4581,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `stopPropagation` —el resto de la tarjeta sí abre la encuesta— y por eso la
   consulta se guarda las urls enteras y no sólo la primera.
 
+  **La llevan las tres tarjetas de encuesta**, y por eso el marcado sale de un
+  solo sitio (`window.portadaDePendienteHtml(idEncuesta)`): la encuesta propia,
+  la que pregunta si le aplica y la de un colaborador. Estuvo escrito dos veces
+  con dos nombres de variable distintos, y una tercera copia es como acaban
+  discrepando —una aprende algo que las otras no—. Sin material convertido
+  devuelve `''` y no se dibuja nada.
+
+  **En la del colaborador se pide por `real_eval_id`**, no por el `id` de la
+  tarjeta, que ahí es compuesto (`missing_survey_<ev>_<sub>`) y no es ninguna
+  encuesta. Vale para lo mismo que en la propia —de qué va lo que hay que
+  contestar— y de paso es lo que el jefe necesita para saber de qué le está
+  hablando a su colaborador cuando se lo recuerda.
+
   Cinco cosas que hay que mantener:
 
   - **Una sola consulta, y sólo de lo que hay delante.** `portadasDeEncuestas`
@@ -4587,7 +4601,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     **después** de decidirla: pedir la portada de encuestas que se filtraron por
     el camino es cobrar una consulta por nada. La hoja de una encuesta sigue con
     su `cargarMaterialesEncuesta`, que se trae el material entero porque lo va a
-    enseñar todo; aquí se traen catorce urls y punto.
+    enseñar todo; aquí se traen catorce urls y punto. Los ids repetidos no
+    cuestan nada —`portadasDeEncuestas` los quita con un `Set` antes de
+    consultar—, que a un jefe al que le toca la misma encuesta le salen dos
+    tarjetas con el mismo id de encuesta.
   - **Las páginas enteras vienen de balde.** La consulta ya devuelve todas las
     filas de esas encuestas, así que guardarlas es lo que deja abrir el visor
     con el documento completo sin volver a preguntar. Van en

@@ -977,9 +977,20 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
         // portada de encuestas que se filtraron por el camino. Si falla, vuelve
         // `{}` y las tarjetas se dibujan como siempre: una portada es lo que
         // ayuda a reconocer la encuesta, no lo que la hace funcionar.
+        //
+        // Las del equipo entran por `real_eval_id`: el `id` de esa tarjeta es
+        // compuesto (`missing_survey_<ev>_<sub>`) y no es ninguna encuesta. Y
+        // ahí la portada dice lo mismo que en la propia —de qué va lo que su
+        // colaborador tiene que contestar—, sólo que además es lo que el jefe
+        // necesita para saber de qué le está hablando cuando se lo recuerda.
+        // Los repetidos no cuestan nada: `portadasDeEncuestas` los quita con un
+        // Set antes de consultar, y a un jefe al que le toca la misma encuesta
+        // le salen las dos tarjetas con el mismo id de encuesta.
         const idsConPortada = items
-            .filter(i => i.virtual_type === 'survey' || i.virtual_type === 'aplica')
-            .map(i => i.id);
+            .filter(i => i.virtual_type === 'survey' || i.virtual_type === 'aplica'
+                      || i.virtual_type === 'team_missing_survey')
+            .map(i => i.virtual_type === 'team_missing_survey' ? i.real_eval_id : i.id)
+            .filter(Boolean);
         const portadas = window.portadasDeEncuestas
             ? await window.portadasDeEncuestas(idsConPortada).catch(() => ({}))
             : {};
@@ -1117,6 +1128,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                 return `
                 <div class="incident-card" style="border-left: 5px solid #ef4444;">
+                    ${window.portadaDePendienteHtml(item.real_eval_id)}
                     <div class="card-header" style="align-items: flex-start;">
                         <div class="card-info" style="flex: 1;">
                             <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
@@ -1288,16 +1300,7 @@ if (item.virtual_type === 'waiting_boss') {
             // el título de una capacitación dice menos de a quién le toca que
             // su primera diapositiva.
             if (item.virtual_type === 'aplica') {
-                const portadaAplica = portadas[String(item.id)];
-                const portadaAplicaHtml = portadaAplica ? `
-                    <button type="button" class="pendiente-portada"
-                            onclick="event.stopPropagation(); window.abrirVisorImagenes && window.abrirVisorImagenes(window.paginasDePortadaDePendiente('${item.id}'))"
-                            title="Ver el material de esta encuesta"
-                            aria-label="Ver el material de esta encuesta">
-                        <img src="${window.sanitizeForHTML(portadaAplica.url)}" alt=""
-                             onerror="window.portadaDePendienteRota(this)">
-                        ${portadaAplica.cuantas > 1 ? `<span class="pendiente-portada-paginas">${portadaAplica.cuantas} páginas</span>` : ''}
-                    </button>` : '';
+                const portadaAplicaHtml = window.portadaDePendienteHtml(item.id);
 
                 return `
                 <div class="incident-card" style="border-left: 5px solid #0891b2;">
@@ -1370,16 +1373,7 @@ if (item.virtual_type === 'waiting_boss') {
                 // Sin material convertido no se dibuja nada: una caja de
                 // proporción fija vacía se llevaría 160px de la tarjeta para no
                 // decir nada.
-                const portada = portadas[String(item.id)];
-                const portadaHtml = portada ? `
-                    <button type="button" class="pendiente-portada"
-                            onclick="event.stopPropagation(); window.abrirVisorImagenes && window.abrirVisorImagenes(window.paginasDePortadaDePendiente('${item.id}'))"
-                            title="Ver el material de esta encuesta"
-                            aria-label="Ver el material de esta encuesta">
-                        <img src="${window.sanitizeForHTML(portada.url)}" alt=""
-                             onerror="window.portadaDePendienteRota(this)">
-                        ${portada.cuantas > 1 ? `<span class="pendiente-portada-paginas">${portada.cuantas} páginas</span>` : ''}
-                    </button>` : '';
+                const portadaHtml = window.portadaDePendienteHtml(item.id);
 
                 return `
                 <div class="incident-card" style="border-left: 5px solid #2563eb;">
@@ -1487,6 +1481,32 @@ if (item.virtual_type === 'waiting_boss') {
 // atributo con catorce urls dentro, y volver a consultarlas, una vuelta a la
 // base por un toque.
 window.portadasDePendientes = {};
+
+// La portada de una tarjeta, que es la misma en las tres que la llevan: la
+// encuesta propia, la que pregunta si le aplica y la de un colaborador. Estuvo
+// escrita dos veces con dos nombres de variable distintos, y una tercera copia
+// es como acaban discrepando —una aprende algo que las otras no—.
+//
+// **Lleva al visor y no al cuestionario**: por eso es un botón suyo con
+// `stopPropagation`, que el resto de la tarjeta sí abre la encuesta. Sin
+// material convertido devuelve '' y no se dibuja nada: una caja de proporción
+// fija vacía se llevaría 160px de la tarjeta para no decir nada.
+//
+// Se le pasa **el id de la encuesta**, que en la tarjeta de un colaborador no
+// es el `id` del pendiente —ése es compuesto— sino su `real_eval_id`.
+window.portadaDePendienteHtml = (evaluationId) => {
+    const p = window.portadasDePendientes[String(evaluationId)];
+    if (!p) return '';
+    return `
+                    <button type="button" class="pendiente-portada"
+                            onclick="event.stopPropagation(); window.abrirVisorImagenes && window.abrirVisorImagenes(window.paginasDePortadaDePendiente('${evaluationId}'))"
+                            title="Ver el material de esta encuesta"
+                            aria-label="Ver el material de esta encuesta">
+                        <img src="${window.sanitizeForHTML(p.url)}" alt=""
+                             onerror="window.portadaDePendienteRota(this)">
+                        ${p.cuantas > 1 ? `<span class="pendiente-portada-paginas">${p.cuantas} páginas</span>` : ''}
+                    </button>`;
+};
 
 window.paginasDePortadaDePendiente = (evaluationId) => {
     const p = window.portadasDePendientes[String(evaluationId)];
