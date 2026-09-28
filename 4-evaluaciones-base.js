@@ -31,6 +31,20 @@ window.evalModeRespondiendo = 'self';
 // cuando sólo había dos.
 window.esModoPrestado = () => window.evalModeRespondiendo === 'prestado';
 
+// Y un cuarto, **'apoyo'**: la contesta quien inició sesión, a su nombre y
+// sobre lo suyo, pero **cubriendo a alguien que está de vacaciones**. Es una
+// respuesta suya en todo —cuenta en su estadística, la califica quien le toque—
+// y lleva en `relevo_de` a quién cubría, que es lo único que la separa de las
+// suyas y lo que cierra el pendiente relevado del otro. A quién se cubre vive
+// en `window.apoyoEnCurso`, que se limpia al enviar y al cancelar.
+window.apoyoEnCurso = null;
+window.esModoApoyo = () => window.evalModeRespondiendo === 'apoyo' && !!window.apoyoEnCurso;
+
+window.responderApoyo = (evalId, title, ausenteId, ausenteNombre) => {
+    window.apoyoEnCurso = { id: String(ausenteId), name: ausenteNombre || '' };
+    window.responderDirecto(evalId, title, 'apoyo');
+};
+
 // --- HELPER 1: OBTENER JERARQUÍA COMPLETA ---
 window.obtenerJerarquiaCompletaEvaluaciones = (liderId) => {
     const all = window.todosLosEmpleadosData || [];
@@ -515,7 +529,7 @@ window.montarHojaEvaluaciones = () => {
 // Devuelve además el `peso` con el que se ordena —lo vencido primero, lo neutro
 // al final— y si cuenta como pendiente de quien mira, que es lo que suma el pie
 // de la clasificación.
-window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalificar, decidir, descartada }) => {
+window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalificar, decidir, descartada, empleadoId }) => {
     // Una encuesta apagada no le pide nada a nadie —sólo llega hasta aquí en
     // modo administrador—, así que va con el estado neutro y al final de su
     // clasificación: pintarle «Sin contestar» en rojo sería reclamar una
@@ -559,7 +573,7 @@ window.estadoDeEncuestaEnLista = (ev, { leToca, revisor, respuestas, porCalifica
         // reponer una respuesta que no puede tocar.
         const contestaQuienMira = (ev.mode || 'self') !== 'boss';
         const v = window.esEvaluacionPendiente(
-            respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, contestaQuienMira);
+            respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, contestaQuienMira, null, empleadoId);
         return {
             estado: window.estadoDeAsignada(v),
             // El vencimiento se devuelve entero porque la pantalla de la
@@ -682,6 +696,8 @@ window.cargarVistaEvaluaciones = async () => {
     // renglón que pide decidirlo como el de la que se descartó, y
     // `leTocaEstaEncuesta` lo mira sin poder esperar.
     if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+    // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
+    if (window.cargarVacaciones) await window.cargarVacaciones();
 
     const misDirectos = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id));
     const tengoEquipo = misDirectos.length > 0;
@@ -711,8 +727,11 @@ window.cargarVistaEvaluaciones = async () => {
         // cronología dibujaba una línea por cada persona del equipo; quitado el
         // gráfico, esas filas se descartaban acto seguido y en una estructura
         // grande eran casi toda la descarga de abrir la pantalla.
+        //
+        // Con `relevo_de`: las que contestó cubriendo a alguien de vacaciones
+        // no son suyas y no le cierran nada (`respuestasPropias`).
         const { data: rData } = await sb.from('evaluation_responses')
-            .select('evaluation_id, review_status, grades_json, submitted_at, employee_id')
+            .select(await window.camposConApoyo('evaluation_id, review_status, grades_json, submitted_at, employee_id'))
             .eq('employee_id', user.id)
             .order('submitted_at', { ascending: false });
 
@@ -906,6 +925,7 @@ window.cargarVistaEvaluaciones = async () => {
             const porCalificar = pendingMap[ev.id] || 0;
             const lectura = window.estadoDeEncuestaEnLista(ev, {
                 leToca, revisor: laReviso(ev), respuestas: misRespuestas, porCalificar,
+                empleadoId: user.id,
                 // En modo administrador la lista es la de todo el mundo, así que
                 // estas dos no hablan de nadie: ahí manda el neutro de siempre.
                 decidir: !window.modoAdminActivo && meFaltaDecidir(ev),
@@ -964,7 +984,7 @@ window.cargarVistaEvaluaciones = async () => {
             // no es de quien mira, y el icono ya lo cuenta.
             const resultado = puntaje !== null
                 ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
-                : ((estado.listo || estado.neutro) ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
+                : ((estado.listo || estado.neutro) && !estado.relevada ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
 
             // Quién la contesta se decía con el emoji del cuadro de la rejilla
             // —👥 contra 📋—, y sin cuadro hay que decirlo: en modo jefe la
@@ -1037,7 +1057,7 @@ window.cargarVistaEvaluaciones = async () => {
         // agosto sin revisar, y una anulada reciente ni siquiera la tumbaba.
         const resumenCert = window.estadoCertificacion(
             g.encuestas.filter(leTocaEstaEncuesta),
-            misRespuestas
+            misRespuestas, undefined, user.id
         );
         const insignia = window.insigniaCertificacion(resumenCert);
         // Va en su propio renglón y no al lado del nombre: «📉 1 por debajo de
@@ -1261,7 +1281,10 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
     // pendientes no, y desde que desde ahí se puede contestar la de otro ese
     // descuido tiene por dónde morder. Se limpia en la única puerta por la
     // que se pasa siempre.
-    if (mode === 'self') window.targetUserForEval = null;
+    if (mode === 'self' || mode === 'apoyo') window.targetUserForEval = null;
+    // Y el apoyo sólo vale en su modo: quedarse puesto dejaría la siguiente
+    // encuesta propia marcada como que cubría a alguien.
+    if (mode !== 'apoyo') window.apoyoEnCurso = null;
 
     document.body.style.cursor = 'wait';
     try {
@@ -1292,8 +1315,24 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
         // que el jefe ya contestó —y le dejarían contestar la que él mismo ya
         // había cerrado—.
         const esPrestado = (mode === 'prestado');
+        const esApoyo = (mode === 'apoyo') && !!window.apoyoEnCurso;
         const quienContesta = esPrestado && window.targetUserForEval
             ? window.targetUserForEval.id : user.id;
+
+        // **Un apoyo sólo se abre mientras dura.** El botón no es el guardia:
+        // la hoja de pendientes pudo quedarse abierta desde antes de que
+        // quien se fue revirtiera sus vacaciones, o desde antes de que
+        // terminara la semana.
+        if (mode === 'apoyo') {
+            if (window.cargarVacaciones) await window.cargarVacaciones(true);
+            const enCurso = esApoyo ? window.vacacionEnCurso(window.apoyoEnCurso.id) : null;
+            if (!enCurso || String(enCurso.relevo_id) !== String(user.id)) {
+                document.body.style.cursor = 'default';
+                window.apoyoEnCurso = null;
+                alert('Este apoyo ya no está vigente: las vacaciones terminaron o se revirtieron.');
+                return;
+            }
+        }
         const nombreQuienContesta = esPrestado && window.targetUserForEval
             ? String(window.targetUserForEval.name || '').trim().split(' ')[0]
             : '';
@@ -1310,10 +1349,15 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
         // CLAUDE.md—, pero en `self` y en `prestado` la fila es de una sola
         // persona y el freno es exactamente el mismo.
         if (mode !== 'boss' && window.esDeUnaSolaRespuesta(resE.data)) {
-            const { data: mias } = await sb.from('evaluation_responses')
-                .select('id, submitted_at')
+            // Las suyas o las de apoyo, según lo que se va a contestar: una
+            // respuesta cubriendo a otro no cierra la propia, ni al revés.
+            const { data: miasTodas } = await sb.from('evaluation_responses')
+                .select(await window.camposConApoyo('id, submitted_at'))
                 .eq('evaluation_id', evalId)
                 .eq('employee_id', quienContesta);
+            const mias = esApoyo
+                ? (miasTodas || []).filter(r => String(r.relevo_de) === String(window.apoyoEnCurso.id))
+                : window.respuestasPropias(miasTodas);
             const ya = window.respuestaQueYaCuenta(
                 { ...resE.data, id: evalId }, mias || []);
             if (ya) {
@@ -1339,7 +1383,12 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
         // siempre 'adelante' y esto no frena nada, que es lo de antes.
         if (mode !== 'boss' && window.pasoDeAplica) {
             if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
-            const paso = window.pasoDeAplica({ ...resE.data, id: evalId }, quienContesta);
+            // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
+            if (window.cargarVacaciones) await window.cargarVacaciones();
+            // En un apoyo la encuesta es de quien está de vacaciones: si le
+            // aplica o no se pregunta de él.
+            const paso = window.pasoDeAplica({ ...resE.data, id: evalId },
+                esApoyo ? window.apoyoEnCurso.id : quienContesta);
             if (paso !== 'adelante') {
                 document.body.style.cursor = 'default';
                 if (esPrestado) {
@@ -1364,7 +1413,7 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
             evaluatesArea = true;
         }
 
-        if (evaluatesArea && !miAreaNorm && !window.modoAdminActivo && mode === 'self') {
+        if (evaluatesArea && !miAreaNorm && !window.modoAdminActivo && (mode === 'self' || mode === 'apoyo')) {
             document.body.style.cursor = 'default';
             window.pedirAreaUsuario();
             return;
@@ -1554,7 +1603,18 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
     // eso ponía «Evaluando a: Juan Carlos» encima de una encuesta que está
     // contestando Juan Carlos de sí mismo: justo al revés de lo que pasa, y en
     // la pantalla donde peor se puede entender.
-    if (!vistaPrevia && window.targetUserForEval && window.esModoPrestado()) {
+    if (!vistaPrevia && window.esModoApoyo()) {
+        // Apoyo por vacaciones: la contesta quien mira y es suya, pero cubre a
+        // otro. Se dice arriba, con el mismo renglón que el modo prestado,
+        // porque es lo que la separa de su propia encuesta cuando los dos
+        // tienen la misma: esa semana la contesta dos veces.
+        avisoPrestadoHtml = `
+                <div class="aviso-prestado">
+                    <span class="aviso-prestado-rotulo">Apoyo por vacaciones</span>
+                    <span class="aviso-prestado-nombre">${window.sanitizeForHTML(window.apoyoEnCurso.name || '')}</span>
+                    <span class="aviso-prestado-nota">La contestas tú y cuenta en tu estadística. A quien cubres no le cuenta esta semana.</span>
+                </div>`;
+    } else if (!vistaPrevia && window.targetUserForEval && window.esModoPrestado()) {
         // Prestado: la encuesta es la suya y la contesta él, así que el título
         // sigue siendo el de la encuesta —cambiarlo por un nombre escondería
         // qué se está contestando—. Lo que hace falta decir es de quién va a
@@ -2214,6 +2274,7 @@ window.cancelarRespuesta = (mode = 'history') => {
     }
     
     window.targetUserForEval = null;
+    window.apoyoEnCurso = null;
     
     // --- 🚀 RETORNO INTELIGENTE (AL CANCELAR) ---
     if (window.mostrandoPendientes || window.mostrandoPendientesEquipo) {
@@ -2243,6 +2304,9 @@ window.enviarRespuestasEval = async () => {
         // otra: se guarda 'Pendiente' y la califica quien le toque.
         const isBossMode = (window.evalModeRespondiendo === 'boss');
         const esPrestado = window.esModoPrestado();
+        // Cubriendo a alguien de vacaciones: la respuesta es suya y sólo
+        // lleva además a quién cubría.
+        const cubreA = window.esModoApoyo() ? window.apoyoEnCurso : null;
 
         // Extraemos el NOMBRE del área para enviarlo a la tabla de historial (evaluation_responses)
         //
@@ -2579,7 +2643,7 @@ window.enviarRespuestasEval = async () => {
         }
 
         // Mandamos EL TEXTO a employee_area para conservar el registro histórico en esa tabla
-        const { error } = await sb.from('evaluation_responses').insert({
+        const fila = {
             evaluation_id: window.evalIdRespondiendo,
             employee_id: targetEmployeeId,
             employee_area: targetAreaName,
@@ -2587,7 +2651,17 @@ window.enviarRespuestasEval = async () => {
             grades_json: finalGrades,
             review_status: finalStatus,
             submitted_at: new Date().toISOString()
-        });
+        };
+        // Sin la columna no hay dónde decir a quién cubría, y guardarla sin
+        // ella la dejaría como una respuesta propia más —cerrándole su propio
+        // pendiente y sin cubrir el del otro—: se para antes de escribir.
+        if (cubreA) {
+            if (!(await window.hayColumnaApoyo())) {
+                throw new Error('Falta correr sql/vacaciones.sql en la base para guardar respuestas de apoyo.');
+            }
+            fila.relevo_de = String(cubreA.id);
+        }
+        const { error } = await sb.from('evaluation_responses').insert(fila);
         
         if (error) throw error;
         
@@ -2602,6 +2676,8 @@ window.enviarRespuestasEval = async () => {
             successMsg = finalStatus === 'Revisado'
                 ? `Encuesta enviada y registrada a nombre de ${suNombre}.`
                 : `Encuesta enviada a nombre de ${suNombre}. Queda pendiente de revisión.`;
+        } else if (cubreA) {
+            successMsg = `Encuesta enviada cubriendo a ${cubreA.name || 'tu compañero'} por vacaciones. Cuenta en tu estadística.`;
         } else if (finalStatus === 'Revisado') {
             successMsg = "✅ Autoevaluación completada y registrada automáticamente en tu desempeño.";
         }
@@ -2610,6 +2686,10 @@ window.enviarRespuestasEval = async () => {
                 
                 window.evalCache = null;
                 window.targetUserForEval = null;
+                window.apoyoEnCurso = null;
+                // El badge del panel se guarda en caché, y un apoyo recién
+                // cubierto —o una encuesta propia— lo tiene que mover.
+                if (cubreA && window.invalidarCacheDashboard) window.invalidarCacheDashboard();
                 window.cancelarRespuesta('none');
                 
                 // --- 🚀 NUEVA LÓGICA DE RETORNO INTELIGENTE ---

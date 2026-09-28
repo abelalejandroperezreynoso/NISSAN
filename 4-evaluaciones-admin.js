@@ -46,6 +46,7 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     // `leTocaEstaEncuesta` lo mira sin poder esperar. Va también antes del
     // atajo de la caché de encuestas, o se saltaría con la primera.
     if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+    if (window.cargarVacaciones) await window.cargarVacaciones();
 
     const yaEsta = window.encuestaEnCache(evaluationId);
     if (yaEsta) return yaEsta;
@@ -3229,6 +3230,7 @@ window.abrirExpedienteEmpleado = async (empId) => {
     // sólo es suya si dijo que sí, y sin la caché el expediente le contaría
     // como pendiente una que descartó.
     if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+    if (window.cargarVacaciones) await window.cargarVacaciones();
     // Estas pantallas llevan su propia flecha en el cuerpo; el encabezado de
     // la hoja vuelve al de la lista para no quedarse con el título de la
     // encuesta que se estuviera viendo.
@@ -3604,7 +3606,7 @@ window.certificarClasificacionExpediente = async (clasificacion) => {
         .filter(ev => window.normalizarClasificacion(ev.category || 'General') === clave)
         .filter(ev => window.leTocaEstaEncuesta(ev, exp.empleado, window.tieneEquipoDirecto(exp.empleado.id)));
 
-    const resumen = window.estadoCertificacion(encuestasDeLaCat, exp.respuestas);
+    const resumen = window.estadoCertificacion(encuestasDeLaCat, exp.respuestas, undefined, exp.empleado.id);
     const E = window.ESTADOS_CERTIFICACION;
 
     if (resumen.estado === E.CERTIFICADA) {
@@ -3662,7 +3664,7 @@ window.certificarClasificacionExpediente = async (clasificacion) => {
 
         // El acta se guarda con el estado ya recalculado, para que refleje lo
         // que de verdad quedó cubierto.
-        const despues = window.estadoCertificacion(encuestasDeLaCat, exp.respuestas);
+        const despues = window.estadoCertificacion(encuestasDeLaCat, exp.respuestas, undefined, exp.empleado.id);
         const acta = await window.registrarActaCertificacion({
             clasificacion: clasificacion,
             empleadoId: exp.empleado.id,
@@ -3722,6 +3724,7 @@ window.abrirCertificacionPorClasificacion = async () => {
     // descartó no se le puede exigir para certificar su clasificación, y sin la
     // caché aparecería como «1 sin contestar» para siempre.
     if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+    if (window.cargarVacaciones) await window.cargarVacaciones();
 
     // `pregunta_si_aplica` va en la consulta por lo mismo: una columna que no se
     // pidió llega `undefined`, y `leTocaEstaEncuesta` la leería como que no
@@ -3928,8 +3931,10 @@ window.cargarClasificacionParaCertificar = async (clasificacion, fechaRef) => {
         if (hasta === null || p.fin > hasta) hasta = p.fin;
     });
 
+    // Con `relevo_de`: la que alguien contestó cubriendo a otro por vacaciones
+    // no es la suya y no certifica nada suyo (`respuestaDelPeriodo`).
     let consulta = sb.from('evaluation_responses')
-        .select('id, evaluation_id, employee_id, review_status, grades_json, submitted_at')
+        .select(await window.camposConApoyo('id, evaluation_id, employee_id, review_status, grades_json, submitted_at'))
         .in('evaluation_id', encuestas.map(ev => ev.id));
     if (desde) {
         consulta = consulta.gte('submitted_at', new Date(desde).toISOString());
@@ -3960,7 +3965,7 @@ window.cargarClasificacionParaCertificar = async (clasificacion, fechaRef) => {
                 window.leTocaEstaEncuesta(ev, emp, window.tieneEquipoDirecto(emp.id)));
             if (suyas.length === 0) return null;
 
-            const resumen = window.estadoCertificacion(suyas, porEmpleado[String(emp.id)] || [], fecha);
+            const resumen = window.estadoCertificacion(suyas, porEmpleado[String(emp.id)] || [], fecha, emp.id);
             return { empleado: emp, resumen: resumen };
         })
         .filter(Boolean);

@@ -696,6 +696,15 @@ window.estadoDeAsignada = (v) => {
     const rojo  = { fondo: '#fee2e2', color: '#b91c1c', borde: '#fecaca' };
     const ambar = { fondo: '#fef3c7', color: '#b45309', borde: '#fde68a' };
 
+    // Relevada: el periodo cayó entero dentro de sus vacaciones y lo cubre su
+    // relevo. No es «al día» —no la contestó—, ni falta: no le toca. Va con el
+    // neutro, que es lo que dibuja lo que no le pide nada a quien mira.
+    if (v && v.tipoAviso === 'relevada') {
+        const quien = v.relevoId != null ? window.nombreCortoDeEmpleado(v.relevoId) : '';
+        return { texto: quien ? `Relevada · ${quien}` : 'Relevada', neutro: true, listo: true,
+                 relevada: true, fondo: '#f0f9ff', color: '#0369a1', borde: '#bae6fd' };
+    }
+
     if (!v || !v.mostrar) return Object.assign({ texto: 'Al día', listo: true }, verde);
 
     switch (v.tipoAviso) {
@@ -826,7 +835,7 @@ window.respuestasDelPeriodoDeTodos = async (encuestas, ahora, frecuencia) => {
     let tope = false;
     for (let pagina = 0; pagina < window.MAX_PAGINAS_RESPUESTAS; pagina++) {
         let consulta = sb.from('evaluation_responses')
-            .select('evaluation_id, employee_id, submitted_at, review_status, grades_json')
+            .select(await window.camposConApoyo('evaluation_id, employee_id, submitted_at, review_status, grades_json'))
             .in('evaluation_id', ids)
             .order('submitted_at', { ascending: false })
             .range(pagina * 1000, pagina * 1000 + 999);
@@ -1049,7 +1058,10 @@ window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
         // una línea plana en la cifra de hoy.
         if (enviada > referencia) return;
 
-        const quien = String(r.employee_id);
+        // La que contestó un relevo cubre el hueco de quien estaba de
+        // vacaciones: para la empresa, esa persona tiene su respuesta de esa
+        // semana. Sin esto se contaría dos veces al relevo y ninguna a él.
+        const quien = String(window.esRespuestaDeApoyo(r) ? r.relevo_de : r.employee_id);
         const previa = ultimaDeCadaUno[quien];
         if (!previa || new Date(r.submitted_at) > new Date(previa.submitted_at)) {
             ultimaDeCadaUno[quien] = r;
@@ -1160,7 +1172,7 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             // quedaría con la frecuencia sola—.
             let resultado = puntaje !== null
                 ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
-                : (estado.listo ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
+                : ((estado.listo && !estado.relevada) ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
 
             // Administrando, delante del promedio va cuánta gente la
             // contestó: el promedio se reparte sobre el padrón, así que sin
@@ -1413,7 +1425,8 @@ window.verPeriodoDeLaTarjeta = (indice) => {
         const contestaQuienMira = (f.ev.mode || 'self') !== 'boss';
         f.vencimiento = window.esEvaluacionPendiente(
             window.respuestasAsignadas, f.ev.id, f.ev.frequency,
-            window.inicioDeEncuesta(f.ev), f.ev, contestaQuienMira, referencia);
+            window.inicioDeEncuesta(f.ev), f.ev, contestaQuienMira, referencia,
+            window.empleadoDeLaTarjeta);
 
         // Mirando un periodo **ya cerrado**, «todavía tiene plazo» no puede ser
         // la respuesta: ese plazo se agotó. Preguntado en el último instante de
@@ -1514,6 +1527,8 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // separa la encuesta asignada de la que todavía está preguntando:
         // `leTocaEstaEncuesta` lo mira sin poder esperar.
         if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+        // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
+        if (window.cargarVacaciones) await window.cargarVacaciones();
 
         const { data: encuestas, error } = await sb.from('evaluations')
             .select(campos)
@@ -1540,7 +1555,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
             topeRespuestas = traidas.tope;
         } else {
             const { data } = await sb.from('evaluation_responses')
-                .select('id, evaluation_id, submitted_at, review_status, grades_json')
+                .select(await window.camposConApoyo('id, evaluation_id, submitted_at, review_status, grades_json'))
                 .eq('employee_id', empStrId)
                 .in('evaluation_id', mias.map(e => e.id));
             respuestas = data || [];
@@ -1564,7 +1579,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
 
             const contestaQuienMira = (ev.mode || 'self') !== 'boss';
             const vencimiento = window.esEvaluacionPendiente(
-                respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, contestaQuienMira);
+                respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, contestaQuienMira, null, empStrId);
             // La respuesta del periodo se guarda: de ella salen el puntaje del
             // renglón y la fecha que enseña la hoja de detalle.
             const resp = window.respuestaDelPeriodo(ev, respuestas, ahora);
@@ -1576,6 +1591,10 @@ window.cargarEncuestasAsignadas = async (userId) => {
         });
 
         window.respuestasAsignadas = respuestas || [];
+        // De quién es, para las vacaciones: al tocar un punto de la gráfica se
+        // vuelve a preguntar `esEvaluacionPendiente` y tiene que saber de quién
+        // son esas respuestas para reconocer una semana relevada.
+        window.empleadoDeLaTarjeta = esAdmin ? null : empStrId;
 
         const { resumen, bloques } = window.cuerpoTarjetaEncuestas(filas, esAdmin, topeRespuestas);
 
@@ -3294,6 +3313,8 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
         // de quien dijo que no. Es la misma caché que mira el panel de
         // pendientes, así que las dos cifras no pueden discrepar.
         if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+        // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
+        if (window.cargarVacaciones) await window.cargarVacaciones();
 
         const camposEvals = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
             'id, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))))));
@@ -3371,7 +3392,7 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                     // `grades_json` es para el plazo de reintento: sin el
                     // puntaje no se sabe si hay que reponer la encuesta.
                     const { data: respuestas } = await sb.from('evaluation_responses')
-                        .select('evaluation_id, submitted_at, review_status, grades_json')
+                        .select(await window.camposConApoyo('evaluation_id, submitted_at, review_status, grades_json'))
                         .eq('employee_id', empId)
                         .in('evaluation_id', idsEvals);
                     
@@ -3381,7 +3402,7 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                                             if (window.pasoDeAplica && window.pasoDeAplica(ev, empStrId) === 'preguntar') return true;
                                             if (window.esEvaluacionPendiente) {
                                                 // Usamos la nueva lógica unificada (Retorna un objeto, por lo que leemos .mostrar)
-                                                return window.esEvaluacionPendiente(respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss').mostrar;
+                                                return window.esEvaluacionPendiente(respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss', null, empStrId).mostrar;
                                             } else {
                                                 // Fallback de seguridad por si el archivo 7-pendientes.js aún no ha cargado
                                                 const resps = respuestas ? respuestas.filter(r => r.evaluation_id === ev.id) : [];
@@ -3390,6 +3411,23 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                                                 return false;
                                             }
                                         }).length;
+                }
+
+                // Lo que cubre por las vacaciones de otro, que es un pendiente
+                // suyo como cualquiera: el mismo `apoyosPendientes` que dibuja
+                // el panel de pendientes, así que las dos cifras no discrepan.
+                // La consulta sólo se hace si de verdad cubre a alguien hoy.
+                if (window.apoyosPendientes && window.VACACIONES) {
+                    const ahoraApoyo = new Date();
+                    const cubre = window.apoyosPendientes(empStrId, activeEvals, [], ahoraApoyo);
+                    if (cubre.length > 0) {
+                        const { data: deApoyo } = await sb.from('evaluation_responses')
+                            .select(await window.camposConApoyo('evaluation_id, submitted_at'))
+                            .eq('employee_id', empId)
+                            .in('evaluation_id', [...new Set(cubre.map(a => a.ev.id))])
+                            .gte('submitted_at', new Date(Math.min(...cubre.map(a => a.periodo.inicio.getTime()))).toISOString());
+                        countEvals += window.apoyosPendientes(empStrId, activeEvals, deApoyo || [], ahoraApoyo).length;
+                    }
                 }
             }
 
@@ -3485,7 +3523,7 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                         // la evaluación de modo jefe que se quedó por debajo del
                         // mínimo y hay que reponer, que es trabajo suyo.
                         const { data: teamResps } = await sb.from('evaluation_responses')
-                            .select('evaluation_id, employee_id, submitted_at, review_status, grades_json')
+                            .select(await window.camposConApoyo('evaluation_id, employee_id, submitted_at, review_status, grades_json'))
                             .in('employee_id', misSubsIds)
                             .in('evaluation_id', teamObligatorias.map(e=>e.id));
                         
@@ -3526,7 +3564,7 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                                                             
                                                             // Evaluamos usando la lógica global unificada
                                                             if (window.esEvaluacionPendiente) {
-                                                                if (window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') === 'boss').mostrar) {
+                                                                if (window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') === 'boss', null, sub.id).mostrar) {
                                                                     countPorCalificar++;
                                                                 }
                                                             } else {

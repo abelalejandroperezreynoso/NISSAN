@@ -38,6 +38,7 @@ Los mensajes de commit van en español.
 | `10-refacciones.js` | Solo inyecta el botón; la pantalla vive aparte |
 | `12-almacenamiento.js` | Consumo de Supabase: archivos por bucket y peso de la base |
 | `13-gestion.js` | Gestionar información: personal, departamentos, puestos, encargos, áreas, plantas y líneas, y la cadena de mando |
+| `14-vacaciones.js` | La hoja de cargar vacaciones y nombrar relevo; las reglas viven en `1-config.js` |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -4535,6 +4536,86 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   y por lo mismo: dura lo que un toque y lo que hay debajo es justo el
   pendiente del que se está hablando, así que esconderlo sería quitar el
   contexto.
+
+- **Quien se va de vacaciones deja sus semanales a un relevo.** Cada quien
+  carga sus vacaciones —**una o dos semanas completas**, de lunes a domingo— y
+  nombra a quien lo releva, **sin que el relevo tenga que aceptar**, y las
+  revierte él mismo mientras no hayan terminado. Se entra por el sol del
+  encabezado de «Mis Pendientes» y por el aviso que sale arriba de esa lista
+  mientras haya vacaciones cargadas. La hoja vive en `14-vacaciones.js`; las
+  reglas, en `1-config.js`.
+
+  La regla es una sola: **un periodo de encuesta que cae entero dentro de las
+  vacaciones no es de quien se fue, es de su relevo.**
+
+  - **A quien se fue no le cuenta**: ni pendiente, ni badge, ni padrón, ni
+    promedio, ni certificación, y al volver tampoco le sale «2 semanas sin
+    contestar» por las que cubrió otro (`esEvaluacionPendiente` las descuenta de
+    la racha). En su tarjeta del inicio y en su lista sale **«Relevada ·
+    Fulano»**, con el neutro.
+  - **Al relevo sí le cuenta**: le sale en sus pendientes como **«Apoyo por
+    vacaciones · Nombre»**, suma una asignación en sus estadísticas y, si no la
+    contesta, le baja la participación como cualquier otra. Si los dos tienen la
+    misma encuesta, **esa semana la contesta dos veces**, la suya y la que cubre.
+  - **Para la empresa, la respuesta del relevo ocupa el hueco de quien se fue**
+    (`resumenDeEncuestaAdmin` la cuenta por `relevo_de`): la semana se cubrió.
+
+  Con semanas completas eso son, en la práctica, **las semanales**: una quincena
+  dura 15 o 16 días y dos semanas son 14, así que nunca cabe entera. Lo mensual o
+  más largo se pone al corriente al volver, y **las revisiones no se relevan**:
+  se regularizan al volver. Tampoco las de modo jefe ni las de «única vez». La
+  regla es la del periodo y no una lista de frecuencias, así que si cambian las
+  duraciones que se ofrecen no hay nada más que tocar.
+
+  ```js
+  await window.cargarVacaciones()               // la caché; `true` la rehace
+  window.periodoRelevado(ev, empleadoId, fecha) // { vacacion, periodo } o null
+  window.periodosRelevadosEntre(ev, empleadoId, desde, hasta)
+  window.encuestaRelevadaEnTramo(ev, empleadoId, desde, hasta)  // todo el tramo
+  window.apoyosDelRelevo(relevoId, encuestas, desde, hasta)     // lo que cubre
+  window.apoyosPendientes(relevoId, encuestas, respuestas, ahora)
+  window.respuestasPropias(respuestas)          // sin las de apoyo
+  window.camposConApoyo(campos)                 // `relevo_de`, en las consultas
+  window.responderApoyo(evalId, titulo, ausenteId, ausenteNombre)
+  ```
+
+  **La respuesta del relevo es suya** (`employee_id` es el del relevo) y lleva en
+  **`evaluation_responses.relevo_de`** a quién cubría. Es el cuarto modo de
+  contestar —`'apoyo'`, junto a `self`, `boss` y `prestado`—, y esa columna es lo
+  único que separa esa respuesta de las suyas. Por eso:
+
+  - **Ninguna respuesta de apoyo cierra un pendiente propio**:
+    `esEvaluacionPendiente` y `respuestaDelPeriodo` las apartan con
+    `respuestasPropias`. Y **toda consulta de respuestas que decida un
+    pendiente encadena `camposConApoyo`** —la trampa de `requires_min_score`
+    otra vez—: sin la columna, el apoyo llegaría como una respuesta suya más y le
+    cerraría al relevo su propia semanal.
+  - **`esEvaluacionPendiente` recibe un octavo argumento, `empleadoId`**, de
+    quién son las respuestas. Sin él no sabe de vacaciones y no cambia nada; las
+    siete llamadas lo pasan. `estadoCertificacion` recibe el suyo en el cuarto.
+  - **El envío se planta sin la columna** antes de escribir: guardar el apoyo
+    sin `relevo_de` lo dejaría como una respuesta propia.
+  - **`responderDirecto` vuelve a comprobar** que las vacaciones sigan en curso y
+    que el relevo sea quien mira: la hoja de pendientes pudo quedarse abierta
+    desde antes de que se revirtieran.
+
+  **Un apoyo sólo sale como pendiente mientras corre su semana.** Uno que cerró
+  sin cubrirse se perdió, como una semanal propia que se dejó pasar, y se queda
+  en las estadísticas del relevo como una asignación sin respuesta.
+
+  **En las estadísticas se decide por tramo** (`ventanaStats`): el periodo que
+  corre en «Periodo actual», o el mes o el año elegidos mirando atrás. A quien se
+  fue se le quita la encuesta **sólo si todo el tramo está relevado** —con una
+  semana relevada en un mes, las otras tres las tuvo para contestar—, y en ese
+  tramo su propia respuesta no cuenta: el tramo es de su relevo. Los desgloses
+  por colaborador cuentan sus asignadas por su cuenta y pasan por
+  `window.asignacionesDeStats`, que sale del mismo cálculo.
+
+  La caché de vacaciones se pide una vez por sesión, como las decisiones de «¿te
+  aplica?», en los mismos sitios. **Sin ella —o sin `sql/vacaciones.sql`, que se
+  corre a mano— todo se comporta como antes** y la hoja dice qué script falta.
+  La tabla está en `RASTROS_DEL_EMPLEADO`: sus vacaciones se borran con su
+  ficha, y donde era relevo o donde lo cubrieron sólo se le desliga.
 
 - **Las dos hojas de contraseña salen de la misma fábrica.** La del modo
   administrador y la de una persona de la plantilla son el mismo control —un

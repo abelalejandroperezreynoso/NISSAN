@@ -5611,6 +5611,100 @@ html.fondo-anclado body {
     color: #c7c7cc;   /* el gris de los chevrons de iOS */
 }
 
+/* --- Vacaciones y relevo (14-vacaciones.js) -------------------------------
+   El aviso de arriba de «Mis Pendientes» mientras haya vacaciones cargadas, y
+   las piezas de su hoja. El aviso es una fila que se toca —abre la hoja, que
+   es donde se revierten—, así que lleva su chevron como cualquier fila. */
+.aviso-vacaciones {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    background: #ecfeff;
+    border: 1px solid #a5f3fc;
+    border-radius: 14px;
+    color: #155e75;
+    font-family: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.aviso-vacaciones-texto { flex: 1; min-width: 0; line-height: 1.4; }
+
+/* Las dos duraciones, como un control segmentado de iOS. */
+.vac-duracion {
+    display: flex;
+    gap: 4px;
+    padding: 3px;
+    background: #f1f5f9;
+    border-radius: 10px;
+}
+
+.vac-duracion button {
+    flex: 1;
+    padding: 9px 0;
+    border: none;
+    border-radius: 8px;
+    background: none;
+    color: #334155;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.vac-duracion button.esta-elegido {
+    background: white;
+    color: #0e7490;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
+}
+
+.fila-ios.esta-elegido { background: #ecfeff; }
+
+.vac-marca {
+    flex-shrink: 0;
+    width: 20px;
+    color: #0891b2;
+    font-weight: 700;
+    text-align: center;
+}
+
+.vac-revertir {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid #fecaca;
+    border-radius: 999px;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.vac-resumen {
+    margin-top: 16px;
+    padding: 0 4px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: #475569;
+}
+
+.vac-resumen p { margin: 0 0 8px; }
+
+.vac-aviso {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    border-radius: 10px;
+    color: #92400e;
+}
+
 .gestion-avatar {
     flex-shrink: 0;
     width: 34px;

@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-22-7';
+window.VERSION_APP = '2026-09-28-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -484,6 +484,262 @@ window.padronDeLaEncuesta = (ev) => {
     const conEquipo = new Set(gente.map(e => e.supId).filter(Boolean).map(String));
     return gente.filter(emp => window.empleadoActivo(emp) &&
         window.leTocaEstaEncuesta(ev, emp, conEquipo.has(String(emp.id))));
+};
+
+// ==========================================
+// VACACIONES Y RELEVO
+// ==========================================
+// Quien se va de vacaciones carga una o dos **semanas completas** —de lunes a
+// domingo— y nombra a quien lo releva. Lo que eso cambia es una sola regla:
+//
+//   **Un periodo de encuesta que cae entero dentro de las vacaciones no es de
+//   quien se fue: es de su relevo.**
+//
+// Al que se fue no le cuenta —ni pendiente, ni padrón, ni promedio, ni
+// certificación— y en su lista sale «Relevada». Al relevo le sale en sus
+// pendientes como «Apoyo por vacaciones» y **sí le cuenta**: es una asignación
+// más suya, que suma si la contesta y le baja la estadística si no.
+//
+// Con semanas completas eso son, en la práctica, las semanales: una quincena
+// dura 15 o 16 días y dos semanas son 14, así que nunca cabe entera, y lo
+// mensual o más largo se pone al corriente al volver. Pero la regla es la del
+// periodo y no una lista de frecuencias: si mañana cambian las duraciones que
+// se ofrecen, no hay nada más que tocar.
+//
+// Lo que **no** se releva: las encuestas de modo jefe —ahí quien contesta es el
+// jefe sobre cada colaborador— y las revisiones, que se regularizan al volver.
+//
+// La respuesta del relevo es **suya** (`employee_id` es el suyo) y lleva en
+// `relevo_de` a quién cubría. Esa columna es lo único que la separa de sus
+// respuestas propias, y por eso ninguna respuesta de apoyo cierra un pendiente
+// propio del relevo (`respuestasPropias`) aunque sea de la misma encuesta: si
+// los dos son supervisores, esa semana la contesta dos veces.
+//
+// El script es `sql/vacaciones.sql` y se corre a mano. Sin él la caché se queda
+// vacía y todo se comporta como antes.
+window.VACACIONES = null;
+let promesaVacaciones = null;
+
+// Se piden **una sola vez por sesión** —la promesa, no el resultado—, como las
+// decisiones de «¿te aplica?», porque quien pregunta lo hace sin poder esperar:
+// `esEvaluacionPendiente`, el padrón y las estadísticas son síncronos.
+window.cargarVacaciones = (recargar) => {
+    if (recargar) { promesaVacaciones = null; window.VACACIONES = null; }
+    if (promesaVacaciones) return promesaVacaciones;
+
+    promesaVacaciones = sb.from('vacaciones')
+        .select('id, employee_id, relevo_id, desde, semanas, creado_en')
+        .then(({ data, error }) => {
+            // Sin la tabla, o sin red, no hay vacaciones: todo como antes. Es
+            // preferible pedirle a alguien una encuesta de más que esconderle a
+            // la plantilla entera las suyas porque una consulta no respondió.
+            if (error) { window.VACACIONES = null; return false; }
+            window.VACACIONES = data || [];
+            return true;
+        })
+        .catch(() => { window.VACACIONES = null; return false; });
+
+    return promesaVacaciones;
+};
+
+// Si la tabla existe, que es lo que decide si el botón de cargar vacaciones se
+// ofrece o dice qué script falta.
+window.hayTablaVacaciones = () => window.hayColumna('vacaciones', 'employee_id');
+
+window.hayColumnaApoyo = () => window.hayColumna('evaluation_responses', 'relevo_de');
+
+// **Toda consulta de respuestas que vaya a decidir un pendiente la encadena.**
+// Es la trampa de `requires_min_score` otra vez, y aquí muerde al relevo: sin
+// la columna, su respuesta de apoyo llega como una respuesta suya más y le
+// cierra su propio pendiente de esa misma encuesta.
+window.camposConApoyo = (campos) =>
+    window.camposConColumna(campos, 'evaluation_responses', 'relevo_de');
+
+window.esRespuestaDeApoyo = (r) => !!(r && r.relevo_de);
+
+// Las respuestas de alguien que son suyas de verdad: sin las que contestó
+// cubriendo a otro.
+window.respuestasPropias = (respuestas) =>
+    (respuestas || []).filter(r => !window.esRespuestaDeApoyo(r));
+
+// El lunes en que empiezan y el lunes siguiente al último domingo, que es el
+// fin exclusivo —como el de un periodo—.
+window.inicioDeVacaciones = (v) => window.fechaDeRegistro(v && v.desde);
+window.finDeVacaciones = (v) => {
+    const inicio = window.inicioDeVacaciones(v);
+    if (!inicio) return null;
+    const fin = new Date(inicio);
+    fin.setDate(fin.getDate() + 7 * (Number(v.semanas) || 1));
+    return fin;
+};
+
+window.vacacionesDe = (empleadoId) =>
+    (window.VACACIONES || []).filter(v => String(v.employee_id) === String(empleadoId));
+
+// Las vacaciones de alguien que están corriendo o que todavía no llegan, que es
+// lo único que se puede revertir: las que ya pasaron son un hecho.
+window.vacacionesVigentesDe = (empleadoId, ahora) => {
+    const hoy = ahora || new Date();
+    return window.vacacionesDe(empleadoId)
+        .filter(v => { const fin = window.finDeVacaciones(v); return fin && fin > hoy; })
+        .sort((a, b) => window.inicioDeVacaciones(a) - window.inicioDeVacaciones(b));
+};
+
+window.vacacionEnCurso = (empleadoId, fecha) => {
+    const cuando = fecha ? new Date(fecha) : new Date();
+    return window.vacacionesDe(empleadoId).find(v =>
+        window.inicioDeVacaciones(v) <= cuando && cuando < window.finDeVacaciones(v)) || null;
+};
+
+// Si la encuesta se puede relevar: no las de modo jefe, y no las que no tienen
+// periodo —las de «única vez» se contestan cuando se vuelva—.
+const encuestaRelevable = (ev) => !!ev && (ev.mode || 'self') !== 'boss'
+    && !!ev.frequency && ev.frequency !== 'once'
+    && typeof window.periodoVigente === 'function';
+
+// Si el periodo de esta encuesta que contiene `fecha` cae entero dentro de unas
+// vacaciones de esta persona. Devuelve `{ vacacion, periodo }` o null.
+window.periodoRelevado = (ev, empleadoId, fecha) => {
+    if (!encuestaRelevable(ev) || empleadoId == null) return null;
+    const propias = window.vacacionesDe(empleadoId);
+    if (propias.length === 0) return null;
+    const periodo = window.periodoVigente(ev.frequency, fecha ? new Date(fecha) : new Date());
+    if (!periodo || !periodo.fin) return null;
+    const vacacion = propias.find(v =>
+        window.inicioDeVacaciones(v) <= periodo.inicio && periodo.fin <= window.finDeVacaciones(v));
+    return vacacion ? { vacacion, periodo } : null;
+};
+
+// Todos los periodos relevados de una encuesta para esta persona que se tocan
+// con el tramo [desde, hasta). Se recorren las vacaciones, que son pocas, y no
+// los periodos del tramo, que pueden ser muchos.
+window.periodosRelevadosEntre = (ev, empleadoId, desde, hasta) => {
+    if (!encuestaRelevable(ev)) return [];
+    const salida = [];
+    window.vacacionesDe(empleadoId).forEach(v => {
+        const inicioV = window.inicioDeVacaciones(v);
+        const finV = window.finDeVacaciones(v);
+        if (!inicioV || !finV) return;
+        let cursor = new Date(inicioV);
+        for (let vueltas = 0; vueltas < 20 && cursor < finV; vueltas++) {
+            const periodo = window.periodoVigente(ev.frequency, cursor);
+            if (!periodo || !periodo.fin) break;
+            const dentro = inicioV <= periodo.inicio && periodo.fin <= finV;
+            const toca = (!desde || periodo.fin > desde) && (!hasta || periodo.inicio < hasta);
+            if (dentro && toca) salida.push({ vacacion: v, periodo });
+            cursor = new Date(periodo.fin);
+        }
+    });
+    return salida;
+};
+
+// Si en el tramo [desde, hasta) **todos** los periodos de la encuesta están
+// relevados, que es lo que hace falta para sacarla de la cuenta de alguien en
+// una pantalla que mira un tramo entero —el mes de las estadísticas—: con una
+// sola semana relevada en un mes, las otras tres las tuvo para contestar.
+window.encuestaRelevadaEnTramo = (ev, empleadoId, desde, hasta) => {
+    if (!encuestaRelevable(ev) || !desde || !hasta) return false;
+    const relevados = window.periodosRelevadosEntre(ev, empleadoId, desde, hasta);
+    if (relevados.length === 0) return false;
+    let cursor = new Date(desde);
+    for (let vueltas = 0; vueltas < 400 && cursor < hasta; vueltas++) {
+        const periodo = window.periodoVigente(ev.frequency, cursor);
+        if (!periodo || !periodo.fin) return false;
+        if (!relevados.some(r => r.periodo.inicio.getTime() === periodo.inicio.getTime())) return false;
+        cursor = new Date(periodo.fin);
+    }
+    return true;
+};
+
+// Si una encuesta le toca a esta persona para que su relevo la cubra: le toca a
+// ella (`leTocaEstaEncuesta`) y se le exige —las opcionales no se le exigen ni
+// a ella, así que tampoco a quien la cubre—.
+window.leTocaRelevarla = (ev, ausente) => !!ausente && encuestaRelevable(ev)
+    && window.empleadoActivo(ausente)
+    && window.leTocaEstaEncuesta(ev, ausente, window.tieneEquipoDirecto(ausente.id))
+    && window.seExigeLaEncuesta(ev, ausente.id);
+
+// Lo que cubre un relevo en el tramo [desde, hasta): una fila por encuesta,
+// persona cubierta y periodo. Es su asignación extra, la que le cuenta en las
+// estadísticas y la que sale en sus pendientes.
+window.apoyosDelRelevo = (relevoId, encuestas, desde, hasta) => {
+    const salida = [];
+    if (relevoId == null) return salida;
+    (window.VACACIONES || [])
+        .filter(v => v.relevo_id != null && String(v.relevo_id) === String(relevoId))
+        .forEach(v => {
+            const ausente = (window.todosLosEmpleadosData || [])
+                .find(e => String(e.id) === String(v.employee_id));
+            if (!ausente) return;
+            (encuestas || []).forEach(ev => {
+                if (!window.encuestaActiva(ev) || !window.leTocaRelevarla(ev, ausente)) return;
+                window.periodosRelevadosEntre(ev, ausente.id, desde, hasta)
+                    .filter(r => r.vacacion === v)
+                    .forEach(r => salida.push({ ev, ausente, vacacion: v, periodo: r.periodo }));
+            });
+        });
+    return salida;
+};
+
+// La respuesta con la que el relevo ya cubrió ese periodo, o null.
+window.respuestaDeApoyo = (apoyo, respuestasDelRelevo) =>
+    (respuestasDelRelevo || []).find(r =>
+        String(r.evaluation_id) === String(apoyo.ev.id) &&
+        String(r.relevo_de) === String(apoyo.ausente.id) &&
+        new Date(r.submitted_at) >= apoyo.periodo.inicio &&
+        new Date(r.submitted_at) < apoyo.periodo.fin) || null;
+
+// Lo que el relevo tiene pendiente **hoy**: el periodo que corre y que todavía
+// no ha cubierto. Un apoyo cuyo periodo ya cerró sin contestarse no vuelve como
+// pendiente —ese periodo se perdió, igual que una semanal propia que se dejó
+// pasar—, pero sigue contando en sus estadísticas como lo que es: una
+// asignación sin respuesta.
+window.apoyosPendientes = (relevoId, encuestas, respuestasDelRelevo, ahora) => {
+    const hoy = ahora || new Date();
+    const manana = new Date(hoy.getTime() + 1);
+    return window.apoyosDelRelevo(relevoId, encuestas, hoy, manana)
+        .filter(a => a.periodo.inicio <= hoy && hoy < a.periodo.fin)
+        .filter(a => !window.respuestaDeApoyo(a, respuestasDelRelevo));
+};
+
+// El nombre con el que una etiqueta dice quién cubrió: el primer trozo, como
+// `nombresCortos` y el botón «Responder · Fulano», que en una etiqueta no sobra
+// ancho. El completo va donde hay sitio.
+window.nombreCortoDeEmpleado = (id) => {
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(id));
+    const nombre = emp && emp.name ? String(emp.name).trim() : '';
+    return nombre ? nombre.split(' ')[0] : (id != null ? `ID ${id}` : '');
+};
+
+window.guardarVacaciones = async ({ empleadoId, relevoId, desde, semanas }) => {
+    const fila = {
+        employee_id: String(empleadoId),
+        relevo_id: String(relevoId),
+        desde,
+        semanas: Number(semanas) === 2 ? 2 : 1
+    };
+    const { data, error } = await sb.from('vacaciones').insert(fila).select();
+    if (error) throw error;
+    // Una política de RLS que la rechace no da error: sólo no inserta nada.
+    if (!data || data.length === 0) {
+        throw new Error('La base no guardó las vacaciones. Falta correr sql/vacaciones.sql o revisar sus políticas.');
+    }
+    if (window.VACACIONES) window.VACACIONES.push(data[0]);
+    if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+    return data[0];
+};
+
+window.revertirVacaciones = async (idVacacion) => {
+    const { data, error } = await sb.from('vacaciones').delete().eq('id', idVacacion).select();
+    if (error) throw error;
+    if (!data || data.length === 0) {
+        throw new Error('La base no borró las vacaciones. Revisa las políticas de sql/vacaciones.sql.');
+    }
+    if (window.VACACIONES) {
+        window.VACACIONES = window.VACACIONES.filter(v => String(v.id) !== String(idVacacion));
+    }
+    if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+    return true;
 };
 
 // Quién es jefe inmediato de quién. `esSupervisorDirecto` de
@@ -2812,6 +3068,8 @@ window.respuestaDelPeriodo = (ev, respuestas, fecha) => {
     const tope = fecha ? new Date(fecha) : null;
     const delPeriodo = (respuestas || []).filter(r => {
         if (String(r.evaluation_id) !== String(ev.id)) return false;
+        // La que contestó cubriendo a alguien de vacaciones no es la suya.
+        if (window.esRespuestaDeApoyo(r)) return false;
         const enviada = new Date(r.submitted_at);
         if (isNaN(enviada)) return false;
         if (enviada < periodo.inicio) return false;
@@ -2935,12 +3193,17 @@ window.etiquetaDePeriodo = (periodo, frecuencia) => {
     }
 };
 
-window.estadoCertificacion = (encuestas, respuestas, fecha) => {
+// `empleadoId`, el cuarto, es de quién se habla, y sólo lo miran las
+// vacaciones: una encuesta cuyo periodo cayó entero dentro de las suyas no se
+// le exige para certificar —la cubrió su relevo—. Sin él no cambia nada.
+window.estadoCertificacion = (encuestas, respuestas, fecha, empleadoId) => {
     const E = window.ESTADOS_CERTIFICACION;
     // Una clasificación que no se certifica no tiene resumen que dar: se queda
     // sin encuestas y el estado sale vacío.
     const lista = (encuestas || []).filter(window.encuestaActiva)
-        .filter(ev => window.clasificacionSeCertifica(ev.category));
+        .filter(ev => window.clasificacionSeCertifica(ev.category))
+        .filter(ev => empleadoId == null || !window.periodoRelevado(ev, empleadoId, fecha)
+            || !!window.respuestaDelPeriodo(ev, respuestas, fecha));
 
     const resumen = {
         estado: E.VACIO,
@@ -3207,6 +3470,14 @@ window.RASTROS_DEL_EMPLEADO = [
     // que la fila entera se va con la ficha; si no, un alta futura con ese mismo
     // número heredaría un «no me aplica» que nunca dijo.
     { tabla: 'evaluaciones_aplica',   suyas: ['employee_id'],                                que: 'respuestas de «¿te aplica?»' },
+    // Sus vacaciones son suyas; las de otro en las que era el relevo sólo se
+    // desligan, que siguen siendo las vacaciones de ese otro.
+    { tabla: 'vacaciones',            suyas: ['employee_id'], menciones: ['relevo_id'],      que: 'vacaciones' },
+    // Las respuestas que un relevo contestó cubriéndolo. Son del relevo, así
+    // que sólo se les quita a quién cubrían. Va en su propia fila y no con la
+    // de arriba: sin `sql/vacaciones.sql` esta columna no existe, y juntas
+    // tumbaría también el conteo de sus respuestas.
+    { tabla: 'evaluation_responses',  menciones: ['relevo_de'],                              que: 'respuestas de su relevo', desligadoEs: 'dejarán de decir a quién cubrían' },
     { tabla: 'scheduled_evaluations', suyas: ['employee_id'],                                que: 'encuestas programadas' },
     { tabla: 'objectives',            suyas: ['employee_id'],                                que: 'objetivos' },
     { tabla: 'hallazgos',             suyas: ['employee_id'], menciones: ['assigned_to'],    que: 'hallazgos' },

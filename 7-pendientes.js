@@ -303,7 +303,10 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
     // resuelve nada, y del lado del jefe no aparecía: no había forma de
     // quitarlo. Lo demás —el periodo, la racha, «mal revisada»— no depende de
     // quién mire y se decide igual para los dos.
-    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia, fechaAlta, encuesta, contestaQuienMira = true, referencia = null) => {
+    // 'empleadoId' —el octavo— es de quién son las respuestas, y sólo lo usan
+    // las vacaciones: un periodo que cayó entero dentro de las suyas no es suyo
+    // sino de su relevo (`window.periodoRelevado`). Sin él no cambia nada.
+    window.esEvaluacionPendiente = (respuestas, evalId, frecuencia, fechaAlta, encuesta, contestaQuienMira = true, referencia = null, empleadoId = null) => {
         // Con `referencia` la pregunta deja de ser «¿está pendiente hoy?» y
         // pasa a ser «¿lo estaba entonces?», que es lo que hace falta al tocar
         // un punto de la gráfica de la tarjeta del panel: el renglón tiene que
@@ -317,12 +320,30 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         // había pasado**: contarlo dejaría a abril diciendo que la encuesta
         // estaba contestada porque se contestó en septiembre. Es el mismo tope
         // con el que `respuestaDelPeriodo` cuenta las respuestas de un punto.
-        const todas = (respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [])
+        //
+        // Y las que se contestaron **cubriendo a otro** no cierran nada propio:
+        // son de su relevo, aunque sean de esta misma encuesta.
+        const todas = window.respuestasPropias(respuestas ? respuestas.filter(r => r.evaluation_id === evalId) : [])
             .filter(r => {
                 if (!mirandoAtras) return true;
                 const enviada = new Date(r.submitted_at);
                 return isNaN(enviada) ? true : enviada <= hasta;
             });
+
+        // **Las vacaciones.** El periodo que cayó entero dentro de las suyas
+        // no se le pide: lo cubre su relevo. Si es el que corre, la encuesta
+        // queda «Relevada» mientras no la haya contestado él mismo —puede
+        // hacerlo, y entonces cuenta como siempre—.
+        const cuandoMira = mirandoAtras ? hasta : new Date();
+        if (empleadoId != null && encuesta && window.periodoRelevado) {
+            const relevado = window.periodoRelevado({ ...encuesta, frequency: frecuencia }, empleadoId, cuandoMira);
+            if (relevado && !todas.some(r => new Date(r.submitted_at) >= relevado.periodo.inicio)) {
+                return {
+                    mostrar: false, tipoAviso: 'relevada', frecuencia,
+                    relevoId: relevado.vacacion.relevo_id, vacacion: relevado.vacacion
+                };
+            }
+        }
 
         // Relanzar la encuesta es un instante: lo contestado antes sigue en el
         // historial pero deja de cerrar el pendiente, así que aquí se aparta.
@@ -356,6 +377,16 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         if (desdeCuando && !isNaN(desdeCuando) && desdeCuando > now) return { mostrar: false };
         const periodo = AVISO_CIERRE.hasOwnProperty(frecuencia) ? window.periodoVigente(frecuencia, now) : null;
 
+        // Los periodos que se le relevaron entre `desde` y el que corre no son
+        // periodos que dejara pasar: estaba de vacaciones. Se descuentan de la
+        // racha, o al volver le saldría «2 semanas sin contestar» por las dos
+        // semanas que cubrió su relevo.
+        const relevadosDesde = (desde) => {
+            if (empleadoId == null || !periodo || !encuesta || !window.periodosRelevadosEntre) return 0;
+            return window.periodosRelevadosEntre({ ...encuesta, frequency: frecuencia }, empleadoId, desde, periodo.inicio)
+                .filter(r => r.periodo.inicio > desde && r.periodo.fin <= periodo.inicio).length;
+        };
+
         if (resps.length === 0) {
             // La contestó, pero antes del relanzamiento. No es «nunca
             // contestada» ni una racha de descuidos suyos: la encuesta se
@@ -376,7 +407,9 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             }
 
             // Nunca contestada: la racha corre desde que se dio de alta la encuesta.
-            const omitidos = (periodo && fechaAlta) ? window.periodosOmitidos(frecuencia, new Date(fechaAlta), periodo) : 0;
+            const omitidos = (periodo && fechaAlta)
+                ? window.periodosOmitidos(frecuencia, new Date(fechaAlta), periodo) - relevadosDesde(new Date(fechaAlta))
+                : 0;
             return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'nunca', ultimaFecha: null, periodosOmitidos: omitidos, frecuencia: frecuencia };
         }
 
@@ -412,7 +445,7 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         // pasado desde entonces.
         if (subDate >= periodo.inicio) return { mostrar: false };
 
-        const omitidos = window.periodosOmitidos(frecuencia, subDate, periodo);
+        const omitidos = window.periodosOmitidos(frecuencia, subDate, periodo) - relevadosDesde(subDate);
 
         // Si dejó cerrar al menos un periodo completo sin contestar, está vencida.
         if (omitidos > 0) {
@@ -470,6 +503,10 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
     }
 
     modal.style.display = 'flex';
+    // El botón de cargar vacaciones es de «Mis Pendientes»: en los del equipo
+    // no habla de nadie que las pueda cargar.
+    const btnVacaciones = document.getElementById('btn-vacaciones-pendientes');
+    if (btnVacaciones) btnVacaciones.hidden = (modo !== 'PROPIOS');
     container.innerHTML = `
         <div style="text-align:center; padding:40px; color:#64748b;">
             <div class="spinner" style="margin: 0 auto 15px auto;"></div>
@@ -503,6 +540,11 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
         `;
 
         let items = [];
+
+        // Las vacaciones, antes de decidir nada: las dos pantallas —la propia y
+        // la del equipo— preguntan sin poder esperar qué semanas están
+        // relevadas, y la del relevo, qué le toca cubrir.
+        if (window.cargarVacaciones) await window.cargarVacaciones();
 
             try {
                 if (modo === 'PROPIOS') {
@@ -555,6 +597,8 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             // caché —o sin el script corrido— no hay decisiones y la encuesta
             // le toca a todos sus candidatos, que es lo de antes.
             if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+            // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
+            if (window.cargarVacaciones) await window.cargarVacaciones();
 
             const camposEvals = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
                 'id, title, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))))));
@@ -568,7 +612,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
             // `review_status` y `grades_json` hacen falta para el plazo de
             // reintento: sin el puntaje no se sabe si hay que reponerla.
             const { data: myResponses } = await sb.from('evaluation_responses')
-                .select('evaluation_id, submitted_at, review_status, grades_json')
+                .select(await window.camposConApoyo('evaluation_id, submitted_at, review_status, grades_json'))
                 .eq('employee_id', user.id);
 
             if (activeEvals && activeEvals.length > 0) {
@@ -640,7 +684,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                 // Solo agregamos la encuesta si hace match
                                                 if (esObligatoria && esParaMi) {
-                                                    const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss');
+                                                    const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss', null, user.id);
                                     if (requiereRespuesta.mostrar) {
     if (ev.mode === 'boss') {
         // Generamos un item especial para indicar que el usuario está esperando a su jefe
@@ -663,6 +707,25 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                 }
                             });
                         }
+
+            // **Lo que cubre por las vacaciones de otro.** Si alguien lo nombró
+            // su relevo, las encuestas de esa persona cuyo periodo cae entero
+            // dentro de sus vacaciones le salen aquí, y le cuentan a él. Sólo
+            // el periodo que corre: uno que ya cerró sin cubrirse se perdió,
+            // igual que una semanal propia que se dejó pasar.
+            if (window.apoyosPendientes && window.VACACIONES) {
+                window.apoyosPendientes(user.id, activeEvals, myResponses, new Date()).forEach(a => {
+                    items.push({
+                        id: `apoyo_${a.ev.id}_${a.ausente.id}`, real_eval_id: a.ev.id,
+                        title: a.ev.title,
+                        date: window.diaLocal ? window.diaLocal(a.periodo.inicio) : a.periodo.inicio.toISOString().split('T')[0],
+                        tipo: 'Encuesta', grado: 'Apoyo',
+                        ausente_id: a.ausente.id, ausente_name: a.ausente.name,
+                        original_data: a.ev, virtual_type: 'apoyo',
+                        periodo: a.periodo
+                    });
+                });
+            }
 
             // --- NUEVO: Buscar las encuestas del usuario marcadas como Mal Revisadas ---
             const { data: misMalRevisadas } = await sb.from('evaluation_responses')
@@ -734,7 +797,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     // de modo jefe se quedó por debajo del mínimo y hay que
                     // reponerla.
                     const { data: teamResponsesEvals } = await sb.from('evaluation_responses')
-                        .select('evaluation_id, employee_id, submitted_at, review_status, grades_json')
+                        .select(await window.camposConApoyo('evaluation_id, employee_id, submitted_at, review_status, grades_json'))
                         .in('employee_id', equipoDirectoIds)
                         .in('evaluation_id', teamObligatorias.map(e => e.id));
 
@@ -784,7 +847,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                                    if (aplicaSub) {
                                                     const subResps = teamResponsesEvals ? teamResponsesEvals.filter(r => String(r.employee_id) === String(sub.id)) : [];
-                                                                       const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') === 'boss');
+                                                                       const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') === 'boss', null, sub.id);
                                                     
                                                     if (requiresResponse.mostrar) {
                                                         if (ev.mode === 'boss') {
@@ -893,7 +956,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                     if (selfEvals.length > 0) {
                         const { data: teamResponses } = await sb.from('evaluation_responses')
-                            .select('evaluation_id, employee_id, submitted_at')
+                            .select(await window.camposConApoyo('evaluation_id, employee_id, submitted_at'))
                             .in('employee_id', teamIds);
 
                         const myFullTeam = window.todosLosEmpleadosData.filter(e => teamIds.includes(String(e.id)));
@@ -934,7 +997,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
                                                                                 if (aplicaSub) {
                                                             const subResps = teamResponses ? teamResponses.filter(r => String(r.employee_id) === String(sub.id)) : [];
-                                                                                    const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, false);
+                                                                                    const requiresResponse = window.esEvaluacionPendiente(subResps, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, false, null, sub.id);
                                                             
                                                             if (requiresResponse.mostrar) {
                                                                 items.push({
@@ -956,6 +1019,12 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
         }
 
         container.innerHTML = '';
+
+        // Las vacaciones cargadas, arriba de todo: es donde se ve que
+        // quedaron puestas y por dónde revertirlas.
+        if (modo === 'PROPIOS' && window.bannerDeVacaciones) {
+            container.insertAdjacentHTML('beforeend', window.bannerDeVacaciones(user.id));
+        }
 
         if (items.length === 0) {
                     window.pintarCuentaPendientes(0);
@@ -988,8 +1057,8 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
         // le salen las dos tarjetas con el mismo id de encuesta.
         const idsConPortada = items
             .filter(i => i.virtual_type === 'survey' || i.virtual_type === 'aplica'
-                      || i.virtual_type === 'team_missing_survey')
-            .map(i => i.virtual_type === 'team_missing_survey' ? i.real_eval_id : i.id)
+                      || i.virtual_type === 'team_missing_survey' || i.virtual_type === 'apoyo')
+            .map(i => (i.virtual_type === 'team_missing_survey' || i.virtual_type === 'apoyo') ? i.real_eval_id : i.id)
             .filter(Boolean);
         const portadas = window.portadasDeEncuestas
             ? await window.portadasDeEncuestas(idsConPortada).catch(() => ({}))
@@ -1004,6 +1073,8 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
         // `onclick`, que es lo que le pasa a la tarjeta del usuario desde
         // siempre—. Se guarda por índice de la lista, que es lo que sí cabe.
         window.pendientesDeColaborador = {};
+        // Y a quién cubre cada «Apoyo por vacaciones», por lo mismo.
+        window.apoyosDePendientes = {};
 
         const htmlPromises = items.map(async (item, indice) => {
             
@@ -1319,6 +1390,42 @@ if (item.virtual_type === 'waiting_boss') {
                 </div>`;
             }
 
+            // **Apoyo por vacaciones.** La encuesta de otra persona que este
+            // usuario cubre mientras ella está de vacaciones. La contesta él,
+            // la respuesta queda a su nombre y le cuenta a él; lo único que la
+            // separa de las suyas es a quién cubría (`relevo_de`). La etiqueta
+            // dice a quién, que es lo que la distingue de la suya propia
+            // cuando los dos tienen la misma encuesta.
+            if (item.virtual_type === 'apoyo') {
+                window.apoyosDePendientes[indice] = {
+                    evalId: item.real_eval_id, titulo: item.title,
+                    ausenteId: item.ausente_id, ausenteNombre: item.ausente_name
+                };
+                const nombreCompleto = window.sanitizeForHTML(
+                    String(item.ausente_name || '').trim() || 'un compañero');
+                const cierre = item.periodo && item.periodo.fin
+                    ? Math.ceil((item.periodo.fin - new Date()) / 86400000) : null;
+                const plazoHtml = cierre === null ? ''
+                    : `<span style="background:#fef9c3; color:#a16207; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; border: 1px solid #fef08a;">${cierre <= 1 ? 'Vence hoy' : `Vence en ${cierre} días`}</span>`;
+
+                return `
+                <div class="incident-card" style="border-left: 5px solid #0891b2;">
+                    ${window.portadaDePendienteHtml(item.real_eval_id)}
+                    <div class="card-header" style="align-items: flex-start;">
+                        <div class="card-info" onclick="window.responderApoyoDePendiente(${indice})" style="cursor:pointer; flex:1;">
+                            <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
+                            <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:0; margin-top:0;">
+                                <span class="badge-type" style="background-color:#0891b2">Apoyo por vacaciones · ${nombreCompleto}</span>
+                                ${plazoHtml}
+                            </div>
+                        </div>
+                        <div class="card-actions" style="align-self: center;">
+                            <button class="btn-firmar" onclick="window.responderApoyoDePendiente(${indice})" style="color:white; background:#0891b2; border:none;">Responder</button>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
             if (item.virtual_type === 'survey') {
                             const safeTitle = (item.title || "Evaluación").replace(/'/g, "&apos;").replace(/"/g, "&quot;");
                 
@@ -1551,6 +1658,16 @@ window.responderPendienteDeColaborador = (indice) => {
     const p = window.pendientesDeColaborador[indice];
     if (!p || !window.responderPorColaborador) return;
     window.responderPorColaborador(p.evalId, p.titulo, p.empId, p.empName);
+};
+
+// El botón de un «Apoyo por vacaciones». La contesta quien mira, a su nombre,
+// cubriendo a quien está de vacaciones: `responderApoyo`, en
+// `4-evaluaciones-base.js`.
+window.apoyosDePendientes = {};
+window.responderApoyoDePendiente = (indice) => {
+    const p = window.apoyosDePendientes[indice];
+    if (!p || !window.responderApoyo) return;
+    window.responderApoyo(p.evalId, p.titulo, p.ausenteId, p.ausenteNombre);
 };
 
 window.pintarCuentaPendientes = (cuantos) => {

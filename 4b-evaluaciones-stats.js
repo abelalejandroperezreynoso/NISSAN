@@ -288,6 +288,8 @@ window.cargarStatsEncuestasGlobales = async () => {
         // quien: sin la caché, el denominador vuelve a ser la plantilla entera
         // y el porcentaje de esa encuesta no significa nada.
         if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+        // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
+        if (window.cargarVacaciones) await window.cargarVacaciones();
 
         const p1 = window.todosLosEmpleadosData && window.todosLosEmpleadosData.length > 0
             ? Promise.resolve(null)
@@ -300,6 +302,9 @@ window.cargarStatsEncuestasGlobales = async () => {
         const p2 = consultaEvals;
         
         // Paginación automática (Batch Fetching)
+        // Con `relevo_de`: la respuesta que contestó un relevo cuenta para él y
+        // por separado de la suya propia.
+        const camposRespuestas = await window.camposConApoyo('id, employee_id, evaluation_id, grades_json, review_status, submitted_at, employee_area');
         const fetchTodasLasRespuestas = async () => {
             let todasLasRespuestas = [];
             let rangoInicio = 0;
@@ -308,7 +313,7 @@ window.cargarStatsEncuestasGlobales = async () => {
 
             while (hayMasDatos) {
                 const { data, error } = await sb.from('evaluation_responses')
-                    .select('id, employee_id, evaluation_id, grades_json, review_status, submitted_at, employee_area')
+                    .select(camposRespuestas)
                     .order('submitted_at', { ascending: false })
                     .range(rangoInicio, rangoInicio + limitePorPagina - 1);
 
@@ -882,6 +887,52 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
     let totalAsignadasGlobal = 0;
     const radarGroupingUsersAssigned = {};
 
+    // **Las vacaciones.** El tramo que mira cada encuesta —su periodo en
+    // «Periodo actual», el mes o el año elegidos mirando atrás—, contra el que
+    // se decide si esa encuesta está relevada para alguien. Si lo está entera,
+    // a quien se fue no se le cuenta, y a su relevo se le suma una asignación
+    // por cada persona que cubre. Sin frecuencia no hay tramo, y lo de «única
+    // vez» no se releva.
+    const ahoraStats = new Date();
+    const ventanaStats = (info) => {
+        if (!info || !info.frequency || info.frequency === 'once') return null;
+        if (periodoFiltro === 'CURRENT') {
+            const p = typeof window.periodoVigente === 'function' ? window.periodoVigente(info.frequency, ahoraStats) : null;
+            return p && p.fin ? p : null;
+        }
+        if (periodoFiltro.includes('-')) {
+            const [y, m] = periodoFiltro.split('-').map(Number);
+            return { inicio: new Date(y, m - 1, 1), fin: new Date(y, m, 1) };
+        }
+        const y = parseInt(periodoFiltro);
+        return { inicio: new Date(y, 0, 1), fin: new Date(y + 1, 0, 1) };
+    };
+    const hayVacaciones = (window.VACACIONES || []).length > 0;
+    const relevosConApoyo = new Set((window.VACACIONES || [])
+        .filter(v => v.relevo_id != null).map(v => String(v.relevo_id)));
+    const relevadaPara = (info, empId) => {
+        if (!hayVacaciones) return false;
+        const ventana = ventanaStats(info);
+        return !!ventana && window.encuestaRelevadaEnTramo(info.encuesta, empId, ventana.inicio, ventana.fin);
+    };
+    const apoyosEnVentana = (info, empId) => {
+        if (!relevosConApoyo.has(String(empId))) return 0;
+        const ventana = ventanaStats(info);
+        if (!ventana) return 0;
+        return new Set(window.apoyosDelRelevo(empId, [info.encuesta], ventana.inicio, ventana.fin)
+            .map(a => String(a.ausente.id))).size;
+    };
+
+    // Lo mismo para los desgloses por colaborador, que cuentan sus asignadas
+    // por su cuenta: con el tramo del filtro que se está mirando, **la suya**
+    // (0 o 1) y **las que cubre** por vacaciones de otros. Separadas, porque
+    // «¡Faltan Obligatorias!» habla sólo de la suya.
+    window.asignacionesDeStats = (ev, emp, tieneEquipo) => {
+        const info = { encuesta: ev, frequency: ev.frequency || 'once' };
+        const suya = window.leTocaEstaEncuesta(ev, emp, tieneEquipo) && !relevadaPara(info, emp.id) ? 1 : 0;
+        return { suya, cubiertas: apoyosEnVentana(info, emp.id) };
+    };
+
     window.todosLosEmpleadosData.forEach(e => {
         if (e.isActive === false) return; // <-- NUEVO: Excluir inactivos del universo asignado
         const dept = getDept(e);
@@ -928,8 +979,13 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         evalsList.forEach(ev => {
              const info = evalMap[ev.id];
 
-             if (window.leTocaEstaEncuesta(ev, e, tieneEquipoEste)) {
-                 empAssignments++;
+             // Lo relevado no es suyo en ese tramo: lo cubre su relevo. Y lo
+             // que cubre él por las vacaciones de otro sí lo es.
+             const suya = window.leTocaEstaEncuesta(ev, e, tieneEquipoEste) && !relevadaPara(info, empId);
+             const cubiertas = apoyosEnVentana(info, empId);
+
+             if (suya || cubiertas > 0) {
+                 empAssignments += (suya ? 1 : 0) + cubiertas;
                  const radarKey = categoriaFiltro === 'GLOBAL' ? info.category : info.title;
                  if (!radarGroupingUsersAssigned[radarKey]) radarGroupingUsersAssigned[radarKey] = new Set();
                  radarGroupingUsersAssigned[radarKey].add(empId);
@@ -964,8 +1020,19 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
             const empObj = window.todosLosEmpleadosData.find(e => String(e.id) === String(r.employee_id));
             if (!empObj || empObj.isActive === false) return; // Ignoramos si no existe o está inactivo
 
-            if (!window.leTocaEstaEncuesta(info.encuesta, empObj, window.tieneEquipoDirecto(empObj.id))) {
-                return; // ⛔ Contestó, pero la encuesta no iba dirigida a esta persona. Se ignora.
+            // Una respuesta de apoyo es de quien la contestó cubriendo a otro:
+            // la encuesta no tiene por qué tocarle a él, así que lo que se mira
+            // es que le tocara a quien cubría. Una propia en un tramo que se le
+            // relevó entero no cuenta: ese tramo es de su relevo.
+            const deApoyo = window.esRespuestaDeApoyo(r);
+            if (deApoyo) {
+                const ausente = window.todosLosEmpleadosData.find(e => String(e.id) === String(r.relevo_de));
+                if (!ausente || !window.leTocaEstaEncuesta(info.encuesta, ausente, window.tieneEquipoDirecto(ausente.id))) return;
+            } else {
+                if (!window.leTocaEstaEncuesta(info.encuesta, empObj, window.tieneEquipoDirecto(empObj.id))) {
+                    return; // ⛔ Contestó, pero la encuesta no iba dirigida a esta persona. Se ignora.
+                }
+                if (relevadaPara(info, empObj.id)) return;
             }
             // -------------------------------------------------------------------
 
@@ -1028,7 +1095,9 @@ window.renderizarPanelEstadisticas = (categoriaFiltro, periodoFiltro = 'CURRENT'
         }
 
         if (validForPeriod) {
-            const key = `${r.employee_id}_${r.evaluation_id}`;
+            // Las de apoyo, aparte de la suya y una por persona cubierta: si los
+            // dos tienen la misma encuesta, esa semana cuentan las dos.
+            const key = `${r.employee_id}_${r.evaluation_id}` + (deApoyo ? `_apoyo_${r.relevo_de}` : '');
             // Mantiene el último intento válido para el periodo seleccionado
             if (!uniqueResponseMap[key]) {
                 uniqueResponseMap[key] = r;
@@ -1626,7 +1695,10 @@ window.actualizarRadarDOM = (deptName = null, supName = null, grupo = null) => {
         if (e.isActive === false) return; // <-- NUEVO: Doble filtro por seguridad
         if (!validEmpIds.has(String(e.id))) return;
         cache.activeEvalsList.forEach(ev => {
-             if (window.leTocaEstaEncuesta(ev, e, window.tieneEquipoDirecto(e.id))) {
+             const asignacion = window.asignacionesDeStats
+                 ? window.asignacionesDeStats(ev, e, window.tieneEquipoDirecto(e.id))
+                 : { suya: window.leTocaEstaEncuesta(ev, e, window.tieneEquipoDirecto(e.id)) ? 1 : 0, cubiertas: 0 };
+             if (asignacion.suya || asignacion.cubiertas) {
                  const radarKey = currentFilter === 'GLOBAL' ? (ev.category || 'General') : ev.title;
                  if (!assignedMap[radarKey]) assignedMap[radarKey] = new Set();
                  assignedMap[radarKey].add(String(e.id));
@@ -3157,11 +3229,18 @@ window.verStatsDetalleSupervisor = (deptName, supName) => {
         activeEvals.forEach(ev => {
             const isObligatory = (ev.is_obligatory !== false);
 
-            if (window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp)) {
+            // Con las vacaciones: la relevada no es suya y la que cubre sí
+            // (`asignacionesDeStats`, que sale del mismo cálculo que el motor).
+            const asignacion = window.asignacionesDeStats
+                ? window.asignacionesDeStats(ev, emp, tieneEquipoEsteEmp)
+                : { suya: window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp) ? 1 : 0, cubiertas: 0 };
+            totalAssigned += asignacion.cubiertas;
+
+            if (asignacion.suya) {
                 totalAssigned++;
                 if (isObligatory) {
                     obligatoryAssigned++;
-                    const hasResponded = responses.some(r => String(r.employee_id) === String(emp.id) && String(r.evaluation_id) === String(ev.id));
+                    const hasResponded = responses.some(r => String(r.employee_id) === String(emp.id) && String(r.evaluation_id) === String(ev.id) && !window.esRespuestaDeApoyo(r));
                     if (hasResponded) obligatoryCompleted++;
                 }
             }
@@ -3307,11 +3386,18 @@ window.verStatsDetalleGrupo = (claveDimension, nombre) => {
         activeEvals.forEach(ev => {
             const isObligatory = (ev.is_obligatory !== false);
 
-            if (window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp)) {
+            // Con las vacaciones: la relevada no es suya y la que cubre sí
+            // (`asignacionesDeStats`, que sale del mismo cálculo que el motor).
+            const asignacion = window.asignacionesDeStats
+                ? window.asignacionesDeStats(ev, emp, tieneEquipoEsteEmp)
+                : { suya: window.leTocaEstaEncuesta(ev, emp, tieneEquipoEsteEmp) ? 1 : 0, cubiertas: 0 };
+            totalAssigned += asignacion.cubiertas;
+
+            if (asignacion.suya) {
                 totalAssigned++;
                 if (isObligatory) {
                     obligatoryAssigned++;
-                    const hasResponded = responses.some(r => String(r.employee_id) === String(emp.id) && String(r.evaluation_id) === String(ev.id));
+                    const hasResponded = responses.some(r => String(r.employee_id) === String(emp.id) && String(r.evaluation_id) === String(ev.id) && !window.esRespuestaDeApoyo(r));
                     if (hasResponded) obligatoryCompleted++;
                 }
             }
