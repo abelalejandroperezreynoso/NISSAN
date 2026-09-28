@@ -5635,6 +5635,30 @@ html.fondo-anclado body {
 
 .aviso-vacaciones-texto { flex: 1; min-width: 0; line-height: 1.4; }
 
+/* El botón del panel, encima de «Cerrar Sesión»: la misma píldora, en neutro
+   —es un ajuste de la cuenta y no una salida— y con las vacaciones cargadas
+   debajo del rótulo cuando las hay. */
+.btn-vacaciones {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding: 12px 30px;
+    border: 1px solid #a5f3fc;
+    border-radius: 50px;
+    background: #ecfeff;
+    color: #0e7490;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(14, 116, 144, 0.1);
+}
+
+.btn-vacaciones-texto { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; }
+.btn-vacaciones-detalle { font-size: 0.75rem; font-weight: 600; opacity: 0.8; }
+.btn-vacaciones-detalle:empty { display: none; }
+
 /* Las dos duraciones, como un control segmentado de iOS. */
 .vac-duracion {
     display: flex;

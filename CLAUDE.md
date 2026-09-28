@@ -4540,10 +4540,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 - **Quien se va de vacaciones deja sus semanales a un relevo.** Cada quien
   carga sus vacaciones —**una o dos semanas completas**, de lunes a domingo— y
   nombra a quien lo releva, **sin que el relevo tenga que aceptar**, y las
-  revierte él mismo mientras no hayan terminado. Se entra por el sol del
-  encabezado de «Mis Pendientes» y por el aviso que sale arriba de esa lista
-  mientras haya vacaciones cargadas. La hoja vive en `14-vacaciones.js`; las
-  reglas, en `1-config.js`.
+  revierte él mismo mientras no hayan terminado. Se entra por el botón
+  **«Vacaciones»** del panel, encima de «Cerrar Sesión» —que dice debajo las que
+  hay cargadas, «5 – 11 oct · en curso», con `pintarBotonVacaciones`—, y por el
+  aviso que sale arriba de «Mis Pendientes» mientras las haya. Va y vuelve con
+  el de cerrar sesión: el calendario esconde los dos por id y objetivos, su
+  contenedor. La hoja vive en `14-vacaciones.js`; las reglas, en `1-config.js`.
 
   La regla es una sola: **un periodo de encuesta que cae entero dentro de las
   vacaciones no es de quien se fue, es de su relevo.**

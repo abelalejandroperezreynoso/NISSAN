@@ -503,10 +503,6 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
     }
 
     modal.style.display = 'flex';
-    // El botón de cargar vacaciones es de «Mis Pendientes»: en los del equipo
-    // no habla de nadie que las pueda cargar.
-    const btnVacaciones = document.getElementById('btn-vacaciones-pendientes');
-    if (btnVacaciones) btnVacaciones.hidden = (modo !== 'PROPIOS');
     container.innerHTML = `
         <div style="text-align:center; padding:40px; color:#64748b;">
             <div class="spinner" style="margin: 0 auto 15px auto;"></div>

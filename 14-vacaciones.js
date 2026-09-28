@@ -6,8 +6,9 @@
 // eso viven en `1-config.js` (`periodoRelevado`, `apoyosDelRelevo`…); aquí sólo
 // está la pantalla.
 //
-// Se entra por el botón del encabezado de «Mis Pendientes» y por el aviso que
-// sale arriba de esa lista mientras haya vacaciones cargadas. La carga el
+// Se entra por el botón «Vacaciones» del panel, encima de «Cerrar Sesión», y
+// por el aviso que sale arriba de «Mis Pendientes» mientras haya vacaciones
+// cargadas. La carga el
 // propio usuario, **sin que el relevo tenga que aceptar**, y la revierte él
 // mismo desde aquí mientras no hayan terminado.
 //
@@ -375,10 +376,28 @@ window.revertirHojaVacaciones = async (id) => {
     }
 };
 
+// El botón del panel dice las vacaciones cargadas debajo de su rótulo —«5 – 11
+// oct · en curso»—, que es lo que deja ver sin abrir nada que quedaron puestas.
+// El rótulo se escribe en su `<span data-texto>` y el detalle en el suyo: con
+// `innerText` sobre el botón se iría el `<svg>`.
+window.pintarBotonVacaciones = async () => {
+    const detalle = document.getElementById('btn-vacaciones-detalle');
+    const yo = yoMismo();
+    if (!detalle || !yo) return;
+    if (window.cargarVacaciones) await window.cargarVacaciones();
+    const vigentes = window.vacacionesVigentesDe ? window.vacacionesVigentesDe(yo.id) : [];
+    detalle.innerText = vigentes.map(v => {
+        const inicio = window.inicioDeVacaciones(v);
+        return window.textoDeTramoVacaciones(inicio, v.semanas) + (inicio <= new Date() ? ' · en curso' : '');
+    }).join(' · ');
+};
+
 // Lo que hay detrás de la hoja habla de otra cosa en cuanto cambian las
-// vacaciones: los pendientes, el badge y la tarjeta de encuestas del inicio.
+// vacaciones: los pendientes, el badge, la tarjeta de encuestas del inicio y el
+// botón del panel.
 window.alCambiarVacaciones = () => {
     const yo = yoMismo();
+    window.pintarBotonVacaciones();
     const hojaPendientes = document.getElementById('modal-pendientes');
     if (hojaPendientes && hojaPendientes.style.display !== 'none' && window.mostrandoPendientes) {
         window.cargarVistaPendientes('PROPIOS');

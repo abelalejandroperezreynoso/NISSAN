@@ -669,6 +669,7 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
 
     window.cargarEncuestasAsignadas(user.id);
     window.cargarEncuestasQueReviso(user.id);
+    if (window.pintarBotonVacaciones) window.pintarBotonVacaciones();
 };
 
 // ==========================================
