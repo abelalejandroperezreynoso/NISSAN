@@ -6647,6 +6647,7 @@ html.fondo-anclado body {
     position: absolute;
     left: 50%;
     top: 50%;
+    transform: translate(-50%, -50%);
     background: white;
     border-radius: 6px;
     overflow: hidden;
@@ -6666,3 +6667,5 @@ html.fondo-anclado body {
     backdrop-filter: blur(6px);
     z-index: 1;
 }
+#modal-presentacion-completa.esta-ampliada { cursor: grab; }
+#modal-presentacion-completa.esta-ampliada:active { cursor: grabbing; }

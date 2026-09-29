@@ -643,11 +643,17 @@ window.cerrarPresentacion = () => {
 // --- PANTALLA COMPLETA ---
 //
 // La diapositiva sola, sobre el gris del visor de imágenes y con su mismo botón
-// flotante de cerrar: es para proyectarla o enseñarla en una junta. **Con el
-// teléfono vertical se gira sola** 90°, que una diapositiva de 16:9 a lo ancho
-// de un teléfono de pie ocupa un tercio de la pantalla; girada, casi entera.
-// Se decide comparando cuánto crece de cada manera, así que en una tableta o
-// un escritorio se queda derecha.
+// flotante de cerrar: es para proyectarla o enseñarla en una junta. **No se
+// gira sola**: se ajusta a como esté el teléfono, y quien la quiera grande lo
+// pone de lado. Girarla por su cuenta dejaba la letra de lado con el teléfono
+// derecho, que es justo lo que no se pidió.
+//
+// **Se amplía con los dedos**, como el visor de imágenes: dos dedos, doble
+// toque —que amplía donde se tocó y vuelve al tamaño— y, en un escritorio,
+// ctrl (o ⌘) con la rueda, doble click y arrastrar. Ampliada, un dedo la
+// mueve. El zoom se hace cambiando el tamaño de la lámina y no con un
+// `scale()`: el SVG se vuelve a dibujar a su tamaño y la letra sale nítida en
+// vez de ampliada como una foto.
 //
 // Donde el navegador deja pedir pantalla completa de verdad (escritorio,
 // Android) se pide también, para quitar además la barra del navegador; salir
@@ -664,7 +670,9 @@ window.montarPresentacionCompleta = () => {
                 class="ios-boton-icono ios-boton-cerrar presentacion-completa-cerrar"
                 title="Salir de pantalla completa" aria-label="Salir de pantalla completa"></button>`;
     document.body.appendChild(capa);
-    window.addEventListener('resize', window.ajustarPresentacionCompleta);
+    // Al girar el teléfono cambia todo el marco: se vuelve al tamaño.
+    window.addEventListener('resize', window.reiniciarZoomPresentacion);
+    window.engancharZoomPresentacion(capa);
     document.addEventListener('fullscreenchange', () => {
         if (!document.fullscreenElement && capa.style.display === 'block') window.cerrarPresentacionCompleta();
     });
@@ -686,27 +694,181 @@ window.pintarPresentacionCompleta = () => {
     window.ajustarPresentacionCompleta();
 };
 
+// Cuánto se amplía y hacia dónde se ha movido, en píxeles de pantalla desde el
+// centro. Se vuelve a 1 al abrir, al cerrar y al girar el teléfono.
+window.MAX_ZOOM_PRESENTACION = 5;
+window.zoomPresentacion = { escala: 1, x: 0, y: 0 };
+
+// El tamaño que llena la pantalla sin ampliar: el mayor 16:9 que cabe.
+window.anchoBasePresentacion = () => {
+    const margen = 12;
+    const W = window.innerWidth - margen * 2, H = window.innerHeight - margen * 2;
+    return Math.min(W, H * window.ANCHO_DIAPOSITIVA / window.ALTO_DIAPOSITIVA);
+};
+
+// La lámina no se sale de la pantalla: ampliada sólo se mueve hasta que su
+// borde llega al de la pantalla, o se perdería de vista sin manera de traerla.
+window.acotarZoomPresentacion = () => {
+    const z = window.zoomPresentacion;
+    const ancho = window.anchoBasePresentacion() * z.escala;
+    const alto = ancho * window.ALTO_DIAPOSITIVA / window.ANCHO_DIAPOSITIVA;
+    const mx = Math.max(0, (ancho - window.innerWidth) / 2 + 12);
+    const my = Math.max(0, (alto - window.innerHeight) / 2 + 12);
+    z.x = Math.max(-mx, Math.min(mx, z.x));
+    z.y = Math.max(-my, Math.min(my, z.y));
+};
+
 window.ajustarPresentacionCompleta = () => {
     const lamina = document.getElementById('lamina-presentacion-completa');
     if (!lamina) return;
-    const margen = 12;
-    const W = window.innerWidth - margen * 2, H = window.innerHeight - margen * 2;
-    const proporcion = window.ANCHO_DIAPOSITIVA / window.ALTO_DIAPOSITIVA;
-    const derecha = Math.min(W, H * proporcion);
-    const girada = Math.min(H, W * proporcion);
-    // Sólo se gira si de verdad gana: con un poco más de sitio no compensa
-    // obligar a girar el teléfono.
-    const girar = girada > derecha * 1.15;
-    const ancho = girar ? girada : derecha;
+    const z = window.zoomPresentacion;
+    window.acotarZoomPresentacion();
+    const ancho = window.anchoBasePresentacion() * z.escala;
     lamina.style.width = `${ancho}px`;
-    lamina.style.height = `${ancho / proporcion}px`;
-    lamina.style.transform = `translate(-50%, -50%)${girar ? ' rotate(90deg)' : ''}`;
+    lamina.style.height = `${ancho * window.ALTO_DIAPOSITIVA / window.ANCHO_DIAPOSITIVA}px`;
+    lamina.style.left = `calc(50% + ${z.x}px)`;
+    lamina.style.top = `calc(50% + ${z.y}px)`;
+    const capa = document.getElementById('modal-presentacion-completa');
+    if (capa) capa.classList.toggle('esta-ampliada', z.escala > 1.01);
+};
+
+// Pone el zoom a `escala` dejando quieto el punto de la pantalla `punto`
+// ({x, y} en píxeles de la ventana): lo que está debajo del dedo se queda
+// debajo del dedo.
+window.ponerZoomPresentacion = (escala, punto) => {
+    const z = window.zoomPresentacion;
+    const nueva = Math.max(1, Math.min(window.MAX_ZOOM_PRESENTACION, escala));
+    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    const px = punto ? punto.x - cx : 0, py = punto ? punto.y - cy : 0;
+    // El punto, en coordenadas de la lámina sin ampliar.
+    const ux = (px - z.x) / z.escala, uy = (py - z.y) / z.escala;
+    z.escala = nueva;
+    z.x = nueva <= 1.01 ? 0 : px - ux * nueva;
+    z.y = nueva <= 1.01 ? 0 : py - uy * nueva;
+    window.ajustarPresentacionCompleta();
+};
+
+window.alternarZoomPresentacion = (punto) => {
+    window.ponerZoomPresentacion(window.zoomPresentacion.escala > 1.01 ? 1 : 2.5, punto);
+};
+
+window.reiniciarZoomPresentacion = () => {
+    window.zoomPresentacion = { escala: 1, x: 0, y: 0 };
+    window.ajustarPresentacionCompleta();
+};
+
+// Los gestos. **Toque y no puntero**, y el `touchmove` no pasivo: es la única
+// manera de parar el desplazamiento del navegador a media pellizcada, igual que
+// en el visor y en el gesto de las hojas. El doble click que el teléfono
+// sintetiza detrás de un doble toque se descarta, o ampliaría y reduciría en el
+// mismo gesto.
+window.engancharZoomPresentacion = (capa) => {
+    let gesto = null, ultimoToque = 0, ultimoTap = 0, tapEn = null;
+    const distancia = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    const medio = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
+    const esBoton = (e) => e.target.closest && e.target.closest('button');
+
+    capa.addEventListener('touchstart', (e) => {
+        if (esBoton(e)) return;
+        ultimoToque = Date.now();
+        const z = window.zoomPresentacion;
+        if (e.touches.length === 2) {
+            gesto = { tipo: 'pellizco', d0: distancia(e.touches[0], e.touches[1]), e0: z.escala,
+                      m0: medio(e.touches[0], e.touches[1]), x0: z.x, y0: z.y };
+        } else if (e.touches.length === 1) {
+            const t = e.touches[0];
+            gesto = { tipo: 'mover', sx: t.clientX, sy: t.clientY, x0: z.x, y0: z.y, movio: false };
+        }
+    }, { passive: false });
+
+    capa.addEventListener('touchmove', (e) => {
+        if (!gesto) return;
+        e.preventDefault();
+        const z = window.zoomPresentacion;
+        if (gesto.tipo === 'pellizco' && e.touches.length === 2) {
+            const m = medio(e.touches[0], e.touches[1]);
+            const nueva = Math.max(1, Math.min(window.MAX_ZOOM_PRESENTACION,
+                gesto.e0 * distancia(e.touches[0], e.touches[1]) / gesto.d0));
+            const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+            const ux = (gesto.m0.x - cx - gesto.x0) / gesto.e0, uy = (gesto.m0.y - cy - gesto.y0) / gesto.e0;
+            z.escala = nueva;
+            z.x = m.x - cx - ux * nueva;
+            z.y = m.y - cy - uy * nueva;
+            window.ajustarPresentacionCompleta();
+        } else if (gesto.tipo === 'mover' && e.touches.length === 1) {
+            const t = e.touches[0];
+            const dx = t.clientX - gesto.sx, dy = t.clientY - gesto.sy;
+            if (Math.abs(dx) + Math.abs(dy) > 6) gesto.movio = true;
+            if (z.escala > 1.01) {
+                z.x = gesto.x0 + dx;
+                z.y = gesto.y0 + dy;
+                window.ajustarPresentacionCompleta();
+            }
+        }
+    }, { passive: false });
+
+    capa.addEventListener('touchend', (e) => {
+        if (!gesto) return;
+        if (gesto.tipo === 'pellizco') {
+            // Al soltar un dedo del pellizco, el otro sigue moviendo.
+            if (e.touches.length === 1) {
+                const t = e.touches[0], z = window.zoomPresentacion;
+                gesto = { tipo: 'mover', sx: t.clientX, sy: t.clientY, x0: z.x, y0: z.y, movio: true };
+                return;
+            }
+            if (window.zoomPresentacion.escala <= 1.01) window.reiniciarZoomPresentacion();
+            gesto = null;
+            return;
+        }
+        if (gesto.tipo === 'mover' && !gesto.movio && e.changedTouches.length) {
+            const t = e.changedTouches[0];
+            const ahora = Date.now();
+            if (ahora - ultimoTap < 300 && tapEn && Math.hypot(t.clientX - tapEn.x, t.clientY - tapEn.y) < 40) {
+                e.preventDefault();
+                window.alternarZoomPresentacion({ x: t.clientX, y: t.clientY });
+                ultimoTap = 0;
+            } else {
+                ultimoTap = ahora;
+                tapEn = { x: t.clientX, y: t.clientY };
+            }
+        }
+        gesto = null;
+    }, { passive: false });
+
+    // Escritorio: doble click, ctrl/⌘ con la rueda (que es también el pellizco
+    // del trackpad) y arrastrar con el ratón.
+    capa.addEventListener('dblclick', (e) => {
+        if (esBoton(e) || Date.now() - ultimoToque < 800) return;
+        window.alternarZoomPresentacion({ x: e.clientX, y: e.clientY });
+    });
+    capa.addEventListener('wheel', (e) => {
+        if (!e.ctrlKey && !e.metaKey) return;
+        e.preventDefault();
+        window.ponerZoomPresentacion(window.zoomPresentacion.escala * Math.exp(-e.deltaY / 200),
+            { x: e.clientX, y: e.clientY });
+    }, { passive: false });
+    let arrastre = null;
+    capa.addEventListener('mousedown', (e) => {
+        if (esBoton(e) || window.zoomPresentacion.escala <= 1.01) return;
+        const z = window.zoomPresentacion;
+        arrastre = { sx: e.clientX, sy: e.clientY, x0: z.x, y0: z.y };
+        e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+        if (!arrastre) return;
+        const z = window.zoomPresentacion;
+        z.x = arrastre.x0 + e.clientX - arrastre.sx;
+        z.y = arrastre.y0 + e.clientY - arrastre.sy;
+        window.ajustarPresentacionCompleta();
+    });
+    window.addEventListener('mouseup', () => { arrastre = null; });
 };
 
 window.abrirPresentacionCompleta = () => {
     if (!window.presentacion.semanas.length) return;
     const capa = window.montarPresentacionCompleta();
     capa.style.display = 'block';
+    window.zoomPresentacion = { escala: 1, x: 0, y: 0 };
     window.pintarPresentacionCompleta();
     try {
         if (capa.requestFullscreen && !document.fullscreenElement) capa.requestFullscreen().catch(() => {});
@@ -716,6 +878,7 @@ window.abrirPresentacionCompleta = () => {
 window.cerrarPresentacionCompleta = () => {
     const capa = document.getElementById('modal-presentacion-completa');
     if (capa) capa.style.display = 'none';
+    window.zoomPresentacion = { escala: 1, x: 0, y: 0 };
     try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch (e) { /* nada */ }
 };
 

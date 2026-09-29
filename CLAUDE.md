@@ -4690,15 +4690,38 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   **Y se abre a pantalla completa**, con el botón de las cuatro esquinas del
   encabezado o tocando la diapositiva: `#modal-presentacion-completa`, sobre el
-  gris del visor y con su mismo botón flotante de cerrar. **Con el teléfono
-  vertical se gira sola 90°** (`ajustarPresentacionCompleta`, que compara
-  cuánto crece de cada manera y sólo gira si gana más de un 15%): un 16:9 a lo
-  ancho de un teléfono de pie ocupa un tercio de la pantalla. Donde el
-  navegador lo permite se pide además `requestFullscreen` —en iOS no existe
-  para un `<div>` y basta la capa—, y salir de él con Esc cierra la vista; con
-  el teclado, las flechas cambian de semana. Como el visor, está excluida de la
-  regla `[id^="modal-"]` que rellena los overlays: aquí el contenido es la
-  pantalla entera.
+  gris del visor y con su mismo botón flotante de cerrar. **No se gira sola**:
+  se ajusta a como esté el teléfono, y quien la quiera grande lo pone de lado.
+  Se giró un tiempo sola en vertical y dejaba la letra de lado con el teléfono
+  derecho. Al girar el teléfono se vuelve a ajustar y el zoom vuelve a 1.
+
+  **Se amplía con los dedos**, como el visor de imágenes: dos dedos, doble
+  toque —amplía donde se tocó y vuelve al tamaño— y, en un escritorio, ctrl (o
+  ⌘) con la rueda, doble click y arrastrar; ampliada, un dedo la mueve.
+
+  ```js
+  window.zoomPresentacion   // { escala, x, y }: x e y en píxeles desde el centro
+  window.ponerZoomPresentacion(escala, punto)  window.alternarZoomPresentacion(punto)
+  window.reiniciarZoomPresentacion()  window.acotarZoomPresentacion()
+  ```
+
+  Tres cosas que hay que mantener:
+
+  - **El zoom cambia el tamaño de la lámina, no le pone un `scale()`.** El SVG
+    se vuelve a dibujar a su tamaño y la letra sale nítida en vez de ampliada
+    como una foto.
+  - **Lo que está debajo del dedo se queda debajo del dedo**, y la lámina no se
+    sale de la pantalla (`acotarZoomPresentacion`): ampliada sólo se mueve hasta
+    que su borde llega al de la pantalla.
+  - **Eventos de toque con `touchmove` no pasivo**, por lo mismo que el visor y
+    el gesto de las hojas, y el doble click que sigue a un doble toque se
+    descarta.
+
+  Donde el navegador lo permite se pide además `requestFullscreen` —en iOS no
+  existe para un `<div>` y basta la capa—, y salir de él con Esc cierra la
+  vista; con el teclado, las flechas cambian de semana. Como el visor, está
+  excluida de la regla `[id^="modal-"]` que rellena los overlays: aquí el
+  contenido es la pantalla entera.
 
   La nota que explicaba debajo de la diapositiva que se arma sola se quitó.
 
