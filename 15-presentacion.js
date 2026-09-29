@@ -201,7 +201,7 @@ window.desempenoDePersonasEn = (referencia) => {
             padron.forEach(emp => {
                 const id = String(emp.id);
                 const p = porPersona[id] || (porPersona[id] =
-                    { emp, filas: [], asignadas: 0, contestadas: 0, calificadas: 0, terminoEn: 0 });
+                    { emp, filas: [], asignadas: 0, contestadas: 0, calificadas: 0, terminoEn: 0, sumaDias: 0, conDias: 0 });
                 p.asignadas++;
                 const r = ultimas[id];
                 if (!r) { p.filas.push({ ev: f.ev, puntaje: 0 }); return; }
@@ -209,6 +209,15 @@ window.desempenoDePersonasEn = (referencia) => {
                 // Cuándo terminó: la más tardía de las respuestas que cuentan.
                 const enviada = new Date(r.submitted_at).getTime();
                 if (!isNaN(enviada) && enviada > p.terminoEn) p.terminoEn = enviada;
+                // Cuánto tardó desde que le apareció como pendiente: la misma
+                // medida que «Prontitud» en las estadísticas (`origenDelPendiente`).
+                const marca = window.origenDelPendiente
+                    ? window.origenDelPendiente(f.ev.frequency, window.inicioDeEncuesta(f.ev), emp, new Date(r.submitted_at))
+                    : null;
+                if (marca && !isNaN(enviada)) {
+                    p.sumaDias += Math.max(0, enviada - marca.origen.getTime()) / 86400000;
+                    p.conDias++;
+                }
                 const puntaje = window.puntajeDeRespuesta(r);
                 if (puntaje === null) return;
                 p.calificadas++;
@@ -217,7 +226,10 @@ window.desempenoDePersonasEn = (referencia) => {
         });
     return Object.values(porPersona)
         .filter(p => p.calificadas > 0)
-        .map(p => Object.assign(p, { promedio: window.promedioPorClasificacion(p.filas) }))
+        .map(p => Object.assign(p, {
+            promedio: window.promedioPorClasificacion(p.filas),
+            diasDeRespuesta: p.conDias ? p.sumaDias / p.conDias : null
+        }))
         .filter(p => p.promedio !== null);
 };
 
@@ -273,6 +285,17 @@ window.partirEnRenglones = (texto, max, lineas) => {
         salida[lineas - 1] = salida[lineas - 1].slice(0, max - 1).trimEnd() + '…';
     }
     return salida.map(r => r.length > max ? r.slice(0, max - 1) + '…' : r);
+};
+
+// «0.4 días», «1 día», «12 días». Por debajo de un día se dicen horas, que
+// «0.2 días» no se lee de un vistazo.
+window.textoDeDias = (dias) => {
+    if (dias < 1) {
+        const horas = Math.max(1, Math.round(dias * 24));
+        return `${horas} ${horas === 1 ? 'hora' : 'horas'}`;
+    }
+    const redondo = dias < 10 ? Math.round(dias * 10) / 10 : Math.round(dias);
+    return `${redondo} ${redondo === 1 ? 'día' : 'días'}`;
 };
 
 window.inicialesDe = (nombre) => String(nombre || '').trim().split(/\s+/).filter(Boolean)
@@ -399,17 +422,19 @@ window.diapositivaDePlanta = (i) => {
         texto(x + 96, yt + 2, w - 108, 16, window.partirEnRenglones(depto, 22, 1)[0], 12, '#475569');
         texto(x + 96, yt + 18, w - 108, 16, window.partirEnRenglones(puesto, 22, 1)[0], 12, '#64748b');
         texto(x + 16, y + 122, 90, 40, `${p.promedio}%`, 32, color(p.promedio), { negrita: true });
-        texto(x + 110, y + 124, w - 122, 16, `${p.calificadas}/${p.asignadas} encuestas calificadas`, 11, '#475569');
-        // El promedio de las últimas semanas es lo que decide un empate, así
-        // que se dice siempre: con él a la vista se entiende por qué salió ésta.
+        // Cuatro renglones cortos a la derecha de la cifra: lo calificado, la
+        // velocidad de respuesta, el promedio de las últimas semanas —que es lo
+        // que decide un empate, así que se dice siempre— y con cuántos empató.
+        const detalle = [[`${p.calificadas}/${p.asignadas} encuestas calificadas`, '#475569']];
+        if (p.diasDeRespuesta !== null) {
+            detalle.push([`Responde en ${window.textoDeDias(p.diasDeRespuesta)}`, '#475569']);
+        }
         if (p.semanasRecientes > 1) {
-            texto(x + 110, y + 141, w - 122, 16,
-                `Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`, 11, '#475569');
+            detalle.push([`Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`, '#475569']);
         }
-        if (p.empates > 0) {
-            texto(x + 110, y + 158, w - 122, 14,
-                `Empató con ${p.empates} esta semana`, 10, '#94a3b8');
-        }
+        if (p.empates > 0) detalle.push([`Empató con ${p.empates}`, '#94a3b8']);
+        const arriba = y + 140 - detalle.length * 13 / 2;
+        detalle.forEach(([t, col], n) => texto(x + 110, arriba + n * 13, w - 122, 13, t, 10.5, col));
     };
     const nadie = ['Todavía nadie tiene', 'resultados calificados.'];
     tarjetaDePersona(mejor, 136, 'MEJOR DESEMPEÑO', '#16a34a', nadie);

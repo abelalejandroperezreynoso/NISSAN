@@ -4672,6 +4672,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     una por el alfabeto. La tarjeta dice siempre ese promedio («Últimas 4
     semanas: 96%»), que es lo que explica por qué salió esa persona, y con
     cuántos empató esa semana.
+  - **Y dice en cuánto responde** («Responde en 1.8 días»): el promedio, sobre
+    las respuestas de esa semana, de lo que tardó desde que cada encuesta le
+    apareció como pendiente hasta que la contestó. Es la misma medida que
+    «Prontitud» de las estadísticas —el origen lo da `origenDelPendiente`: el
+    inicio del periodo, o el alta de la encuesta o de la persona si son
+    posteriores—, así que las dos pantallas no pueden discrepar. Por debajo de
+    un día se dice en horas (`textoDeDias`). Informa y no desempata: el
+    desempate ya mira quién terminó antes.
   - **La foto es un elemento más, `imagen`**: en el SVG va recortada en círculo
     sobre las iniciales, que quedan a la vista si no carga. En el PowerPoint
     tiene que ir dentro del archivo, así que al descargar se pide con
