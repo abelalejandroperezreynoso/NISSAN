@@ -199,12 +199,134 @@ window.vistaDe = (r, clave) => {
 
 // Las diapositivas de una semana: la de la planta y detrás una por cada
 // clasificación que existía entonces, por nombre —en una presentación el orden
-// tiene que ser el mismo todas las semanas, y el de la cifra cambiaría—.
+// tiene que ser el mismo todas las semanas, y el de la cifra cambiaría—. Detrás
+// de cada clasificación, si esa semana dejó fotos de evidencia, va la de sus
+// evidencias. Cada una lleva su `id`, que es por lo que se sabe cuál se está
+// mirando: la clasificación y sus evidencias comparten `clave`.
 window.diapositivasDeSemana = (i) => {
     const r = window.resultadoDeSemana(i);
-    return [{ clave: '' }].concat(r.clasificaciones.slice()
+    const fotos = window.evidenciasDeSemana(i);
+    const mazo = [{ id: '', clave: '' }];
+    r.clasificaciones.slice()
         .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-        .map(c => ({ clave: c.clave })));
+        .forEach(c => {
+            mazo.push({ id: c.clave, clave: c.clave });
+            if (fotos && fotos[c.clave] && fotos[c.clave].length) {
+                mazo.push({ id: `evidencias:${c.clave}`, clave: c.clave, evidencias: true });
+            }
+        });
+    return mazo;
+};
+
+// La diapositiva que toca a una entrada del mazo.
+window.laminaDe = (i, d, numero, cuantas) => d.evidencias
+    ? window.diapositivaDeEvidencias(i, d.clave, numero, cuantas)
+    : window.diapositiva(i, d.clave, numero, cuantas);
+
+// --- LAS EVIDENCIAS DE LA SEMANA ---
+//
+// Las fotos que dejaron las preguntas de evidencia fotográfica en la semana que
+// se mira, por clasificación. No vienen con las respuestas de la tarjeta —ésas
+// se piden sin `answers_json`, que es lo que más pesa de una fila—, así que se
+// piden aparte y **sólo las de la semana que se mira**, cuando se mira: son las
+// encuestas que tienen alguna pregunta de foto y las respuestas de esos siete
+// días. Mientras llegan, la semana se enseña sin ellas y se repinta al llegar.
+//
+// Ante cualquier problema no hay diapositiva de evidencias, y no se guarda:
+// la siguiente vez que se mire esa semana se vuelve a intentar.
+window.MAX_EVIDENCIAS_POR_DIAPOSITIVA = 8;
+window.MAX_RESPUESTAS_EVIDENCIA = 500;
+let promesaPreguntasDeFoto = null;
+window.preguntasDeFotoDeLaPresentacion = () => {
+    if (!promesaPreguntasDeFoto) {
+        promesaPreguntasDeFoto = sb.from('evaluation_questions')
+            .select('id, evaluation_id, question_text, question_type')
+            .eq('question_type', window.TIPO_PREGUNTA_FOTO)
+            .then(({ data, error }) => { if (error) throw error; return data || []; })
+            .catch(() => { promesaPreguntasDeFoto = null; return null; });
+    }
+    return promesaPreguntasDeFoto;
+};
+
+// Lo que ya llegó de una semana, `{ clave: [foto, …] }`, o null mientras no.
+window.evidenciasDeSemana = (i) => {
+    const p = window.presentacion;
+    return (p.evidencias && p.evidencias[i]) || null;
+};
+
+window.cargarEvidenciasDeSemana = (i) => {
+    const p = window.presentacion;
+    p.evidencias = p.evidencias || {};
+    p.promesasEvidencias = p.promesasEvidencias || {};
+    if (p.evidencias[i]) return Promise.resolve(p.evidencias[i]);
+    if (p.promesasEvidencias[i]) return p.promesasEvidencias[i];
+    const semana = p.semanas[i];
+    const promesa = (async () => {
+        try {
+            const encuestas = new Map((window.filasDeLaTarjeta || []).map(f => [String(f.ev.id), f.ev]));
+            const preguntas = await window.preguntasDeFotoDeLaPresentacion();
+            if (!preguntas) return null;
+            const porEncuesta = {};
+            preguntas.filter(q => encuestas.has(String(q.evaluation_id))).forEach(q => {
+                (porEncuesta[q.evaluation_id] = porEncuesta[q.evaluation_id] || []).push(q);
+            });
+            const ids = Object.keys(porEncuesta);
+            const resultado = {};
+            if (ids.length) {
+                const hasta = semana.actual ? new Date() : semana.fin;
+                const { data, error } = await sb.from('evaluation_responses')
+                    .select('evaluation_id, employee_id, submitted_at, review_status, answers_json')
+                    .in('evaluation_id', ids)
+                    .gte('submitted_at', semana.inicio.toISOString())
+                    .lt('submitted_at', hasta.toISOString())
+                    .order('submitted_at', { ascending: false })
+                    .limit(window.MAX_RESPUESTAS_EVIDENCIA);
+                if (error || !data) return null;
+                const plantilla = window.todosLosEmpleadosData || [];
+                data.forEach(r => {
+                    // Una respuesta que alguien declaró falsa no es evidencia de nada.
+                    if (r.review_status === 'Falsa') return;
+                    const ev = encuestas.get(String(r.evaluation_id));
+                    let respuestas = r.answers_json;
+                    if (typeof respuestas === 'string') { try { respuestas = JSON.parse(respuestas); } catch (e) { respuestas = null; } }
+                    if (!ev || !respuestas) return;
+                    const emp = plantilla.find(e => String(e.id) === String(r.employee_id));
+                    const clave = window.normalizarClasificacion(ev.category || '');
+                    porEncuesta[r.evaluation_id].forEach(q => {
+                        const url = respuestas[q.id];
+                        if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return;
+                        (resultado[clave] = resultado[clave] || []).push({
+                            url, pregunta: String(q.question_text || '').trim() || String(ev.title || '').trim(),
+                            encuesta: String(ev.title || '').trim(),
+                            empleado: String(r.employee_id), nombre: emp ? emp.name : '',
+                            fecha: new Date(r.submitted_at)
+                        });
+                    });
+                });
+            }
+            p.evidencias[i] = resultado;
+            return resultado;
+        } catch (e) {
+            return null;
+        } finally {
+            delete p.promesasEvidencias[i];
+        }
+    })();
+    p.promesasEvidencias[i] = promesa;
+    return promesa;
+};
+
+// Cuáles caben en la diapositiva: de la más reciente a la más vieja, pero
+// **una por persona antes de repetir a nadie** —ocho fotos del mismo turno
+// dicen menos del área que ocho turnos distintos—.
+window.evidenciasParaDiapositiva = (fotos, cuantas) => {
+    const vistas = new Set();
+    const primero = [], despues = [];
+    fotos.forEach(f => {
+        if (vistas.has(f.empleado)) despues.push(f);
+        else { vistas.add(f.empleado); primero.push(f); }
+    });
+    return primero.concat(despues).slice(0, cuantas);
 };
 
 // Con memoria: la tendencia pregunta por las ocho semanas de atrás y cambiar
@@ -664,6 +786,62 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     return el;
 };
 
+// La diapositiva de las evidencias de una clasificación: las fotos de la
+// semana en una rejilla, cada una con lo que se pedía fotografiar y quién y
+// cuándo la tomó. Hasta ocho —cuatro por dos—; con tres o menos, en un solo
+// renglón y más grandes. El mismo encabezado y el mismo pie que las demás.
+window.diapositivaDeEvidencias = (i, clave, numero, cuantas) => {
+    const C = window.COLORES_IOS;
+    const semana = window.presentacion.semanas[i];
+    const r = window.vistaDe(window.resultadoDeSemana(i), clave);
+    const todas = ((window.evidenciasDeSemana(i) || {})[clave]) || [];
+    const fotos = window.evidenciasParaDiapositiva(todas, window.MAX_EVIDENCIAS_POR_DIAPOSITIVA);
+    const personas = new Set(todas.map(f => f.empleado)).size;
+    const el = [];
+    const texto = (x, y, w, h, t, tam, col, extra) =>
+        el.push(Object.assign({ tipo: 'texto', x, y, w, h, texto: t, tam, color: col }, extra || {}));
+
+    el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
+    texto(48, 38, 600, 18, (window.textoDeSemana(semana) + (semana.actual ? ' · en curso' : '')), 14, C.secundario, { peso: 500 });
+    texto(48, 58, 700, 44, window.partirEnRenglones(r ? r.nombre : '', 36, 1)[0], 34, C.texto, { peso: 700 });
+    texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
+    texto(48, 106, 500, 16, 'EVIDENCIA FOTOGRÁFICA', 11, C.secundario, { peso: 600, espaciado: 0.6 });
+    texto(512, 106, 400, 16,
+        `${todas.length} ${todas.length === 1 ? 'foto' : 'fotos'} de ${personas} ${personas === 1 ? 'persona' : 'personas'}`,
+        11, C.secundario, { alinear: 'right' });
+
+    const meses = window.MESES_CORTOS;
+    const pocas = fotos.length <= 3;
+    const columnas = pocas ? Math.max(1, fotos.length) : 4;
+    const hueco = 16, izquierda = 48, ancho = 864;
+    const w = pocas ? Math.min(360, (ancho - hueco * (columnas - 1)) / columnas) : (ancho - hueco * 3) / 4;
+    const h = pocas ? Math.min(270, w * 3 / 4) : 124;
+    const x0 = izquierda + (ancho - (w * columnas + hueco * (columnas - 1))) / 2;
+    const alto = h + 44;
+    fotos.forEach((f, n) => {
+        const x = x0 + (n % columnas) * (w + hueco);
+        const y = 130 + Math.floor(n / columnas) * (alto + hueco);
+        el.push({ tipo: 'foto', x, y, w, h, radio: 12, url: window.procesarUrlImagen(f.url), fondo: C.agrupado });
+        const letras = Math.floor(w / 6);
+        texto(x + 2, y + h + 6, w - 4, 16, window.partirEnRenglones(f.pregunta, letras, 1)[0], 12, C.texto, { peso: 600 });
+        const quien = String(f.nombre || '').trim() || 'Sin nombre';
+        const cuando = isNaN(f.fecha) ? '' : ` · ${f.fecha.getDate()} ${meses[f.fecha.getMonth()]}`;
+        texto(x + 2, y + h + 24, w - 4, 14,
+            window.partirEnRenglones(quien, Math.max(8, letras + 4 - cuando.length), 1)[0] + cuando, 10.5, C.secundario);
+    });
+
+    const sobran = todas.length - fotos.length;
+    const hoy = new Date();
+    if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
+    texto(48, 506, 760, 16,
+        (sobran > 0 ? `y ${sobran} ${sobran === 1 ? 'foto más' : 'fotos más'} en la aplicación · ` : '') +
+        'Una por persona antes de repetir, de la más reciente a la más vieja · ' +
+        `generada el ${hoy.getDate()} ${meses[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
+        `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
+        10, C.terciario);
+    return el;
+};
+
 // --- DE LA LISTA AL SVG ---
 // Cada foto lleva su propio recorte, y los ids no pueden repetirse en el
 // documento: la hoja repinta la diapositiva a cada cambio de semana.
@@ -701,6 +879,16 @@ window.svgDeDiapositiva = (elementos) => {
                 ${e.url ? `<image href="${esc(e.url)}" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}"
                       preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` : ''}
                 <circle cx="${cx}" cy="${cy}" r="${r - 1}" fill="none" stroke="#ffffff" stroke-width="2"/>`;
+        }
+        if (e.tipo === 'foto') {
+            // Una foto rectangular con sus esquinas redondas, rellenando la
+            // caja como un `object-fit: cover`. Sobre el gris, que es lo que
+            // queda si no carga.
+            const id = `recorte-foto-${++window.contadorRecortesDiapositiva}`;
+            return `<clipPath id="${id}"><rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx="${e.radio || 0}"/></clipPath>
+                <rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx="${e.radio || 0}" fill="${e.fondo}"/>
+                ${e.url ? `<image href="${esc(e.url)}" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}"
+                      preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` : ''}`;
         }
         if (e.tipo === 'texto') {
             const ancla = e.alinear === 'right' ? 'end' : (e.alinear === 'center' ? 'middle' : 'start');
@@ -791,6 +979,13 @@ window.agregarDiapositivaPptx = (pptx, elementos) => {
             // círculo. Sin él quedan las iniciales, que es lo que se ve también
             // en la hoja cuando la foto no carga.
             if (e.datos) s.addImage({ data: e.datos, x: pulg(e.x), y: pulg(e.y), w: pulg(e.w), h: pulg(e.h) });
+        } else if (e.tipo === 'foto') {
+            s.addShape(pptx.ShapeType.roundRect, {
+                x: pulg(e.x), y: pulg(e.y), w: pulg(e.w), h: pulg(e.h),
+                fill: { color: hex(e.fondo) }, line: { color: hex(e.fondo), width: 0 },
+                rectRadius: pulg(e.radio || 0)
+            });
+            if (e.datos) s.addImage({ data: e.datos, x: pulg(e.x), y: pulg(e.y), w: pulg(e.w), h: pulg(e.h) });
         } else if (e.tipo === 'texto') {
             s.addText(e.texto, {
                 x: pulg(e.x), y: pulg(e.y), w: pulg(e.w), h: pulg(e.h),
@@ -832,9 +1027,45 @@ window.fotoRedondaParaPptx = (url, lado) => new Promise(resolve => {
     img.src = url;
 });
 
+// Una foto de evidencia, recortada a su caja —centrada, como el `slice` del
+// SVG— y con las esquinas redondas sobre blanco, que es el fondo de la
+// diapositiva: en JPEG no hay transparencia y así pesa una fracción del PNG.
+window.fotoRecortadaParaPptx = (url, w, h, radio) => new Promise(resolve => {
+    if (!url || url.startsWith('data:')) return resolve(null);
+    const img = new Image();
+    const plazo = setTimeout(() => resolve(null), 10000);
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+        clearTimeout(plazo);
+        try {
+            const escala = 2;
+            const c = document.createElement('canvas');
+            c.width = Math.round(w * escala); c.height = Math.round(h * escala);
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, c.width, c.height);
+            const rr = (radio || 0) * escala;
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(0, 0, c.width, c.height, rr); else ctx.rect(0, 0, c.width, c.height);
+            ctx.clip();
+            const proporcion = c.width / c.height;
+            let sw = img.naturalWidth, sh = img.naturalHeight;
+            if (sw / sh > proporcion) sw = sh * proporcion; else sh = sw / proporcion;
+            ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, c.width, c.height);
+            resolve(c.toDataURL('image/jpeg', 0.85));
+        } catch (e) { resolve(null); }
+    };
+    img.onerror = () => { clearTimeout(plazo); resolve(null); };
+    img.src = url;
+});
+
 window.fotosParaPptx = (elementos) => Promise.all(elementos
-    .filter(e => e.tipo === 'imagen' && e.url)
-    .map(async e => { e.datos = await window.fotoRedondaParaPptx(e.url, 240); }));
+    .filter(e => (e.tipo === 'imagen' || e.tipo === 'foto') && e.url)
+    .map(async e => {
+        e.datos = e.tipo === 'foto'
+            ? await window.fotoRecortadaParaPptx(e.url, e.w, e.h, e.radio)
+            : await window.fotoRedondaParaPptx(e.url, 240);
+    }));
 
 // --- LA HOJA ---
 window.montarHojaPresentacion = () => {
@@ -995,10 +1226,14 @@ window.pintarPresentacionCompleta = () => {
     if (!capa || capa.style.display !== 'block') return;
     const p = window.presentacion;
     const mazo = window.diapositivasDeSemana(p.indice);
-    const k = Math.max(0, mazo.findIndex(d => d.clave === p.clave));
-    p.clave = mazo[k].clave;
+    // Si en esta semana esa clasificación no dejó evidencias, su propia
+    // diapositiva; si ni existía, la de la planta.
+    let k = mazo.findIndex(d => d.id === p.clave);
+    if (k < 0) k = mazo.findIndex(d => d.id === String(p.clave || '').replace(/^evidencias:/, ''));
+    k = Math.max(0, k);
+    p.clave = mazo[k].id;
     document.getElementById('lamina-presentacion-completa').innerHTML =
-        window.svgDeDiapositiva(window.diapositiva(p.indice, p.clave, k + 1, mazo.length));
+        window.svgDeDiapositiva(window.laminaDe(p.indice, mazo[k], k + 1, mazo.length));
     document.getElementById('btn-completa-anterior').disabled = k === 0;
     document.getElementById('btn-completa-siguiente').disabled = k === mazo.length - 1;
     document.getElementById('contador-completa').innerText = `${k + 1} / ${mazo.length}`;
@@ -1245,7 +1480,7 @@ window.abrirPresentacionCompleta = (k) => {
     if (!p.semanas.length) return;
     if (typeof k === 'number') {
         const mazo = window.diapositivasDeSemana(p.indice);
-        if (mazo[k]) p.clave = mazo[k].clave;
+        if (mazo[k]) p.clave = mazo[k].id;
     }
     const capa = window.montarPresentacionCompleta();
     capa.style.display = 'block';
@@ -1266,9 +1501,9 @@ window.cerrarPresentacionCompleta = () => {
 window.moverDiapositivaPresentacion = (paso) => {
     const p = window.presentacion;
     const mazo = window.diapositivasDeSemana(p.indice);
-    const k = Math.max(0, mazo.findIndex(d => d.clave === p.clave)) + paso;
+    const k = Math.max(0, mazo.findIndex(d => d.id === p.clave)) + paso;
     if (k < 0 || k >= mazo.length) return;
-    p.clave = mazo[k].clave;
+    p.clave = mazo[k].id;
     window.pintarPresentacionCompleta();
 };
 
@@ -1293,15 +1528,29 @@ window.pintarPresentacion = () => {
     caja.innerHTML = mazo.map((d, k) => `
         <div class="presentacion-diapositiva" role="button" tabindex="0" title="Ver en pantalla completa"
              onclick="window.abrirPresentacionCompleta(${k})">
-            ${window.svgDeDiapositiva(window.diapositiva(p.indice, d.clave, k + 1, mazo.length))}
+            ${window.svgDeDiapositiva(window.laminaDe(p.indice, d, k + 1, mazo.length))}
         </div>`).join('');
     const rotulo = window.textoDeSemana(semana) + (semana.actual ? ' · en curso' : '');
     document.getElementById('semana-presentacion').innerText = rotulo;
+    const clasificaciones = mazo.filter(d => d.id && !d.evidencias).length;
+    const conFotos = mazo.filter(d => d.evidencias).length;
     document.getElementById('subtitulo-presentacion').innerText =
-        `La planta y ${mazo.length - 1} ${mazo.length - 1 === 1 ? 'clasificación' : 'clasificaciones'}`;
+        `La planta y ${clasificaciones} ${clasificaciones === 1 ? 'clasificación' : 'clasificaciones'}` +
+        (conFotos ? ` · ${conFotos} con evidencias` : '');
     document.getElementById('btn-semana-anterior').disabled = p.indice === 0;
     document.getElementById('btn-semana-siguiente').disabled = p.indice === p.semanas.length - 1;
     window.pintarPresentacionCompleta();
+
+    // Las evidencias de esta semana, si todavía no llegaron. Al llegar se
+    // repinta, sólo si se sigue mirando la misma semana en la misma hoja.
+    if (!window.evidenciasDeSemana(p.indice)) {
+        const indice = p.indice;
+        window.cargarEvidenciasDeSemana(indice).then(fotos => {
+            const hoja = document.getElementById('modal-presentacion');
+            if (!fotos || window.presentacion !== p || p.indice !== indice || !hoja || hoja.style.display !== 'flex') return;
+            if (Object.keys(fotos).length) window.pintarPresentacion();
+        });
+    }
 };
 
 // El nombre del archivo va sin acentos: con uno, Chromium descarta el nombre
@@ -1319,9 +1568,11 @@ window.descargarPresentacion = async () => {
         const pptx = new window.PptxGenJS();
         pptx.layout = 'LAYOUT_WIDE';
         pptx.title = `Resultado de la planta · ${window.textoDeSemana(semana)}`;
-        // Todas las de la semana, en el orden de la hoja.
+        // Todas las de la semana, en el orden de la hoja, con sus evidencias:
+        // si todavía no habían llegado, se esperan aquí.
+        await window.cargarEvidenciasDeSemana(p.indice);
         const mazo = window.diapositivasDeSemana(p.indice);
-        const hojas = mazo.map((d, k) => window.diapositiva(p.indice, d.clave, k + 1, mazo.length));
+        const hojas = mazo.map((d, k) => window.laminaDe(p.indice, d, k + 1, mazo.length));
         await window.fotosParaPptx([].concat(...hojas));
         hojas.forEach(elementos => window.agregarDiapositivaPptx(pptx, elementos));
         const d = semana.inicio;

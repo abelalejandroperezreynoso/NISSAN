@@ -4668,6 +4668,41 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     `destacadosDeSemana(i, clave)`): sin ella, el desempate de cada una
     recalcularía cuatro semanas de la plantilla entera en cada repintado.
 
+  **Y detrás de cada clasificación, sus evidencias**: si esa semana alguna de
+  sus encuestas recibió fotos en una pregunta de evidencia fotográfica, va una
+  diapositiva con ellas —hasta ocho en una rejilla de cuatro por dos, o en un
+  solo renglón y más grandes con tres o menos—, cada una con lo que se pedía
+  fotografiar, quién y cuándo. Sin fotos esa semana no hay diapositiva.
+
+  ```js
+  window.cargarEvidenciasDeSemana(i)   // { clave: [foto, …] }, o null si falló
+  window.evidenciasDeSemana(i)         // lo que ya llegó, sin esperar
+  window.diapositivaDeEvidencias(i, clave, numero, cuantas)
+  window.laminaDe(i, entradaDelMazo, numero, cuantas)   // la que toque de las dos
+  ```
+
+  Cuatro cosas que hay que mantener:
+
+  - **Se piden aparte y sólo de la semana que se mira.** Las respuestas de la
+    tarjeta vienen sin `answers_json`, que es lo que más pesa de una fila; aquí
+    se traen las preguntas de foto una vez por sesión y las respuestas de esos
+    siete días de las encuestas que las tienen. Mientras llegan la semana se ve
+    sin ellas y se repinta al llegar; la descarga las espera. Un fallo no se
+    guarda, y la próxima vez que se mire la semana se reintenta.
+  - **Cada entrada del mazo lleva su `id`** (`''`, la clave de la
+    clasificación, o `evidencias:` + la clave): la clasificación y sus
+    evidencias comparten `clave`, así que es por el `id` por lo que se sabe cuál
+    se está mirando. Al cambiar a una semana donde esa clasificación no dejó
+    fotos se queda en su diapositiva, y si ni existía, en la de la planta.
+  - **Una por persona antes de repetir a nadie** (`evidenciasParaDiapositiva`),
+    de la más reciente a la más vieja: ocho fotos del mismo turno dicen menos
+    que ocho turnos. Lo que no cabe se cuenta en el pie. Una respuesta
+    declarada `'Falsa'` no aporta foto.
+  - **La foto es un elemento más, `foto`**: rectangular, con esquinas redondas
+    y rellenando su caja. En el PowerPoint va dentro del archivo, recortada en
+    un lienzo al doble de su tamaño y en JPEG sobre blanco
+    (`fotoRecortadaParaPptx`); si no carga queda el recuadro gris.
+
   **En la hoja van todas, una debajo de otra**, y tocar una la abre a pantalla
   completa. Ahí **izquierda y derecha pasan de diapositiva** —las flechas,
   deslizar el dedo sin zoom y las del teclado, como en Keynote— y **la semana
