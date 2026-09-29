@@ -6703,5 +6703,57 @@ html.fondo-anclado body {
 .presentacion-completa-flecha:active:not(:disabled) { transform: scale(0.92); }
 #modal-presentacion-completa.esta-ampliada .presentacion-completa-flecha:not(:disabled) { opacity: 0.45; }
 .presentacion-cargando { aspect-ratio: 16 / 9; background: #f8fafc; }
+.presentacion-lista { display: flex; flex-direction: column; gap: 12px; }
+.presentacion-lista .presentacion-diapositiva { margin-bottom: 0; }
+
+/* La semana, a pantalla completa: una píldora pequeña en el hueco de arriba con
+   el teléfono derecho, y de pie en la columna de la izquierda con el teléfono
+   de lado (`.vertical`, donde sus flechas apuntan arriba y abajo). */
+.presentacion-semana-flotante {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.28);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    color: white;
+    z-index: 1;
+}
+.presentacion-semana-flotante span {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0 6px;
+    white-space: pre-line;
+    text-align: center;
+    line-height: 1.15;
+}
+.presentacion-semana-flotante button {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: white;
+    cursor: pointer;
+}
+.presentacion-semana-flotante button:disabled { opacity: 0.3; cursor: default; }
+.presentacion-semana-flotante.vertical { flex-direction: column; width: 40px; padding: 4px 0; }
+.presentacion-semana-flotante.vertical span { padding: 2px 0; font-size: 0.7rem; }
+.presentacion-semana-flotante.vertical svg { transform: rotate(90deg); }
+.presentacion-contador {
+    position: absolute;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #8E8E93;
+    z-index: 1;
+}
 #modal-presentacion-completa.esta-ampliada { cursor: grab; }
 #modal-presentacion-completa.esta-ampliada:active { cursor: grabbing; }

@@ -9,7 +9,7 @@
 // Se entra por el botón del final de la tarjeta de encuestas, que sólo sale en
 // modo administrador: es la cifra de la empresa y sólo esa tarjeta la tiene.
 //
-// **La diapositiva se describe una sola vez** (`diapositivaDePlanta`), como una
+// **La diapositiva se describe una sola vez** (`diapositiva`), como una
 // lista de rectángulos, textos, líneas y círculos en un lienzo de 960×540, y
 // de esa lista salen las dos cosas: el SVG que se ve en la hoja y el PowerPoint
 // que se descarga. Así no pueden decir cosas distintas. La escala es la de
@@ -152,7 +152,7 @@ window.resultadoDePlantaEn = (referencia) => {
     filas.forEach(f => {
         const clave = window.normalizarClasificacion(f.ev.category || '');
         if (!porClave[clave]) {
-            porClave[clave] = { nombre: String(f.ev.category || 'General').trim() || 'General', filas: [] };
+            porClave[clave] = { clave, nombre: String(f.ev.category || 'General').trim() || 'General', filas: [] };
             grupos.push(porClave[clave]);
         }
         porClave[clave].filas.push(f);
@@ -160,7 +160,14 @@ window.resultadoDePlantaEn = (referencia) => {
 
     const clasificaciones = grupos.map(g => {
         const t = window.totalDeEncuestasAdmin(g.filas);
-        return { nombre: g.nombre, promedio: t.promedio, contestaron: t.contestaron, total: t.total };
+        // Sus encuestas, para la diapositiva de la clasificación: cada una con
+        // su cifra, la misma del renglón de la tarjeta.
+        const encuestas = g.filas.map(f => ({
+            nombre: String(f.ev.title || 'Sin título').trim(), promedio: f.resumen.promedio,
+            contestaron: f.resumen.contestaron, total: f.resumen.total
+        })).sort((a, b) => (b.promedio === null ? -1 : b.promedio) - (a.promedio === null ? -1 : a.promedio)
+            || a.nombre.localeCompare(b.nombre, 'es'));
+        return { clave: g.clave, nombre: g.nombre, promedio: t.promedio, contestaron: t.contestaron, total: t.total, encuestas };
     }).sort((a, b) => (b.promedio === null ? -1 : b.promedio) - (a.promedio === null ? -1 : a.promedio)
         || a.nombre.localeCompare(b.nombre, 'es'));
 
@@ -172,6 +179,33 @@ window.resultadoDePlantaEn = (referencia) => {
         encuestas: filas.length,
         clasificaciones
     };
+};
+
+// Lo que dice una diapositiva de un resultado: la planta entera (`clave`
+// vacía) o una clasificación. Las dos se dibujan igual, así que se les da la
+// misma forma: la cifra, las respuestas, cuántas encuestas y las filas de la
+// columna del centro —las clasificaciones de la planta, o las encuestas de una
+// clasificación—. Una clasificación que en ese instante no existía da null.
+window.vistaDe = (r, clave) => {
+    if (!r) return null;
+    if (!clave) {
+        return { nombre: 'Resultado de la planta', promedio: r.promedio, contestaron: r.contestaron, total: r.total,
+                 encuestas: r.encuestas, filas: r.clasificaciones, rotuloFilas: 'Por clasificación' };
+    }
+    const c = r.clasificaciones.find(x => x.clave === clave);
+    if (!c) return null;
+    return { nombre: c.nombre, promedio: c.promedio, contestaron: c.contestaron, total: c.total,
+             encuestas: c.encuestas.length, filas: c.encuestas, rotuloFilas: 'Por encuesta' };
+};
+
+// Las diapositivas de una semana: la de la planta y detrás una por cada
+// clasificación que existía entonces, por nombre —en una presentación el orden
+// tiene que ser el mismo todas las semanas, y el de la cifra cambiaría—.
+window.diapositivasDeSemana = (i) => {
+    const r = window.resultadoDeSemana(i);
+    return [{ clave: '' }].concat(r.clasificaciones.slice()
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+        .map(c => ({ clave: c.clave })));
 };
 
 // Con memoria: la tendencia pregunta por las ocho semanas de atrás y cambiar
@@ -187,10 +221,12 @@ window.SEMANAS_DEL_DESEMPATE = 4;
 
 // Las personas de una semana, con memoria: el desempate de cada semana pregunta
 // por las tres de antes, y cambiar de semana volvería a calcularlas.
-window.personasDeSemana = (i) => {
+window.personasDeSemana = (i, clave) => {
     const r = window.resultadoDeSemana(i);
-    if (!r.personas) r.personas = window.desempenoDePersonasEn(window.presentacion.semanas[i].referencia);
-    return r.personas;
+    r.personas = r.personas || {};
+    const k = clave || '';
+    if (!r.personas[k]) r.personas[k] = window.desempenoDePersonasEn(window.presentacion.semanas[i].referencia, k);
+    return r.personas[k];
 };
 
 // El resultado en un instante cualquiera, con memoria: los puntos de los meses
@@ -208,7 +244,7 @@ window.resultadoEnInstante = (fecha) => {
 // lo tiene. Cada mes es la foto de su cierre —la misma de los puntos grandes de
 // la gráfica del panel— y el de la semana que se mira, la de su domingo: así
 // el último punto es la cifra grande de la diapositiva.
-window.mesesDeLaTendencia = (i) => {
+window.mesesDeLaTendencia = (i, clave) => {
     const p = window.presentacion;
     const semana = p.semanas[i];
     const hasta = semana.referencia;
@@ -219,9 +255,10 @@ window.mesesDeLaTendencia = (i) => {
         .reverse()
         .map(m => {
             const ref = (m.referencia && m.referencia < hasta) ? m.referencia : hasta;
-            return { inicio: m.inicio, actual: ref === hasta, r: window.resultadoEnInstante(ref) };
+            const v = window.vistaDe(window.resultadoEnInstante(ref), clave);
+            return { inicio: m.inicio, actual: ref === hasta, valor: v ? v.promedio : null };
         });
-    const primero = meses.findIndex(m => m.r.promedio !== null);
+    const primero = meses.findIndex(m => m.valor !== null);
     return primero < 0 ? [] : meses.slice(primero);
 };
 
@@ -229,26 +266,28 @@ window.mesesDeLaTendencia = (i) => {
 // A cada persona se le pone su promedio de las últimas semanas —sólo las que
 // tuvo algo calificado, como la cifra de cada semana—, que es el primer
 // desempate.
-window.destacadosDeSemana = (i) => {
+window.destacadosDeSemana = (i, clave) => {
     const r = window.resultadoDeSemana(i);
-    if (!r.destacados) {
+    r.destacados = r.destacados || {};
+    const llave = clave || '';
+    if (!r.destacados[llave]) {
         const historia = {};
         for (let k = Math.max(0, i - window.SEMANAS_DEL_DESEMPATE + 1); k <= i; k++) {
-            window.personasDeSemana(k).forEach(p => {
+            window.personasDeSemana(k, clave).forEach(p => {
                 const id = String(p.emp.id);
                 (historia[id] = historia[id] || []).push(p.promedio);
             });
         }
-        const personas = window.personasDeSemana(i).map(p => {
+        const personas = window.personasDeSemana(i, clave).map(p => {
             const vals = historia[String(p.emp.id)] || [p.promedio];
             return Object.assign({}, p, {
                 promedioReciente: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
                 semanasRecientes: vals.length
             });
         });
-        r.destacados = window.destacadosDeLaSemana(personas);
+        r.destacados[llave] = window.destacadosDeLaSemana(personas);
     }
-    return r.destacados;
+    return r.destacados[llave];
 };
 
 // Cómo le fue a cada persona en un instante, con la misma regla que la cifra
@@ -262,10 +301,13 @@ window.destacadosDeSemana = (i) => {
 // desempeño» saldría de sortear entre cuarenta ceros a alguien que no ha hecho
 // nada todavía —ni mal ni bien—. Lo contestado y sin calificar tampoco puntúa,
 // como en todas partes: su cero sería el atraso del revisor.
-window.desempenoDePersonasEn = (referencia) => {
+// Con `clave`, sólo las encuestas de esa clasificación: el mejor de
+// «Seguridad» es el mejor en «Seguridad», no el mejor de la planta.
+window.desempenoDePersonasEn = (referencia, clave) => {
     const porPersona = {};
     (window.filasDeLaTarjeta || [])
         .filter(f => window.encuestaExistiaEn(f.ev, referencia))
+        .filter(f => !clave || window.normalizarClasificacion(f.ev.category || '') === clave)
         .forEach(f => {
             const padron = (window.padronesDeLaTarjeta || {})[f.ev.id] || window.padronDeLaEncuesta(f.ev);
             const ultimas = window.ultimaDeCadaUnoEnPeriodo(f.ev, window.respuestasParaPresentar(), referencia);
@@ -404,11 +446,15 @@ window.tinteIOS = (hex, cuanto) => {
     return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
 };
 
-window.diapositivaDePlanta = (i) => {
+// La de la planta es una diapositiva más, la de la clave vacía.
+window.diapositivaDePlanta = (i) => window.diapositiva(i, '');
+
+window.diapositiva = (i, clave, numero, cuantas) => {
     const C = window.COLORES_IOS;
     const semana = window.presentacion.semanas[i];
-    const r = window.resultadoDeSemana(i);
-    const anterior = i > 0 ? window.resultadoDeSemana(i - 1) : null;
+    const r = window.vistaDe(window.resultadoDeSemana(i), clave)
+        || { nombre: '', promedio: null, contestaron: 0, total: 0, encuestas: 0, filas: [], rotuloFilas: '' };
+    const anterior = i > 0 ? window.vistaDe(window.resultadoDeSemana(i - 1), clave) : null;
     const color = window.colorIOS;
     const el = [];
     const texto = (x, y, w, h, t, tam, col, extra) =>
@@ -420,17 +466,17 @@ window.diapositivaDePlanta = (i) => {
     // Encabezado: la semana en gris encima y el título grande debajo, como el
     // de una pantalla de iOS. Sin barras ni líneas.
     texto(48, 38, 600, 18, (window.textoDeSemana(semana) + (semana.actual ? ' · en curso' : '')), 14, C.secundario, { peso: 500 });
-    texto(48, 58, 700, 44, 'Resultado de la planta', 34, C.texto, { peso: 700 });
+    texto(48, 58, 700, 44, window.partirEnRenglones(r.nombre, 36, 1)[0], 34, C.texto, { peso: 700 });
     texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
 
     // Columna 1: el anillo, lo que lo acompaña y la tendencia.
-    rotulo(48, 132, 260, 'Resultado general');
+    rotulo(48, 132, 260, clave ? 'Resultado' : 'Resultado general');
     const cx = 128, cy = 232, radio = 64;
     el.push({ tipo: 'anillo', cx, cy, r: radio, grosor: 16,
               proporcion: r.promedio === null ? 0 : r.promedio / 100,
               color: color(r.promedio), pista: window.tinteIOS(r.promedio === null ? C.terciario : color(r.promedio)) });
     texto(cx - 60, cy - 24, 120, 40, r.promedio === null ? '—' : `${r.promedio}%`, 34, C.texto, { peso: 700, alinear: 'center' });
-    texto(cx - 60, cy + 14, 120, 16, 'general', 12, C.secundario, { alinear: 'center' });
+    texto(cx - 60, cy + 14, 120, 16, clave ? 'promedio' : 'general', 12, C.secundario, { alinear: 'center' });
 
     texto(212, 196, 100, 22, `${r.contestaron}`, 20, C.texto, { peso: 700 });
     texto(212, 218, 100, 14, r.total > 0 ? `de ${r.total} respuestas` : 'respuestas', 11, C.secundario);
@@ -450,7 +496,7 @@ window.diapositivaDePlanta = (i) => {
     // La tendencia de los últimos meses —hasta doce, los que tengan resultado—,
     // terminando en el de la semana que se mira. Una línea azul fina y sólo el
     // último punto en grande, con el color de su cifra.
-    const tramo = window.mesesDeLaTendencia(i);
+    const tramo = window.mesesDeLaTendencia(i, clave);
     rotulo(48, 372, 260, tramo.length === 1 ? 'Este mes' : `Últimos ${tramo.length} meses`);
     const gx = 56, gw = 244, gy = 398, gh = 70;
     const px = (j) => gx + (tramo.length === 1 ? gw / 2 : gw * j / (tramo.length - 1));
@@ -460,8 +506,8 @@ window.diapositivaDePlanta = (i) => {
     el.push({ tipo: 'linea', x1: gx, y1: gy + gh, x2: gx + gw, y2: gy + gh, color: C.separador, grosor: 1 });
     let previo = null;
     tramo.forEach((t, j) => {
-        if (t.r.promedio === null) { previo = null; return; }
-        const punto = [px(j), py(t.r.promedio)];
+        if (t.valor === null) { previo = null; return; }
+        const punto = [px(j), py(t.valor)];
         if (previo) el.push({ tipo: 'linea', x1: previo[0], y1: previo[1], x2: punto[0], y2: punto[1], color: C.azul, grosor: 2 });
         previo = punto;
     });
@@ -475,21 +521,40 @@ window.diapositivaDePlanta = (i) => {
             const rot = window.MESES_CORTOS[d.getMonth()] + (d.getMonth() === 0 ? ` ${String(d.getFullYear()).slice(2)}` : '');
             texto(px(j) - 22, 476, 44, 14, rot, 10, ultimo ? C.texto : C.terciario, { alinear: 'center', peso: ultimo ? 600 : 400 });
         }
-        if (t.r.promedio === null) return;
+        if (t.valor === null) return;
         el.push(ultimo
-            ? { tipo: 'circulo', cx: px(j), cy: py(t.r.promedio), r: 5, relleno: color(t.r.promedio), borde: '#ffffff' }
-            : { tipo: 'circulo', cx: px(j), cy: py(t.r.promedio), r: 2.2, relleno: C.azul });
+            ? { tipo: 'circulo', cx: px(j), cy: py(t.valor), r: 5, relleno: color(t.valor), borde: '#ffffff' }
+            : { tipo: 'circulo', cx: px(j), cy: py(t.valor), r: 2.2, relleno: C.azul });
     });
 
     // Columna 2: una fila por clasificación, de la mejor a la peor. El nombre y
     // la cifra en un renglón y debajo una cápsula fina, como las de Tiempo en
     // pantalla; la marca gris de cada cápsula es la meta.
-    rotulo(348, 132, 280, 'Por clasificación');
-    const lista = r.clasificaciones;
-    const alto = Math.min(44, 330 / Math.max(lista.length, 1));
+    rotulo(348, 132, 280, r.rotuloFilas);
+    // Caben catorce; si hay más, las de abajo se cuentan en un renglón.
+    const MAX_FILAS = 14;
+    const lista = r.filas.slice(0, MAX_FILAS);
+    const sobran = r.filas.length - lista.length;
+    const alto = Math.min(44, (sobran > 0 ? 312 : 330) / Math.max(lista.length, 1));
     const tam = Math.max(10, Math.min(13, alto * 0.32));
     const bx = 348, bw = 268;
+    // Con muchas filas no caben dos renglones: el nombre, la cápsula y la cifra
+    // van en uno.
+    const compacta = alto < 30;
     lista.forEach((c, j) => {
+        if (compacta) {
+            const y = 160 + j * alto, hb = 5, yb = y + alto / 2 - 2.5;
+            const nombre = window.partirEnRenglones(c.nombre, Math.floor(138 / (tam * 0.56)), 1)[0];
+            texto(bx, y, 140, alto, nombre, tam, C.texto, { peso: 600 });
+            el.push({ tipo: 'rect', x: bx + 146, y: yb, w: 76, h: hb, relleno: C.agrupado, radio: 2.5 });
+            if (c.promedio !== null && c.promedio > 0) {
+                el.push({ tipo: 'rect', x: bx + 146, y: yb, w: Math.max(hb, 76 * c.promedio / 100), h: hb,
+                          relleno: color(c.promedio), radio: 2.5 });
+            }
+            texto(bx + bw - 44, y, 44, alto, c.promedio === null ? '—' : `${c.promedio}%`, tam, color(c.promedio),
+                { peso: 700, alinear: 'right' });
+            return;
+        }
         const y = 160 + j * alto;
         const hb = Math.max(4, Math.min(6, alto * 0.14));
         const yb = y + alto * 0.62;
@@ -505,9 +570,10 @@ window.diapositivaDePlanta = (i) => {
         const xm = bx + bw * window.UMBRAL_CERTIFICACION / 100;
         el.push({ tipo: 'linea', x1: xm, y1: yb - 2, x2: xm, y2: yb + hb + 2, color: C.terciario, grosor: 1 });
     });
+    if (sobran > 0) texto(bx, 160 + lista.length * alto + 2, bw, 16, `y ${sobran} más`, 11, C.secundario);
 
     // Columna 3: quién destacó, en dos tarjetas agrupadas.
-    const { mejor, peor } = window.destacadosDeSemana(i);
+    const { mejor, peor } = window.destacadosDeSemana(i, clave);
     const tarjetaDePersona = (p, y, titulo, acento, vacio) => {
         const x = 660, w = 252, h = 172;
         el.push({ tipo: 'rect', x, y, w, h, relleno: C.agrupado, radio: 18 });
@@ -548,8 +614,10 @@ window.diapositivaDePlanta = (i) => {
 
     // Pie, en el gris más claro.
     const hoy = new Date();
-    texto(48, 506, 864, 16,
-        `Cada clasificación pesa igual · meta ${window.UMBRAL_CERTIFICACION}% · desempeño sobre lo ya calificado · ` +
+    if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
+    texto(48, 506, 760, 16,
+        (clave ? 'Cada encuesta pesa según a cuánta gente le toca' : 'Cada clasificación pesa igual') +
+        ` · meta ${window.UMBRAL_CERTIFICACION}% · desempeño sobre lo ya calificado · ` +
         `generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
         `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
         10, C.terciario);
@@ -770,8 +838,7 @@ window.montarHojaPresentacion = () => {
                     <button type="button" id="btn-semana-siguiente" onclick="window.moverSemanaPresentacion(1)"
                             title="Semana siguiente" aria-label="Semana siguiente">›</button>
                 </div>
-                <div id="diapositiva-presentacion" class="presentacion-diapositiva" role="button" tabindex="0"
-                     title="Ver en pantalla completa" onclick="window.abrirPresentacionCompleta()"></div>
+                <div id="diapositiva-presentacion" class="presentacion-lista"></div>
             </div>
         </div>`;
     document.body.appendChild(overlay);
@@ -799,7 +866,7 @@ window.abrirPresentacion = async () => {
     if (hoja.style.display !== 'flex') return;
     const semanas = window.semanasDeLaPresentacion(datos.cubreDesde);
     if (semanas.length === 0) { sub.innerText = 'Todavía no hay semanas que enseñar.'; caja.innerHTML = ''; return; }
-    window.presentacion = { semanas, indice: semanas.length - 1, resultados: {},
+    window.presentacion = { semanas, indice: semanas.length - 1, resultados: {}, clave: '',
                             respuestas: datos.respuestas, cubreDesde: datos.cubreDesde };
     window.pintarPresentacion();
 };
@@ -836,13 +903,27 @@ window.montarPresentacionCompleta = () => {
     capa.id = 'modal-presentacion-completa';
     capa.innerHTML = `
         <div id="lamina-presentacion-completa" class="presentacion-lamina"></div>
+        <div id="semana-completa" class="presentacion-semana-flotante">
+            <button type="button" id="btn-completa-semana-anterior" onclick="window.moverSemanaPresentacion(-1)"
+                    title="Semana anterior" aria-label="Semana anterior">
+                <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none"
+                     stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <span id="semana-completa-texto"></span>
+            <button type="button" id="btn-completa-semana-siguiente" onclick="window.moverSemanaPresentacion(1)"
+                    title="Semana siguiente" aria-label="Semana siguiente">
+                <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none"
+                     stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+        </div>
+        <span id="contador-completa" class="presentacion-contador"></span>
         <button type="button" id="btn-completa-anterior" class="presentacion-completa-flecha"
-                onclick="window.moverSemanaPresentacion(-1)" title="Semana anterior" aria-label="Semana anterior">
+                onclick="window.moverDiapositivaPresentacion(-1)" title="Diapositiva anterior" aria-label="Diapositiva anterior">
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none"
                  stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <button type="button" id="btn-completa-siguiente" class="presentacion-completa-flecha"
-                onclick="window.moverSemanaPresentacion(1)" title="Semana siguiente" aria-label="Semana siguiente">
+                onclick="window.moverDiapositivaPresentacion(1)" title="Diapositiva siguiente" aria-label="Diapositiva siguiente">
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none"
                  stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -859,8 +940,12 @@ window.montarPresentacionCompleta = () => {
     document.addEventListener('keydown', (e) => {
         if (capa.style.display !== 'block') return;
         if (e.key === 'Escape') window.cerrarPresentacionCompleta();
-        if (e.key === 'ArrowLeft') { window.moverSemanaPresentacion(-1); }
-        if (e.key === 'ArrowRight') { window.moverSemanaPresentacion(1); }
+        // Izquierda y derecha pasan de diapositiva, como en Keynote; arriba y
+        // abajo, de semana.
+        if (e.key === 'ArrowLeft') window.moverDiapositivaPresentacion(-1);
+        if (e.key === 'ArrowRight' || e.key === ' ') window.moverDiapositivaPresentacion(1);
+        if (e.key === 'ArrowUp') { e.preventDefault(); window.moverSemanaPresentacion(-1); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); window.moverSemanaPresentacion(1); }
     });
     return capa;
 };
@@ -869,10 +954,20 @@ window.pintarPresentacionCompleta = () => {
     const capa = document.getElementById('modal-presentacion-completa');
     if (!capa || capa.style.display !== 'block') return;
     const p = window.presentacion;
+    const mazo = window.diapositivasDeSemana(p.indice);
+    const k = Math.max(0, mazo.findIndex(d => d.clave === p.clave));
+    p.clave = mazo[k].clave;
     document.getElementById('lamina-presentacion-completa').innerHTML =
-        window.svgDeDiapositiva(window.diapositivaDePlanta(p.indice));
-    document.getElementById('btn-completa-anterior').disabled = p.indice === 0;
-    document.getElementById('btn-completa-siguiente').disabled = p.indice === p.semanas.length - 1;
+        window.svgDeDiapositiva(window.diapositiva(p.indice, p.clave, k + 1, mazo.length));
+    document.getElementById('btn-completa-anterior').disabled = k === 0;
+    document.getElementById('btn-completa-siguiente').disabled = k === mazo.length - 1;
+    document.getElementById('contador-completa').innerText = `${k + 1} / ${mazo.length}`;
+    const semana = p.semanas[p.indice];
+    const d = semana.inicio;
+    document.getElementById('semana-completa-texto').dataset.corto = `${d.getDate()}\n${window.MESES_CORTOS[d.getMonth()]}`;
+    document.getElementById('semana-completa-texto').dataset.largo = window.textoDeSemana(semana).replace('Semana del ', '');
+    document.getElementById('btn-completa-semana-anterior').disabled = p.indice === 0;
+    document.getElementById('btn-completa-semana-siguiente').disabled = p.indice === p.semanas.length - 1;
     window.ajustarPresentacionCompleta();
 };
 
@@ -924,21 +1019,39 @@ window.ajustarPresentacionCompleta = () => {
 window.colocarFlechasPresentacion = () => {
     const ant = document.getElementById('btn-completa-anterior');
     const sig = document.getElementById('btn-completa-siguiente');
-    if (!ant || !sig) return;
+    const semana = document.getElementById('semana-completa');
+    const texto = document.getElementById('semana-completa-texto');
+    const contador = document.getElementById('contador-completa');
+    if (!ant || !sig || !semana) return;
     const lado = 36;
     const W = window.innerWidth, H = window.innerHeight;
     const anchoBase = window.anchoBasePresentacion();
     const altoBase = anchoBase * window.ALTO_DIAPOSITIVA / window.ANCHO_DIAPOSITIVA;
     const libreX = (W - anchoBase) / 2, libreY = (H - altoBase) / 2;
+    const arribaLamina = H / 2 - altoBase / 2;
     if (libreX >= lado + 12 || libreY < lado + 24) {
+        // De lado: las flechas de diapositiva a media altura, el contador
+        // debajo de la de la derecha y la semana arriba a la izquierda, de pie.
         const x = Math.max(6, libreX / 2 - lado / 2);
         const y = H / 2 - lado / 2;
         Object.assign(ant.style, { left: `${x}px`, top: `${y}px` });
         Object.assign(sig.style, { left: `${W - x - lado}px`, top: `${y}px` });
+        Object.assign(contador.style, { left: `${W - libreX / 2 - 24}px`, top: `${y + lado + 8}px`, width: '48px' });
+        semana.classList.add('vertical');
+        texto.innerText = texto.dataset.corto || '';
+        Object.assign(semana.style, { left: `${Math.max(6, libreX / 2 - 20)}px`, top: `${Math.max(12, arribaLamina)}px`,
+                                      transform: 'none' });
     } else {
+        // Derecho: las flechas y el contador debajo de la lámina y la semana
+        // encima, en el hueco que sobra arriba.
         const y = H / 2 + altoBase / 2 + Math.min(20, (libreY - lado) / 2);
-        Object.assign(ant.style, { left: `${W / 2 - lado - 12}px`, top: `${y}px` });
-        Object.assign(sig.style, { left: `${W / 2 + 12}px`, top: `${y}px` });
+        Object.assign(ant.style, { left: `${W / 2 - lado - 34}px`, top: `${y}px` });
+        Object.assign(sig.style, { left: `${W / 2 + 34}px`, top: `${y}px` });
+        Object.assign(contador.style, { left: `${W / 2 - 24}px`, top: `${y + lado / 2 - 8}px`, width: '48px' });
+        semana.classList.remove('vertical');
+        texto.innerText = texto.dataset.largo || '';
+        Object.assign(semana.style, { left: '50%', top: `${Math.max(64, arribaLamina - 44)}px`,
+                                      transform: 'translateX(-50%)' });
     }
 };
 
@@ -1009,6 +1122,7 @@ window.engancharZoomPresentacion = (capa) => {
             const t = e.touches[0];
             const dx = t.clientX - gesto.sx, dy = t.clientY - gesto.sy;
             if (Math.abs(dx) + Math.abs(dy) > 6) gesto.movio = true;
+            gesto.dx = dx; gesto.dy = dy;
             if (z.escala > 1.01) {
                 z.x = gesto.x0 + dx;
                 z.y = gesto.y0 + dy;
@@ -1027,6 +1141,13 @@ window.engancharZoomPresentacion = (capa) => {
                 return;
             }
             if (window.zoomPresentacion.escala <= 1.01) window.reiniciarZoomPresentacion();
+            gesto = null;
+            return;
+        }
+        // Sin zoom, deslizar de lado pasa de diapositiva, como en Fotos.
+        if (gesto.tipo === 'mover' && gesto.movio && window.zoomPresentacion.escala <= 1.01
+            && Math.abs(gesto.dx || 0) > 60 && Math.abs(gesto.dx) > 1.5 * Math.abs(gesto.dy || 0)) {
+            window.moverDiapositivaPresentacion(gesto.dx < 0 ? 1 : -1);
             gesto = null;
             return;
         }
@@ -1074,8 +1195,15 @@ window.engancharZoomPresentacion = (capa) => {
     window.addEventListener('mouseup', () => { arrastre = null; });
 };
 
-window.abrirPresentacionCompleta = () => {
-    if (!window.presentacion.semanas.length) return;
+// `k` es la diapositiva de la semana por la que se entra; sin él, la que se
+// estuviera mirando.
+window.abrirPresentacionCompleta = (k) => {
+    const p = window.presentacion;
+    if (!p.semanas.length) return;
+    if (typeof k === 'number') {
+        const mazo = window.diapositivasDeSemana(p.indice);
+        if (mazo[k]) p.clave = mazo[k].clave;
+    }
     const capa = window.montarPresentacionCompleta();
     capa.style.display = 'block';
     window.zoomPresentacion = { escala: 1, x: 0, y: 0 };
@@ -1092,6 +1220,17 @@ window.cerrarPresentacionCompleta = () => {
     try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch (e) { /* nada */ }
 };
 
+window.moverDiapositivaPresentacion = (paso) => {
+    const p = window.presentacion;
+    const mazo = window.diapositivasDeSemana(p.indice);
+    const k = Math.max(0, mazo.findIndex(d => d.clave === p.clave)) + paso;
+    if (k < 0 || k >= mazo.length) return;
+    p.clave = mazo[k].clave;
+    window.pintarPresentacionCompleta();
+};
+
+// Al cambiar de semana se queda en la misma clasificación; si en esa semana
+// no existía, vuelve a la de la planta (`pintarPresentacionCompleta`).
 window.moverSemanaPresentacion = (paso) => {
     const p = window.presentacion;
     const nuevo = p.indice + paso;
@@ -1105,10 +1244,18 @@ window.pintarPresentacion = () => {
     const semana = p.semanas[p.indice];
     const caja = document.getElementById('diapositiva-presentacion');
     if (!semana || !caja) return;
-    caja.innerHTML = window.svgDeDiapositiva(window.diapositivaDePlanta(p.indice));
+    // En la hoja van todas, una debajo de otra; tocar una la abre a pantalla
+    // completa, que es donde se pasa de una a otra.
+    const mazo = window.diapositivasDeSemana(p.indice);
+    caja.innerHTML = mazo.map((d, k) => `
+        <div class="presentacion-diapositiva" role="button" tabindex="0" title="Ver en pantalla completa"
+             onclick="window.abrirPresentacionCompleta(${k})">
+            ${window.svgDeDiapositiva(window.diapositiva(p.indice, d.clave, k + 1, mazo.length))}
+        </div>`).join('');
     const rotulo = window.textoDeSemana(semana) + (semana.actual ? ' · en curso' : '');
     document.getElementById('semana-presentacion').innerText = rotulo;
-    document.getElementById('subtitulo-presentacion').innerText = 'Resultado general de la planta';
+    document.getElementById('subtitulo-presentacion').innerText =
+        `La planta y ${mazo.length - 1} ${mazo.length - 1 === 1 ? 'clasificación' : 'clasificaciones'}`;
     document.getElementById('btn-semana-anterior').disabled = p.indice === 0;
     document.getElementById('btn-semana-siguiente').disabled = p.indice === p.semanas.length - 1;
     window.pintarPresentacionCompleta();
@@ -1128,10 +1275,12 @@ window.descargarPresentacion = async () => {
         await window.cargarLibreria(window.LIBRERIA_PRESENTACIONES);
         const pptx = new window.PptxGenJS();
         pptx.layout = 'LAYOUT_WIDE';
-        pptx.title = `Resultado general de la planta · ${window.textoDeSemana(semana)}`;
-        const elementos = window.diapositivaDePlanta(p.indice);
-        await window.fotosParaPptx(elementos);
-        window.agregarDiapositivaPptx(pptx, elementos);
+        pptx.title = `Resultado de la planta · ${window.textoDeSemana(semana)}`;
+        // Todas las de la semana, en el orden de la hoja.
+        const mazo = window.diapositivasDeSemana(p.indice);
+        const hojas = mazo.map((d, k) => window.diapositiva(p.indice, d.clave, k + 1, mazo.length));
+        await window.fotosParaPptx([].concat(...hojas));
+        hojas.forEach(elementos => window.agregarDiapositivaPptx(pptx, elementos));
         const d = semana.inicio;
         const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         await pptx.writeFile({ fileName: `Resultado-planta-semana-${dia}.pptx` });
@@ -1139,6 +1288,6 @@ window.descargarPresentacion = async () => {
         alert('No se pudo preparar la presentación: ' + e.message);
     } finally {
         if (btn) btn.disabled = false;
-        if (sub) sub.innerText = 'Resultado general de la planta';
+        if (sub) window.pintarPresentacion();
     }
 };

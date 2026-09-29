@@ -4641,6 +4641,42 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   diferencia con la semana anterior, la tendencia de los últimos doce meses y
   una barra por clasificación. Se ve en la hoja y se descarga como `.pptx`.
 
+  **Detrás va una diapositiva por clasificación**, con la misma forma: su
+  cifra, sus respuestas, su tendencia, una fila por cada una de sus encuestas y
+  quién destacó **en ella** —el mejor de «Seguridad» se mide sólo con las
+  encuestas de «Seguridad»—. Van por nombre y no por cifra, que en una
+  presentación el orden tiene que ser el mismo todas las semanas.
+
+  ```js
+  window.diapositivasDeSemana(i)   // [{ clave: '' }, { clave }, …]: la planta y sus clasificaciones
+  window.diapositiva(i, clave, numero, cuantas)
+  window.vistaDe(resultado, clave) // la misma forma para la planta y para una clasificación
+  window.moverDiapositivaPresentacion(paso)
+  ```
+
+  Tres cosas que hay que mantener:
+
+  - **Una sola función dibuja las dos** (`diapositiva`), sobre `vistaDe`, que
+    le da a la planta y a una clasificación la misma forma: si no, la de una
+    clasificación aprendería algo que la de la planta no. Las cifras de dentro
+    de una clasificación pesan por padrón (`totalDeEncuestasAdmin`), que es lo
+    que dice su pie; las de la planta, cada clasificación igual.
+  - **Con más de catorce filas se cuentan las que sobran** («y 3 más»), y por
+    debajo de 30 px de alto la fila pasa a un solo renglón —nombre, cápsula y
+    cifra—, que en dos se pisarían.
+  - **La memoria va por clave** (`personasDeSemana(i, clave)`,
+    `destacadosDeSemana(i, clave)`): sin ella, el desempate de cada una
+    recalcularía cuatro semanas de la plantilla entera en cada repintado.
+
+  **En la hoja van todas, una debajo de otra**, y tocar una la abre a pantalla
+  completa. Ahí **izquierda y derecha pasan de diapositiva** —las flechas,
+  deslizar el dedo sin zoom y las del teclado, como en Keynote— y **la semana
+  tiene su propio control**, una píldora pequeña: encima de la lámina con el
+  teléfono derecho, y de pie en la columna de la izquierda con el teléfono de
+  lado, con las flechas hacia arriba y abajo, que son también las del teclado.
+  Al cambiar de semana se queda en la misma clasificación, o vuelve a la de la
+  planta si en esa semana no existía. La descarga lleva todas las de la semana.
+
   ```js
   window.semanasDeLaPresentacion()     // las semanas con datos, de la más vieja a la que corre
   window.resultadoDePlantaEn(fecha)    // { promedio, contestaron, total, encuestas, clasificaciones }
@@ -4705,15 +4741,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   tope, la más vieja que llegó— y **un mes o una semana que empiece antes no se
   enseña**: saldría a medias, más bajo de lo que fue.
 
-  **A pantalla completa hay flechas de semana**, dos discos pequeños y
-  translúcidos **en el hueco que deja la lámina, nunca encima**
-  (`colocarFlechasPresentacion`): con el teléfono de lado o en un escritorio
-  van a los lados, a media altura; con el teléfono derecho, juntas debajo de la
-  lámina. Fueron una píldora abajo con la fecha y, de lado, tapaba la parte de
-  abajo de la diapositiva; la fecha no hace falta, que la dice la propia
-  diapositiva. El zoom se conserva al cambiar de semana —así se compara la
-  misma zona de dos semanas— y ampliada las flechas se atenúan, que la lámina
-  puede pasar por debajo.
+  **Los controles de pantalla completa van en el hueco que deja la lámina,
+  nunca encima** (`colocarFlechasPresentacion`): discos pequeños y
+  translúcidos, a los lados con el teléfono de lado y debajo con el teléfono
+  derecho, con el contador («2 / 9») al lado. Fueron una píldora abajo con la
+  fecha y, de lado, tapaba la parte de abajo de la diapositiva. El zoom se
+  conserva al cambiar de semana —así se compara la misma zona de dos semanas— y
+  ampliada, los controles se atenúan, que la lámina puede pasar por debajo.
 
   **Y a la derecha, quién destacó**: la persona con mejor y con menor
   desempeño de la semana, con su foto, su nombre, su departamento y su puesto.
