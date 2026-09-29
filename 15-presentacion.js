@@ -275,7 +275,7 @@ window.cargarEvidenciasDeSemana = (i) => {
             if (ids.length) {
                 const hasta = semana.actual ? new Date() : semana.fin;
                 const { data, error } = await sb.from('evaluation_responses')
-                    .select('evaluation_id, employee_id, submitted_at, review_status, answers_json')
+                    .select('evaluation_id, employee_id, submitted_at, review_status, grades_json, employee_area, answers_json')
                     .in('evaluation_id', ids)
                     .gte('submitted_at', semana.inicio.toISOString())
                     .lt('submitted_at', hasta.toISOString())
@@ -292,6 +292,16 @@ window.cargarEvidenciasDeSemana = (i) => {
                     if (!ev || !respuestas) return;
                     const emp = plantilla.find(e => String(e.id) === String(r.employee_id));
                     const clave = window.normalizarClasificacion(ev.category || '');
+                    // Dónde se tomó y cómo salió: el área es la que guardó la
+                    // respuesta ese día —la de la ficha sólo si no la trae—, el
+                    // departamento el de hoy, y el resultado el de la respuesta
+                    // entera, con la misma regla que el resto de la presentación.
+                    const guardada = String(r.employee_area || '').trim();
+                    const deFicha = emp && window.areaDeEmpleado ? window.areaDeEmpleado(emp) : '';
+                    const area = (guardada && guardada !== 'Sin Área') ? guardada
+                        : (deFicha && deFicha !== 'Sin Área' ? deFicha : '');
+                    const depto = emp && window.deptDeEmpleado ? window.deptDeEmpleado(emp) : '';
+                    const puntaje = window.puntajeDeRespuesta(r);
                     porEncuesta[r.evaluation_id].forEach(q => {
                         const url = respuestas[q.id];
                         if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return;
@@ -299,7 +309,9 @@ window.cargarEvidenciasDeSemana = (i) => {
                             url, pregunta: String(q.question_text || '').trim() || String(ev.title || '').trim(),
                             encuesta: String(ev.title || '').trim(),
                             empleado: String(r.employee_id), nombre: emp ? emp.name : '',
-                            fecha: new Date(r.submitted_at)
+                            fecha: new Date(r.submitted_at),
+                            area, departamento: depto === 'Sin Departamento' ? '' : depto,
+                            puntaje: typeof puntaje === 'number' && !isNaN(puntaje) ? puntaje : null
                         });
                     });
                 });
@@ -788,7 +800,8 @@ window.diapositiva = (i, clave, numero, cuantas) => {
 
 // La diapositiva de las evidencias de una clasificación: las fotos de la
 // semana en una rejilla, cada una con lo que se pedía fotografiar y quién y
-// cuándo la tomó. Hasta ocho —cuatro por dos—; con tres o menos, en un solo
+// cuándo la tomó, de qué área y departamento es y qué resultado sacó la
+// respuesta —en una píldora sobre la esquina de la foto—. Hasta ocho —cuatro por dos—; con tres o menos, en un solo
 // renglón y más grandes. El mismo encabezado y el mismo pie que las demás.
 window.diapositivaDeEvidencias = (i, clave, numero, cuantas) => {
     const C = window.COLORES_IOS;
@@ -815,9 +828,9 @@ window.diapositivaDeEvidencias = (i, clave, numero, cuantas) => {
     const columnas = pocas ? Math.max(1, fotos.length) : 4;
     const hueco = 16, izquierda = 48, ancho = 864;
     const w = pocas ? Math.min(360, (ancho - hueco * (columnas - 1)) / columnas) : (ancho - hueco * 3) / 4;
-    const h = pocas ? Math.min(270, w * 3 / 4) : 124;
+    const h = pocas ? Math.min(260, w * 3 / 4) : 108;
     const x0 = izquierda + (ancho - (w * columnas + hueco * (columnas - 1))) / 2;
-    const alto = h + 44;
+    const alto = h + 58;
     fotos.forEach((f, n) => {
         const x = x0 + (n % columnas) * (w + hueco);
         const y = 130 + Math.floor(n / columnas) * (alto + hueco);
@@ -826,8 +839,19 @@ window.diapositivaDeEvidencias = (i, clave, numero, cuantas) => {
         texto(x + 2, y + h + 6, w - 4, 16, window.partirEnRenglones(f.pregunta, letras, 1)[0], 12, C.texto, { peso: 600 });
         const quien = String(f.nombre || '').trim() || 'Sin nombre';
         const cuando = isNaN(f.fecha) ? '' : ` · ${f.fecha.getDate()} ${meses[f.fecha.getMonth()]}`;
-        texto(x + 2, y + h + 24, w - 4, 14,
+        const donde = [f.area, f.departamento].filter(Boolean).join(' · ') || 'Sin área';
+        texto(x + 2, y + h + 23, w - 4, 14, window.partirEnRenglones(donde, letras + 4, 1)[0], 10.5, C.texto);
+        texto(x + 2, y + h + 39, w - 4, 14,
             window.partirEnRenglones(quien, Math.max(8, letras + 4 - cuando.length), 1)[0] + cuando, 10.5, C.secundario);
+
+        // El resultado, en una píldora de color macizo sobre la esquina de la
+        // foto: debajo puede haber cualquier cosa, y un tinte claro no se lee.
+        const rotulo = f.puntaje === null ? 'Sin calificar' : `${window.pctTexto(f.puntaje / 100)}%`;
+        const tam = 11;
+        const pw = Math.ceil(rotulo.length * tam * 0.62) + 16, ph = 20;
+        const px = x + w - pw - 8, py = y + 8;
+        el.push({ tipo: 'rect', x: px, y: py, w: pw, h: ph, radio: ph / 2, relleno: window.colorIOS(f.puntaje === null ? null : f.puntaje) });
+        texto(px, py, pw, ph, rotulo, tam, '#ffffff', { alinear: 'center', peso: 700 });
     });
 
     const sobran = todas.length - fotos.length;

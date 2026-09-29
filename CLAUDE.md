@@ -4694,6 +4694,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     evidencias comparten `clave`, así que es por el `id` por lo que se sabe cuál
     se está mirando. Al cambiar a una semana donde esa clasificación no dejó
     fotos se queda en su diapositiva, y si ni existía, en la de la planta.
+  - **Cada foto dice de dónde es y cómo salió**: debajo, lo que se pedía, el
+    área y el departamento, y quién y cuándo; encima, en una píldora de color
+    macizo en su esquina, el resultado de la respuesta (`puntajeDeRespuesta`,
+    «Sin calificar» si todavía no lo tiene). El área es la que guardó la
+    respuesta (`employee_area`) y sólo si falta la de la ficha; el departamento,
+    el de hoy. Por eso la consulta se trae además `grades_json` y
+    `employee_area`.
   - **Una por persona antes de repetir a nadie** (`evidenciasParaDiapositiva`),
     de la más reciente a la más vieja: ocho fotos del mismo turno dicen menos
     que ocho turnos. Lo que no cabe se cuenta en el pie. Una respuesta
