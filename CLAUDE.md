@@ -6145,8 +6145,11 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   **Dibujan dientes de sierra, y no es un error**: cada encuesta se mira en su
   periodo, así que al empezar el mes las mensuales vuelven a estar sin contestar
   y la primera semana sale baja —en el administrador, donde quien no contestó
-  cuenta como cero—. Por eso **no llevan línea**: unidos se leerían como una
-  segunda serie compitiendo con la del mes. Tocar uno abre su globo con
+  cuenta como cero—. **La línea pasa por todos**, los del mes y los de cada
+  semana, ordenados por su posición en el eje: estuvieron un tiempo sueltos, sin
+  línea, y se pidió verlos unidos para leer lo que pasó semana a semana. La
+  contrapartida es el zigzag, y la tendencia de fondo la siguen diciendo los
+  puntos grandes. Tocar uno abre su globo con
   `window.marcarPuntoSemanal`, que **no cierra el del mes**: ése es la marca del
   periodo que se está mirando, y mirar una semana no cambia la lista de abajo.
   Van dibujados antes que los grandes, así que donde se tocan gana el grande.

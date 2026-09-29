@@ -1986,11 +1986,6 @@ window.dibujoDeGraficaDeLinea = (puntos, alElegir, A, semanales) => {
         <line x1="${IZQ}" y1="${y(window.UMBRAL_CERTIFICACION).toFixed(1)}" x2="${A - DER}" y2="${y(window.UMBRAL_CERTIFICACION).toFixed(1)}"
               stroke="#86efac" stroke-width="1" stroke-dasharray="3 3"/>`;
 
-    // La línea une los periodos que tienen resultado; los que no lo tienen se
-    // saltan, y por eso no hay punto donde no se contestó nada.
-    const linea = `<polyline fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
-                             points="${puntos.map((p, i) => p.promedio === null ? null : `${x(i).toFixed(1)},${y(p.promedio).toFixed(1)}`).filter(Boolean).join(' ')}"/>`;
-
     // El punto y, encima, su blanco para el dedo: un círculo de 4 no se acierta,
     // así que el que escucha el toque es uno transparente y mucho más ancho.
     const dots = puntos.map((p, i) => {
@@ -2013,8 +2008,7 @@ window.dibujoDeGraficaDeLinea = (puntos, alElegir, A, semanales) => {
     // Van debajo de los grandes —se dibujan antes—, que así el blanco del dedo
     // de un punto grande sigue ganando donde se tocan.
     //
-    // Sin línea que los una: son la foto de cada semana, y unidos se leerían
-    // como una segunda serie que compite con la del mes.
+    // La línea pasa también por ellos (ver `trazo`, justo debajo).
     const anclas = puntos.map((p, i) => ({ i, t: p.referencia instanceof Date ? p.referencia.getTime() : null }))
         .filter(a => a.t !== null);
     const xDeFecha = (t) => {
@@ -2028,12 +2022,25 @@ window.dibujoDeGraficaDeLinea = (puntos, alElegir, A, semanales) => {
         const sx = xDeFecha(s.referencia.getTime());
         return sx === null ? null : { s, k, sx, sy: y(s.promedio) };
     }).filter(Boolean);
+    // La línea pasa por **todos** los puntos con resultado, los del mes y los de
+    // cada semana, en el orden en que caen en el eje. Con los semanales dibuja
+    // el zigzag de cada mes —la primera semana baja porque las mensuales vuelven
+    // a estar sin contestar— y eso es lo que se pidió ver: lo que pasó semana a
+    // semana, no sólo dónde acabó cada mes. Los periodos sin resultado se
+    // saltan, y por eso no hay punto donde no se contestó nada.
+    const trazo = puntos.map((p, i) => p.promedio === null ? null : [x(i), y(p.promedio)])
+        .filter(Boolean)
+        .concat(semanas.map(({ sx, sy }) => [sx, sy]))
+        .sort((m, n) => m[0] - n[0]);
+    const linea = `<polyline fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
+                             points="${trazo.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' ')}"/>`;
+
     const dotsSemanales = semanas.map(({ s, k, sx, sy }) => {
         const color = typeof window.getColorScore === 'function' ? window.getColorScore(s.promedio) : '#2563eb';
         return `<g data-punto="s${k}" style="cursor:pointer;" onclick="window.marcarPuntoSemanal(this)">
                     <title>${window.sanitizeForHTML(s.etiqueta)} · ${s.promedio}%</title>
                     <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="7" fill="transparent"/>
-                    <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="2.2" fill="${color}" opacity="0.75"/>
+                    <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="2.6" fill="${color}" stroke="white" stroke-width="1"/>
                 </g>`;
     }).join('');
     const globosSemanales = semanas.map(({ s, k, sx, sy }) => {
