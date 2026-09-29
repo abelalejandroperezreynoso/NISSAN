@@ -6757,3 +6757,5 @@ html.fondo-anclado body {
 }
 #modal-presentacion-completa.esta-ampliada { cursor: grab; }
 #modal-presentacion-completa.esta-ampliada:active { cursor: grabbing; }
+
+.zona-evidencia { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

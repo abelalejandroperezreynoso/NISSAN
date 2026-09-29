@@ -275,7 +275,7 @@ window.cargarEvidenciasDeSemana = (i) => {
             if (ids.length) {
                 const hasta = semana.actual ? new Date() : semana.fin;
                 const { data, error } = await sb.from('evaluation_responses')
-                    .select('evaluation_id, employee_id, submitted_at, review_status, grades_json, employee_area, answers_json')
+                    .select('id, evaluation_id, employee_id, submitted_at, review_status, grades_json, employee_area, answers_json')
                     .in('evaluation_id', ids)
                     .gte('submitted_at', semana.inicio.toISOString())
                     .lt('submitted_at', hasta.toISOString())
@@ -308,7 +308,7 @@ window.cargarEvidenciasDeSemana = (i) => {
                         (resultado[clave] = resultado[clave] || []).push({
                             url, pregunta: String(q.question_text || '').trim() || String(ev.title || '').trim(),
                             encuesta: String(ev.title || '').trim(),
-                            empleado: String(r.employee_id), nombre: emp ? emp.name : '',
+                            respuesta: r.id, empleado: String(r.employee_id), nombre: emp ? emp.name : '',
                             fecha: new Date(r.submitted_at),
                             area, departamento: depto === 'Sin Departamento' ? '' : depto,
                             puntaje: typeof puntaje === 'number' && !isNaN(puntaje) ? puntaje : null
@@ -843,6 +843,13 @@ window.fotoDeEvidenciaEnDiapositiva = (el, f, x, y, w, h, conPregunta) => {
     const px = x + w - pw - 8, py = y + 8;
     el.push({ tipo: 'rect', x: px, y: py, w: pw, h: ph, radio: ph / 2, relleno: window.colorIOS(f.puntaje) });
     texto(px, py, pw, ph, rotulo, tam, '#ffffff', { alinear: 'center', peso: 700 });
+
+    // Encima de todo, la foto con su pie como un solo blanco del dedo: el
+    // administrador lo mantiene pulsado para abrir la respuesta. Sólo existe
+    // en el SVG; el PowerPoint no sabe qué es y lo salta.
+    if (f.respuesta !== undefined && f.respuesta !== null) {
+        el.push({ tipo: 'zona', x, y, w, h: yt + 30 - y, respuesta: String(f.respuesta) });
+    }
 };
 
 // La diapositiva de las evidencias de una clasificación: las fotos de la
@@ -933,6 +940,10 @@ window.svgDeDiapositiva = (elementos) => {
                 ${e.url ? `<image href="${esc(e.url)}" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}"
                       preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` : ''}
                 <circle cx="${cx}" cy="${cy}" r="${r - 1}" fill="none" stroke="#ffffff" stroke-width="2"/>`;
+        }
+        if (e.tipo === 'zona') {
+            return `<rect class="zona-evidencia" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" fill="transparent"
+                          data-respuesta="${esc(e.respuesta)}"><title>Mantén pulsada la foto para abrir su evaluación</title></rect>`;
         }
         if (e.tipo === 'foto') {
             // Una foto rectangular con sus esquinas redondas, rellenando la
@@ -1639,3 +1650,97 @@ window.descargarPresentacion = async () => {
         if (sub) window.pintarPresentacion();
     }
 };
+
+
+// --- DE LA FOTO A SU EVALUACIÓN ---
+//
+// El administrador mantiene pulsada una foto de evidencia —en la hoja o a
+// pantalla completa— y se abre la respuesta donde aparece, con la hoja de
+// detalle de siempre (`verDetalleRespuesta`). Mantener y no tocar: un toque en
+// la hoja abre la pantalla completa, y a pantalla completa el dedo pasa de
+// diapositiva y amplía.
+//
+// Al cerrar el detalle se vuelve a la presentación, a la misma diapositiva
+// (`volverAPresentacion`, que lee `cancelarRespuesta`). La pantalla completa se
+// cierra antes de abrirlo: con `requestFullscreen` puesto, nada fuera de la
+// capa se ve.
+window.MS_PULSACION_EVIDENCIA = 550;
+window.abrirEvaluacionDeEvidencia = async (idRespuesta) => {
+    if (!window.modoAdminActivo || !idRespuesta) return;
+    const volverACompleta = (document.getElementById('modal-presentacion-completa') || {}).style?.display === 'block';
+    try {
+        const { data, error } = await sb.from('evaluation_responses').select('*').eq('id', idRespuesta).single();
+        if (error || !data) throw error || new Error('sin datos');
+        if (volverACompleta) window.cerrarPresentacionCompleta();
+        window.volverAPresentacion = { completa: volverACompleta, respuesta: String(data.id) };
+        await window.verDetalleRespuesta(data);
+    } catch (e) {
+        window.volverAPresentacion = null;
+        alert('No se pudo abrir la evaluación de esta foto.');
+    }
+};
+
+(() => {
+    let pulsacion = null, tragarHasta = 0;
+    const zonaDe = (objetivo) => {
+        const z = objetivo && objetivo.closest && objetivo.closest('.zona-evidencia');
+        return z && z.closest('#modal-presentacion, #modal-presentacion-completa') ? z : null;
+    };
+    const empezar = (objetivo, x, y) => {
+        const zona = zonaDe(objetivo);
+        if (!zona || !window.modoAdminActivo) return;
+        cancelar();
+        pulsacion = { x, y, disparo: false, id: zona.getAttribute('data-respuesta') };
+        pulsacion.temporizador = setTimeout(() => {
+            if (!pulsacion) return;
+            pulsacion.disparo = true;
+            if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { /* nada */ } }
+            window.abrirEvaluacionDeEvidencia(pulsacion.id);
+        }, window.MS_PULSACION_EVIDENCIA);
+    };
+    const mover = (x, y) => {
+        if (pulsacion && !pulsacion.disparo && Math.hypot(x - pulsacion.x, y - pulsacion.y) > 10) cancelar();
+    };
+    function cancelar() {
+        if (pulsacion) clearTimeout(pulsacion.temporizador);
+        pulsacion = null;
+    }
+    // Al soltar tras el disparo, el click que venga detrás no puede abrir la
+    // pantalla completa. El plazo empieza al soltar, como el del monitor de
+    // datos, y caduca pronto para no comerse el toque siguiente.
+    const soltar = (e) => {
+        if (pulsacion && pulsacion.disparo) {
+            if (e && e.cancelable) e.preventDefault();
+            tragarHasta = Date.now() + 400;
+        }
+        cancelar();
+    };
+
+    document.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) { cancelar(); return; }
+        empezar(e.target, e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 1) { cancelar(); return; }
+        mover(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    document.addEventListener('touchend', soltar, { passive: false });
+    document.addEventListener('touchcancel', cancelar, { passive: true });
+    document.addEventListener('mousedown', (e) => { if (e.button === 0) empezar(e.target, e.clientX, e.clientY); });
+    document.addEventListener('mousemove', (e) => mover(e.clientX, e.clientY));
+    document.addEventListener('mouseup', soltar);
+    document.addEventListener('click', (e) => {
+        if (Date.now() < tragarHasta) { e.stopPropagation(); e.preventDefault(); tragarHasta = 0; }
+    }, true);
+    // El menú de mantener pulsado —«Guardar imagen» en iOS, el contextual en
+    // Android— se lo lleva la foto; en un escritorio, el botón derecho abre la
+    // evaluación directamente.
+    document.addEventListener('contextmenu', (e) => {
+        const zona = zonaDe(e.target);
+        if (!zona || !window.modoAdminActivo) return;
+        e.preventDefault();
+        if (pulsacion) return;   // la pulsación larga ya se encarga
+        if (e.pointerType === 'touch' || Date.now() < tragarHasta) return;
+        window.abrirEvaluacionDeEvidencia(zona.getAttribute('data-respuesta'));
+    });
+})();

@@ -2277,7 +2277,17 @@ window.cancelarRespuesta = (mode = 'history') => {
     window.apoyoEnCurso = null;
     
     // --- 🚀 RETORNO INTELIGENTE (AL CANCELAR) ---
-    if (window.mostrandoPendientes || window.mostrandoPendientesEquipo) {
+    // Desde una foto de la presentación se vuelve a ella, no al panel de
+    // encuestas: la hoja sigue abierta debajo y, si se venía de la pantalla
+    // completa, se vuelve a abrir en la misma diapositiva.
+    // La marca vale sólo para la respuesta que se abrió desde la foto: guardar
+    // la calificación cierra la hoja por otro camino y la deja puesta.
+    const marca = window.volverAPresentacion;
+    window.volverAPresentacion = null;
+    const aPresentacion = marca && String(marca.respuesta) === String(window.gradingResponseId) ? marca : null;
+    if (aPresentacion) {
+        if (aPresentacion.completa && window.abrirPresentacionCompleta) window.abrirPresentacionCompleta();
+    } else if (window.mostrandoPendientes || window.mostrandoPendientesEquipo) {
         // No hacemos nada con el panel flotante porque no estábamos ahí.
         // El modal de pendientes ya debería estar de fondo.
     } else {

@@ -4707,6 +4707,23 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     Con pocas encuestas la columna quedaba casi vacía; con muchas no se dibuja.
     La foto y su pie los pinta `fotoDeEvidenciaEnDiapositiva`, el mismo que usa
     la diapositiva de evidencias, así que las dos dicen lo mismo de ella.
+  - **El administrador mantiene pulsada una foto y se abre su evaluación**, con
+    la hoja de detalle de siempre (`verDetalleRespuesta`), en la hoja y a
+    pantalla completa; en un escritorio, también con el botón derecho. Es una
+    pulsación larga (`MS_PULSACION_EVIDENCIA`, 550 ms) y no un toque, porque el
+    toque ya abre la pantalla completa y ahí el dedo pasa de diapositiva y
+    amplía. Cada foto lleva encima un elemento `zona` —sólo del SVG, el
+    PowerPoint lo salta— con el id de la respuesta, que por eso viene en la
+    consulta de evidencias. El click que sigue a la pulsación se traga, con la
+    marca de 400 ms que empieza al soltar, como la del monitor de datos.
+
+    **Al cerrar el detalle se vuelve a la presentación**, a la misma
+    diapositiva: la pantalla completa se cierra antes de abrirlo —con
+    `requestFullscreen` puesto no se vería— y `cancelarRespuesta` la reabre si
+    ve `window.volverAPresentacion`. La marca lleva el id de la respuesta y sólo
+    vale para ésa: guardar la calificación cierra la hoja por otro camino y la
+    deja puesta, y sin esa comprobación la siguiente respuesta que se cerrara
+    en cualquier otra pantalla saltaría a la presentación.
   - **Una por persona antes de repetir a nadie** (`evidenciasParaDiapositiva`),
     de la más reciente a la más vieja: ocho fotos del mismo turno dicen menos
     que ocho turnos. Lo que no cabe se cuenta en el pie. Una respuesta
