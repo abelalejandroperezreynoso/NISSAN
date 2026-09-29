@@ -6133,6 +6133,29 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   maqueta; a la izquierda cae a plomo con el renglón del resumen y con los de
   cada clasificación, o sea dentro de la columna de texto a la que pertenece.
 
+  **Y en la tarjeta del panel, entre punto y punto, va cada semana en pequeño**
+  (`window.puntosSemanales`, el tercer argumento de `graficaDeLinea`). Es la
+  misma pregunta que los puntos grandes —el mismo historial, con la misma regla
+  de peso— sólo que con el eje en semanas: cada punto pequeño es **cómo iba la
+  cosa al cierre de su semana**. Se colocan por su fecha entre los dos grandes
+  que los encierran, que están en el instante con el que se calcularon
+  (`referencia`); las semanas de antes del primer punto grande no tienen dónde
+  dibujarse y la que corre ya es el punto del mes.
+
+  **Dibujan dientes de sierra, y no es un error**: cada encuesta se mira en su
+  periodo, así que al empezar el mes las mensuales vuelven a estar sin contestar
+  y la primera semana sale baja —en el administrador, donde quien no contestó
+  cuenta como cero—. Por eso **no llevan línea**: unidos se leerían como una
+  segunda serie compitiendo con la del mes. Tocar uno abre su globo con
+  `window.marcarPuntoSemanal`, que **no cierra el del mes**: ése es la marca del
+  periodo que se está mirando, y mirar una semana no cambia la lista de abajo.
+  Van dibujados antes que los grandes, así que donde se tocan gana el grande.
+
+  Salen de las mismas respuestas que ya trajo la consulta —su `gte` es el del
+  primer mes del eje—, y los padrones se le pasan hechos a `historialDeRevision`
+  (`opciones.padrones`): son ~27 semanas y `padronDeLaEncuesta` recorre la
+  plantilla entera.
+
   **El eje rotula todos los periodos, y en una sola talla.**
   `window.etiquetasDeEje(inicio, frecuencia)` da dos: la `corta` («ago», «T3»,
   «2ª ago», «23 ago») y la `minima` para cuando no cabe —la inicial del mes, o

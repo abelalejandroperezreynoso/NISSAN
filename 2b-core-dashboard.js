@@ -1642,21 +1642,26 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // `modoAdminActivo` al tocar el punto: es lo que decidió cómo son
         // estas filas, no lo que esté puesto un rato después.
         window.tarjetaDeEncuestasEsAdmin = esAdmin;
-        window.periodosDeLaTarjeta = topeRespuestas ? []
-            : (esAdmin
-                ? window.historialDeRevision({ filas }, respuestas,
-                    { sobrePadron: true, frecuencia: window.RITMO_GRAFICA_EMPRESA,
-                      porClasificacion: true })
-                : window.historialDeClasificacion({ filas }, window.PERIODOS_EN_LA_GRAFICA,
-                    respuestas, { frecuencia: window.RITMO_GRAFICA_EMPRESA,
-                                  porClasificacion: true }));
-        window.referenciaElegidaTarjeta = null;
         // `padronDeLaEncuesta` recorre la plantilla entera: se pregunta una vez
-        // por encuesta y no una vez por encuesta y toque.
+        // por encuesta y no una vez por encuesta y toque —ni una vez por cada
+        // uno de los ~27 puntos semanales—.
         window.padronesDeLaTarjeta = {};
         if (esAdmin) filas.forEach(f => {
             window.padronesDeLaTarjeta[f.ev.id] = window.padronDeLaEncuesta(f.ev);
         });
+        // La misma pregunta con otro ritmo y otra cantidad de periodos: la
+        // mensual es la línea, la semanal son los puntos pequeños.
+        const historialConRitmo = (frecuencia, cuantos) => esAdmin
+            ? window.historialDeRevision({ filas }, respuestas,
+                { sobrePadron: true, frecuencia, cuantos, porClasificacion: true,
+                  padrones: window.padronesDeLaTarjeta })
+            : window.historialDeClasificacion({ filas }, cuantos,
+                respuestas, { frecuencia, porClasificacion: true });
+        window.periodosDeLaTarjeta = topeRespuestas ? []
+            : historialConRitmo(window.RITMO_GRAFICA_EMPRESA, window.PERIODOS_EN_LA_GRAFICA);
+        const semanalesDeLaTarjeta = topeRespuestas ? []
+            : window.puntosSemanales(window.periodosDeLaTarjeta, historialConRitmo);
+        window.referenciaElegidaTarjeta = null;
 
         // **Elegir un periodo vale en las dos tarjetas.** Fue cosa del
         // administrador mientras `verPeriodoDeLaTarjeta` sólo sabía resumir con
@@ -1666,7 +1671,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // periodos a la vez. Desde que esa regla acepta la fecha del periodo, la
         // lista entera habla del punto que se tocó.
         const graficaHtml = window.graficaDeLinea(
-            window.periodosDeLaTarjeta, 'window.verPeriodoDeLaTarjeta');
+            window.periodosDeLaTarjeta, 'window.verPeriodoDeLaTarjeta', semanalesDeLaTarjeta);
 
         // Sin título: lo que la tarjeta es se ve —las clasificaciones— y el
         // renglón del resumen dice más en el mismo sitio.
@@ -1913,7 +1918,36 @@ window.graficasDeLinea = {};
 // gráficas de una clasificación; con él, además elige ese periodo —la tarjeta
 // del panel, que pasa a hablar de aquel mes—. Es un identificador escrito aquí
 // dentro y no texto de nadie: no hay nada que escapar.
-window.graficaDeLinea = (puntos, alElegir) => {
+// Los puntos pequeños de la tarjeta del panel: **cómo iba la cosa al cierre de
+// cada semana**, entre un mes y el siguiente. Es la misma pregunta que los
+// puntos grandes —el mismo `historialDeRevision` o `historialDeClasificacion`,
+// con la misma regla de peso— sólo que con el eje en semanas, así que cada
+// punto es una foto del instante en que cerró su semana y el de la última
+// semana de un mes cae casi encima del punto de ese mes.
+//
+// Por eso **dibujan dientes de sierra, y no es un error**: cada encuesta se
+// mira en su propio periodo, así que al empezar el mes las mensuales vuelven a
+// estar sin contestar y la semana siguiente sale baja —en el administrador,
+// donde quien no contestó cuenta como cero—. Es justo lo que se viene a ver:
+// cuánto se tarda en recuperar el mes.
+//
+// Sólo entran las semanas que cierran **entre** el primer punto del eje y el
+// último, que son los que les dan posición: las anteriores no tienen dónde
+// dibujarse, y la que corre es el punto del mes que corre.
+window.puntosSemanales = (mensuales, historialConRitmo) => {
+    const anclas = (mensuales || []).filter(p => p.referencia instanceof Date);
+    if (anclas.length < 2) return [];
+    const primera = anclas[0].referencia.getTime();
+    const ultima = anclas[anclas.length - 1].referencia.getTime();
+    const cuantas = Math.ceil((Date.now() - primera) / (7 * 86400000)) + 2;
+    return historialConRitmo('weekly', cuantas).filter(p =>
+        p.promedio !== null && p.referencia instanceof Date &&
+        p.referencia.getTime() > primera && p.referencia.getTime() < ultima);
+};
+
+// `semanales`, si llegan, son los puntos pequeños de `puntosSemanales`: van
+// entre los grandes, colocados por su fecha, y no cambian nada de lo demás.
+window.graficaDeLinea = (puntos, alElegir, semanales) => {
     if (puntos.filter(p => p.promedio !== null).length < 2) return '';
 
     // Se dibuja a la talla base, que es la que no se puede equivocar: aquí
@@ -1922,20 +1956,20 @@ window.graficaDeLinea = (puntos, alElegir) => {
     // si cambia —al girar el teléfono, o al abrirse la hoja que la traía—.
     const id = (window.contadorDeGraficas = (window.contadorDeGraficas || 0) + 1);
     const unidades = window.ANCHO_BASE_GRAFICA;
-    window.graficasDeLinea[id] = { puntos, alElegir, unidades };
+    window.graficasDeLinea[id] = { puntos, alElegir, unidades, semanales };
     window.programarAjusteDeGraficas();
 
     return `
         <div class="grafica-linea" data-grafica="${id}"
              style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:10px 8px 4px; margin-bottom:16px;">
-            ${window.dibujoDeGraficaDeLinea(puntos, alElegir, unidades)}
+            ${window.dibujoDeGraficaDeLinea(puntos, alElegir, unidades, semanales)}
         </div>`;
 };
 
 // El SVG, dibujado en `A` unidades de ancho. Todo lo que no sea el reparto
 // horizontal de los puntos va en unidades fijas, así que es la escala a la que
 // se estire el `viewBox` la que decide el tamaño del trazo en pantalla.
-window.dibujoDeGraficaDeLinea = (puntos, alElegir, A) => {
+window.dibujoDeGraficaDeLinea = (puntos, alElegir, A, semanales) => {
     const ALTO = 150, IZQ = 26, DER = 10, ARRIBA = 16, ABAJO = 26;
     const ancho = A - IZQ - DER, alto = ALTO - ARRIBA - ABAJO;
     const n = puntos.length;
@@ -1969,6 +2003,48 @@ window.dibujoDeGraficaDeLinea = (puntos, alElegir, A) => {
                     <title>${window.sanitizeForHTML(p.etiqueta)} · ${p.promedio}%</title>
                     <circle cx="${x(i).toFixed(1)}" cy="${y(p.promedio).toFixed(1)}" r="14" fill="transparent"/>
                     <circle cx="${x(i).toFixed(1)}" cy="${y(p.promedio).toFixed(1)}" r="4" fill="${color}" stroke="white" stroke-width="1.5"/>
+                </g>`;
+    }).join('');
+
+    // Los puntos semanales, colocados **por su fecha** entre los dos grandes que
+    // los encierran: cada punto grande está en el instante con el que se
+    // calculó (`referencia`), así que el tiempo entre dos de ellos se reparte
+    // en línea recta y la última semana de un mes cae junto al punto del mes.
+    // Van debajo de los grandes —se dibujan antes—, que así el blanco del dedo
+    // de un punto grande sigue ganando donde se tocan.
+    //
+    // Sin línea que los una: son la foto de cada semana, y unidos se leerían
+    // como una segunda serie que compite con la del mes.
+    const anclas = puntos.map((p, i) => ({ i, t: p.referencia instanceof Date ? p.referencia.getTime() : null }))
+        .filter(a => a.t !== null);
+    const xDeFecha = (t) => {
+        for (let k = 0; k < anclas.length - 1; k++) {
+            const a = anclas[k], b = anclas[k + 1];
+            if (t > a.t && t <= b.t) return x(a.i) + (x(b.i) - x(a.i)) * (t - a.t) / (b.t - a.t);
+        }
+        return null;
+    };
+    const semanas = (semanales || []).map((s, k) => {
+        const sx = xDeFecha(s.referencia.getTime());
+        return sx === null ? null : { s, k, sx, sy: y(s.promedio) };
+    }).filter(Boolean);
+    const dotsSemanales = semanas.map(({ s, k, sx, sy }) => {
+        const color = typeof window.getColorScore === 'function' ? window.getColorScore(s.promedio) : '#2563eb';
+        return `<g data-punto="s${k}" style="cursor:pointer;" onclick="window.marcarPuntoSemanal(this)">
+                    <title>${window.sanitizeForHTML(s.etiqueta)} · ${s.promedio}%</title>
+                    <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="7" fill="transparent"/>
+                    <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="2.2" fill="${color}" opacity="0.75"/>
+                </g>`;
+    }).join('');
+    const globosSemanales = semanas.map(({ s, k, sx, sy }) => {
+        const texto = `${s.etiqueta} · ${s.promedio}%`;
+        const anchoGlobo = texto.length * 4.5 + 14;
+        const cx = Math.max(anchoGlobo / 2 + 2, Math.min(A - anchoGlobo / 2 - 2, sx));
+        const encima = sy > ARRIBA + 24;
+        const cy = encima ? sy - 24 : sy + 8;
+        return `<g data-globo="s${k}" style="display:none; pointer-events:none;">
+                    <rect x="${(cx - anchoGlobo / 2).toFixed(1)}" y="${cy.toFixed(1)}" width="${anchoGlobo.toFixed(1)}" height="16" rx="5" fill="#475569" opacity="0.92"/>
+                    <text x="${cx.toFixed(1)}" y="${(cy + 11).toFixed(1)}" text-anchor="middle" font-size="8.5" font-weight="600" fill="white">${window.sanitizeForHTML(texto)}</text>
                 </g>`;
     }).join('');
 
@@ -2009,7 +2085,7 @@ window.dibujoDeGraficaDeLinea = (puntos, alElegir, A) => {
     return `
         <svg viewBox="0 0 ${A} ${ALTO}" style="width:100%; height:auto; display:block;" role="img"
              aria-label="Resultados por periodo">
-            ${rejilla}${umbral}${linea}${dots}${rotulos}${globos}
+            ${rejilla}${umbral}${linea}${dotsSemanales}${dots}${rotulos}${globosSemanales}${globos}
         </svg>`;
 };
 
@@ -2032,17 +2108,18 @@ window.ajustarGraficaDeLinea = (caja) => {
     // El globo abierto no es un detalle que se abre y se cierra: en la tarjeta
     // del panel es la marca de qué periodo se está mirando, y perderlo al girar
     // el teléfono dejaría la lista hablando de un periodo sin decir cuál.
-    let marcado = null;
+    // Pueden ser dos: el del mes elegido y el de una semana.
+    const marcados = [];
     svg.querySelectorAll('[data-globo]').forEach(g => {
-        if (g.style.display !== 'none') marcado = g.getAttribute('data-globo');
+        if (g.style.display !== 'none') marcados.push(g.getAttribute('data-globo'));
     });
 
     reg.unidades = A;
-    caja.innerHTML = window.dibujoDeGraficaDeLinea(reg.puntos, reg.alElegir, A);
-    if (marcado !== null) {
-        const globo = caja.querySelector(`[data-globo="${marcado}"]`);
+    caja.innerHTML = window.dibujoDeGraficaDeLinea(reg.puntos, reg.alElegir, A, reg.semanales);
+    marcados.forEach(m => {
+        const globo = caja.querySelector(`[data-globo="${m}"]`);
         if (globo) globo.style.display = '';
-    }
+    });
 };
 
 // El barrido: pone al día las que hay en el documento, las deja vigiladas y
@@ -2103,6 +2180,18 @@ window.marcarPuntoGrafica = (nodo, siempre) => {
     const abierto = !!globo && globo.style.display !== 'none';
     svg.querySelectorAll('[data-globo]').forEach(g => { g.style.display = 'none'; });
     if (globo && (siempre || !abierto)) globo.style.display = '';
+};
+
+// El globo de un punto semanal. Sólo cierra los de las otras semanas y deja en
+// paz el del mes: en la tarjeta ése es la marca del periodo que se está
+// mirando, y mirar una semana no cambia de periodo la lista de abajo.
+window.marcarPuntoSemanal = (nodo) => {
+    const svg = nodo.ownerSVGElement;
+    if (!svg) return;
+    const globo = svg.querySelector(`[data-globo="${nodo.getAttribute('data-punto')}"]`);
+    const abierto = !!globo && globo.style.display !== 'none';
+    svg.querySelectorAll('[data-globo^="s"]').forEach(g => { g.style.display = 'none'; });
+    if (globo && !abierto) globo.style.display = '';
 };
 
 // ==========================================
@@ -2543,7 +2632,10 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
     // mes entero, se pregunte con la semana que se pregunte—, o sea cuatro
     // puntos idénticos y una línea que no dice nada.
     const conRitmo = opts.frecuencia ? [{ frequency: opts.frecuencia }] : encuestas;
-    const periodos = window.periodosDeClasificacion(conRitmo, window.PERIODOS_EN_LA_GRAFICA);
+    // `cuantos` lo pasan sólo los puntos semanales de la tarjeta, que necesitan
+    // las semanas que caben en los seis meses del eje; `padrones`, lo mismo: la
+    // tarjeta ya los tiene calculados y aquí se preguntarían otra vez.
+    const periodos = window.periodosDeClasificacion(conRitmo, opts.cuantos || window.PERIODOS_EN_LA_GRAFICA);
     const ritmo = window.encuestaQueMarcaElRitmo(conRitmo);
     const frecuencia = (ritmo && ritmo.frequency) || 'once';
 
@@ -2551,7 +2643,7 @@ window.historialDeRevision = (grupo, respuestas, opciones) => {
     // vez por encuesta y no una vez por encuesta y periodo.
     const padrones = {};
     if (sobrePadron) encuestas.forEach(ev => {
-        padrones[ev.id] = window.padronDeLaEncuesta(ev);
+        padrones[ev.id] = (opts.padrones && opts.padrones[ev.id]) || window.padronDeLaEncuesta(ev);
     });
 
     // La media de los promedios de cada clasificación. Es `promedioDeClasificaciones`
