@@ -4613,6 +4613,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   por colaborador cuentan sus asignadas por su cuenta y pasan por
   `window.asignacionesDeStats`, que sale del mismo cálculo.
 
+  **Se cargan antes de tomarlas o mientras duran, nunca después**
+  (`window.vacacionesTerminadas`). Cargadas a toro pasado le quitarían a alguien
+  encuestas que ya no contestó y se las pasarían a un relevo que ya no puede
+  contestarlas. La hoja no ofrece semanas que ya acabaron —con dos semanas sí la
+  pasada, porque se está a mitad—, `guardarVacaciones` se planta igual y la base
+  lo frena con un trigger de `sql/vacaciones.sql`, con un día de holgura porque
+  su `current_date` es UTC.
+
   La caché de vacaciones se pide una vez por sesión, como las decisiones de «¿te
   aplica?», en los mismos sitios. **Sin ella —o sin `sql/vacaciones.sql`, que se
   corre a mano— todo se comporta como antes** y la hoja dice qué script falta.

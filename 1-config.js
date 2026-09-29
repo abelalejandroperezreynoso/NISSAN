@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-28-2';
+window.VERSION_APP = '2026-09-29-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -573,6 +573,15 @@ window.finDeVacaciones = (v) => {
     return fin;
 };
 
+// Unas vacaciones que ya terminaron no se cargan: sólo antes de tomarlas o
+// mientras duran. Después sería quitarle a alguien encuestas que ya no contestó
+// y pasárselas a un relevo que ya no tiene cómo contestarlas. Lo miran la hoja,
+// para no ofrecerlas, y `guardarVacaciones`, que es quien decide.
+window.vacacionesTerminadas = (v, ahora = new Date()) => {
+    const fin = window.finDeVacaciones(v);
+    return !fin || fin <= ahora;
+};
+
 window.vacacionesDe = (empleadoId) =>
     (window.VACACIONES || []).filter(v => String(v.employee_id) === String(empleadoId));
 
@@ -712,6 +721,9 @@ window.nombreCortoDeEmpleado = (id) => {
 };
 
 window.guardarVacaciones = async ({ empleadoId, relevoId, desde, semanas }) => {
+    if (window.vacacionesTerminadas({ desde, semanas })) {
+        throw new Error('esas semanas ya terminaron. Las vacaciones se cargan antes de tomarlas o mientras duran.');
+    }
     const fila = {
         employee_id: String(empleadoId),
         relevo_id: String(relevoId),

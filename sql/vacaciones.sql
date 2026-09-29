@@ -93,3 +93,25 @@ create policy "vacaciones_borrado"
     on public.vacaciones for delete
     to anon, authenticated
     using (true);
+
+-- Sólo antes de tomarlas o mientras duran. La aplicación ya no ofrece unas que
+-- terminaron, y esto es el freno de verdad: un botón apagado se enciende desde
+-- la consola. Lleva un día de holgura porque `current_date` es la del servidor
+-- (UTC) y la aplicación cuenta con la hora local de quien las carga; la regla
+-- exacta la aplica el cliente.
+create or replace function public.vacaciones_no_pasadas()
+returns trigger
+language plpgsql
+as $$
+begin
+    if new.desde + 7 * new.semanas < current_date then
+        raise exception 'Esas vacaciones ya terminaron: sólo se cargan antes de tomarlas o mientras duran.';
+    end if;
+    return new;
+end;
+$$;
+
+drop trigger if exists vacaciones_no_pasadas on public.vacaciones;
+create trigger vacaciones_no_pasadas
+    before insert or update of desde, semanas on public.vacaciones
+    for each row execute function public.vacaciones_no_pasadas();

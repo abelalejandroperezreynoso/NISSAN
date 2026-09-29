@@ -33,16 +33,49 @@ window.lunesDe = (fecha) => {
     return d;
 };
 
-// Las semanas que se ofrecen: la que corre y las doce siguientes. La que corre
-// entra porque las vacaciones pueden empezar hoy mismo —se carga el lunes a
-// primera hora, o el martes porque se olvidó—.
-window.lunesDisponibles = (cuantos = 13) => {
+// Las semanas en que pueden empezar: la que corre y las doce siguientes. La que
+// corre entra porque las vacaciones pueden empezar hoy mismo —se carga el lunes a
+// primera hora, o el martes porque se olvidó—. Con dos semanas entra además la
+// pasada: acaban el domingo que viene, así que se está a mitad de ellas.
+//
+// Lo que nunca se ofrece son unas que ya terminaron. Cargarlas después sería
+// quitarle a alguien encuestas que ya no contestó y pasárselas a un relevo que
+// no tiene cómo contestarlas: la regla es `vacacionesTerminadas`, en
+// `1-config.js`, y la vuelve a mirar el guardado.
+window.lunesDisponibles = (semanas = 1, cuantos = 13) => {
     const primero = window.lunesDe(new Date());
-    return Array.from({ length: cuantos }, (_, i) => {
+    const desde = Number(semanas) === 2 ? -1 : 0;
+    const lunes = [];
+    for (let i = desde; i < cuantos; i++) {
         const d = new Date(primero);
         d.setDate(d.getDate() + 7 * i);
-        return d;
-    });
+        if (!window.vacacionesTerminadas({ desde: window.diaLocal(d), semanas })) lunes.push(d);
+    }
+    return lunes;
+};
+
+// El desplegable de la semana depende de cuántas: con dos sale además la pasada.
+// Se rehace al cambiar de duración y se queda con la elegida si sigue valiendo.
+window.pintarSemanasVacaciones = () => {
+    const estado = window.hojaVacaciones;
+    const select = document.getElementById('vac-desde');
+    if (!select) return;
+    const lunes = window.lunesDisponibles(estado.semanas);
+    const esta = window.diaLocal(window.lunesDe(new Date()));
+    const nombre = (d) => {
+        const clave = window.diaLocal(d);
+        const dif = Math.round((window.fechaDeRegistro(clave) - window.fechaDeRegistro(esta)) / 864e5 / 7);
+        if (dif === -1) return 'La semana pasada';
+        if (dif === 0) return 'Esta semana';
+        if (dif === 1) return 'La próxima';
+        return `Semana del ${diaCorto(d)}`;
+    };
+    select.innerHTML = lunes.map(d =>
+        `<option value="${window.diaLocal(d)}">${nombre(d)} · ${window.textoDeTramoVacaciones(d, estado.semanas)}</option>`
+    ).join('');
+    const valores = lunes.map(d => window.diaLocal(d));
+    if (!valores.includes(estado.desde)) estado.desde = valores.includes(esta) ? esta : valores[0];
+    select.value = estado.desde;
 };
 
 const MESES_VAC = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -148,14 +181,8 @@ window.abrirHojaVacaciones = async () => {
     estado.relevoId = null;
     estado.busqueda = '';
     estado.semanas = 1;
-    const semanas = window.lunesDisponibles();
-    estado.desde = window.diaLocal(semanas[0]);
-
-    const select = document.getElementById('vac-desde');
-    select.innerHTML = semanas.map((d, i) =>
-        `<option value="${window.diaLocal(d)}">${i === 0 ? 'Esta semana' : (i === 1 ? 'La próxima' : `Semana del ${diaCorto(d)}`)} · ${window.textoDeTramoVacaciones(d, 1)}</option>`
-    ).join('');
-    select.value = estado.desde;
+    estado.desde = window.diaLocal(window.lunesDe(new Date()));
+    window.pintarSemanasVacaciones();
     const buscador = document.getElementById('vac-buscar-relevo');
     if (buscador) buscador.value = '';
 
@@ -179,6 +206,7 @@ window.cerrarHojaVacaciones = () => {
 
 window.elegirSemanasVacaciones = (n) => {
     window.hojaVacaciones.semanas = n === 2 ? 2 : 1;
+    window.pintarSemanasVacaciones();
     window.pintarHojaVacaciones();
 };
 
@@ -328,6 +356,13 @@ window.guardarHojaVacaciones = async () => {
 
     if (!estado.relevoId) { alert('Elige quién te va a relevar.'); return; }
     if (String(estado.relevoId) === String(yo.id)) { alert('No puedes relevarte a ti mismo.'); return; }
+    // La hoja pudo quedarse abierta hasta que esas semanas pasaron.
+    if (window.vacacionesTerminadas({ desde: estado.desde, semanas: estado.semanas })) {
+        alert('Esas vacaciones ya terminaron. Sólo se cargan antes de tomarlas o mientras duran.');
+        window.pintarSemanasVacaciones();
+        window.pintarHojaVacaciones();
+        return;
+    }
     if (window.vacacionesVigentesDe(yo.id).some(v => sePisan(estado.desde, estado.semanas, v))) {
         alert('Ya tienes vacaciones cargadas en esas semanas. Revierte las anteriores si quieres cambiarlas.');
         return;
