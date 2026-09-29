@@ -143,11 +143,39 @@ window.resultadoDeSemana = (i) => {
     return p.resultados[i];
 };
 
+// Cuántas semanas mira el desempate: la que se mira y las tres de antes.
+window.SEMANAS_DEL_DESEMPATE = 4;
+
+// Las personas de una semana, con memoria: el desempate de cada semana pregunta
+// por las tres de antes, y cambiar de semana volvería a calcularlas.
+window.personasDeSemana = (i) => {
+    const r = window.resultadoDeSemana(i);
+    if (!r.personas) r.personas = window.desempenoDePersonasEn(window.presentacion.semanas[i].referencia);
+    return r.personas;
+};
+
 // Los destacados sólo los pide la semana que se está mirando, no la tendencia.
+// A cada persona se le pone su promedio de las últimas semanas —sólo las que
+// tuvo algo calificado, como la cifra de cada semana—, que es el primer
+// desempate.
 window.destacadosDeSemana = (i) => {
     const r = window.resultadoDeSemana(i);
     if (!r.destacados) {
-        r.destacados = window.destacadosDeLaSemana(window.desempenoDePersonasEn(window.presentacion.semanas[i].referencia));
+        const historia = {};
+        for (let k = Math.max(0, i - window.SEMANAS_DEL_DESEMPATE + 1); k <= i; k++) {
+            window.personasDeSemana(k).forEach(p => {
+                const id = String(p.emp.id);
+                (historia[id] = historia[id] || []).push(p.promedio);
+            });
+        }
+        const personas = window.personasDeSemana(i).map(p => {
+            const vals = historia[String(p.emp.id)] || [p.promedio];
+            return Object.assign({}, p, {
+                promedioReciente: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
+                semanasRecientes: vals.length
+            });
+        });
+        r.destacados = window.destacadosDeLaSemana(personas);
     }
     return r.destacados;
 };
@@ -173,11 +201,14 @@ window.desempenoDePersonasEn = (referencia) => {
             padron.forEach(emp => {
                 const id = String(emp.id);
                 const p = porPersona[id] || (porPersona[id] =
-                    { emp, filas: [], asignadas: 0, contestadas: 0, calificadas: 0 });
+                    { emp, filas: [], asignadas: 0, contestadas: 0, calificadas: 0, terminoEn: 0 });
                 p.asignadas++;
                 const r = ultimas[id];
                 if (!r) { p.filas.push({ ev: f.ev, puntaje: 0 }); return; }
                 p.contestadas++;
+                // Cuándo terminó: la más tardía de las respuestas que cuentan.
+                const enviada = new Date(r.submitted_at).getTime();
+                if (!isNaN(enviada) && enviada > p.terminoEn) p.terminoEn = enviada;
                 const puntaje = window.puntajeDeRespuesta(r);
                 if (puntaje === null) return;
                 p.calificadas++;
@@ -190,17 +221,31 @@ window.desempenoDePersonasEn = (referencia) => {
         .filter(p => p.promedio !== null);
 };
 
-// El mejor y el peor, y con cuántos empata cada uno. Un empate se deshace a
-// favor de lo que dice más de la persona: el mejor, quien más tiene
-// calificado; el peor, quien más deja sin contestar. Con una sola persona no
-// hay «peor» que enseñar.
+// El mejor y el peor, y con cuántos empataron esa semana. El empate se
+// deshace en este orden, que es el mismo para los dos, al revés:
+//
+//   1. El promedio de las últimas cuatro semanas (`promedioReciente`): quien
+//      sostiene el resultado semana tras semana va delante de quien lo tuvo una.
+//   2. Cuántas encuestas tiene calificadas: un 100% sobre nueve dice más que
+//      sobre dos. Para el peor, cuántas dejó sin contestar.
+//   3. Quién terminó antes de contestar la semana. Para el peor, quién después.
+//   4. El nombre, sólo para que el resultado no dependa del orden de la consulta.
+//
+// Con una sola persona no hay «peor» que enseñar.
 window.destacadosDeLaSemana = (personas) => {
     if (!personas.length) return { mejor: null, peor: null };
     const nombre = (p) => String(p.emp.name || '');
+    const reciente = (p) => p.promedioReciente === undefined ? p.promedio : p.promedioReciente;
     const mejores = personas.slice().sort((a, b) => b.promedio - a.promedio
-        || b.calificadas - a.calificadas || nombre(a).localeCompare(nombre(b), 'es'));
+        || reciente(b) - reciente(a)
+        || b.calificadas - a.calificadas
+        || (a.terminoEn || 0) - (b.terminoEn || 0)
+        || nombre(a).localeCompare(nombre(b), 'es'));
     const peores = personas.slice().sort((a, b) => a.promedio - b.promedio
-        || (b.asignadas - b.contestadas) - (a.asignadas - a.contestadas) || nombre(a).localeCompare(nombre(b), 'es'));
+        || reciente(a) - reciente(b)
+        || (b.asignadas - b.contestadas) - (a.asignadas - a.contestadas)
+        || (b.terminoEn || 0) - (a.terminoEn || 0)
+        || nombre(a).localeCompare(nombre(b), 'es'));
     const empates = (p) => personas.filter(q => q !== p && q.promedio === p.promedio).length;
     const mejor = mejores[0];
     const peor = personas.length > 1 ? peores[0] : null;
@@ -355,9 +400,15 @@ window.diapositivaDePlanta = (i) => {
         texto(x + 96, yt + 18, w - 108, 16, window.partirEnRenglones(puesto, 22, 1)[0], 12, '#64748b');
         texto(x + 16, y + 122, 90, 40, `${p.promedio}%`, 32, color(p.promedio), { negrita: true });
         texto(x + 110, y + 124, w - 122, 16, `${p.calificadas}/${p.asignadas} encuestas calificadas`, 11, '#475569');
+        // El promedio de las últimas semanas es lo que decide un empate, así
+        // que se dice siempre: con él a la vista se entiende por qué salió ésta.
+        if (p.semanasRecientes > 1) {
+            texto(x + 110, y + 141, w - 122, 16,
+                `Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`, 11, '#475569');
+        }
         if (p.empates > 0) {
-            texto(x + 110, y + 142, w - 122, 16,
-                `+${p.empates} con el mismo resultado`, 11, '#94a3b8');
+            texto(x + 110, y + 158, w - 122, 14,
+                `Empató con ${p.empates} esta semana`, 10, '#94a3b8');
         }
     };
     const nadie = ['Todavía nadie tiene', 'resultados calificados.'];

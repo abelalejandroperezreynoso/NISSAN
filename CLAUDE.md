@@ -4661,9 +4661,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - **Sólo entra quien tiene algo calificado.** A principio de mes media
     plantilla está en cero porque las mensuales vuelven a estar sin contestar,
     y el «menor desempeño» sería sortear entre decenas de ceros a alguien que
-    todavía no ha hecho nada. El empate se dice («+3 con el mismo resultado») y
-    se deshace a favor de lo que más dice: el mejor, quien más tiene calificado;
-    el peor, quien más deja sin contestar.
+    todavía no ha hecho nada.
+  - **El empate se deshace con un criterio que se pueda explicar**, el mismo
+    para los dos y al revés para el peor: primero el **promedio de las últimas
+    cuatro semanas** (`SEMANAS_DEL_DESEMPATE`, sólo las que tuvo algo
+    calificado), después cuántas tiene calificadas —el peor, cuántas dejó sin
+    contestar—, después **quién terminó antes** de contestar la semana
+    (`terminoEn`, la más tardía de sus respuestas que cuentan) y, sólo al
+    final, el nombre. Con treinta personas al 100%, ordenar por nombre elegía a
+    una por el alfabeto. La tarjeta dice siempre ese promedio («Últimas 4
+    semanas: 96%»), que es lo que explica por qué salió esa persona, y con
+    cuántos empató esa semana.
   - **La foto es un elemento más, `imagen`**: en el SVG va recortada en círculo
     sobre las iniciales, que quedan a la vista si no carga. En el PowerPoint
     tiene que ir dentro del archivo, así que al descargar se pide con
