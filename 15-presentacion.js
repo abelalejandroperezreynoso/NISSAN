@@ -33,7 +33,6 @@
 //     `?v=`, como SheetJS: son 470 KB que no tiene por qué pagar quien sólo mira.
 
 window.LIBRERIA_PRESENTACIONES = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
-window.MESES_EN_LA_TENDENCIA = 12;
 
 // Lo que se está mirando: las semanas que se pueden enseñar y cuál.
 window.presentacion = { semanas: [], indice: 0, resultados: {} };
@@ -239,27 +238,66 @@ window.resultadoEnInstante = (fecha) => {
     return p.porInstante[k];
 };
 
-// Los meses de la tendencia de la semana `i`: hasta doce, terminando en el mes
-// de esa semana, y **sólo los que tienen resultado** a partir del primero que
-// lo tiene. Cada mes es la foto de su cierre —la misma de los puntos grandes de
-// la gráfica del panel— y el de la semana que se mira, la de su domingo: así
-// el último punto es la cifra grande de la diapositiva.
+// El ritmo del eje de la tendencia. La planta va en meses, como la gráfica de
+// la tarjeta; una clasificación va **al de su frecuencia mínima**: la encuesta
+// que se contesta menos a menudo (`PESO_FRECUENCIA` más bajo) es la que tarda
+// más en cerrar un periodo completo, así que con un eje más fino que ése los
+// puntos se repetirían o saldrían en dientes de sierra —la mensual vuelve a
+// estar sin contestar cada semana—. Las de «única vez» no tienen ritmo y no
+// cuentan; sin ninguna periódica, meses.
+window.ritmoDeLaTendencia = (clave) => {
+    if (!clave) return 'monthly';
+    const peso = window.PESO_FRECUENCIA;
+    let ritmo = null;
+    (window.filasDeLaTarjeta || []).forEach(f => {
+        if (window.normalizarClasificacion(f.ev.category || '') !== clave) return;
+        const fr = f.ev.frequency || 'once';
+        if (fr === 'once' || !(fr in peso)) return;
+        if (!ritmo || peso[fr] < peso[ritmo]) ritmo = fr;
+    });
+    return ritmo || 'monthly';
+};
+
+// Cómo se dice en plural el periodo de un ritmo, para el rótulo de la gráfica.
+// El tercero dice si es femenino: «Esta semana», «Últimas 12 semanas».
+window.PLURAL_DE_PERIODO = {
+    weekly: ['semana', 'semanas', true], biweekly: ['quincena', 'quincenas', true], monthly: ['mes', 'meses'],
+    quarterly: ['trimestre', 'trimestres'], semiannual: ['semestre', 'semestres'],
+    yearly: ['año', 'años'], biennial: ['bienio', 'bienios']
+};
+
+// Los periodos de la tendencia de la semana `i`: hasta doce del ritmo que toque,
+// terminando en el de esa semana, y **sólo los que tienen resultado** a partir
+// del primero que lo tiene. Cada uno es la foto de su cierre —la misma de los
+// puntos grandes de la gráfica del panel— y el de la semana que se mira, la de
+// su domingo: así el último punto es la cifra grande de la diapositiva.
+window.MESES_EN_LA_TENDENCIA = 12;
 window.mesesDeLaTendencia = (i, clave) => {
     const p = window.presentacion;
     const semana = p.semanas[i];
     const hasta = semana.referencia;
-    const meses = window.periodosDeClasificacion([{ frequency: 'monthly' }], window.MESES_EN_LA_TENDENCIA, hasta)
-        // Un mes que empieza antes de donde las respuestas están enteras saldría
-        // a medias —más bajo de lo que fue—, así que no se dibuja.
+    const ritmo = window.ritmoDeLaTendencia(clave);
+    const periodos = window.periodosDeClasificacion([{ frequency: ritmo }], window.MESES_EN_LA_TENDENCIA, hasta)
+        // Un periodo que empieza antes de donde las respuestas están enteras
+        // saldría a medias —más bajo de lo que fue—, así que no se dibuja.
         .filter(m => m.inicio instanceof Date && !(p.cubreDesde instanceof Date && m.inicio < p.cubreDesde))
         .reverse()
         .map(m => {
             const ref = (m.referencia && m.referencia < hasta) ? m.referencia : hasta;
             const v = window.vistaDe(window.resultadoEnInstante(ref), clave);
-            return { inicio: m.inicio, actual: ref === hasta, valor: v ? v.promedio : null };
+            return { inicio: m.inicio, actual: ref === hasta, valor: v ? v.promedio : null, ritmo };
         });
-    const primero = meses.findIndex(m => m.valor !== null);
-    return primero < 0 ? [] : meses.slice(primero);
+    const primero = periodos.findIndex(m => m.valor !== null);
+    return primero < 0 ? [] : periodos.slice(primero);
+};
+
+// El rótulo de un punto del eje: el de la gráfica del panel (`etiquetasDeEje`),
+// y en meses el de enero con el año, que es donde cambia.
+window.rotuloDePeriodo = (inicio, ritmo) => {
+    if (ritmo === 'monthly') {
+        return window.MESES_CORTOS[inicio.getMonth()] + (inicio.getMonth() === 0 ? ` ${String(inicio.getFullYear()).slice(2)}` : '');
+    }
+    return (window.etiquetasDeEje ? window.etiquetasDeEje(inicio, ritmo).corta : '') || window.MESES_CORTOS[inicio.getMonth()];
 };
 
 // Los destacados sólo los pide la semana que se está mirando, no la tendencia.
@@ -497,7 +535,9 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     // terminando en el de la semana que se mira. Una línea azul fina y sólo el
     // último punto en grande, con el color de su cifra.
     const tramo = window.mesesDeLaTendencia(i, clave);
-    rotulo(48, 372, 260, tramo.length === 1 ? 'Este mes' : `Últimos ${tramo.length} meses`);
+    const plural = window.PLURAL_DE_PERIODO[window.ritmoDeLaTendencia(clave)] || ['periodo', 'periodos'];
+    rotulo(48, 372, 260, tramo.length === 1 ? `${plural[2] ? 'Esta' : 'Este'} ${plural[0]}`
+        : `${plural[2] ? 'Últimas' : 'Últimos'} ${tramo.length} ${plural[1]}`);
     const gx = 56, gw = 244, gy = 398, gh = 70;
     const px = (j) => gx + (tramo.length === 1 ? gw / 2 : gw * j / (tramo.length - 1));
     const py = (v) => gy + gh * (1 - v / 100);
@@ -518,7 +558,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         const d = t.inicio;
         const ultimo = j === tramo.length - 1;
         if ((tramo.length - 1 - j) % saltoRotulo === 0) {
-            const rot = window.MESES_CORTOS[d.getMonth()] + (d.getMonth() === 0 ? ` ${String(d.getFullYear()).slice(2)}` : '');
+            const rot = window.rotuloDePeriodo(d, t.ritmo);
             texto(px(j) - 22, 476, 44, 14, rot, 10, ultimo ? C.texto : C.terciario, { alinear: 'center', peso: ultimo ? 600 : 400 });
         }
         if (t.valor === null) return;

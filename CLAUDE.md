@@ -4716,12 +4716,22 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     `peso` —el grosor numérico— y `espaciado`, que en PowerPoint es
     `charSpacing`.
 
-  **La tendencia es de meses, hasta doce** (`MESES_EN_LA_TENDENCIA`,
+  **La tendencia es de hasta doce periodos** (`MESES_EN_LA_TENDENCIA`,
   `mesesDeLaTendencia`): los que tengan resultado a partir del primero que lo
-  tiene, terminando en el mes de la semana que se mira. Cada mes es la foto de
-  su cierre y el de la semana que se mira, la de su domingo, así que el último
-  punto es la cifra grande. Con más de seis los rótulos van alternos, y enero
-  lleva el año.
+  tiene, terminando en el de la semana que se mira. Cada uno es la foto de su
+  cierre y el de la semana que se mira, la de su domingo, así que el último
+  punto es la cifra grande. Con más de seis los rótulos van alternos.
+
+  **El periodo lo pone el ritmo de cada diapositiva** (`ritmoDeLaTendencia`):
+  la de la planta va en meses, como la gráfica de la tarjeta, y la de una
+  clasificación **en el de su frecuencia mínima** —la encuesta que se contesta
+  menos a menudo, la de `PESO_FRECUENCIA` más bajo—. Con un eje más fino que
+  ése los puntos se repetirían o saldrían en dientes de sierra, que una
+  mensual vuelve a estar sin contestar cada semana. Las de «única vez» no
+  cuentan, y sin ninguna periódica va en meses. El rótulo dice el periodo
+  —«Últimas 12 semanas», «Últimos 4 trimestres»— y los del eje salen de
+  `etiquetasDeEje`, las mismas de la gráfica del panel (`rotuloDePeriodo`, que
+  en meses le pone el año a enero).
 
   **Doce meses son más de lo que trae la tarjeta**, que se trae seis:
 
