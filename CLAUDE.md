@@ -4753,8 +4753,11 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   **Los controles de pantalla completa van en el hueco que deja la lámina,
   nunca encima** (`colocarFlechasPresentacion`): discos pequeños y
-  translúcidos, a los lados con el teléfono de lado y debajo con el teléfono
-  derecho, con el contador («2 / 9») al lado. Fueron una píldora abajo con la
+  translúcidos, a los lados con el teléfono de lado y, con el teléfono
+  derecho, **en los bordes**: la semana arriba, a la altura de la cruz, y las
+  flechas de diapositiva con su contador («2 / 9») abajo, sobre el indicador de
+  inicio. Pegados a la lámina quedaban a media pantalla, lejos del pulgar y
+  apretados contra ella. Fueron una píldora abajo con la
   fecha y, de lado, tapaba la parte de abajo de la diapositiva. El zoom se
   conserva al cambiar de semana —así se compara la misma zona de dos semanas— y
   ampliada, los controles se atenúan, que la lámina puede pasar por debajo.

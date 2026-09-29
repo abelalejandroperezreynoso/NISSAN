@@ -1082,15 +1082,18 @@ window.colocarFlechasPresentacion = () => {
         Object.assign(semana.style, { left: `${Math.max(6, libreX / 2 - 20)}px`, top: `${Math.max(12, arribaLamina)}px`,
                                       transform: 'none' });
     } else {
-        // Derecho: las flechas y el contador debajo de la lámina y la semana
-        // encima, en el hueco que sobra arriba.
-        const y = H / 2 + altoBase / 2 + Math.min(20, (libreY - lado) / 2);
-        Object.assign(ant.style, { left: `${W / 2 - lado - 34}px`, top: `${y}px` });
-        Object.assign(sig.style, { left: `${W / 2 + 34}px`, top: `${y}px` });
-        Object.assign(contador.style, { left: `${W / 2 - 24}px`, top: `${y + lado / 2 - 8}px`, width: '48px' });
+        // Derecho: los controles se van a los bordes, que ahí sobra alto y la
+        // lámina se queda sola en el centro. La semana arriba, a la altura de
+        // la cruz; las flechas de diapositiva y el contador abajo, apartados del
+        // indicador de inicio. Pegados a la lámina se leían como parte de ella.
+        const abajo = `calc(100% - ${lado + 20}px - env(safe-area-inset-bottom))`;
+        Object.assign(ant.style, { left: `${W / 2 - lado - 34}px`, top: abajo });
+        Object.assign(sig.style, { left: `${W / 2 + 34}px`, top: abajo });
+        Object.assign(contador.style, { left: `${W / 2 - 24}px`, width: '48px',
+                                        top: `calc(100% - ${lado / 2 + 28}px - env(safe-area-inset-bottom))` });
         semana.classList.remove('vertical');
         texto.innerText = texto.dataset.largo || '';
-        Object.assign(semana.style, { left: '50%', top: `${Math.max(64, arribaLamina - 44)}px`,
+        Object.assign(semana.style, { left: '50%', top: 'calc(12px + env(safe-area-inset-top))',
                                       transform: 'translateX(-50%)' });
     }
 };
