@@ -510,16 +510,29 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     }
     const quienAplicaHtml = window.bloqueDeQuienAplica(evalData, imparte);
 
-    // **Aquí el material sólo se lee.** Agregarlo y quitarlo se hace en la hoja
-    // de editar la encuesta, que es donde se escribe todo lo demás de ella; en
-    // ésta quedan la portada de arriba —que abre el visor con todo lo
-    // convertido— y, abajo, los archivos sueltos, que no entran en el visor.
-    window.materialDeLaHoja = { id: evalId };
+    // **Aquí el material se lee y, quien la imparte, lo agrega.** Quitarlo se
+    // hace en la hoja de editar la encuesta, que es donde se escribe todo lo
+    // demás de ella; en ésta quedan la portada de arriba —que abre el visor con
+    // todo lo convertido—, abajo los archivos sueltos, que no entran en el
+    // visor, y para el administrador y quien la revisa el botón de «Agregar
+    // material» (`soloAgregar`): subir la presentación de la junta desde donde
+    // se está mirando la junta, sin abrir la hoja entera de edición.
+    //
+    // Y aquí no hay edición delante: la hoja de edición cierra ésta al abrirse
+    // y viceversa, pero nadie soltaba `materialEnEdicion` al cerrarla, y con esa
+    // marca puesta `pintarMaterialEncuesta` se salta este recuadro —lo recién
+    // subido no se vería—. Su hueco se vacía por lo mismo: la hoja de edición
+    // sigue escondida en el documento, y una previa suya con el mismo
+    // `nota-conversion` se llevaría los avisos de la conversión de ésta.
+    window.materialEnEdicion = null;
+    const huecoEdicion = document.getElementById('material-edicion');
+    if (huecoEdicion) huecoEdicion.innerHTML = '';
+    window.materialDeLaHoja = { id: evalId, puedeAgregar: !!imparte };
     // Se decide **antes** de armar el recuadro, que es quien la mira para no
     // repetir arriba y abajo el mismo documento. La portada se monta después,
     // cuando ya hay encabezado en el documento donde insertarla.
     window.hayPortadaEnLaHoja = window.documentosConPortada(window.materialesEncuesta).length > 0;
-    const materialHtml = `<div id="material-encuesta">${window.bloqueDeMaterial(evalId, false)}</div>`;
+    const materialHtml = `<div id="material-encuesta">${window.bloqueDeMaterial(evalId, false, { soloAgregar: !!imparte })}</div>`;
 
     window.paseDeLista = {
         ev: evalData,
@@ -933,9 +946,21 @@ window.notaDeMaterial = () =>
 // **Sin material y sin permiso para subirlo no se dibuja nada**: un recuadro
 // vacío que dice «no hay material» ocupa lo mismo que uno lleno y no cuenta
 // nada. Quien lo puede subir sí ve el recuadro vacío, que es su puerta.
+//
+// **`opciones.soloAgregar`** es el tercer estado, el de la hoja de la encuesta
+// para quien la imparte: se lee como la de sólo lectura —ni ✕ de quitar ni los
+// documentos que ya enseña la portada— pero lleva la puerta de agregar y la
+// previa de lo convertido con su «Guardar». Quitar se queda en la hoja de
+// edición: un documento borrado desde aquí de un toque es un documento que se
+// pierde sin querer.
 window.bloqueDeMaterial = (evalId, puedeSubir, opciones = {}) => {
     const materiales = window.materialesEncuesta;
     if (materiales === null) return '';
+    if (!puedeSubir && opciones.soloAgregar) {
+        const p = window.materialPorGuardar;
+        return window.bloqueDeMaterialParaAgregar(evalId,
+            p && p.evalId === String(evalId) ? p : null);
+    }
     // Lo que está a medio convertir es de quien lo subió: en el recuadro de
     // sólo lectura no pinta nada, y sin esto una conversión dejada a medias en
     // la hoja de edición le sacaba a quien sólo lee sus miniaturas con los
@@ -1042,6 +1067,46 @@ window.bloqueDeMaterial = (evalId, puedeSubir, opciones = {}) => {
 // portada—, y el recuadro se queda para quien puede subirlos y quitarlos, que
 // es su consola, y para los archivos sueltos, que no se pueden abrir ahí.
 window.hayPortadaEnLaHoja = false;
+
+// El recuadro de la hoja de la encuesta para quien la imparte. Su campo lleva
+// otro id que el de la hoja de edición —`inp-material-hoja`—, porque las dos
+// hojas siguen en el documento a la vez (cerrar sólo las esconde) y un
+// `<label for>` que apunte a un id repetido abre el campo de la otra.
+window.bloqueDeMaterialParaAgregar = (evalId, pendiente) => {
+    const documentos = window.documentosDeMaterial(window.materialesEncuesta)
+        .filter(d => !window.hayPortadaEnLaHoja || d.esArchivo);
+
+    const filas = documentos.map(doc => {
+        const detalle = window.detalleDeDocumento(doc);
+        const pie = `
+            <span class="material-pie">
+                <span class="material-texto">
+                    <span class="material-nombre">${window.sanitizeForHTML(doc.nombre)}</span>
+                    ${detalle ? `<span class="material-detalle">${window.sanitizeForHTML(detalle)}</span>` : ''}
+                </span>
+                <span class="material-flecha" aria-hidden="true">&rsaquo;</span>
+            </span>`;
+        const cuerpo = doc.esArchivo
+            ? `<a class="material-enlace" href="${window.sanitizeForHTML(doc.paginas[0].url)}" target="_blank" rel="noopener">
+                   <span class="material-icono" aria-hidden="true">${window.iconoDeMaterial(doc.nombre)}</span>${pie}</a>`
+            : `<button type="button" class="material-enlace" onclick="window.abrirDocumentoMaterial('${window.sanitizeForHTML(doc.clave)}')">
+                   <img class="material-portada" src="${window.sanitizeForHTML(doc.paginas[0].url)}" alt="" loading="lazy"
+                        onerror="window.portadaRota(this)">${pie}</button>`;
+        return `<div class="material-fila${doc.esArchivo ? ' sin-portada' : ''}">${cuerpo}</div>`;
+    }).join('');
+
+    const subir = pendiente ? '' : `
+        <input type="file" id="inp-material-hoja" accept="${window.aceptaDeMaterial()}"
+               style="display:none;" onchange="window.agregarMaterial(this, '${evalId}')">
+        <label for="inp-material-hoja" class="material-agregar">Agregar material</label>
+        <div class="material-nota">${window.notaDeMaterial()}</div>`;
+
+    return `
+        <div class="material-tarjeta">
+            <div class="material-rotulo">Material</div>
+            ${filas}${pendiente ? window.bloqueDeConversion() : ''}${subir}
+        </div>`;
+};
 
 // Los documentos que tienen página que enseñar: los convertidos. Lo que se
 // subió antes de que el material fueran imágenes son archivos sueltos, y ésos
@@ -1421,7 +1486,14 @@ window.pintarMaterialEncuesta = () => {
     // volver a abrirla, que es por donde se pasa siempre.
     const hoja = document.getElementById('material-encuesta');
     if (hoja && window.materialDeLaHoja && !window.materialEnEdicion) {
-        hoja.innerHTML = window.bloqueDeMaterial(window.materialDeLaHoja.id, false);
+        // Lo primero que se agrega desde aquí pasa a ser la portada: se monta
+        // antes de repintar el recuadro, que la mira para no repetirla abajo.
+        if (!document.getElementById('portada-hoja-evaluaciones')
+            && window.documentosConPortada(window.materialesEncuesta).length > 0) {
+            window.pintarPortadaDeLaHoja();
+        }
+        hoja.innerHTML = window.bloqueDeMaterial(window.materialDeLaHoja.id, false,
+            { soloAgregar: !!window.materialDeLaHoja.puedeAgregar });
     }
     const edicion = document.getElementById('material-edicion');
     if (edicion && window.materialEnEdicion) {

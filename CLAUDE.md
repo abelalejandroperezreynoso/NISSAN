@@ -2931,6 +2931,31 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.prepararMaterialEnEdicion(id, permitirPendiente)
   ```
 
+  **Y también se agrega desde la hoja de la encuesta**, sin abrir la de
+  edición: al administrador y a quien la revisa —el mismo `imparte` que ve los
+  nombres del pase de lista— el recuadro de esa hoja les sale con «Agregar
+  material» y con la previa de lo convertido y su «Guardar»
+  (`bloqueDeMaterial(id, false, { soloAgregar: true })`, que dibuja
+  `window.bloqueDeMaterialParaAgregar`). Es subir la presentación de la junta
+  desde donde se está mirando la junta. **Quitar no**: sigue siendo cosa de la
+  hoja de edición, que un documento borrado de un toque desde aquí es uno que se
+  pierde sin querer; por eso ese recuadro no lleva ✕ y sigue sin repetir lo que
+  ya enseña la portada.
+
+  Tres cosas que hay que mantener:
+
+  - **El campo lleva su propio id** (`inp-material-hoja`): las dos hojas siguen
+    en el documento a la vez —cerrar sólo esconde— y un `<label for>` que apunte
+    a un id repetido abre el campo de la otra.
+  - **Abrir la hoja de la encuesta suelta `materialEnEdicion` y vacía
+    `#material-edicion`.** Nadie la soltaba al cerrar la de edición, y con esa
+    marca puesta `pintarMaterialEncuesta` se saltaba el recuadro de esta hoja:
+    lo recién subido no se habría visto. El hueco se vacía para que su
+    `nota-conversion` escondida no se lleve los avisos de esta conversión.
+  - **Lo primero que se sube monta la portada** —`pintarMaterialEncuesta` la
+    pide si todavía no la hay— antes de repintar el recuadro, que la mira para
+    no repetirla abajo.
+
   **Y se agrega también al crear una, aunque todavía no haya fila.** Un archivo
   cuelga de su encuesta —la carpeta del bucket lleva su id y cada fila la
   nombra—, así que hasta que no se publica no hay a qué colgarlo; durante un
