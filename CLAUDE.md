@@ -4649,6 +4649,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.abrirPresentacion()  window.descargarPresentacion()
   ```
 
+  **Va con el estilo de iOS**: mucho blanco, sin barras ni líneas de adorno,
+  la tipografía del sistema, los rótulos de sección en versalitas grises como
+  los de una lista de Ajustes y las dos tarjetas de personas sobre el gris de
+  las listas agrupadas. La cifra general es un **anillo de actividad** como los
+  de Salud, las clasificaciones son cápsulas finas como las de Tiempo en
+  pantalla —con una marca gris en la meta— y la diferencia con la semana
+  anterior va en una píldora teñida.
+
+  ```js
+  window.COLORES_IOS        // los del sistema: texto, secundario, agrupado, verde, naranja, rojo, azul…
+  window.colorIOS(valor)    // los cortes de `getColorScore` (80 y 60) con los tonos de iOS
+  window.tinteIOS(hex, cuanto)   // el mismo color aclarado sobre blanco
+  window.FUENTE_DIAPOSITIVA  window.FUENTE_PPTX
+  ```
+
+  Tres cosas que hay que mantener:
+
+  - **Los tintes se mezclan a mano**, no con transparencia: PowerPoint no la
+    entiende en todas partes, y la pista del anillo o el fondo de la píldora
+    saldrían opacos.
+  - **El anillo es un elemento más, `anillo`**, en los dos traductores. En el
+    SVG es un círculo con `stroke-dasharray` y extremos redondos; en PowerPoint,
+    un `blockArc`, que cuenta los grados desde las tres del reloj —empezar
+    arriba es empezar en 270— y no redondea sus extremos, así que lleva un
+    círculo encima de cada uno.
+  - **La fuente es la del sistema en el SVG** (San Francisco en un iPhone o
+    una Mac) **y Helvetica Neue en el PowerPoint**, que sólo admite un nombre:
+    en una Mac está, y en Windows PowerPoint la sustituye solo. El texto admite
+    `peso` —el grosor numérico— y `espaciado`, que en PowerPoint es
+    `charSpacing`.
+
   **La tendencia es de meses, hasta doce** (`MESES_EN_LA_TENDENCIA`,
   `mesesDeLaTendencia`): los que tengan resultado a partir del primero que lo
   tiene, terminando en el mes de la semana que se mira. Cada mes es la foto de

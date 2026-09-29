@@ -379,147 +379,180 @@ window.inicialesDe = (nombre) => String(nombre || '').trim().split(/\s+/).filter
 window.ANCHO_DIAPOSITIVA = 960;
 window.ALTO_DIAPOSITIVA = 540;
 
+// El estilo es el de iOS: mucho blanco, la tipografía del sistema, los colores
+// del sistema (`COLORES_IOS`) y las tarjetas agrupadas sobre el gris de sus
+// listas. La cifra general es un anillo de actividad, como los de Salud, y los
+// rótulos de sección van en versalitas grises, como los encabezados de una
+// lista de Ajustes. Los cortes de color son los de siempre —80 y 60, los de
+// `getColorScore`—, sólo que con los tonos de iOS.
+window.COLORES_IOS = {
+    texto: '#1C1C1E', secundario: '#8E8E93', terciario: '#AEAEB2', separador: '#E5E5EA',
+    agrupado: '#F2F2F7', verde: '#34C759', naranja: '#FF9500', rojo: '#FF3B30', azul: '#007AFF'
+};
+window.colorIOS = (v) => {
+    const c = window.COLORES_IOS;
+    if (v === null || v === undefined) return c.terciario;
+    return v >= window.UMBRAL_CERTIFICACION ? c.verde : (v >= 60 ? c.naranja : c.rojo);
+};
+// El mismo color sobre blanco, aclarado: la pista del anillo y el fondo de una
+// píldora. Va mezclado a mano y no con transparencia, que PowerPoint no la
+// entiende en todas partes.
+window.tinteIOS = (hex, cuanto) => {
+    const n = parseInt(String(hex).replace('#', ''), 16);
+    const mezcla = (c) => Math.round(c + (255 - c) * (cuanto === undefined ? 0.82 : cuanto));
+    const r = mezcla(n >> 16), g = mezcla((n >> 8) & 255), b = mezcla(n & 255);
+    return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
+};
+
 window.diapositivaDePlanta = (i) => {
+    const C = window.COLORES_IOS;
     const semana = window.presentacion.semanas[i];
     const r = window.resultadoDeSemana(i);
     const anterior = i > 0 ? window.resultadoDeSemana(i - 1) : null;
-    const color = (v) => v === null ? '#94a3b8' : window.getColorScore(v);
+    const color = window.colorIOS;
     const el = [];
     const texto = (x, y, w, h, t, tam, col, extra) =>
         el.push(Object.assign({ tipo: 'texto', x, y, w, h, texto: t, tam, color: col }, extra || {}));
+    const rotulo = (x, y, w, t) => texto(x, y, w, 16, t.toUpperCase(), 11, C.secundario, { peso: 600, espaciado: 0.6 });
 
     el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
-    el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 8, relleno: '#2563eb' });
 
-    // Encabezado.
-    texto(40, 30, 640, 42, 'Resultado general de la planta', 30, '#0f172a', { negrita: true });
-    texto(40, 74, 640, 24, window.textoDeSemana(semana) + (semana.actual ? ' · en curso' : ''), 16, '#64748b');
-    texto(620, 36, 300, 22, 'Panel de Mantenimiento', 13, '#94a3b8', { alinear: 'right' });
-    el.push({ tipo: 'linea', x1: 40, y1: 114, x2: 920, y2: 114, color: '#e2e8f0', grosor: 1 });
+    // Encabezado: la semana en gris encima y el título grande debajo, como el
+    // de una pantalla de iOS. Sin barras ni líneas.
+    texto(48, 38, 600, 18, (window.textoDeSemana(semana) + (semana.actual ? ' · en curso' : '')), 14, C.secundario, { peso: 500 });
+    texto(48, 58, 700, 44, 'Resultado de la planta', 34, C.texto, { peso: 700 });
+    texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
 
-    // Tres columnas: la cifra y su tendencia, las clasificaciones y quién
-    // destacó. La cifra grande y lo que la acompaña.
-    texto(40, 136, 270, 22, 'Resultado general', 15, '#64748b');
-    texto(40, 160, 270, 110, r.promedio === null ? '—' : `${r.promedio}%`, 88, color(r.promedio), { negrita: true });
-    texto(40, 272, 270, 22,
-        r.total > 0 ? `${r.contestaron}/${r.total} respuestas · ${r.encuestas} encuestas` : `${r.contestaron} respuestas`,
-        13, '#475569');
+    // Columna 1: el anillo, lo que lo acompaña y la tendencia.
+    rotulo(48, 132, 260, 'Resultado general');
+    const cx = 128, cy = 232, radio = 64;
+    el.push({ tipo: 'anillo', cx, cy, r: radio, grosor: 16,
+              proporcion: r.promedio === null ? 0 : r.promedio / 100,
+              color: color(r.promedio), pista: window.tinteIOS(r.promedio === null ? C.terciario : color(r.promedio)) });
+    texto(cx - 60, cy - 24, 120, 40, r.promedio === null ? '—' : `${r.promedio}%`, 34, C.texto, { peso: 700, alinear: 'center' });
+    texto(cx - 60, cy + 14, 120, 16, 'general', 12, C.secundario, { alinear: 'center' });
+
+    texto(212, 196, 100, 22, `${r.contestaron}`, 20, C.texto, { peso: 700 });
+    texto(212, 218, 100, 14, r.total > 0 ? `de ${r.total} respuestas` : 'respuestas', 11, C.secundario);
+    texto(212, 244, 100, 22, `${r.encuestas}`, 20, C.texto, { peso: 700 });
+    texto(212, 266, 100, 14, r.encuestas === 1 ? 'encuesta' : 'encuestas', 11, C.secundario);
+
     if (anterior && anterior.promedio !== null && r.promedio !== null) {
         const d = r.promedio - anterior.promedio;
+        const tono = d > 0 ? C.verde : (d < 0 ? C.rojo : C.secundario);
         const t = d === 0 ? 'Igual que la semana anterior'
-            : `${d > 0 ? '▲' : '▼'} ${Math.abs(d)} pts vs. semana anterior`;
-        texto(40, 298, 270, 22, t, 13, d > 0 ? '#16a34a' : (d < 0 ? '#dc2626' : '#64748b'), { negrita: true });
+            : `${d > 0 ? '▲' : '▼'} ${Math.abs(d)} ${Math.abs(d) === 1 ? 'punto' : 'puntos'} vs. semana anterior`;
+        const ancho = Math.min(260, t.length * 6.4 + 24);
+        el.push({ tipo: 'rect', x: 48, y: 318, w: ancho, h: 24, relleno: window.tinteIOS(tono, 0.86), radio: 12 });
+        texto(48, 318, ancho, 24, t, 11.5, tono, { peso: 600, alinear: 'center' });
     }
 
     // La tendencia de los últimos meses —hasta doce, los que tengan resultado—,
-    // terminando en el de la semana que se mira.
+    // terminando en el de la semana que se mira. Una línea azul fina y sólo el
+    // último punto en grande, con el color de su cifra.
     const tramo = window.mesesDeLaTendencia(i);
-    texto(40, 338, 270, 20, tramo.length === 1 ? 'Este mes' : `Últimos ${tramo.length} meses`, 12, '#94a3b8', { negrita: true });
-    const gx = 62, gw = 226, gy = 366, gh = 100;
+    rotulo(48, 372, 260, tramo.length === 1 ? 'Este mes' : `Últimos ${tramo.length} meses`);
+    const gx = 56, gw = 244, gy = 398, gh = 70;
     const px = (j) => gx + (tramo.length === 1 ? gw / 2 : gw * j / (tramo.length - 1));
     const py = (v) => gy + gh * (1 - v / 100);
-    el.push({ tipo: 'rect', x: 40, y: 358, w: 270, h: 140, relleno: '#f8fafc', radio: 10 });
     el.push({ tipo: 'linea', x1: gx, y1: py(window.UMBRAL_CERTIFICACION), x2: gx + gw, y2: py(window.UMBRAL_CERTIFICACION),
-              color: '#86efac', grosor: 1, guiones: true });
+              color: window.tinteIOS(C.verde, 0.55), grosor: 1, guiones: true });
+    el.push({ tipo: 'linea', x1: gx, y1: gy + gh, x2: gx + gw, y2: gy + gh, color: C.separador, grosor: 1 });
     let previo = null;
     tramo.forEach((t, j) => {
         if (t.r.promedio === null) { previo = null; return; }
         const punto = [px(j), py(t.r.promedio)];
-        if (previo) el.push({ tipo: 'linea', x1: previo[0], y1: previo[1], x2: punto[0], y2: punto[1], color: '#2563eb', grosor: 2.5 });
+        if (previo) el.push({ tipo: 'linea', x1: previo[0], y1: previo[1], x2: punto[0], y2: punto[1], color: C.azul, grosor: 2 });
         previo = punto;
     });
-    // Doce rótulos no caben en 226 px: con más de seis van alternos, siempre
-    // con el del mes que se mira. El de enero lleva el año, que es donde cambia.
+    // Doce rótulos no caben: con más de seis van alternos, siempre con el del
+    // mes que se mira. El de enero lleva el año, que es donde cambia.
     const saltoRotulo = tramo.length > 6 ? 2 : 1;
     tramo.forEach((t, j) => {
         const d = t.inicio;
         const ultimo = j === tramo.length - 1;
         if ((tramo.length - 1 - j) % saltoRotulo === 0) {
-            const rotulo = window.MESES_CORTOS[d.getMonth()] + (d.getMonth() === 0 ? ` ${String(d.getFullYear()).slice(2)}` : '');
-            texto(px(j) - 22, 474, 44, 16, rotulo, 10,
-                ultimo ? '#0f172a' : '#94a3b8', { alinear: 'center', negrita: ultimo });
+            const rot = window.MESES_CORTOS[d.getMonth()] + (d.getMonth() === 0 ? ` ${String(d.getFullYear()).slice(2)}` : '');
+            texto(px(j) - 22, 476, 44, 14, rot, 10, ultimo ? C.texto : C.terciario, { alinear: 'center', peso: ultimo ? 600 : 400 });
         }
         if (t.r.promedio === null) return;
-        el.push({ tipo: 'circulo', cx: px(j), cy: py(t.r.promedio), r: ultimo ? 6 : 4,
-                  relleno: color(t.r.promedio), borde: '#ffffff' });
+        el.push(ultimo
+            ? { tipo: 'circulo', cx: px(j), cy: py(t.r.promedio), r: 5, relleno: color(t.r.promedio), borde: '#ffffff' }
+            : { tipo: 'circulo', cx: px(j), cy: py(t.r.promedio), r: 2.2, relleno: C.azul });
     });
 
-    // Una barra por clasificación, de la mejor a la peor.
-    texto(340, 136, 300, 22, 'Por clasificación', 15, '#0f172a', { negrita: true });
+    // Columna 2: una fila por clasificación, de la mejor a la peor. El nombre y
+    // la cifra en un renglón y debajo una cápsula fina, como las de Tiempo en
+    // pantalla; la marca gris de cada cápsula es la meta.
+    rotulo(348, 132, 280, 'Por clasificación');
     const lista = r.clasificaciones;
-    const alto = Math.min(52, 322 / Math.max(lista.length, 1));
-    const tam = Math.max(9, Math.min(13, alto * 0.36));
-    const bx = 462, bw = 128;
+    const alto = Math.min(44, 330 / Math.max(lista.length, 1));
+    const tam = Math.max(10, Math.min(13, alto * 0.32));
+    const bx = 348, bw = 268;
     lista.forEach((c, j) => {
-        const y = 168 + j * alto;
-        const renglones = window.partirEnRenglones(c.nombre, Math.floor(116 / (tam * 0.56)), alto >= tam * 2.6 ? 2 : 1);
-        renglones.forEach((t, n) => texto(340, y + (alto - renglones.length * tam * 1.2) / 2 + n * tam * 1.2,
-            118, tam * 1.2, t, tam, '#334155', { negrita: true }));
-        const hb = Math.max(6, alto * 0.32);
-        el.push({ tipo: 'rect', x: bx, y: y + (alto - hb) / 2, w: bw, h: hb, relleno: '#f1f5f9', radio: hb / 2 });
+        const y = 160 + j * alto;
+        const hb = Math.max(4, Math.min(6, alto * 0.14));
+        const yb = y + alto * 0.62;
+        const nombre = window.partirEnRenglones(c.nombre, Math.floor(210 / (tam * 0.58)), 1)[0];
+        texto(bx, yb - tam * 1.5 - 2, 216, tam * 1.3, nombre, tam, C.texto, { peso: 600 });
+        texto(bx + bw - 60, yb - tam * 1.5 - 2, 60, tam * 1.3, c.promedio === null ? '—' : `${c.promedio}%`, tam, color(c.promedio),
+            { peso: 700, alinear: 'right' });
+        el.push({ tipo: 'rect', x: bx, y: yb, w: bw, h: hb, relleno: C.agrupado, radio: hb / 2 });
         if (c.promedio !== null && c.promedio > 0) {
-            el.push({ tipo: 'rect', x: bx, y: y + (alto - hb) / 2, w: Math.max(hb, bw * c.promedio / 100), h: hb,
+            el.push({ tipo: 'rect', x: bx, y: yb, w: Math.max(hb, bw * c.promedio / 100), h: hb,
                       relleno: color(c.promedio), radio: hb / 2 });
         }
-        texto(592, y, 48, alto, c.promedio === null ? '—' : `${c.promedio}%`, tam + 1, color(c.promedio),
-            { negrita: true, alinear: 'right' });
-    });
-    if (lista.length) {
         const xm = bx + bw * window.UMBRAL_CERTIFICACION / 100;
-        el.push({ tipo: 'linea', x1: xm, y1: 164, x2: xm, y2: 168 + lista.length * alto + 2, color: '#22c55e', grosor: 1, guiones: true });
-    }
+        el.push({ tipo: 'linea', x1: xm, y1: yb - 2, x2: xm, y2: yb + hb + 2, color: C.terciario, grosor: 1 });
+    });
 
-    // Quién destacó: la mejor y la peor persona de la semana.
+    // Columna 3: quién destacó, en dos tarjetas agrupadas.
     const { mejor, peor } = window.destacadosDeSemana(i);
-    const tarjetaDePersona = (p, y, rotulo, acento, vacio) => {
-        const x = 670, w = 250, h = 176;
-        el.push({ tipo: 'rect', x, y, w, h, relleno: '#f8fafc', radio: 12 });
-        el.push({ tipo: 'rect', x, y: y + 14, w: 4, h: 20, relleno: acento });
-        texto(x + 16, y + 14, w - 32, 20, rotulo, 12, acento, { negrita: true });
+    const tarjetaDePersona = (p, y, titulo, acento, vacio) => {
+        const x = 660, w = 252, h = 172;
+        el.push({ tipo: 'rect', x, y, w, h, relleno: C.agrupado, radio: 18 });
+        el.push({ tipo: 'circulo', cx: x + 20, cy: y + 22, r: 4, relleno: acento });
+        texto(x + 30, y + 14, w - 46, 16, titulo.toUpperCase(), 11, acento, { peso: 600, espaciado: 0.6 });
         if (!p) {
-            vacio.forEach((t, n) => texto(x + 16, y + 48 + n * 18, w - 32, 18, t, 13, '#94a3b8'));
+            vacio.forEach((t, n) => texto(x + 16, y + 48 + n * 18, w - 32, 18, t, 13, C.secundario));
             return;
         }
         const emp = p.emp;
-        el.push({ tipo: 'imagen', x: x + 16, y: y + 44, w: 68, h: 68,
+        el.push({ tipo: 'imagen', x: x + 16, y: y + 42, w: 60, h: 60,
                   url: emp.avatar ? window.procesarUrlImagen(emp.avatar) : '',
-                  iniciales: window.inicialesDe(emp.name), fondo: '#e2e8f0' });
-        let yt = y + 44;
-        window.partirEnRenglones(emp.name, 17, 2).forEach(t => {
-            texto(x + 96, yt, w - 108, 18, t, 14, '#0f172a', { negrita: true });
+                  iniciales: window.inicialesDe(emp.name), fondo: '#E5E5EA' });
+        let yt = y + 42;
+        window.partirEnRenglones(emp.name, 19, 2).forEach(t => {
+            texto(x + 88, yt, w - 100, 18, t, 14, C.texto, { peso: 700 });
             yt += 18;
         });
         const depto = String(emp.dept || emp.department || '').trim() || 'Sin departamento';
         const puesto = String(emp.puesto || '').trim() || 'Sin puesto';
-        texto(x + 96, yt + 2, w - 108, 16, window.partirEnRenglones(depto, 22, 1)[0], 12, '#475569');
-        texto(x + 96, yt + 18, w - 108, 16, window.partirEnRenglones(puesto, 22, 1)[0], 12, '#64748b');
-        texto(x + 16, y + 122, 90, 40, `${p.promedio}%`, 32, color(p.promedio), { negrita: true });
-        // Cuatro renglones cortos a la derecha de la cifra: lo calificado, la
-        // velocidad de respuesta, el promedio de las últimas semanas —que es lo
-        // que decide un empate, así que se dice siempre— y con cuántos empató.
-        const detalle = [[`${p.calificadas}/${p.asignadas} encuestas calificadas`, '#475569']];
-        if (p.diasDeRespuesta !== null) {
-            detalle.push([`Responde en ${window.textoDeDias(p.diasDeRespuesta)}`, '#475569']);
-        }
-        if (p.semanasRecientes > 1) {
-            detalle.push([`Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`, '#475569']);
-        }
-        if (p.empates > 0) detalle.push([`Empató con ${p.empates}`, '#94a3b8']);
-        const arriba = y + 140 - detalle.length * 13 / 2;
-        detalle.forEach(([t, col], n) => texto(x + 110, arriba + n * 13, w - 122, 13, t, 10.5, col));
+        texto(x + 88, yt + 2, w - 100, 15, window.partirEnRenglones(depto, 24, 1)[0], 11.5, C.secundario);
+        texto(x + 88, yt + 17, w - 100, 15, window.partirEnRenglones(puesto, 24, 1)[0], 11.5, C.secundario);
+        texto(x + 16, y + 116, 90, 40, `${p.promedio}%`, 30, color(p.promedio), { peso: 700 });
+        // Hasta cuatro renglones cortos a la derecha de la cifra: lo calificado,
+        // la velocidad de respuesta, el promedio de las últimas semanas —que es
+        // lo que decide un empate, así que se dice siempre— y con cuántos empató.
+        const detalle = [`${p.calificadas}/${p.asignadas} encuestas calificadas`];
+        if (p.diasDeRespuesta !== null) detalle.push(`Responde en ${window.textoDeDias(p.diasDeRespuesta)}`);
+        if (p.semanasRecientes > 1) detalle.push(`Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`);
+        if (p.empates > 0) detalle.push(`Empató con ${p.empates}`);
+        const arriba = y + 136 - detalle.length * 13 / 2;
+        detalle.forEach((t, n) => texto(x + 108, arriba + n * 13, w - 120, 13, t, 10.5, C.secundario));
     };
     const nadie = ['Todavía nadie tiene', 'resultados calificados.'];
-    tarjetaDePersona(mejor, 136, 'MEJOR DESEMPEÑO', '#16a34a', nadie);
-    tarjetaDePersona(peor, 324, 'MENOR DESEMPEÑO', '#dc2626',
+    tarjetaDePersona(mejor, 132, 'Mejor desempeño', C.verde, nadie);
+    tarjetaDePersona(peor, 320, 'Menor desempeño', C.rojo,
         mejor ? ['Sólo una persona tiene', 'resultados calificados.'] : nadie);
 
-    // Pie.
+    // Pie, en el gris más claro.
     const hoy = new Date();
-    texto(40, 508, 880, 18,
+    texto(48, 506, 864, 16,
         `Cada clasificación pesa igual · meta ${window.UMBRAL_CERTIFICACION}% · desempeño sobre lo ya calificado · ` +
         `generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
         `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
-        11, '#94a3b8');
+        10, C.terciario);
     return el;
 };
 
@@ -527,12 +560,27 @@ window.diapositivaDePlanta = (i) => {
 // Cada foto lleva su propio recorte, y los ids no pueden repetirse en el
 // documento: la hoja repinta la diapositiva a cada cambio de semana.
 window.contadorRecortesDiapositiva = 0;
+// La del sistema en un iPhone o una Mac —San Francisco— y la más parecida en
+// lo demás. PowerPoint sólo admite un nombre, y va Helvetica Neue: en una Mac
+// está, y en Windows PowerPoint la sustituye solo.
+window.FUENTE_DIAPOSITIVA = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif';
+window.FUENTE_PPTX = 'Helvetica Neue';
 window.svgDeDiapositiva = (elementos) => {
     const esc = window.sanitizeForHTML;
     const partes = elementos.map(e => {
         if (e.tipo === 'rect') return `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx="${e.radio || 0}" fill="${e.relleno}"/>`;
         if (e.tipo === 'linea') return `<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="${e.color}" stroke-width="${e.grosor}"${e.guiones ? ' stroke-dasharray="5 4"' : ''} stroke-linecap="round"/>`;
         if (e.tipo === 'circulo') return `<circle cx="${e.cx}" cy="${e.cy}" r="${e.r}" fill="${e.relleno}"${e.borde ? ` stroke="${e.borde}" stroke-width="2"` : ''}/>`;
+        if (e.tipo === 'anillo') {
+            // La pista entera y encima el arco, con los extremos redondos de los
+            // anillos de Salud. Empieza arriba y va en el sentido del reloj.
+            const largo = 2 * Math.PI * e.r;
+            const p = Math.max(0, Math.min(1, e.proporcion));
+            return `<circle cx="${e.cx}" cy="${e.cy}" r="${e.r}" fill="none" stroke="${e.pista}" stroke-width="${e.grosor}"/>`
+                + (p > 0 ? `<circle cx="${e.cx}" cy="${e.cy}" r="${e.r}" fill="none" stroke="${e.color}" stroke-width="${e.grosor}"
+                      stroke-linecap="round" stroke-dasharray="${largo * p} ${largo}"
+                      transform="rotate(-90 ${e.cx} ${e.cy})"/>` : '');
+        }
         if (e.tipo === 'imagen') {
             // Las iniciales van debajo y la foto encima, recortada en círculo:
             // si la foto no carga, el SVG no dibuja nada y quedan las iniciales.
@@ -541,7 +589,7 @@ window.svgDeDiapositiva = (elementos) => {
             return `<clipPath id="${id}"><circle cx="${cx}" cy="${cy}" r="${r}"/></clipPath>
                 <circle cx="${cx}" cy="${cy}" r="${r}" fill="${e.fondo}"/>
                 <text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="${Math.round(e.w * 0.36)}"
-                      font-weight="700" fill="#64748b">${esc(e.iniciales)}</text>
+                      font-weight="600" fill="#8E8E93">${esc(e.iniciales)}</text>
                 ${e.url ? `<image href="${esc(e.url)}" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}"
                       preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` : ''}
                 <circle cx="${cx}" cy="${cy}" r="${r - 1}" fill="none" stroke="#ffffff" stroke-width="2"/>`;
@@ -550,13 +598,14 @@ window.svgDeDiapositiva = (elementos) => {
             const ancla = e.alinear === 'right' ? 'end' : (e.alinear === 'center' ? 'middle' : 'start');
             const x = e.alinear === 'right' ? e.x + e.w : (e.alinear === 'center' ? e.x + e.w / 2 : e.x);
             return `<text x="${x}" y="${e.y + e.h / 2}" text-anchor="${ancla}" dominant-baseline="central"
-                          font-size="${e.tam}" font-weight="${e.negrita ? 700 : 400}" fill="${e.color}">${esc(e.texto)}</text>`;
+                          font-size="${e.tam}" font-weight="${e.peso || (e.negrita ? 700 : 400)}"${e.espaciado ? ` letter-spacing="${e.espaciado}"` : ''}
+                          fill="${e.color}">${esc(e.texto)}</text>`;
         }
         return '';
     }).join('');
     return `<svg viewBox="0 0 ${window.ANCHO_DIAPOSITIVA} ${window.ALTO_DIAPOSITIVA}" role="img"
                  aria-label="Resultado general de la planta"
-                 style="width:100%; height:auto; display:block; font-family:Arial, Helvetica, sans-serif;">${partes}</svg>`;
+                 style="width:100%; height:auto; display:block; font-family:${window.FUENTE_DIAPOSITIVA};">${partes}</svg>`;
 };
 
 // --- DE LA LISTA AL POWERPOINT ---
@@ -589,6 +638,37 @@ window.agregarDiapositivaPptx = (pptx, elementos) => {
                 fill: { color: hex(e.relleno) },
                 line: { color: hex(e.borde || e.relleno), width: e.borde ? 1.5 : 0 }
             });
+        } else if (e.tipo === 'anillo') {
+            // La pista es un círculo con borde grueso; el arco, un `blockArc`,
+            // que PowerPoint mide en grados desde las tres del reloj en el
+            // sentido de las agujas: empezar arriba es empezar en 270. Sus
+            // extremos no se redondean, así que se les pone un círculo encima.
+            const p = Math.max(0, Math.min(1, e.proporcion));
+            s.addShape(pptx.ShapeType.ellipse, {
+                x: pulg(e.cx - e.r), y: pulg(e.cy - e.r), w: pulg(e.r * 2), h: pulg(e.r * 2),
+                fill: { type: 'none' }, line: { color: hex(e.pista), width: e.grosor * 0.75 }
+            });
+            if (p >= 0.999) {
+                s.addShape(pptx.ShapeType.ellipse, {
+                    x: pulg(e.cx - e.r), y: pulg(e.cy - e.r), w: pulg(e.r * 2), h: pulg(e.r * 2),
+                    fill: { type: 'none' }, line: { color: hex(e.color), width: e.grosor * 0.75 }
+                });
+            } else if (p > 0) {
+                const fuera = e.r + e.grosor / 2;
+                s.addShape(pptx.ShapeType.blockArc, {
+                    x: pulg(e.cx - fuera), y: pulg(e.cy - fuera), w: pulg(fuera * 2), h: pulg(fuera * 2),
+                    fill: { color: hex(e.color) }, line: { color: hex(e.color), width: 0 },
+                    angleRange: [270, (270 + 360 * p) % 360], arcThicknessRatio: e.grosor / fuera
+                });
+                [0, p].forEach(q => {
+                    const a = -Math.PI / 2 + 2 * Math.PI * q;
+                    const x = e.cx + e.r * Math.cos(a), y = e.cy + e.r * Math.sin(a), rr = e.grosor / 2;
+                    s.addShape(pptx.ShapeType.ellipse, {
+                        x: pulg(x - rr), y: pulg(y - rr), w: pulg(rr * 2), h: pulg(rr * 2),
+                        fill: { color: hex(e.color) }, line: { color: hex(e.color), width: 0 }
+                    });
+                });
+            }
         } else if (e.tipo === 'imagen') {
             s.addShape(pptx.ShapeType.ellipse, {
                 x: pulg(e.x), y: pulg(e.y), w: pulg(e.w), h: pulg(e.h),
@@ -596,7 +676,7 @@ window.agregarDiapositivaPptx = (pptx, elementos) => {
             });
             s.addText(e.iniciales, {
                 x: pulg(e.x), y: pulg(e.y), w: pulg(e.w), h: pulg(e.h),
-                fontFace: 'Arial', fontSize: Math.round(e.w * 0.36 * 0.75), color: '64748B',
+                fontFace: window.FUENTE_PPTX, fontSize: Math.round(e.w * 0.36 * 0.75), color: '8E8E93',
                 bold: true, align: 'center', valign: 'middle', margin: 0
             });
             // `datos` lo deja puesto `fotosParaPptx`: la foto ya recortada en
@@ -606,8 +686,9 @@ window.agregarDiapositivaPptx = (pptx, elementos) => {
         } else if (e.tipo === 'texto') {
             s.addText(e.texto, {
                 x: pulg(e.x), y: pulg(e.y), w: pulg(e.w), h: pulg(e.h),
-                fontFace: 'Arial', fontSize: Math.round(e.tam * 0.75 * 10) / 10, color: hex(e.color),
-                bold: !!e.negrita, align: e.alinear || 'left', valign: 'middle', margin: 0
+                fontFace: window.FUENTE_PPTX, fontSize: Math.round(e.tam * 0.75 * 10) / 10, color: hex(e.color),
+                bold: !!e.negrita || (e.peso || 0) >= 600, align: e.alinear || 'left', valign: 'middle', margin: 0,
+                charSpacing: e.espaciado ? e.espaciado * 0.75 : undefined
             });
         }
     });
