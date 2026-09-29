@@ -4667,11 +4667,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   tope, la más vieja que llegó— y **un mes o una semana que empiece antes no se
   enseña**: saldría a medias, más bajo de lo que fue.
 
-  **A pantalla completa hay flechas de semana**, en una píldora abajo del mismo
-  disco oscuro que la cruz y apartada del indicador de inicio
-  (`.presentacion-completa-nav`). El zoom se conserva al cambiar de semana, que
-  es lo que deja comparar la misma zona de dos semanas; y la píldora no cuenta
-  para los gestos, o dos toques seguidos a la flecha ampliarían la lámina.
+  **A pantalla completa hay flechas de semana**, dos discos pequeños y
+  translúcidos **en el hueco que deja la lámina, nunca encima**
+  (`colocarFlechasPresentacion`): con el teléfono de lado o en un escritorio
+  van a los lados, a media altura; con el teléfono derecho, juntas debajo de la
+  lámina. Fueron una píldora abajo con la fecha y, de lado, tapaba la parte de
+  abajo de la diapositiva; la fecha no hace falta, que la dice la propia
+  diapositiva. El zoom se conserva al cambiar de semana —así se compara la
+  misma zona de dos semanas— y ampliada las flechas se atenúan, que la lámina
+  puede pasar por debajo.
 
   **Y a la derecha, quién destacó**: la persona con mejor y con menor
   desempeño de la semana, con su foto, su nombre, su departamento y su puesto.

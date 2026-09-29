@@ -755,13 +755,16 @@ window.montarPresentacionCompleta = () => {
     capa.id = 'modal-presentacion-completa';
     capa.innerHTML = `
         <div id="lamina-presentacion-completa" class="presentacion-lamina"></div>
-        <div class="presentacion-completa-nav">
-            <button type="button" id="btn-completa-anterior" onclick="window.moverSemanaPresentacion(-1)"
-                    title="Semana anterior" aria-label="Semana anterior">‹</button>
-            <span id="semana-completa"></span>
-            <button type="button" id="btn-completa-siguiente" onclick="window.moverSemanaPresentacion(1)"
-                    title="Semana siguiente" aria-label="Semana siguiente">›</button>
-        </div>
+        <button type="button" id="btn-completa-anterior" class="presentacion-completa-flecha"
+                onclick="window.moverSemanaPresentacion(-1)" title="Semana anterior" aria-label="Semana anterior">
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none"
+                 stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" id="btn-completa-siguiente" class="presentacion-completa-flecha"
+                onclick="window.moverSemanaPresentacion(1)" title="Semana siguiente" aria-label="Semana siguiente">
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none"
+                 stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
         <button type="button" onclick="window.cerrarPresentacionCompleta()"
                 class="ios-boton-icono ios-boton-cerrar presentacion-completa-cerrar"
                 title="Salir de pantalla completa" aria-label="Salir de pantalla completa"></button>`;
@@ -787,9 +790,6 @@ window.pintarPresentacionCompleta = () => {
     const p = window.presentacion;
     document.getElementById('lamina-presentacion-completa').innerHTML =
         window.svgDeDiapositiva(window.diapositivaDePlanta(p.indice));
-    const semana = p.semanas[p.indice];
-    document.getElementById('semana-completa').innerText =
-        window.textoDeSemana(semana).replace('Semana del ', '') + (semana.actual ? ' · en curso' : '');
     document.getElementById('btn-completa-anterior').disabled = p.indice === 0;
     document.getElementById('btn-completa-siguiente').disabled = p.indice === p.semanas.length - 1;
     window.ajustarPresentacionCompleta();
@@ -831,6 +831,34 @@ window.ajustarPresentacionCompleta = () => {
     lamina.style.top = `calc(50% + ${z.y}px)`;
     const capa = document.getElementById('modal-presentacion-completa');
     if (capa) capa.classList.toggle('esta-ampliada', z.escala > 1.01);
+    window.colocarFlechasPresentacion();
+};
+
+// Las flechas de semana van **donde no tapan nada**: en el hueco que deja la
+// lámina sin ampliar. Con el teléfono de lado —o en un escritorio— sobra a los
+// lados y van ahí, a media altura; con el teléfono derecho sobra arriba y
+// abajo, y van juntas debajo de la lámina. La fecha no la repiten: la dice la
+// propia diapositiva. Ampliada, la lámina puede pasar por debajo, y por eso
+// se atenúan (`.esta-ampliada`).
+window.colocarFlechasPresentacion = () => {
+    const ant = document.getElementById('btn-completa-anterior');
+    const sig = document.getElementById('btn-completa-siguiente');
+    if (!ant || !sig) return;
+    const lado = 36;
+    const W = window.innerWidth, H = window.innerHeight;
+    const anchoBase = window.anchoBasePresentacion();
+    const altoBase = anchoBase * window.ALTO_DIAPOSITIVA / window.ANCHO_DIAPOSITIVA;
+    const libreX = (W - anchoBase) / 2, libreY = (H - altoBase) / 2;
+    if (libreX >= lado + 12 || libreY < lado + 24) {
+        const x = Math.max(6, libreX / 2 - lado / 2);
+        const y = H / 2 - lado / 2;
+        Object.assign(ant.style, { left: `${x}px`, top: `${y}px` });
+        Object.assign(sig.style, { left: `${W - x - lado}px`, top: `${y}px` });
+    } else {
+        const y = H / 2 + altoBase / 2 + Math.min(20, (libreY - lado) / 2);
+        Object.assign(ant.style, { left: `${W / 2 - lado - 12}px`, top: `${y}px` });
+        Object.assign(sig.style, { left: `${W / 2 + 12}px`, top: `${y}px` });
+    }
 };
 
 // Pone el zoom a `escala` dejando quieto el punto de la pantalla `punto`
@@ -867,7 +895,7 @@ window.engancharZoomPresentacion = (capa) => {
     let gesto = null, ultimoToque = 0, ultimoTap = 0, tapEn = null;
     const distancia = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     const medio = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
-    const esBoton = (e) => e.target.closest && e.target.closest('button, .presentacion-completa-nav');
+    const esBoton = (e) => e.target.closest && e.target.closest('button');
 
     capa.addEventListener('touchstart', (e) => {
         if (esBoton(e)) return;

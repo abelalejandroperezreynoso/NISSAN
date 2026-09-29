@@ -6667,47 +6667,32 @@ html.fondo-anclado body {
     backdrop-filter: blur(6px);
     z-index: 1;
 }
-/* Las flechas de semana a pantalla completa: una píldora abajo, del mismo disco
-   oscuro que la cruz, apartada del indicador de inicio. */
-.presentacion-completa-nav {
+/* Las flechas de semana a pantalla completa: dos discos pequeños y
+   translúcidos en el hueco que deja la lámina. Dónde, lo decide
+   `colocarFlechasPresentacion`; ampliada se atenúan, que la lámina puede
+   pasar por debajo. */
+.presentacion-completa-flecha {
     position: absolute;
-    left: 50%;
-    bottom: calc(16px + env(safe-area-inset-bottom));
-    transform: translateX(-50%);
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 4px;
-    border-radius: 999px;
-    background: rgba(15, 23, 42, 0.55);
-    -webkit-backdrop-filter: blur(6px);
-    backdrop-filter: blur(6px);
-    color: white;
-    z-index: 1;
-    max-width: calc(100% - 32px);
-}
-.presentacion-completa-nav span {
-    font-size: 0.82rem;
-    font-weight: 600;
-    padding: 0 6px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.presentacion-completa-nav button {
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
+    justify-content: center;
+    padding: 0;
     border: none;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(15, 23, 42, 0.28);
     color: white;
-    font-size: 1.5rem;
-    line-height: 1;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
     cursor: pointer;
+    z-index: 1;
+    transition: opacity 0.2s, background 0.15s;
 }
-.presentacion-completa-nav button:disabled { opacity: 0.3; cursor: default; }
-.presentacion-completa-nav button:active:not(:disabled) { transform: scale(0.92); }
+.presentacion-completa-flecha:hover { background: rgba(15, 23, 42, 0.45); }
+.presentacion-completa-flecha:disabled { opacity: 0.25; cursor: default; }
+.presentacion-completa-flecha:active:not(:disabled) { transform: scale(0.92); }
+#modal-presentacion-completa.esta-ampliada .presentacion-completa-flecha:not(:disabled) { opacity: 0.45; }
 .presentacion-cargando { aspect-ratio: 16 / 9; background: #f8fafc; }
 #modal-presentacion-completa.esta-ampliada { cursor: grab; }
 #modal-presentacion-completa.esta-ampliada:active { cursor: grabbing; }
