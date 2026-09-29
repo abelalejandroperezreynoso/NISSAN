@@ -1687,6 +1687,7 @@ window.cargarEncuestasAsignadas = async (userId) => {
                      title="${esAdmin ? 'Las encuestas activas de la empresa. El promedio se reparte entre toda la gente a la que le toca: quien no contestó cuenta como 0.' : ''}">${resumen}</div>
                 ${graficaHtml}
                 <div id="bloques-encuestas-tarjeta">${bloques}</div>
+                ${window.botonDePresentacion ? window.botonDePresentacion() : ''}
             </div>`;
         cont.style.display = 'block';
     } catch (e) {

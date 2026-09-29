@@ -39,6 +39,7 @@ Los mensajes de commit van en español.
 | `12-almacenamiento.js` | Consumo de Supabase: archivos por bucket y peso de la base |
 | `13-gestion.js` | Gestionar información: personal, departamentos, puestos, encargos, áreas, plantas y líneas, y la cadena de mando |
 | `14-vacaciones.js` | La hoja de cargar vacaciones y nombrar relevo; las reglas viven en `1-config.js` |
+| `15-presentacion.js` | La presentación semanal: la diapositiva del resultado de la planta, en la hoja y en `.pptx` |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -4625,6 +4626,45 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   corre a mano— todo se comporta como antes** y la hoja dice qué script falta.
   La tabla está en `RASTROS_DEL_EMPLEADO`: sus vacaciones se borran con su
   ficha, y donde era relevo o donde lo cubrieron sólo se le desliga.
+
+- **Cada semana tiene su presentación, y nadie la genera.** Al final de la
+  tarjeta de encuestas del administrador va «Presentación de la semana», que
+  abre `#modal-presentacion` (`15-presentacion.js`) con una diapositiva del
+  resultado general de la planta: la cifra grande, las respuestas, la
+  diferencia con la semana anterior, la tendencia de las últimas ocho semanas y
+  una barra por clasificación. Se ve en la hoja y se descarga como `.pptx`.
+
+  ```js
+  window.semanasDeLaPresentacion()     // las semanas con datos, de la más vieja a la que corre
+  window.resultadoDePlantaEn(fecha)    // { promedio, contestaron, total, encuestas, clasificaciones }
+  window.diapositivaDePlanta(indice)   // la diapositiva, como lista de elementos
+  window.svgDeDiapositiva(elementos)   window.agregarDiapositivaPptx(pptx, elementos)
+  window.abrirPresentacion()  window.descargarPresentacion()
+  ```
+
+  **No se guarda en ningún sitio**, y es lo que la hace automática: sale al
+  vuelo de las mismas respuestas que ya trajo la tarjeta, así que la de cada
+  semana existe sin que nadie la pulse y las pasadas se recorren con las
+  flechas. La contrapartida es que **no queda congelada**: se calcula con el
+  padrón de hoy, así que una semana vieja puede moverse un poco si cambia la
+  plantilla. Congelarla pediría una tabla y alguien —o algo— que la escribiera
+  cada semana, y esta aplicación no tiene servidor que lo haga solo.
+
+  Tres cosas que hay que mantener:
+
+  - **Las cifras son las de la tarjeta**: `resumenDeEncuestaAdmin`,
+    `totalDeEncuestasAdmin` y `promedioDeClasificaciones`, con los padrones de
+    `padronesDeLaTarjeta`. Cada semana es la foto de su cierre —la de los puntos
+    pequeños de la gráfica— y la que corre, la de ahora; por eso la primera de
+    un mes sale baja.
+  - **La diapositiva se describe una sola vez** (`diapositivaDePlanta`) como
+    rectángulos, textos, líneas y círculos sobre 960×540, y de ahí salen el SVG
+    de la hoja y el PowerPoint. 960 px son las 13.33 pulgadas del panorámico a
+    72 por pulgada; un texto de 20 px son 15 pt. Un elemento nuevo se añade a
+    los dos traductores o una de las dos salidas dirá menos que la otra.
+  - **PptxGenJS se pide al pulsar descargar** (`LIBRERIA_PRESENTACIONES`, con
+    `cargarLibreria` y sin `?v=`), como SheetJS, y el nombre del archivo va sin
+    acentos por lo mismo que el del Excel.
 
 - **Las dos hojas de contraseña salen de la misma fábrica.** La del modo
   administrador y la de una persona de la plantilla son el mismo control —un
