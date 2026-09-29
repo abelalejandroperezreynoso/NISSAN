@@ -4672,6 +4672,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   - **Los ids de recorte no se repiten** (`contadorRecortesDiapositiva`): la
     hoja repinta la diapositiva en cada cambio de semana.
 
+  **Y se abre a pantalla completa**, con el botón de las cuatro esquinas del
+  encabezado o tocando la diapositiva: `#modal-presentacion-completa`, sobre el
+  gris del visor y con su mismo botón flotante de cerrar. **Con el teléfono
+  vertical se gira sola 90°** (`ajustarPresentacionCompleta`, que compara
+  cuánto crece de cada manera y sólo gira si gana más de un 15%): un 16:9 a lo
+  ancho de un teléfono de pie ocupa un tercio de la pantalla. Donde el
+  navegador lo permite se pide además `requestFullscreen` —en iOS no existe
+  para un `<div>` y basta la capa—, y salir de él con Esc cierra la vista; con
+  el teclado, las flechas cambian de semana. Como el visor, está excluida de la
+  regla `[id^="modal-"]` que rellena los overlays: aquí el contenido es la
+  pantalla entera.
+
+  La nota que explicaba debajo de la diapositiva que se arma sola se quitó.
+
   **No se guarda en ningún sitio**, y es lo que la hace automática: sale al
   vuelo de las mismas respuestas que ya trajo la tarjeta, así que la de cada
   semana existe sin que nadie la pulse y las pasadas se recorren con las

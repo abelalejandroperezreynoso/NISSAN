@@ -515,6 +515,13 @@ window.montarHojaPresentacion = () => {
                     <div class="hoja-subtitulo" id="subtitulo-presentacion"></div>
                 </div>
                 <div class="hoja-acciones">
+                    <button type="button" onclick="window.abrirPresentacionCompleta()" class="ios-boton-icono"
+                            title="Pantalla completa" aria-label="Pantalla completa">
+                        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2.4"
+                                  stroke-linecap="round" stroke-linejoin="round"></path>
+                        </svg>
+                    </button>
                     <button id="btn-descargar-presentacion" type="button" onclick="window.descargarPresentacion()"
                             class="ios-boton-icono" title="Descargar en PowerPoint" aria-label="Descargar en PowerPoint">
                         <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
@@ -534,9 +541,8 @@ window.montarHojaPresentacion = () => {
                     <button type="button" id="btn-semana-siguiente" onclick="window.moverSemanaPresentacion(1)"
                             title="Semana siguiente" aria-label="Semana siguiente">›</button>
                 </div>
-                <div id="diapositiva-presentacion" class="presentacion-diapositiva"></div>
-                <p class="presentacion-nota">Se arma sola cada semana con los datos del momento: no hay que generarla ni
-                    guardarla. La semana en curso cambia conforme la gente contesta; las cerradas son la foto de su domingo.</p>
+                <div id="diapositiva-presentacion" class="presentacion-diapositiva" role="button" tabindex="0"
+                     title="Ver en pantalla completa" onclick="window.abrirPresentacionCompleta()"></div>
             </div>
         </div>`;
     document.body.appendChild(overlay);
@@ -553,8 +559,88 @@ window.abrirPresentacion = () => {
 };
 
 window.cerrarPresentacion = () => {
+    window.cerrarPresentacionCompleta();
     const overlay = document.getElementById('modal-presentacion');
     if (overlay) overlay.style.display = 'none';
+};
+
+// --- PANTALLA COMPLETA ---
+//
+// La diapositiva sola, sobre el gris del visor de imágenes y con su mismo botón
+// flotante de cerrar: es para proyectarla o enseñarla en una junta. **Con el
+// teléfono vertical se gira sola** 90°, que una diapositiva de 16:9 a lo ancho
+// de un teléfono de pie ocupa un tercio de la pantalla; girada, casi entera.
+// Se decide comparando cuánto crece de cada manera, así que en una tableta o
+// un escritorio se queda derecha.
+//
+// Donde el navegador deja pedir pantalla completa de verdad (escritorio,
+// Android) se pide también, para quitar además la barra del navegador; salir
+// de ella con Esc cierra la vista. En iOS no existe para un `<div>` y basta
+// con la capa.
+window.montarPresentacionCompleta = () => {
+    let capa = document.getElementById('modal-presentacion-completa');
+    if (capa) return capa;
+    capa = document.createElement('div');
+    capa.id = 'modal-presentacion-completa';
+    capa.innerHTML = `
+        <div id="lamina-presentacion-completa" class="presentacion-lamina"></div>
+        <button type="button" onclick="window.cerrarPresentacionCompleta()"
+                class="ios-boton-icono ios-boton-cerrar presentacion-completa-cerrar"
+                title="Salir de pantalla completa" aria-label="Salir de pantalla completa"></button>`;
+    document.body.appendChild(capa);
+    window.addEventListener('resize', window.ajustarPresentacionCompleta);
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && capa.style.display === 'block') window.cerrarPresentacionCompleta();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (capa.style.display !== 'block') return;
+        if (e.key === 'Escape') window.cerrarPresentacionCompleta();
+        if (e.key === 'ArrowLeft') { window.moverSemanaPresentacion(-1); }
+        if (e.key === 'ArrowRight') { window.moverSemanaPresentacion(1); }
+    });
+    return capa;
+};
+
+window.pintarPresentacionCompleta = () => {
+    const capa = document.getElementById('modal-presentacion-completa');
+    if (!capa || capa.style.display !== 'block') return;
+    const p = window.presentacion;
+    document.getElementById('lamina-presentacion-completa').innerHTML =
+        window.svgDeDiapositiva(window.diapositivaDePlanta(p.indice));
+    window.ajustarPresentacionCompleta();
+};
+
+window.ajustarPresentacionCompleta = () => {
+    const lamina = document.getElementById('lamina-presentacion-completa');
+    if (!lamina) return;
+    const margen = 12;
+    const W = window.innerWidth - margen * 2, H = window.innerHeight - margen * 2;
+    const proporcion = window.ANCHO_DIAPOSITIVA / window.ALTO_DIAPOSITIVA;
+    const derecha = Math.min(W, H * proporcion);
+    const girada = Math.min(H, W * proporcion);
+    // Sólo se gira si de verdad gana: con un poco más de sitio no compensa
+    // obligar a girar el teléfono.
+    const girar = girada > derecha * 1.15;
+    const ancho = girar ? girada : derecha;
+    lamina.style.width = `${ancho}px`;
+    lamina.style.height = `${ancho / proporcion}px`;
+    lamina.style.transform = `translate(-50%, -50%)${girar ? ' rotate(90deg)' : ''}`;
+};
+
+window.abrirPresentacionCompleta = () => {
+    if (!window.presentacion.semanas.length) return;
+    const capa = window.montarPresentacionCompleta();
+    capa.style.display = 'block';
+    window.pintarPresentacionCompleta();
+    try {
+        if (capa.requestFullscreen && !document.fullscreenElement) capa.requestFullscreen().catch(() => {});
+    } catch (e) { /* sin pantalla completa del navegador basta la capa */ }
+};
+
+window.cerrarPresentacionCompleta = () => {
+    const capa = document.getElementById('modal-presentacion-completa');
+    if (capa) capa.style.display = 'none';
+    try { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch (e) { /* nada */ }
 };
 
 window.moverSemanaPresentacion = (paso) => {
@@ -576,6 +662,7 @@ window.pintarPresentacion = () => {
     document.getElementById('subtitulo-presentacion').innerText = 'Resultado general de la planta';
     document.getElementById('btn-semana-anterior').disabled = p.indice === 0;
     document.getElementById('btn-semana-siguiente').disabled = p.indice === p.semanas.length - 1;
+    window.pintarPresentacionCompleta();
 };
 
 // El nombre del archivo va sin acentos: con uno, Chromium descarta el nombre

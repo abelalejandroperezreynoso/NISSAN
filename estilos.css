@@ -4114,7 +4114,7 @@ textarea:focus {
    —y `content-box`, que es lo que hay— el visor medía 40px más que la
    ventana: la imagen se dibujaba 20px por debajo del centro, la última página
    no llegaba a su tope y los botones del zoom se salían por abajo. */
-[id^="modal-"]:not(#modal-cal-title):not(#modal-cal-content):not(#modal-visor):not(.hoja-overlay) {
+[id^="modal-"]:not(#modal-cal-title):not(#modal-cal-content):not(#modal-visor):not(#modal-presentacion-completa):not(.hoja-overlay) {
     padding-top: calc(20px + env(safe-area-inset-top)) !important;
     padding-bottom: calc(20px + env(safe-area-inset-bottom)) !important;
 }
@@ -6626,10 +6626,43 @@ html.fondo-anclado body {
     border-radius: 6px;
     overflow: hidden;
     box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+    cursor: zoom-in;
+    margin-bottom: 8px;
 }
-.presentacion-nota {
-    margin: 12px 2px 0;
-    font-size: 0.76rem;
-    line-height: 1.4;
-    color: #94a3b8;
+
+/* La diapositiva a pantalla completa. Mismo gris que el visor de imágenes y por
+   lo mismo: una diapositiva blanca se recorta sola sobre él, y es el color con
+   el que `html.modal-abierto` pinta la franja de la barra de estado. El tamaño
+   y el giro los pone `ajustarPresentacionCompleta`. */
+#modal-presentacion-completa {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    background: #f0f2f5;
+    overscroll-behavior: contain;
+    touch-action: none;
+}
+.presentacion-lamina {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    background: white;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 4px 24px rgba(15, 23, 42, 0.18);
+}
+/* El botón flotante del visor (`#txt-cerrar`): disco oscuro translúcido y la
+   cruz en blanco, que encima puede quedar la diapositiva o el gris. */
+.presentacion-completa-cerrar {
+    position: absolute;
+    top: calc(12px + env(safe-area-inset-top));
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    background: rgba(15, 23, 42, 0.5);
+    color: white;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    z-index: 1;
 }
