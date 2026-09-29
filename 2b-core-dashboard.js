@@ -1033,15 +1033,12 @@ window.textoDeRespuestasAdmin = (resumen) => {
         : `${n} respuesta${n === 1 ? '' : 's'}`;
 };
 
-// Cómo va una encuesta este periodo: el promedio de la empresa y cuánta gente
-// la contestó de la que la tiene asignada.
-//
-// **Cuenta gente, no respuestas**, igual que el pase de lista: quien contestó
-// dos veces cuenta una, y su puntaje es el de la última —promediar las dos la
-// pondera el doble—.
-// `padronDado` evita recalcularlo: `padronDeLaEncuesta` recorre la plantilla
-// entera y la gráfica de periodos pregunta doce veces por la misma encuesta.
-window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
+// La última respuesta de cada persona en el periodo de la encuesta que
+// contiene `ahora`, sin nada de lo enviado después. Es lo que resume la
+// empresa y lo que usa la presentación para puntuar a cada quien: las dos
+// tienen que elegir la misma respuesta, o la persona y la planta hablarían de
+// respuestas distintas.
+window.ultimaDeCadaUnoEnPeriodo = (ev, respuestas, ahora) => {
     const referencia = ahora || new Date();
     const periodo = window.periodoDeEncuesta(ev, referencia);
     const ultimaDeCadaUno = {};
@@ -1068,6 +1065,21 @@ window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
             ultimaDeCadaUno[quien] = r;
         }
     });
+
+    return ultimaDeCadaUno;
+};
+
+// Cómo va una encuesta este periodo: el promedio de la empresa y cuánta gente
+// la contestó de la que la tiene asignada.
+//
+// **Cuenta gente, no respuestas**, igual que el pase de lista: quien contestó
+// dos veces cuenta una, y su puntaje es el de la última —promediar las dos la
+// pondera el doble—.
+// `padronDado` evita recalcularlo: `padronDeLaEncuesta` recorre la plantilla
+// entera y la gráfica de periodos pregunta doce veces por la misma encuesta.
+window.resumenDeEncuestaAdmin = (ev, respuestas, ahora, padronDado) => {
+    const referencia = ahora || new Date();
+    const ultimaDeCadaUno = window.ultimaDeCadaUnoEnPeriodo(ev, respuestas, referencia);
 
     const suyas = Object.values(ultimaDeCadaUno);
     const puntajes = suyas.map(r => window.puntajeDeRespuesta(r)).filter(p => p !== null);

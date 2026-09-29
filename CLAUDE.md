@@ -4642,6 +4642,36 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.abrirPresentacion()  window.descargarPresentacion()
   ```
 
+  **Y a la derecha, quién destacó**: la persona con mejor y con menor
+  desempeño de la semana, con su foto, su nombre, su departamento y su puesto.
+
+  ```js
+  window.desempenoDePersonasEn(referencia)   // [{ emp, promedio, asignadas, contestadas, calificadas }]
+  window.destacadosDeLaSemana(personas)      // { mejor, peor }, cada uno con sus `empates`
+  window.ultimaDeCadaUnoEnPeriodo(ev, respuestas, ahora)   // en 2b-core-dashboard.js
+  ```
+
+  Cuatro cosas que hay que mantener:
+
+  - **Cada persona se mide con la regla de la planta**: su última respuesta de
+    cada encuesta en el periodo de esa encuesta —el mismo
+    `ultimaDeCadaUnoEnPeriodo` que usa `resumenDeEncuestaAdmin`, que se extrajo
+    de ahí para eso—, cero en lo que no contestó y cada clasificación pesando
+    igual (`promedioPorClasificacion`).
+  - **Sólo entra quien tiene algo calificado.** A principio de mes media
+    plantilla está en cero porque las mensuales vuelven a estar sin contestar,
+    y el «menor desempeño» sería sortear entre decenas de ceros a alguien que
+    todavía no ha hecho nada. El empate se dice («+3 con el mismo resultado») y
+    se deshace a favor de lo que más dice: el mejor, quien más tiene calificado;
+    el peor, quien más deja sin contestar.
+  - **La foto es un elemento más, `imagen`**: en el SVG va recortada en círculo
+    sobre las iniciales, que quedan a la vista si no carga. En el PowerPoint
+    tiene que ir dentro del archivo, así que al descargar se pide con
+    `crossOrigin` y se recorta redonda en un lienzo (`fotosParaPptx`); si falla,
+    salen las iniciales y la descarga sigue.
+  - **Los ids de recorte no se repiten** (`contadorRecortesDiapositiva`): la
+    hoja repinta la diapositiva en cada cambio de semana.
+
   **No se guarda en ningún sitio**, y es lo que la hace automática: sale al
   vuelo de las mismas respuestas que ya trajo la tarjeta, así que la de cada
   semana existe sin que nadie la pulse y las pasadas se recorren con las
