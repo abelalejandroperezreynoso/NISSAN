@@ -4726,8 +4726,11 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     en cualquier otra pantalla saltaría a la presentación.
   - **Una por persona antes de repetir a nadie** (`evidenciasParaDiapositiva`),
     de la más reciente a la más vieja: ocho fotos del mismo turno dicen menos
-    que ocho turnos. Lo que no cabe se cuenta en el pie. Una respuesta
-    declarada `'Falsa'` no aporta foto.
+    que ocho turnos. Lo que no cabe se cuenta en el pie. **Una respuesta
+    anulada (`'Falsa'`) también aporta la suya**: es justo la foto que hay que
+    ver para entender por qué se anuló. Su píldora dice «Anulada», en el negro
+    del texto y no en un color de resultado, que un rojo se leería como un
+    puntaje bajo.
   - **La foto es un elemento más, `foto`**: rectangular, con esquinas redondas
     y rellenando su caja. En el PowerPoint va dentro del archivo, recortada en
     un lienzo al doble de su tamaño y en JPEG sobre blanco

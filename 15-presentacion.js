@@ -284,8 +284,10 @@ window.cargarEvidenciasDeSemana = (i) => {
                 if (error || !data) return null;
                 const plantilla = window.todosLosEmpleadosData || [];
                 data.forEach(r => {
-                    // Una respuesta que alguien declaró falsa no es evidencia de nada.
-                    if (r.review_status === 'Falsa') return;
+                    // Una respuesta anulada también entra: su foto es justo lo
+                    // que hay que ver para entender por qué se anuló. Va con su
+                    // píldora de «Anulada» en vez del resultado.
+                    const anulada = r.review_status === 'Falsa';
                     const ev = encuestas.get(String(r.evaluation_id));
                     let respuestas = r.answers_json;
                     if (typeof respuestas === 'string') { try { respuestas = JSON.parse(respuestas); } catch (e) { respuestas = null; } }
@@ -311,7 +313,8 @@ window.cargarEvidenciasDeSemana = (i) => {
                             respuesta: r.id, empleado: String(r.employee_id), nombre: emp ? emp.name : '',
                             fecha: new Date(r.submitted_at),
                             area, departamento: depto === 'Sin Departamento' ? '' : depto,
-                            puntaje: typeof puntaje === 'number' && !isNaN(puntaje) ? puntaje : null
+                            puntaje: !anulada && typeof puntaje === 'number' && !isNaN(puntaje) ? puntaje : null,
+                            anulada
                         });
                     });
                 });
@@ -837,11 +840,12 @@ window.fotoDeEvidenciaEnDiapositiva = (el, f, x, y, w, h, conPregunta) => {
     texto(x + 2, yt + 16, w - 4, 14,
         window.partirEnRenglones(quien, Math.max(8, letras + 4 - cuando.length), 1)[0] + cuando, 10.5, C.secundario);
 
-    const rotulo = f.puntaje === null ? 'Sin calificar' : `${window.pctTexto(f.puntaje / 100)}%`;
+    const rotulo = f.anulada ? 'Anulada'
+        : (f.puntaje === null ? 'Sin calificar' : `${window.pctTexto(f.puntaje / 100)}%`);
     const tam = 11;
     const pw = Math.ceil(rotulo.length * tam * 0.62) + 16, ph = 20;
     const px = x + w - pw - 8, py = y + 8;
-    el.push({ tipo: 'rect', x: px, y: py, w: pw, h: ph, radio: ph / 2, relleno: window.colorIOS(f.puntaje) });
+    el.push({ tipo: 'rect', x: px, y: py, w: pw, h: ph, radio: ph / 2, relleno: f.anulada ? C.texto : window.colorIOS(f.puntaje) });
     texto(px, py, pw, ph, rotulo, tam, '#ffffff', { alinear: 'center', peso: 700 });
 
     // Encima de todo, la foto con su pie como un solo blanco del dedo: el
