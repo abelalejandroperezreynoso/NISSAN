@@ -746,6 +746,21 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     });
     if (sobran > 0) texto(bx, 160 + lista.length * alto + 2, bw, 16, `y ${sobran} más`, 11, C.secundario);
 
+    // Lo que queda debajo de las filas, en la de una clasificación, se llena
+    // con la foto de evidencia más reciente de la semana: con pocas encuestas
+    // la columna se quedaba casi vacía. Sólo si cabe una foto que se lea.
+    if (clave) {
+        const fotos = ((window.evidenciasDeSemana(i) || {})[clave]) || [];
+        const f = window.evidenciasParaDiapositiva(fotos, 1)[0];
+        const desde = 160 + lista.length * alto + (sobran > 0 ? 20 : 0) + 20;
+        const hf = Math.min(Math.round(bw * 3 / 4), 494 - desde - 16 - 36);
+        if (f && hf >= 96) {
+            rotulo(bx, desde, bw, 'Evidencia de la semana');
+            const yf = desde + 22;
+            window.fotoDeEvidenciaEnDiapositiva(el, f, bx, yf, bw, hf);
+        }
+    }
+
     // Columna 3: quién destacó, en dos tarjetas agrupadas.
     const { mejor, peor } = window.destacadosDeSemana(i, clave);
     const tarjetaDePersona = (p, y, titulo, acento, vacio) => {
@@ -798,6 +813,38 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     return el;
 };
 
+// Una foto de evidencia con lo que la acompaña: el resultado en una píldora de
+// color macizo sobre su esquina —debajo puede haber cualquier cosa, y un tinte
+// claro no se lee— y debajo, lo que se pedía (con `conPregunta`), el área y el
+// departamento, y quién y cuándo. La usan la diapositiva de evidencias y el
+// hueco de la de una clasificación, que así no pueden decir cosas distintas.
+window.fotoDeEvidenciaEnDiapositiva = (el, f, x, y, w, h, conPregunta) => {
+    const C = window.COLORES_IOS;
+    const meses = window.MESES_CORTOS;
+    const texto = (tx, ty, tw, th, t, tam, col, extra) =>
+        el.push(Object.assign({ tipo: 'texto', x: tx, y: ty, w: tw, h: th, texto: t, tam, color: col }, extra || {}));
+    el.push({ tipo: 'foto', x, y, w, h, radio: 12, url: window.procesarUrlImagen(f.url), fondo: C.agrupado });
+    const letras = Math.floor(w / 6);
+    let yt = y + h + 6;
+    if (conPregunta) {
+        texto(x + 2, yt, w - 4, 16, window.partirEnRenglones(f.pregunta, letras, 1)[0], 12, C.texto, { peso: 600 });
+        yt += 17;
+    }
+    const quien = String(f.nombre || '').trim() || 'Sin nombre';
+    const cuando = isNaN(f.fecha) ? '' : ` · ${f.fecha.getDate()} ${meses[f.fecha.getMonth()]}`;
+    const donde = [f.area, f.departamento].filter(Boolean).join(' · ') || 'Sin área';
+    texto(x + 2, yt, w - 4, 14, window.partirEnRenglones(donde, letras + 4, 1)[0], 10.5, C.texto);
+    texto(x + 2, yt + 16, w - 4, 14,
+        window.partirEnRenglones(quien, Math.max(8, letras + 4 - cuando.length), 1)[0] + cuando, 10.5, C.secundario);
+
+    const rotulo = f.puntaje === null ? 'Sin calificar' : `${window.pctTexto(f.puntaje / 100)}%`;
+    const tam = 11;
+    const pw = Math.ceil(rotulo.length * tam * 0.62) + 16, ph = 20;
+    const px = x + w - pw - 8, py = y + 8;
+    el.push({ tipo: 'rect', x: px, y: py, w: pw, h: ph, radio: ph / 2, relleno: window.colorIOS(f.puntaje) });
+    texto(px, py, pw, ph, rotulo, tam, '#ffffff', { alinear: 'center', peso: 700 });
+};
+
 // La diapositiva de las evidencias de una clasificación: las fotos de la
 // semana en una rejilla, cada una con lo que se pedía fotografiar y quién y
 // cuándo la tomó, de qué área y departamento es y qué resultado sacó la
@@ -834,24 +881,7 @@ window.diapositivaDeEvidencias = (i, clave, numero, cuantas) => {
     fotos.forEach((f, n) => {
         const x = x0 + (n % columnas) * (w + hueco);
         const y = 130 + Math.floor(n / columnas) * (alto + hueco);
-        el.push({ tipo: 'foto', x, y, w, h, radio: 12, url: window.procesarUrlImagen(f.url), fondo: C.agrupado });
-        const letras = Math.floor(w / 6);
-        texto(x + 2, y + h + 6, w - 4, 16, window.partirEnRenglones(f.pregunta, letras, 1)[0], 12, C.texto, { peso: 600 });
-        const quien = String(f.nombre || '').trim() || 'Sin nombre';
-        const cuando = isNaN(f.fecha) ? '' : ` · ${f.fecha.getDate()} ${meses[f.fecha.getMonth()]}`;
-        const donde = [f.area, f.departamento].filter(Boolean).join(' · ') || 'Sin área';
-        texto(x + 2, y + h + 23, w - 4, 14, window.partirEnRenglones(donde, letras + 4, 1)[0], 10.5, C.texto);
-        texto(x + 2, y + h + 39, w - 4, 14,
-            window.partirEnRenglones(quien, Math.max(8, letras + 4 - cuando.length), 1)[0] + cuando, 10.5, C.secundario);
-
-        // El resultado, en una píldora de color macizo sobre la esquina de la
-        // foto: debajo puede haber cualquier cosa, y un tinte claro no se lee.
-        const rotulo = f.puntaje === null ? 'Sin calificar' : `${window.pctTexto(f.puntaje / 100)}%`;
-        const tam = 11;
-        const pw = Math.ceil(rotulo.length * tam * 0.62) + 16, ph = 20;
-        const px = x + w - pw - 8, py = y + 8;
-        el.push({ tipo: 'rect', x: px, y: py, w: pw, h: ph, radio: ph / 2, relleno: window.colorIOS(f.puntaje === null ? null : f.puntaje) });
-        texto(px, py, pw, ph, rotulo, tam, '#ffffff', { alinear: 'center', peso: 700 });
+        window.fotoDeEvidenciaEnDiapositiva(el, f, x, y, w, h, true);
     });
 
     const sobran = todas.length - fotos.length;

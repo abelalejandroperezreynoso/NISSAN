@@ -4701,6 +4701,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     respuesta (`employee_area`) y sólo si falta la de la ficha; el departamento,
     el de hoy. Por eso la consulta se trae además `grades_json` y
     `employee_area`.
+  - **Y la diapositiva de la clasificación aprovecha su hueco**: si debajo de
+    sus filas «Por encuesta» cabe una foto de al menos 96 px de alto, va ahí la
+    evidencia más reciente de la semana, con el rótulo «Evidencia de la semana».
+    Con pocas encuestas la columna quedaba casi vacía; con muchas no se dibuja.
+    La foto y su pie los pinta `fotoDeEvidenciaEnDiapositiva`, el mismo que usa
+    la diapositiva de evidencias, así que las dos dicen lo mismo de ella.
   - **Una por persona antes de repetir a nadie** (`evidenciasParaDiapositiva`),
     de la más reciente a la más vieja: ocho fotos del mismo turno dicen menos
     que ocho turnos. Lo que no cabe se cuenta en el pie. Una respuesta
