@@ -4617,9 +4617,8 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   (`window.vacacionesTerminadas`). Cargadas a toro pasado le quitarían a alguien
   encuestas que ya no contestó y se las pasarían a un relevo que ya no puede
   contestarlas. La hoja no ofrece semanas que ya acabaron —con dos semanas sí la
-  pasada, porque se está a mitad—, `guardarVacaciones` se planta igual y la base
-  lo frena con un trigger de `sql/vacaciones.sql`, con un día de holgura porque
-  su `current_date` es UTC.
+  pasada, porque se está a mitad— y `guardarVacaciones` se planta igual. Lo
+  controla sólo la aplicación: la base no lleva ningún freno para esto.
 
   La caché de vacaciones se pide una vez por sesión, como las decisiones de «¿te
   aplica?», en los mismos sitios. **Sin ella —o sin `sql/vacaciones.sql`, que se
