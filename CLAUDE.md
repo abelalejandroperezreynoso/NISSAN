@@ -4631,7 +4631,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   tarjeta de encuestas del administrador va «Presentación de la semana», que
   abre `#modal-presentacion` (`15-presentacion.js`) con una diapositiva del
   resultado general de la planta: la cifra grande, las respuestas, la
-  diferencia con la semana anterior, la tendencia de las últimas ocho semanas y
+  diferencia con la semana anterior, la tendencia de los últimos doce meses y
   una barra por clasificación. Se ve en la hoja y se descarga como `.pptx`.
 
   ```js
@@ -4641,6 +4641,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   window.svgDeDiapositiva(elementos)   window.agregarDiapositivaPptx(pptx, elementos)
   window.abrirPresentacion()  window.descargarPresentacion()
   ```
+
+  **La tendencia es de meses, hasta doce** (`MESES_EN_LA_TENDENCIA`,
+  `mesesDeLaTendencia`): los que tengan resultado a partir del primero que lo
+  tiene, terminando en el mes de la semana que se mira. Cada mes es la foto de
+  su cierre y el de la semana que se mira, la de su domingo, así que el último
+  punto es la cifra grande. Con más de seis los rótulos van alternos, y enero
+  lleva el año.
+
+  **Doce meses son más de lo que trae la tarjeta**, que se trae seis:
+
+  ```js
+  window.cargarRespuestasDeLaPresentacion()   // { respuestas, cubreDesde }, una vez por sesión
+  window.desdeDeRespuestasDeTodos(encuestas, ahora, frecuencia, cuantos)   // en 2b-core-dashboard.js
+  window.respuestasParaPresentar()
+  ```
+
+  Se reusan las de la tarjeta **sólo si ya llegan** —pasa en cuanto hay una
+  encuesta de «única vez», que arrastra la consulta hasta el principio— y ella
+  no tocó el tope (`window.topeDeLaTarjeta`); si no, la presentación pide las
+  suyas al abrirse, con el cuarto argumento de `respuestasDelPeriodoDeTodos`, y
+  lo dice en el subtítulo mientras llegan. Para saber si le alcanzan **no
+  consulta**: `desdeDeRespuestasDeTodos` es la misma cuenta del `gte` de esa
+  consulta, sacada aparte. `cubreDesde` es desde cuándo están enteras —con el
+  tope, la más vieja que llegó— y **un mes o una semana que empiece antes no se
+  enseña**: saldría a medias, más bajo de lo que fue.
+
+  **A pantalla completa hay flechas de semana**, en una píldora abajo del mismo
+  disco oscuro que la cruz y apartada del indicador de inicio
+  (`.presentacion-completa-nav`). El zoom se conserva al cambiar de semana, que
+  es lo que deja comparar la misma zona de dos semanas; y la píldora no cuenta
+  para los gestos, o dos toques seguidos a la flecha ampliarían la lámina.
 
   **Y a la derecha, quién destacó**: la persona con mejor y con menor
   desempeño de la semana, con su foto, su nombre, su departamento y su puesto.

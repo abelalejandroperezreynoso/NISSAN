@@ -6667,5 +6667,47 @@ html.fondo-anclado body {
     backdrop-filter: blur(6px);
     z-index: 1;
 }
+/* Las flechas de semana a pantalla completa: una píldora abajo, del mismo disco
+   oscuro que la cruz, apartada del indicador de inicio. */
+.presentacion-completa-nav {
+    position: absolute;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.55);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    color: white;
+    z-index: 1;
+    max-width: calc(100% - 32px);
+}
+.presentacion-completa-nav span {
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.presentacion-completa-nav button {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    color: white;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.presentacion-completa-nav button:disabled { opacity: 0.3; cursor: default; }
+.presentacion-completa-nav button:active:not(:disabled) { transform: scale(0.92); }
+.presentacion-cargando { aspect-ratio: 16 / 9; background: #f8fafc; }
 #modal-presentacion-completa.esta-ampliada { cursor: grab; }
 #modal-presentacion-completa.esta-ampliada:active { cursor: grabbing; }

@@ -33,7 +33,7 @@
 //     `?v=`, como SheetJS: son 470 KB que no tiene por qué pagar quien sólo mira.
 
 window.LIBRERIA_PRESENTACIONES = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
-window.SEMANAS_EN_LA_TENDENCIA = 8;
+window.MESES_EN_LA_TENDENCIA = 12;
 
 // Lo que se está mirando: las semanas que se pueden enseñar y cuál.
 window.presentacion = { semanas: [], indice: 0, resultados: {} };
@@ -64,15 +64,54 @@ window.botonDePresentacion = () => {
         </button>`;
 };
 
-// Las semanas que tienen datos: desde la primera del eje de la gráfica —que es
-// desde donde la consulta de la tarjeta se trajo respuestas— hasta la que
-// corre, de la más vieja a la más nueva. La que corre se mira con la hora de
+// Las respuestas de la presentación. La gráfica mira hasta doce meses atrás y la
+// tarjeta del panel se trae seis, así que **se reusan las suyas sólo si ya
+// llegan hasta ahí** —pasa cuando hay alguna encuesta de «única vez», que
+// arrastra la consulta hasta el principio— y sin haber tocado el tope; si no,
+// se piden las que faltan una sola vez por sesión (se guarda la promesa).
+// `cubreDesde` es desde cuándo están enteras: con el tope, las más viejas que
+// llegaron, que lo de antes vino a medias.
+window.respuestasDeLaPresentacion = null;
+window.cargarRespuestasDeLaPresentacion = () => {
+    const encuestas = (window.filasDeLaTarjeta || []).map(f => f.ev);
+    const ahora = new Date();
+    const hacenFalta = window.desdeDeRespuestasDeTodos(encuestas, ahora, null, window.MESES_EN_LA_TENDENCIA);
+    const trajoLaTarjeta = window.desdeDeRespuestasDeTodos(encuestas, ahora, null, window.PERIODOS_EN_LA_GRAFICA);
+    const deHoy = window.diaLocal ? window.diaLocal(ahora) : ahora.toDateString();
+    const clave = encuestas.map(e => e.id).join(',') + '|' + deHoy;
+
+    if (!window.topeDeLaTarjeta && trajoLaTarjeta && hacenFalta && trajoLaTarjeta <= hacenFalta) {
+        return Promise.resolve({ respuestas: window.respuestasAsignadas || [], cubreDesde: trajoLaTarjeta });
+    }
+    const guardada = window.respuestasDeLaPresentacion;
+    if (guardada && guardada.clave === clave) return guardada.promesa;
+
+    const promesa = window.respuestasDelPeriodoDeTodos(encuestas, ahora, null, window.MESES_EN_LA_TENDENCIA)
+        .then(r => {
+            let cubreDesde = r.desde;
+            if (r.tope && r.respuestas.length) {
+                cubreDesde = new Date(r.respuestas[r.respuestas.length - 1].submitted_at);
+            }
+            return { respuestas: r.respuestas, cubreDesde };
+        })
+        .catch(e => { window.respuestasDeLaPresentacion = null; throw e; });
+    window.respuestasDeLaPresentacion = { clave, promesa };
+    return promesa;
+};
+
+// Las respuestas con las que se calcula todo: las de la presentación, o las de
+// la tarjeta mientras no haya otras.
+window.respuestasParaPresentar = () => window.presentacion.respuestas || window.respuestasAsignadas;
+
+// Las semanas que tienen datos: desde doce meses atrás —o desde donde las
+// respuestas están enteras— hasta la que corre, de la más vieja a la más nueva. La que corre se mira con la hora de
 // ahora, que su cierre todavía no ha llegado.
-window.semanasDeLaPresentacion = () => {
+window.semanasDeLaPresentacion = (cubreDesde) => {
     const meses = window.periodosDeClasificacion(
-        [{ frequency: window.RITMO_GRAFICA_EMPRESA }], window.PERIODOS_EN_LA_GRAFICA);
-    const desde = meses.length ? meses[meses.length - 1].inicio : null;
+        [{ frequency: 'monthly' }], window.MESES_EN_LA_TENDENCIA);
+    let desde = meses.length ? meses[meses.length - 1].inicio : null;
     if (!(desde instanceof Date)) return [];
+    if (cubreDesde instanceof Date && cubreDesde > desde) desde = cubreDesde;
 
     const cuantas = Math.ceil((Date.now() - desde.getTime()) / (7 * 86400000)) + 1;
     const ahora = new Date();
@@ -104,7 +143,7 @@ window.resultadoDePlantaEn = (referencia) => {
         .filter(f => window.encuestaExistiaEn(f.ev, referencia))
         .map(f => ({
             ev: f.ev,
-            resumen: window.resumenDeEncuestaAdmin(f.ev, window.respuestasAsignadas, referencia,
+            resumen: window.resumenDeEncuestaAdmin(f.ev, window.respuestasParaPresentar(), referencia,
                 (window.padronesDeLaTarjeta || {})[f.ev.id])
         }));
 
@@ -154,6 +193,38 @@ window.personasDeSemana = (i) => {
     return r.personas;
 };
 
+// El resultado en un instante cualquiera, con memoria: los puntos de los meses
+// se repiten de una semana a la siguiente.
+window.resultadoEnInstante = (fecha) => {
+    const p = window.presentacion;
+    p.porInstante = p.porInstante || {};
+    const k = fecha.getTime();
+    if (!p.porInstante[k]) p.porInstante[k] = window.resultadoDePlantaEn(fecha);
+    return p.porInstante[k];
+};
+
+// Los meses de la tendencia de la semana `i`: hasta doce, terminando en el mes
+// de esa semana, y **sólo los que tienen resultado** a partir del primero que
+// lo tiene. Cada mes es la foto de su cierre —la misma de los puntos grandes de
+// la gráfica del panel— y el de la semana que se mira, la de su domingo: así
+// el último punto es la cifra grande de la diapositiva.
+window.mesesDeLaTendencia = (i) => {
+    const p = window.presentacion;
+    const semana = p.semanas[i];
+    const hasta = semana.referencia;
+    const meses = window.periodosDeClasificacion([{ frequency: 'monthly' }], window.MESES_EN_LA_TENDENCIA, hasta)
+        // Un mes que empieza antes de donde las respuestas están enteras saldría
+        // a medias —más bajo de lo que fue—, así que no se dibuja.
+        .filter(m => m.inicio instanceof Date && !(p.cubreDesde instanceof Date && m.inicio < p.cubreDesde))
+        .reverse()
+        .map(m => {
+            const ref = (m.referencia && m.referencia < hasta) ? m.referencia : hasta;
+            return { inicio: m.inicio, actual: ref === hasta, r: window.resultadoEnInstante(ref) };
+        });
+    const primero = meses.findIndex(m => m.r.promedio !== null);
+    return primero < 0 ? [] : meses.slice(primero);
+};
+
 // Los destacados sólo los pide la semana que se está mirando, no la tendencia.
 // A cada persona se le pone su promedio de las últimas semanas —sólo las que
 // tuvo algo calificado, como la cifra de cada semana—, que es el primer
@@ -197,7 +268,7 @@ window.desempenoDePersonasEn = (referencia) => {
         .filter(f => window.encuestaExistiaEn(f.ev, referencia))
         .forEach(f => {
             const padron = (window.padronesDeLaTarjeta || {})[f.ev.id] || window.padronDeLaEncuesta(f.ev);
-            const ultimas = window.ultimaDeCadaUnoEnPeriodo(f.ev, window.respuestasAsignadas, referencia);
+            const ultimas = window.ultimaDeCadaUnoEnPeriodo(f.ev, window.respuestasParaPresentar(), referencia);
             padron.forEach(emp => {
                 const id = String(emp.id);
                 const p = porPersona[id] || (porPersona[id] =
@@ -340,11 +411,10 @@ window.diapositivaDePlanta = (i) => {
         texto(40, 298, 270, 22, t, 13, d > 0 ? '#16a34a' : (d < 0 ? '#dc2626' : '#64748b'), { negrita: true });
     }
 
-    // La tendencia de las últimas semanas, hasta la que se está mirando.
-    const desde = Math.max(0, i - window.SEMANAS_EN_LA_TENDENCIA + 1);
-    const tramo = [];
-    for (let k = desde; k <= i; k++) tramo.push({ k, r: window.resultadoDeSemana(k), s: window.presentacion.semanas[k] });
-    texto(40, 338, 270, 20, `Últimas ${tramo.length} semanas`, 12, '#94a3b8', { negrita: true });
+    // La tendencia de los últimos meses —hasta doce, los que tengan resultado—,
+    // terminando en el de la semana que se mira.
+    const tramo = window.mesesDeLaTendencia(i);
+    texto(40, 338, 270, 20, tramo.length === 1 ? 'Este mes' : `Últimos ${tramo.length} meses`, 12, '#94a3b8', { negrita: true });
     const gx = 62, gw = 226, gy = 366, gh = 100;
     const px = (j) => gx + (tramo.length === 1 ? gw / 2 : gw * j / (tramo.length - 1));
     const py = (v) => gy + gh * (1 - v / 100);
@@ -358,17 +428,19 @@ window.diapositivaDePlanta = (i) => {
         if (previo) el.push({ tipo: 'linea', x1: previo[0], y1: previo[1], x2: punto[0], y2: punto[1], color: '#2563eb', grosor: 2.5 });
         previo = punto;
     });
-    // Con ocho semanas en 226 px no caben los ocho rótulos: van alternos,
-    // siempre con el de la semana que se mira.
-    const saltoRotulo = tramo.length > 5 ? 2 : 1;
+    // Doce rótulos no caben en 226 px: con más de seis van alternos, siempre
+    // con el del mes que se mira. El de enero lleva el año, que es donde cambia.
+    const saltoRotulo = tramo.length > 6 ? 2 : 1;
     tramo.forEach((t, j) => {
-        const d = t.s.inicio;
+        const d = t.inicio;
+        const ultimo = j === tramo.length - 1;
         if ((tramo.length - 1 - j) % saltoRotulo === 0) {
-            texto(px(j) - 22, 474, 44, 16, `${d.getDate()} ${window.MESES_CORTOS[d.getMonth()]}`, 10,
-                t.k === i ? '#0f172a' : '#94a3b8', { alinear: 'center', negrita: t.k === i });
+            const rotulo = window.MESES_CORTOS[d.getMonth()] + (d.getMonth() === 0 ? ` ${String(d.getFullYear()).slice(2)}` : '');
+            texto(px(j) - 22, 474, 44, 16, rotulo, 10,
+                ultimo ? '#0f172a' : '#94a3b8', { alinear: 'center', negrita: ultimo });
         }
         if (t.r.promedio === null) return;
-        el.push({ tipo: 'circulo', cx: px(j), cy: py(t.r.promedio), r: t.k === i ? 6 : 4,
+        el.push({ tipo: 'circulo', cx: px(j), cy: py(t.r.promedio), r: ultimo ? 6 : 4,
                   relleno: color(t.r.promedio), borde: '#ffffff' });
     });
 
@@ -625,12 +697,29 @@ window.montarHojaPresentacion = () => {
     return overlay;
 };
 
-window.abrirPresentacion = () => {
+window.abrirPresentacion = async () => {
     if (!window.hayPresentacion()) return;
-    const semanas = window.semanasDeLaPresentacion();
-    if (semanas.length === 0) return;
-    window.presentacion = { semanas, indice: semanas.length - 1, resultados: {} };
-    window.montarHojaPresentacion().style.display = 'flex';
+    const hoja = window.montarHojaPresentacion();
+    hoja.style.display = 'flex';
+    const sub = document.getElementById('subtitulo-presentacion');
+    const caja = document.getElementById('diapositiva-presentacion');
+    // Si hay que pedir el último año se dice, en el subtítulo como todo estado
+    // de una hoja, y la diapositiva espera en blanco.
+    sub.innerText = 'Cargando el último año…';
+    caja.innerHTML = '<div class="presentacion-cargando"></div>';
+    let datos;
+    try {
+        datos = await window.cargarRespuestasDeLaPresentacion();
+    } catch (e) {
+        sub.innerText = 'No se pudieron cargar las respuestas.';
+        caja.innerHTML = '';
+        return;
+    }
+    if (hoja.style.display !== 'flex') return;
+    const semanas = window.semanasDeLaPresentacion(datos.cubreDesde);
+    if (semanas.length === 0) { sub.innerText = 'Todavía no hay semanas que enseñar.'; caja.innerHTML = ''; return; }
+    window.presentacion = { semanas, indice: semanas.length - 1, resultados: {},
+                            respuestas: datos.respuestas, cubreDesde: datos.cubreDesde };
     window.pintarPresentacion();
 };
 
@@ -666,6 +755,13 @@ window.montarPresentacionCompleta = () => {
     capa.id = 'modal-presentacion-completa';
     capa.innerHTML = `
         <div id="lamina-presentacion-completa" class="presentacion-lamina"></div>
+        <div class="presentacion-completa-nav">
+            <button type="button" id="btn-completa-anterior" onclick="window.moverSemanaPresentacion(-1)"
+                    title="Semana anterior" aria-label="Semana anterior">‹</button>
+            <span id="semana-completa"></span>
+            <button type="button" id="btn-completa-siguiente" onclick="window.moverSemanaPresentacion(1)"
+                    title="Semana siguiente" aria-label="Semana siguiente">›</button>
+        </div>
         <button type="button" onclick="window.cerrarPresentacionCompleta()"
                 class="ios-boton-icono ios-boton-cerrar presentacion-completa-cerrar"
                 title="Salir de pantalla completa" aria-label="Salir de pantalla completa"></button>`;
@@ -691,6 +787,11 @@ window.pintarPresentacionCompleta = () => {
     const p = window.presentacion;
     document.getElementById('lamina-presentacion-completa').innerHTML =
         window.svgDeDiapositiva(window.diapositivaDePlanta(p.indice));
+    const semana = p.semanas[p.indice];
+    document.getElementById('semana-completa').innerText =
+        window.textoDeSemana(semana).replace('Semana del ', '') + (semana.actual ? ' · en curso' : '');
+    document.getElementById('btn-completa-anterior').disabled = p.indice === 0;
+    document.getElementById('btn-completa-siguiente').disabled = p.indice === p.semanas.length - 1;
     window.ajustarPresentacionCompleta();
 };
 
@@ -766,7 +867,7 @@ window.engancharZoomPresentacion = (capa) => {
     let gesto = null, ultimoToque = 0, ultimoTap = 0, tapEn = null;
     const distancia = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
     const medio = (a, b) => ({ x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 });
-    const esBoton = (e) => e.target.closest && e.target.closest('button');
+    const esBoton = (e) => e.target.closest && e.target.closest('button, .presentacion-completa-nav');
 
     capa.addEventListener('touchstart', (e) => {
         if (esBoton(e)) return;

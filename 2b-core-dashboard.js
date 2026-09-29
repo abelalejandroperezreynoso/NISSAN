@@ -804,14 +804,14 @@ window.ritmoDelEjeDeEncuesta = (ev) => {
 // una encuesta anual arrastra el `gte` hasta enero y con ella el año entero.
 // Quien llega al tope lo dice en pantalla en vez de enseñar un promedio corto
 // como si fuera el bueno.
-window.respuestasDelPeriodoDeTodos = async (encuestas, ahora, frecuencia) => {
-    const ids = (encuestas || []).map(e => e.id);
-    if (ids.length === 0) return { respuestas: [], tope: false };
-
+// Desde cuándo hay que traerse las respuestas de todos: lo que pide la consulta
+// de abajo, aparte para que la presentación semanal pueda saber, sin consultar,
+// si lo que ya trajo la tarjeta le alcanza. `cuantos` son los periodos del eje.
+window.desdeDeRespuestasDeTodos = (encuestas, ahora, frecuencia, cuantos) => {
     // El más temprano de los periodos vigentes: dentro se filtra encuesta por
     // encuesta con el suyo.
     let desde = null;
-    encuestas.forEach(ev => {
+    (encuestas || []).forEach(ev => {
         const p = window.periodoDeEncuesta(ev, ahora);
         if (p && p.inicio && (!desde || p.inicio < desde)) desde = p.inicio;
     });
@@ -828,9 +828,17 @@ window.respuestasDelPeriodoDeTodos = async (encuestas, ahora, frecuencia) => {
     // los cuatro puntos de atrás salían vacíos o, peor, a medias —que es la
     // línea subiendo desde un suelo falso que la gráfica no dibuja nunca—.
     const periodos = window.periodosDeClasificacion(
-        [{ frequency: frecuencia || window.RITMO_GRAFICA_EMPRESA }], window.PERIODOS_EN_LA_GRAFICA);
+        [{ frequency: frecuencia || window.RITMO_GRAFICA_EMPRESA }], cuantos || window.PERIODOS_EN_LA_GRAFICA);
     const masViejo = periodos.length ? periodos[periodos.length - 1].inicio : null;
     if (masViejo && (!desde || masViejo < desde)) desde = masViejo;
+
+    return desde;
+};
+
+window.respuestasDelPeriodoDeTodos = async (encuestas, ahora, frecuencia, cuantos) => {
+    const ids = (encuestas || []).map(e => e.id);
+    if (ids.length === 0) return { respuestas: [], tope: false, desde: null };
+    const desde = window.desdeDeRespuestasDeTodos(encuestas, ahora, frecuencia, cuantos);
 
     const filas = [];
     let tope = false;
@@ -848,7 +856,7 @@ window.respuestasDelPeriodoDeTodos = async (encuestas, ahora, frecuencia) => {
         if (data.length < 1000) break;
         if (pagina === window.MAX_PAGINAS_RESPUESTAS - 1) tope = true;
     }
-    return { respuestas: filas, tope };
+    return { respuestas: filas, tope, desde };
 };
 
 // Sobre cuánta gente se reparte el puntaje de una encuesta: **lo calificado más
@@ -1566,6 +1574,9 @@ window.cargarEncuestasAsignadas = async (userId) => {
             const traidas = await window.respuestasDelPeriodoDeTodos(mias, ahora);
             respuestas = traidas.respuestas;
             topeRespuestas = traidas.tope;
+            // La presentación semanal la lee para saber si puede reusar estas
+            // respuestas o tiene que pedir las suyas.
+            window.topeDeLaTarjeta = traidas.tope;
         } else {
             const { data } = await sb.from('evaluation_responses')
                 .select(await window.camposConApoyo('id, evaluation_id, submitted_at, review_status, grades_json'))
