@@ -423,10 +423,33 @@ window.mesesDeLaTendencia = (i, clave) => {
         .map(m => {
             const ref = (m.referencia && m.referencia < hasta) ? m.referencia : hasta;
             const v = window.vistaDe(window.resultadoEnInstante(ref), clave);
-            return { inicio: m.inicio, actual: ref === hasta, valor: v ? v.promedio : null, ritmo };
+            return { inicio: m.inicio, ref, actual: ref === hasta, valor: v ? v.promedio : null, ritmo };
         });
     const primero = periodos.findIndex(m => m.valor !== null);
     return primero < 0 ? [] : periodos.slice(primero);
+};
+
+// Las semanas que caen entre dos periodos de la tendencia, cada una con el
+// resultado de su cierre: son los puntos pequeños de la gráfica de la tarjeta
+// del panel, y dibujan los mismos dientes de sierra —al empezar el mes las
+// mensuales vuelven a estar sin contestar—. Cada una se coloca por su fecha
+// entre los dos periodos que la encierran; las de antes del primero no tienen
+// dónde ir y la que se mira ya es el último punto. Con el eje en semanas no hay
+// nada entre punto y punto.
+window.puntosSemanalesDeLaTendencia = (i, clave, tramo, px) => {
+    const p = window.presentacion;
+    if (tramo.length < 2 || tramo[0].ritmo === 'weekly') return [];
+    const salida = [];
+    for (let k = 0; k < i; k++) {
+        const r = p.semanas[k].referencia;
+        const j = tramo.findIndex((t, n) => n > 0 && r > tramo[n - 1].ref && r < t.ref);
+        if (j < 0) continue;
+        const a = tramo[j - 1].ref.getTime(), b = tramo[j].ref.getTime();
+        const v = window.vistaDe(window.resultadoDeSemana(k), clave);
+        if (!v || v.promedio === null) continue;
+        salida.push({ x: px(j - 1) + (px(j) - px(j - 1)) * (r.getTime() - a) / (b - a), valor: v.promedio });
+    }
+    return salida;
 };
 
 // El rótulo de un punto del eje: el de la gráfica del panel (`etiquetasDeEje`),
@@ -675,25 +698,38 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     }
 
     // La tendencia de los últimos meses —hasta doce, los que tengan resultado—,
-    // terminando en el de la semana que se mira. Una línea azul fina y sólo el
-    // último punto en grande, con el color de su cifra.
+    // terminando en el de la semana que se mira. Se dibuja igual que la gráfica
+    // de la tarjeta del panel (`graficaDeLinea`): la escala 0 / 50 / 100, cada
+    // periodo con un punto del color de su cifra y, entre periodo y periodo,
+    // cada semana en pequeño (`puntosSemanalesDeLaTendencia`), con la línea
+    // pasando por todos. El último punto es la cifra grande de la diapositiva.
     const tramo = window.mesesDeLaTendencia(i, clave);
     const plural = window.PLURAL_DE_PERIODO[window.ritmoDeLaTendencia(clave)] || ['periodo', 'periodos'];
     rotulo(48, 372, 260, tramo.length === 1 ? `${plural[2] ? 'Esta' : 'Este'} ${plural[0]}`
         : `${plural[2] ? 'Últimas' : 'Últimos'} ${tramo.length} ${plural[1]}`);
-    const gx = 56, gw = 244, gy = 398, gh = 70;
+    const gx = 72, gw = 228, gy = 398, gh = 70;
     const px = (j) => gx + (tramo.length === 1 ? gw / 2 : gw * j / (tramo.length - 1));
     const py = (v) => gy + gh * (1 - v / 100);
+    [0, 50, 100].forEach(v => {
+        el.push({ tipo: 'linea', x1: gx, y1: py(v), x2: gx + gw, y2: py(v), color: v === 0 ? C.separador : C.agrupado, grosor: 1 });
+        texto(gx - 30, py(v) - 7, 24, 14, String(v), 9, C.terciario, { alinear: 'right' });
+    });
     el.push({ tipo: 'linea', x1: gx, y1: py(window.UMBRAL_CERTIFICACION), x2: gx + gw, y2: py(window.UMBRAL_CERTIFICACION),
               color: window.tinteIOS(C.verde, 0.55), grosor: 1, guiones: true });
-    el.push({ tipo: 'linea', x1: gx, y1: gy + gh, x2: gx + gw, y2: gy + gh, color: C.separador, grosor: 1 });
+    const semanales = window.puntosSemanalesDeLaTendencia(i, clave, tramo, px);
+    // La línea pasa por los periodos y las semanas, ordenados por su sitio en
+    // el eje; un periodo sin resultado la corta, como en la tarjeta.
+    const recorrido = tramo.map((t, j) => ({ x: px(j), valor: t.valor }))
+        .concat(semanales)
+        .sort((a, b) => a.x - b.x);
     let previo = null;
-    tramo.forEach((t, j) => {
-        if (t.valor === null) { previo = null; return; }
-        const punto = [px(j), py(t.valor)];
+    recorrido.forEach(q => {
+        if (q.valor === null) { previo = null; return; }
+        const punto = [q.x, py(q.valor)];
         if (previo) el.push({ tipo: 'linea', x1: previo[0], y1: previo[1], x2: punto[0], y2: punto[1], color: C.azul, grosor: 2 });
         previo = punto;
     });
+    semanales.forEach(q => el.push({ tipo: 'circulo', cx: q.x, cy: py(q.valor), r: 2, relleno: color(q.valor) }));
     // Doce rótulos no caben: con más de seis van alternos, siempre con el del
     // mes que se mira. El de enero lleva el año, que es donde cambia.
     const saltoRotulo = tramo.length > 6 ? 2 : 1;
@@ -705,9 +741,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             texto(px(j) - 22, 476, 44, 14, rot, 10, ultimo ? C.texto : C.terciario, { alinear: 'center', peso: ultimo ? 600 : 400 });
         }
         if (t.valor === null) return;
-        el.push(ultimo
-            ? { tipo: 'circulo', cx: px(j), cy: py(t.valor), r: 5, relleno: color(t.valor), borde: '#ffffff' }
-            : { tipo: 'circulo', cx: px(j), cy: py(t.valor), r: 2.2, relleno: C.azul });
+        el.push({ tipo: 'circulo', cx: px(j), cy: py(t.valor), r: ultimo ? 5 : 3.6, relleno: color(t.valor), borde: '#ffffff' });
     });
 
     // Columna 2: una fila por clasificación, de la mejor a la peor. El nombre y

@@ -4815,6 +4815,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   cierre y el de la semana que se mira, la de su domingo, así que el último
   punto es la cifra grande. Con más de seis los rótulos van alternos.
 
+  **Y se dibuja igual que la gráfica de la tarjeta del panel**: la escala 0 /
+  50 / 100, cada periodo con un punto del color de su cifra y, entre periodo y
+  periodo, cada semana en pequeño (`puntosSemanalesDeLaTendencia`), con la
+  línea pasando por todos y los mismos dientes de sierra. Iba con una línea lisa
+  entre los meses y sin escala, y al lado de la tarjeta parecían dos gráficas
+  distintas con las mismas cifras. Cada semana sale del resultado de su cierre
+  (`resultadoDeSemana`, con su memoria), se coloca por su fecha entre los dos
+  periodos que la encierran y no se dibuja con el eje ya en semanas. Lo que
+  sigue siendo distinto es el alcance: la tarjeta enseña seis meses y la
+  presentación hasta doce.
+
   **El periodo lo pone el ritmo de cada diapositiva** (`ritmoDeLaTendencia`):
   la de la planta va en meses, como la gráfica de la tarjeta, y la de una
   clasificación **en el de su frecuencia mínima** —la encuesta que se contesta
