@@ -1,3 +1,12 @@
+/* Safari en iOS agranda por su cuenta el texto que le parece pequeño al girar
+   el teléfono de lado, y a veces lo deja así al volver a vertical: la lista de
+   clasificaciones salía con otra letra después de ver la presentación a
+   pantalla completa. Con esto el tamaño es siempre el que dice la hoja. */
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background-color: #f0f2f5;

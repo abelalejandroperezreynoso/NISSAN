@@ -244,6 +244,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   en toda la app y esa franja se pinta hoy con el fondo de `<html>` de cada
   documento. Un cambio en el manifiesto sólo se aplica reinstalando el icono
   desde la pantalla de inicio; iOS congela el que había al añadirlo.
+- **Safari en iOS agranda la letra al girar el teléfono**, y a veces no la
+  devuelve al volver a vertical: la lista de clasificaciones del panel salía
+  con otra letra después de ver la presentación a pantalla completa, que es lo
+  primero que invita a girarlo. Lo corta `-webkit-text-size-adjust: 100%` sobre
+  `<html>`, al principio de `estilos.css`, que cargan las tres pantallas. No se
+  quita: sin esa regla el tamaño de letra depende de cómo se sostuvo el
+  teléfono antes.
 - **Safe area del iPhone.** Las páginas llevan `viewport-fit=cover` en el meta
   viewport para que fondos y overlays lleguen al borde físico de la pantalla.
   Como contrapartida, el contenido debe apartarse de la barra de estado y del
