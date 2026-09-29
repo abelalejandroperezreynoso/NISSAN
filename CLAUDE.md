@@ -4871,10 +4871,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     `ultimaDeCadaUnoEnPeriodo` que usa `resumenDeEncuestaAdmin`, que se extrajo
     de ahí para eso—, cero en lo que no contestó y cada clasificación pesando
     igual (`promedioPorClasificacion`).
-  - **Sólo entra quien tiene algo calificado.** A principio de mes media
-    plantilla está en cero porque las mensuales vuelven a estar sin contestar,
-    y el «menor desempeño» sería sortear entre decenas de ceros a alguien que
-    todavía no ha hecho nada.
+  - **El mejor sale de quien tiene algo calificado; el menor desempeño, de
+    todos, también de quien no contestó nada**, que entra con un cero. Estuvo
+    limitado a lo calificado —para no sortear entre ceros a principio de mes— y
+    salía de «menor desempeño» una persona al 100% mientras otras ni habían
+    abierto la encuesta: no participar es el peor resultado posible. Entre
+    ceros desempata el promedio de las últimas semanas, que ahora también lleva
+    el cero de las no contestadas, así que va delante quien repite. Lo
+    contestado y sin calificar sigue sin puntuar, y quien sólo tiene eso se
+    queda fuera. Sin nadie calificado no sale ninguno de los dos, y el peor
+    nunca es el propio mejor. Su tarjeta dice «No contestó ninguna de N» en vez
+    de «0/N encuestas calificadas», que se leería como atraso del revisor.
   - **El empate se deshace con un criterio que se pueda explicar**, el mismo
     para los dos y al revés para el peor: primero el **promedio de las últimas
     cuatro semanas** (`SEMANAS_DEL_DESEMPATE`, sólo las que tuvo algo

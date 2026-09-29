@@ -28,7 +28,8 @@
 //   - **Quién destacó se mide con la regla de la planta, persona por persona**
 //     (`desempenoDePersonasEn`): su última respuesta de cada encuesta en su
 //     periodo, cero en lo que no contestó y cada clasificación pesando igual.
-//     Sólo entra quien tiene algo calificado.
+//     El mejor sale de quien tiene algo calificado; el menor desempeño, también
+//     de quien no contestó nada, que es el peor resultado posible.
 //   - **PptxGenJS se pide al pulsar descargar**, con `cargarLibreria` y sin
 //     `?v=`, como SheetJS: son 470 KB que no tiene por qué pagar quien sólo mira.
 
@@ -438,8 +439,8 @@ window.rotuloDePeriodo = (inicio, ritmo) => {
 };
 
 // Los destacados sólo los pide la semana que se está mirando, no la tendencia.
-// A cada persona se le pone su promedio de las últimas semanas —sólo las que
-// tuvo algo calificado, como la cifra de cada semana—, que es el primer
+// A cada persona se le pone su promedio de las últimas semanas —las que tuvo
+// algo asignado, con el cero de las que no contestó—, que es el primer
 // desempate.
 window.destacadosDeSemana = (i, clave) => {
     const r = window.resultadoDeSemana(i);
@@ -471,11 +472,12 @@ window.destacadosDeSemana = (i, clave) => {
 // contestó vale cero y cada clasificación pesa igual
 // (`promedioPorClasificacion`, la misma del renglón de quien contesta).
 //
-// **Sólo entra quien tiene algo calificado.** A principio de mes media planta
-// está en cero porque las mensuales vuelven a estar sin contestar, y el «menor
-// desempeño» saldría de sortear entre cuarenta ceros a alguien que no ha hecho
-// nada todavía —ni mal ni bien—. Lo contestado y sin calificar tampoco puntúa,
-// como en todas partes: su cero sería el atraso del revisor.
+// **Entra también quien no contestó nada**, con un cero: no participar es el
+// peor resultado posible, y dejarlo fuera ponía de «menor desempeño» a alguien
+// al 100% mientras otros ni la habían abierto. Lo que no entra es lo contestado
+// y sin calificar, como en todas partes: su cero sería el atraso del revisor,
+// así que quien sólo tiene eso se queda sin promedio. El mejor, en cambio, sale
+// sólo de quien tiene algo calificado (`destacadosDeLaSemana`).
 // Con `clave`, sólo las encuestas de esa clasificación: el mejor de
 // «Seguridad» es el mejor en «Seguridad», no el mejor de la planta.
 window.desempenoDePersonasEn = (referencia, clave) => {
@@ -513,7 +515,6 @@ window.desempenoDePersonasEn = (referencia, clave) => {
             });
         });
     return Object.values(porPersona)
-        .filter(p => p.calificadas > 0)
         .map(p => Object.assign(p, {
             promedio: window.promedioPorClasificacion(p.filas),
             diasDeRespuesta: p.conDias ? p.sumaDias / p.conDias : null
@@ -526,13 +527,18 @@ window.desempenoDePersonasEn = (referencia, clave) => {
 //
 //   1. El promedio de las últimas cuatro semanas (`promedioReciente`): quien
 //      sostiene el resultado semana tras semana va delante de quien lo tuvo una.
+//      Entre quienes no contestaron nada, va delante quien tampoco contestó
+//      las semanas anteriores.
 //   2. Cuántas encuestas tiene calificadas: un 100% sobre nueve dice más que
 //      sobre dos. Para el peor, cuántas dejó sin contestar.
 //   3. Quién terminó antes de contestar la semana. Para el peor, quién después.
 //   4. El nombre, sólo para que el resultado no dependa del orden de la consulta.
 //
-// Con una sola persona no hay «peor» que enseñar.
-window.destacadosDeLaSemana = (personas) => {
+// El mejor sólo puede salir de quien tiene algo calificado; el peor, de
+// cualquiera —también de quien no contestó nada—, menos del propio mejor. Sin
+// nadie calificado no hay ninguno de los dos: no hay contra qué comparar.
+window.destacadosDeLaSemana = (todas) => {
+    const personas = todas.filter(p => p.calificadas > 0);
     if (!personas.length) return { mejor: null, peor: null };
     const nombre = (p) => String(p.emp.name || '');
     const reciente = (p) => p.promedioReciente === undefined ? p.promedio : p.promedioReciente;
@@ -541,17 +547,17 @@ window.destacadosDeLaSemana = (personas) => {
         || b.calificadas - a.calificadas
         || (a.terminoEn || 0) - (b.terminoEn || 0)
         || nombre(a).localeCompare(nombre(b), 'es'));
-    const peores = personas.slice().sort((a, b) => a.promedio - b.promedio
+    const peores = todas.slice().sort((a, b) => a.promedio - b.promedio
         || reciente(a) - reciente(b)
         || (b.asignadas - b.contestadas) - (a.asignadas - a.contestadas)
         || (b.terminoEn || 0) - (a.terminoEn || 0)
         || nombre(a).localeCompare(nombre(b), 'es'));
-    const empates = (p) => personas.filter(q => q !== p && q.promedio === p.promedio).length;
     const mejor = mejores[0];
-    const peor = personas.length > 1 ? peores[0] : null;
+    const empates = (p, grupo) => grupo.filter(q => q !== p && q.promedio === p.promedio).length;
+    const peor = peores.find(p => p !== mejor) || null;
     return {
-        mejor: Object.assign({ empates: empates(mejor) }, mejor),
-        peor: peor ? Object.assign({ empates: empates(peor) }, peor) : null
+        mejor: Object.assign({ empates: empates(mejor, personas) }, mejor),
+        peor: peor ? Object.assign({ empates: empates(peor, todas) }, peor) : null
     };
 };
 
@@ -792,7 +798,11 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         // Hasta cuatro renglones cortos a la derecha de la cifra: lo calificado,
         // la velocidad de respuesta, el promedio de las últimas semanas —que es
         // lo que decide un empate, así que se dice siempre— y con cuántos empató.
-        const detalle = [`${p.calificadas}/${p.asignadas} encuestas calificadas`];
+        // Quien no contestó nada lo dice con esas palabras: «0/5 calificadas»
+        // se leería como un atraso del revisor.
+        const detalle = [p.contestadas === 0
+            ? (p.asignadas === 1 ? 'No contestó su encuesta' : `No contestó ninguna de ${p.asignadas}`)
+            : `${p.calificadas}/${p.asignadas} encuestas calificadas`];
         if (p.diasDeRespuesta !== null) detalle.push(`Responde en ${window.textoDeDias(p.diasDeRespuesta)}`);
         if (p.semanasRecientes > 1) detalle.push(`Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`);
         if (p.empates > 0) detalle.push(`Empató con ${p.empates}`);
@@ -802,14 +812,14 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     const nadie = ['Todavía nadie tiene', 'resultados calificados.'];
     tarjetaDePersona(mejor, 132, 'Mejor desempeño', C.verde, nadie);
     tarjetaDePersona(peor, 320, 'Menor desempeño', C.rojo,
-        mejor ? ['Sólo una persona tiene', 'resultados calificados.'] : nadie);
+        mejor ? ['Sólo una persona tiene', 'encuestas asignadas.'] : nadie);
 
     // Pie, en el gris más claro.
     const hoy = new Date();
     if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
     texto(48, 506, 760, 16,
         (clave ? 'Cada encuesta pesa según a cuánta gente le toca' : 'Cada clasificación pesa igual') +
-        ` · meta ${window.UMBRAL_CERTIFICACION}% · desempeño sobre lo ya calificado · ` +
+        ` · meta ${window.UMBRAL_CERTIFICACION}% · lo no contestado cuenta como cero · ` +
         `generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
         `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
         10, C.terciario);
