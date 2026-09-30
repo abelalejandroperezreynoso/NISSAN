@@ -276,13 +276,20 @@ window.diapositivasDeSemana = (i) => {
             }
         });
     // Al final, las dos de reflexión: se leen después de haber visto todo.
-    mazo.push({ id: 'reflexion:1', clave: '', reflexion: 1 }, { id: 'reflexion:2', clave: '', reflexion: 2 });
+    // Entre las dos, si el departamento rezagado dejó fotos esa semana, las suyas.
+    mazo.push({ id: 'reflexion:1', clave: '', reflexion: 1 });
+    if ((window.evidenciasDelDepartamento(i) || []).length) {
+        mazo.push({ id: 'reflexion:evidencias', clave: '', reflexion: 'evidencias' });
+    }
+    mazo.push({ id: 'reflexion:2', clave: '', reflexion: 2 });
     return mazo;
 };
 
 // La diapositiva que toca a una entrada del mazo.
 window.laminaDe = (i, d, numero, cuantas) => d.reflexion
-    ? (d.reflexion === 1 ? window.diapositivaDeLectura(i, numero, cuantas) : window.diapositivaDeAcciones(i, numero, cuantas))
+    ? (d.reflexion === 1 ? window.diapositivaDeLectura(i, numero, cuantas)
+        : d.reflexion === 'evidencias' ? window.diapositivaDeEvidenciasDelDepartamento(i, numero, cuantas)
+        : window.diapositivaDeAcciones(i, numero, cuantas))
     : d.evidencias
     ? window.diapositivaDeEvidencias(i, d.clave, numero, cuantas)
     : window.diapositiva(i, d.clave, numero, cuantas);
@@ -1154,18 +1161,7 @@ window.diapositivaDeEvidencias = (i, clave, numero, cuantas) => {
         11, C.secundario, { alinear: 'right' });
 
     const meses = window.MESES_CORTOS;
-    const pocas = fotos.length <= 3;
-    const columnas = pocas ? Math.max(1, fotos.length) : 4;
-    const hueco = 16, izquierda = 48, ancho = 864;
-    const w = pocas ? Math.min(360, (ancho - hueco * (columnas - 1)) / columnas) : (ancho - hueco * 3) / 4;
-    const h = pocas ? Math.min(260, w * 3 / 4) : 108;
-    const x0 = izquierda + (ancho - (w * columnas + hueco * (columnas - 1))) / 2;
-    const alto = h + 58;
-    fotos.forEach((f, n) => {
-        const x = x0 + (n % columnas) * (w + hueco);
-        const y = 130 + Math.floor(n / columnas) * (alto + hueco);
-        window.fotoDeEvidenciaEnDiapositiva(el, f, x, y, w, h, true);
-    });
+    window.rejillaDeEvidencias(el, fotos);
 
     const sobran = todas.length - fotos.length;
     const hoy = new Date();
@@ -1300,8 +1296,10 @@ window.reflexionDeSemana = (i) => {
     return r.reflexion;
 };
 
-// El encabezado y el pie de las dos: el mismo de las demás, con el rótulo de
-// reflexión a la derecha en vez de sólo el nombre del panel.
+// El encabezado y el pie de la reflexión: el mismo de las demás, con el rótulo
+// de reflexión a la derecha. Son dos, o tres si el departamento rezagado dejó
+// evidencias: la de sus fotos va en medio.
+window.partesDeReflexion = (i) => (window.evidenciasDelDepartamento(i) || []).length ? 3 : 2;
 window.marcoDeReflexion = (el, i, titulo, parte, numero, cuantas) => {
     const C = window.COLORES_IOS;
     const semana = window.presentacion.semanas[i];
@@ -1311,7 +1309,7 @@ window.marcoDeReflexion = (el, i, titulo, parte, numero, cuantas) => {
     texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
     texto(48, 58, 700, 44, titulo, 34, C.texto, { peso: 700 });
     texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
-    const rot = `REFLEXIÓN · ${parte} DE 2`;
+    const rot = `REFLEXIÓN · ${parte} DE ${window.partesDeReflexion(i)}`;
     const ancho = rot.length * 7.2 + 20;
     el.push({ tipo: 'rect', x: 912 - ancho, y: 66, w: ancho, h: 24, relleno: window.tinteIOS(C.azul, 0.88), radio: 12 });
     texto(912 - ancho, 66, ancho, 24, rot, 11, C.azul, { peso: 700, alinear: 'center', espaciado: 0.6 });
@@ -1579,14 +1577,50 @@ window.diapositivaDeLectura = (i, numero, cuantas) => {
     return el;
 };
 
-// La segunda: ¿qué vamos a hacer? Enfocada al departamento de menor
+// Las fotos de evidencia de la semana tomadas por gente del departamento
+// rezagado, de todas las clasificaciones. **Las de peor resultado primero**
+// —las anuladas, después de menor a mayor puntaje, y lo sin calificar antes de
+// lo aprobado—: la reflexión va de entender qué salió mal, y eso es lo que hay
+// que ver. Dentro de eso, una por persona antes de repetir a nadie. Null
+// mientras las evidencias de la semana no han llegado.
+window.evidenciasDelDepartamento = (i) => {
+    const fotos = window.evidenciasDeSemana(i);
+    if (!fotos) return null;
+    const d = window.departamentoRezagado(i);
+    if (!d) return [];
+    const peso = (f) => f.anulada ? -1 : (f.puntaje === null ? window.UMBRAL_CERTIFICACION - 0.5 : f.puntaje);
+    const suyas = [].concat(...Object.values(fotos))
+        .filter(f => (f.departamento || 'Sin Departamento') === d.nombre)
+        .sort((a, b) => peso(a) - peso(b) || (b.fecha - a.fecha) || 0);
+    return suyas;
+};
+
+window.diapositivaDeEvidenciasDelDepartamento = (i, numero, cuantas) => {
+    const C = window.COLORES_IOS;
+    const d = window.departamentoRezagado(i);
+    const todas = window.evidenciasDelDepartamento(i) || [];
+    const fotos = window.evidenciasParaDiapositiva(todas, window.MAX_EVIDENCIAS_POR_DIAPOSITIVA);
+    const personas = new Set(todas.map(f => f.empleado)).size;
+    const el = [];
+    const texto = window.marcoDeReflexion(el, i,
+        `Evidencias de ${window.partirEnRenglones(d ? d.nombre : '', 24, 1)[0]}`, 2, numero, cuantas);
+    texto(48, 106, 500, 16, 'LAS DE MENOR RESULTADO PRIMERO', 11, C.secundario, { peso: 600, espaciado: 0.6 });
+    const sobran = todas.length - fotos.length;
+    texto(512, 106, 400, 16,
+        `${todas.length} ${todas.length === 1 ? 'foto' : 'fotos'} de ${personas} ${personas === 1 ? 'persona' : 'personas'}` +
+        (sobran > 0 ? ` · ${sobran} más en la aplicación` : ''), 11, C.secundario, { alinear: 'right' });
+    window.rejillaDeEvidencias(el, fotos);
+    return el;
+};
+
+// La última: ¿qué vamos a hacer? Enfocada al departamento de menor
 // desempeño: las preguntas son las suyas y los compromisos, para él. Debajo
 // del título se dice cuál es, que es lo que da sentido a lo demás.
 window.diapositivaDeAcciones = (i, numero, cuantas) => {
     const C = window.COLORES_IOS;
     const d = window.departamentoRezagado(i);
     const el = [];
-    const texto = window.marcoDeReflexion(el, i, '¿Qué vamos a hacer?', 2, numero, cuantas);
+    const texto = window.marcoDeReflexion(el, i, '¿Qué vamos a hacer?', window.partesDeReflexion(i), numero, cuantas);
     const rotulo = (x, y, w, t) => texto(x, y, w, 16, t.toUpperCase(), 11, C.secundario, { peso: 600, espaciado: 0.6 });
 
     if (d) {
@@ -1632,6 +1666,24 @@ window.diapositivaDeAcciones = (i, numero, cuantas) => {
         `Se revisan al abrir la presentación ${nom.femenino ? 'de la siguiente' : 'del siguiente'} ${nom.uno}.`,
         10.5, C.secundario);
     return el;
+};
+
+// La rejilla de fotos de una diapositiva de evidencias: hasta ocho, cuatro por
+// dos; con tres o menos, en un solo renglón y más grandes. La comparten la de
+// una clasificación y la de reflexión del departamento rezagado.
+window.rejillaDeEvidencias = (el, fotos) => {
+    const pocas = fotos.length <= 3;
+    const columnas = pocas ? Math.max(1, fotos.length) : 4;
+    const hueco = 16, izquierda = 48, ancho = 864;
+    const w = pocas ? Math.min(360, (ancho - hueco * (columnas - 1)) / columnas) : (ancho - hueco * 3) / 4;
+    const h = pocas ? Math.min(260, w * 3 / 4) : 108;
+    const x0 = izquierda + (ancho - (w * columnas + hueco * (columnas - 1))) / 2;
+    const alto = h + 58;
+    fotos.forEach((f, n) => {
+        const x = x0 + (n % columnas) * (w + hueco);
+        const y = 130 + Math.floor(n / columnas) * (alto + hueco);
+        window.fotoDeEvidenciaEnDiapositiva(el, f, x, y, w, h, true);
+    });
 };
 
 // --- DE LA LISTA AL SVG ---

@@ -4815,6 +4815,24 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   Sin departamentos, las preguntas vuelven a ser las de la planta. En el
   PowerPoint los compromisos se escriben encima.
 
+  **Y entre las dos, sus evidencias**: si alguien de ese departamento dejó
+  fotos de evidencia esa semana —de cualquier clasificación—, va una
+  diapositiva «Evidencias de ‹departamento›» con la misma rejilla que las de
+  una clasificación (`rejillaDeEvidencias`, que comparten) y **las de peor
+  resultado primero**: las anuladas, después de menor a mayor puntaje y lo sin
+  calificar antes de lo aprobado, una por persona antes de repetir. Sin fotos
+  no hay diapositiva y la reflexión vuelve a ser de dos; el rótulo «Reflexión ·
+  N de M» lo cuenta `partesDeReflexion`. Se reconoce al departamento por el
+  `departamento` que ya trae cada foto —el de hoy, con `deptDeEmpleado`, el
+  mismo del que sale el rezagado—, así que no hay consulta nueva: viene en
+  `cargarEvidenciasDeSemana`, y mantener pulsada una foto abre su evaluación
+  como en las demás.
+
+  ```js
+  window.evidenciasDelDepartamento(i)   // null mientras no llegan las de la semana
+  window.diapositivaDeEvidenciasDelDepartamento(i, numero, cuantas)
+  ```
+
   ```js
   window.reflexionDeSemana(i)        // la lectura de la planta, con memoria
   window.departamentosDeSemana(i)    // del peor al mejor, con memoria
