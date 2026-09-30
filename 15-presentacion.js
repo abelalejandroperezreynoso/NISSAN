@@ -376,6 +376,35 @@ window.resultadoEnInstante = (fecha) => {
     return p.porInstante[k];
 };
 
+// El desempeño de cada persona en un instante cualquiera, con memoria y por
+// clave: la gráfica de cada tarjeta de «quién destacó» pregunta por los mismos
+// cierres de periodo que la tendencia, y ésos no cambian de una semana a otra.
+window.personasEnInstante = (fecha, clave) => {
+    const p = window.presentacion;
+    p.personasPorInstante = p.personasPorInstante || {};
+    const k = fecha.getTime() + '|' + (clave || '');
+    if (!p.personasPorInstante[k]) {
+        const mapa = {};
+        window.desempenoDePersonasEn(fecha, clave || '').forEach(q => { mapa[String(q.emp.id)] = q.promedio; });
+        p.personasPorInstante[k] = mapa;
+    }
+    return p.personasPorInstante[k];
+};
+
+// La trayectoria de una persona sobre los mismos periodos que la tendencia de
+// la diapositiva (`mesesDeLaTendencia`): así su línea se lee contra la de al
+// lado. Un periodo en que no le tocaba nada queda en null y corta la línea.
+window.trayectoriaDePersona = (i, clave, persona) => {
+    const id = String(persona.emp.id);
+    return window.mesesDeLaTendencia(i, clave).map(t => ({
+        inicio: t.inicio, ritmo: t.ritmo,
+        valor: t.actual ? persona.promedio : (() => {
+            const v = window.personasEnInstante(t.ref, clave)[id];
+            return v === undefined ? null : v;
+        })()
+    }));
+};
+
 // El ritmo del eje de la tendencia. La planta va en meses, como la gráfica de
 // la tarjeta; una clasificación va **al de su frecuencia mínima**: la encuesta
 // que se contesta menos a menudo (`PESO_FRECUENCIA` más bajo) es la que tarda
@@ -881,49 +910,92 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     // Columna 3: quién destacó, en dos tarjetas agrupadas.
     const { mejor, peor } = window.destacadosDeSemana(i, clave);
     const tarjetaDePersona = (p, y, titulo, acento, vacio) => {
-        const x = 660, w = 252, h = 172;
+        const x = 660, w = 252, h = 175;
         el.push({ tipo: 'rect', x, y, w, h, relleno: C.agrupado, radio: 18 });
-        el.push({ tipo: 'circulo', cx: x + 20, cy: y + 22, r: 4, relleno: acento });
-        texto(x + 30, y + 14, w - 46, 16, titulo.toUpperCase(), 11, acento, { peso: 600, espaciado: 0.6 });
+        el.push({ tipo: 'circulo', cx: x + 20, cy: y + 20, r: 4, relleno: acento });
+        texto(x + 30, y + 12, w - 46, 16, titulo.toUpperCase(), 11, acento, { peso: 600, espaciado: 0.6 });
         if (!p) {
-            vacio.forEach((t, n) => texto(x + 16, y + 48 + n * 18, w - 32, 18, t, 13, C.secundario));
+            vacio.forEach((t, n) => texto(x + 16, y + 46 + n * 18, w - 32, 18, t, 13, C.secundario));
             return;
         }
         const emp = p.emp;
-        el.push({ tipo: 'imagen', x: x + 16, y: y + 42, w: 60, h: 60,
+        el.push({ tipo: 'imagen', x: x + 16, y: y + 36, w: 46, h: 46,
                   url: emp.avatar ? window.procesarUrlImagen(emp.avatar) : '',
                   iniciales: window.inicialesDe(emp.name), fondo: '#E5E5EA' });
-        let yt = y + 42;
-        window.partirEnRenglones(emp.name, 19, 2).forEach(t => {
-            texto(x + 88, yt, w - 100, 18, t, 14, C.texto, { peso: 700 });
-            yt += 18;
+        let yt = y + 35;
+        window.partirEnRenglones(emp.name, 21, 2).forEach(t => {
+            texto(x + 74, yt, w - 86, 17, t, 13.5, C.texto, { peso: 700 });
+            yt += 16;
         });
+        // El departamento y el puesto en un solo renglón: el que dejan libre
+        // es el de la gráfica.
         const depto = String(emp.dept || emp.department || '').trim() || 'Sin departamento';
-        const puesto = String(emp.puesto || '').trim() || 'Sin puesto';
-        texto(x + 88, yt + 2, w - 100, 15, window.partirEnRenglones(depto, 24, 1)[0], 11.5, C.secundario);
-        texto(x + 88, yt + 17, w - 100, 15, window.partirEnRenglones(puesto, 24, 1)[0], 11.5, C.secundario);
-        texto(x + 16, y + 116, 90, 40, `${p.promedio}%`, 30, color(p.promedio), { peso: 700 });
-        // Hasta cuatro renglones cortos a la derecha de la cifra: lo calificado,
-        // la velocidad de respuesta, el promedio de las últimas semanas —que es
-        // lo que decide un empate, así que se dice siempre— y con cuántos empató.
-        // Quien no contestó nada lo dice con esas palabras: «0/5 calificadas»
-        // se leería como un atraso del revisor.
+        const puesto = String(emp.puesto || '').trim();
+        // Si no caben los dos, se queda el departamento: un «· …» al final no
+        // dice nada del puesto.
+        const junto = puesto ? `${depto} · ${puesto}` : depto;
+        texto(x + 74, yt + 2, w - 86, 14,
+            window.partirEnRenglones(junto.length <= 28 ? junto : depto, 28, 1)[0], 11, C.secundario);
+
+        texto(x + 16, y + 90, 80, 36, `${p.promedio}%`, 28, color(p.promedio), { peso: 700 });
+
+        // A la derecha de la cifra, cómo le ha ido en los mismos periodos que
+        // la tendencia de la diapositiva (`trayectoriaDePersona`): la escala
+        // 0–100 con la meta a trazos, cada periodo con un punto de su color y
+        // el último —la cifra de al lado— más grande. Con menos de dos periodos
+        // con resultado no hay línea que dibujar.
+        const tray = window.trayectoriaDePersona(i, clave, p);
+        if (tray.filter(t => t.valor !== null).length >= 2) {
+            const sx = x + 102, sw = w - 102 - 18, sy = y + 92, sh = 30;
+            const qx = (j) => sx + (tray.length === 1 ? sw / 2 : sw * j / (tray.length - 1));
+            const qy = (v) => sy + sh * (1 - v / 100);
+            el.push({ tipo: 'linea', x1: sx, y1: qy(0), x2: sx + sw, y2: qy(0), color: C.separador, grosor: 1 });
+            el.push({ tipo: 'linea', x1: sx, y1: qy(window.UMBRAL_CERTIFICACION), x2: sx + sw, y2: qy(window.UMBRAL_CERTIFICACION),
+                      color: window.tinteIOS(C.verde, 0.55), grosor: 1, guiones: true });
+            let previo = null;
+            tray.forEach((t, j) => {
+                if (t.valor === null) { previo = null; return; }
+                const punto = [qx(j), qy(t.valor)];
+                if (previo) el.push({ tipo: 'linea', x1: previo[0], y1: previo[1], x2: punto[0], y2: punto[1], color: C.azul, grosor: 1.5 });
+                previo = punto;
+            });
+            tray.forEach((t, j) => {
+                if (t.valor === null) return;
+                const ultimo = j === tray.length - 1;
+                el.push({ tipo: 'circulo', cx: qx(j), cy: qy(t.valor), r: ultimo ? 3.4 : 2.2, relleno: color(t.valor),
+                          borde: ultimo ? '#ffffff' : undefined });
+            });
+            const primero = tray.find(t => t.valor !== null);
+            texto(sx - 4, sy + sh + 2, 60, 11, window.rotuloDePeriodo(primero.inicio, primero.ritmo), 8.5, C.terciario);
+            texto(sx + sw - 56, sy + sh + 2, 60, 11, window.rotuloDePeriodo(tray[tray.length - 1].inicio, tray[0].ritmo),
+                8.5, C.terciario, { alinear: 'right' });
+        }
+
+        // Debajo, lo que la explica, en renglones cortos que se juntan de dos
+        // en dos cuando caben: lo calificado, lo que tiene sin calificar como
+        // revisor, cuánto tarda en resolver, el promedio de las últimas
+        // semanas —el primer desempate, así que se dice siempre— y con cuántos
+        // empató. Quien no contestó nada lo dice con esas palabras: «0/5
+        // calificadas» se leería como un atraso del revisor.
         const detalle = [];
         if (p.asignadas > 0) detalle.push(p.contestadas === 0
             ? (p.asignadas === 1 ? 'No contestó su encuesta' : `No contestó ninguna de ${p.asignadas}`)
-            : `${p.calificadas}/${p.asignadas} encuestas calificadas`);
-        // Lo que tiene sin calificar como revisor, que es lo que le baja la cifra.
+            : `${p.calificadas}/${p.asignadas} calificadas`);
         if (p.porCalificar > 0) detalle.push(`${p.porCalificar} ${p.porCalificar === 1 ? 'respuesta' : 'respuestas'} sin calificar`);
         if (p.diasDeRespuesta !== null) detalle.push(`Resuelve en ${window.textoDeDias(p.diasDeRespuesta)}`);
         if (p.semanasRecientes > 1) detalle.push(`Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`);
         if (p.empates > 0) detalle.push(`Empató con ${p.empates}`);
-        detalle.length = Math.min(detalle.length, 4);
-        const arriba = y + 136 - detalle.length * 13 / 2;
-        detalle.forEach((t, n) => texto(x + 108, arriba + n * 13, w - 120, 13, t, 10.5, C.secundario));
+        const MAX_LETRAS = 42, renglones = [];
+        detalle.forEach(t => {
+            const ultimo = renglones[renglones.length - 1];
+            if (ultimo && (ultimo + ' · ' + t).length <= MAX_LETRAS) renglones[renglones.length - 1] = ultimo + ' · ' + t;
+            else renglones.push(t);
+        });
+        renglones.slice(0, 3).forEach((t, n) => texto(x + 16, y + 132 + n * 13, w - 32, 13, t, 10.5, C.secundario));
     };
     const nadie = ['Todavía nadie tiene', 'resultados calificados.'];
     tarjetaDePersona(mejor, 132, 'Mejor desempeño', C.verde, nadie);
-    tarjetaDePersona(peor, 320, 'Menor desempeño', C.rojo,
+    tarjetaDePersona(peor, 319, 'Menor desempeño', C.rojo,
         mejor ? ['Sólo una persona tiene', 'encuestas asignadas.'] : nadie);
 
     // Pie, en el gris más claro.

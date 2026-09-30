@@ -4931,6 +4931,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     posteriores—, así que las dos pantallas no pueden discrepar. Por debajo de
     un día se dice en horas (`textoDeDias`). Informa y no desempata: el
     desempate ya mira quién terminó antes.
+  - **Y cada tarjeta lleva su gráfica**, a la derecha de la cifra: cómo le fue
+    a esa persona en los mismos periodos que la tendencia de la diapositiva
+    (`trayectoriaDePersona`), con la escala 0–100, la meta a trazos, un punto
+    del color de cada cifra y el primer y el último periodo rotulados. Es la
+    misma regla de siempre medida en cada cierre —`personasEnInstante`, con
+    memoria por instante y clave, que los cierres pasados no cambian de una
+    semana a otra— y el último punto es la cifra de al lado. Un periodo en que
+    no le tocaba nada corta la línea, y con menos de dos con resultado no se
+    dibuja. Para hacerle sitio la foto bajó a 46 px, el departamento y el
+    puesto van en un renglón —sólo el departamento si no caben— y los
+    renglones de detalle van debajo, juntándose de dos en dos cuando caben.
   - **La foto es un elemento más, `imagen`**: en el SVG va recortada en círculo
     sobre las iniciales, que quedan a la vista si no carga. En el PowerPoint
     tiene que ir dentro del archivo, así que al descargar se pide con
