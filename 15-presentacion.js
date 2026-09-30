@@ -530,21 +530,35 @@ window.desempenoDePersonasEn = (referencia, clave) => {
                 // Cuándo terminó: la más tardía de las respuestas que cuentan.
                 const enviada = new Date(r.submitted_at).getTime();
                 if (!isNaN(enviada) && enviada > p.terminoEn) p.terminoEn = enviada;
-                // Cuánto tardó desde que le apareció como pendiente: la misma
-                // medida que «Prontitud» en las estadísticas (`origenDelPendiente`).
-                const marca = window.origenDelPendiente
-                    ? window.origenDelPendiente(f.ev.frequency, window.inicioDeEncuesta(f.ev), emp, new Date(r.submitted_at))
-                    : null;
-                if (marca && !isNaN(enviada)) {
-                    p.sumaDias += Math.max(0, enviada - marca.origen.getTime()) / 86400000;
-                    p.conDias++;
-                }
                 const puntaje = window.puntajeDeRespuesta(r);
                 if (puntaje === null) return;
                 p.calificadas++;
                 p.filas.push({ ev: f.ev, puntaje });
             });
         });
+    // Cuánto tarda en resolver un pendiente, **últimamente**: cada respuesta
+    // enviada en las últimas `SEMANAS_DEL_DESEMPATE` semanas, desde que esa
+    // encuesta le apareció como pendiente hasta que la contestó —la misma
+    // medida que «Prontitud» en las estadísticas (`origenDelPendiente`)—.
+    // No sale de `ultimas`: ahí una de «única vez» trae la respuesta de hace
+    // meses, y su retraso de entonces se quedaba pegado a la cifra para siempre.
+    const hasta = new Date(referencia).getTime();
+    const desde = hasta - window.SEMANAS_DEL_DESEMPATE * 7 * 86400000;
+    const recientes = (window.respuestasPropias || (x => x))(window.respuestasParaPresentar() || [])
+        .filter(r => { const t = new Date(r.submitted_at).getTime(); return t > desde && t <= hasta; });
+    filasEnJuego.forEach(f => {
+        if (!window.origenDelPendiente) return;
+        recientes.forEach(r => {
+            if (String(r.evaluation_id) !== String(f.ev.id)) return;
+            const p = porPersona[String(r.employee_id)];
+            if (!p) return;
+            const enviada = new Date(r.submitted_at);
+            const marca = window.origenDelPendiente(f.ev.frequency, window.inicioDeEncuesta(f.ev), p.emp, enviada);
+            if (!marca || !marca.origen) return;
+            p.sumaDias += Math.max(0, enviada.getTime() - marca.origen.getTime()) / 86400000;
+            p.conDias++;
+        });
+    });
     const atraso = window.atrasoDeRevision(filasEnJuego.map(f => f.ev), referencia);
     Object.keys(atraso).forEach(id => {
         const a = atraso[id];
@@ -900,7 +914,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             : `${p.calificadas}/${p.asignadas} encuestas calificadas`);
         // Lo que tiene sin calificar como revisor, que es lo que le baja la cifra.
         if (p.porCalificar > 0) detalle.push(`${p.porCalificar} ${p.porCalificar === 1 ? 'respuesta' : 'respuestas'} sin calificar`);
-        if (p.diasDeRespuesta !== null) detalle.push(`Responde en ${window.textoDeDias(p.diasDeRespuesta)}`);
+        if (p.diasDeRespuesta !== null) detalle.push(`Resuelve en ${window.textoDeDias(p.diasDeRespuesta)}`);
         if (p.semanasRecientes > 1) detalle.push(`Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`);
         if (p.empates > 0) detalle.push(`Empató con ${p.empates}`);
         detalle.length = Math.min(detalle.length, 4);

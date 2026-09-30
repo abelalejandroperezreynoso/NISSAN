@@ -4917,9 +4917,15 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     una por el alfabeto. La tarjeta dice siempre ese promedio («Últimas 4
     semanas: 96%»), que es lo que explica por qué salió esa persona, y con
     cuántos empató esa semana.
-  - **Y dice en cuánto responde** («Responde en 1.8 días»): el promedio, sobre
-    las respuestas de esa semana, de lo que tardó desde que cada encuesta le
-    apareció como pendiente hasta que la contestó. Es la misma medida que
+  - **Y dice en cuánto resuelve un pendiente** («Resuelve en 1.8 días»): el
+    promedio, sobre **todo lo que contestó en las últimas cuatro semanas**
+    (`SEMANAS_DEL_DESEMPATE`), de lo que tardó desde que cada encuesta le
+    apareció como pendiente hasta que la contestó. Salía de la última respuesta
+    de cada encuesta en su periodo, y en una de «única vez» ésa puede ser de
+    hace meses: su retraso de entonces se quedaba pegado a la cifra para
+    siempre y la tarjeta decía «Responde en 50 días» de alguien que hoy
+    contesta al día. Sin respuestas recientes no se dice nada, y las de apoyo
+    por vacaciones no cuentan (`respuestasPropias`). Es la misma medida que
     «Prontitud» de las estadísticas —el origen lo da `origenDelPendiente`: el
     inicio del periodo, o el alta de la encuesta o de la persona si son
     posteriores—, así que las dos pantallas no pueden discrepar. Por debajo de
