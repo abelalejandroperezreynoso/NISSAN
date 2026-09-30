@@ -1350,8 +1350,9 @@ window.departamentosDeSemana = (i) => {
         const nombre = deptDe(p.emp);
         const d = porDepto[nombre] || (porDepto[nombre] = {
             nombre, personas: 0, suma: 0, asignadas: 0, contestadas: 0, calificadas: 0, sinNada: 0,
-            porClasificacion: {}, porSupervisor: {} });
+            porClasificacion: {}, porSupervisor: {}, gente: [] });
         d.personas++;
+        d.gente.push(p);
         d.suma += p.promedio;
         d.asignadas += p.asignadas;
         d.contestadas += p.contestadas;
@@ -1386,7 +1387,12 @@ window.departamentosDeSemana = (i) => {
         const supervisores = Object.values(d.porSupervisor)
             .map(s => ({ nombre: s.nombre, personas: s.n, promedio: Math.round(s.suma / s.n) }))
             .sort((a, b) => a.promedio - b.promedio || a.nombre.localeCompare(b.nombre, 'es'));
-        return { nombre: d.nombre, personas: d.personas, promedio: Math.round(d.suma / d.personas),
+        // Su peor persona, con el orden del menor desempeño de la planta: la
+        // cifra, después quien más dejó sin contestar y al final el nombre.
+        const peorPersona = d.gente.slice().sort((a, b) => a.promedio - b.promedio
+            || (b.asignadas - b.contestadas) - (a.asignadas - a.contestadas)
+            || String(a.emp.name || '').localeCompare(String(b.emp.name || ''), 'es'))[0] || null;
+        return { nombre: d.nombre, personas: d.personas, promedio: Math.round(d.suma / d.personas), peorPersona,
                  asignadas: d.asignadas, contestadas: d.contestadas, calificadas: d.calificadas,
                  participacion: pct(d.contestadas, d.asignadas), sinNada: d.sinNada,
                  faltan: d.asignadas - d.contestadas, sinCalificar: Math.max(0, d.contestadas - d.calificadas),
@@ -1544,8 +1550,7 @@ window.diapositivaDeLectura = (i, numero, cuantas) => {
     texto(64, by + 68, 250, 14, `${d.de > 1 ? `Último de ${d.de} departamentos · ` : ''}${d.personas} ${d.personas === 1 ? 'persona' : 'personas'}`,
         11, C.secundario);
     const comparado = [L.r.promedio !== null ? `Planta ${L.r.promedio}%` : '',
-        d.delta === null ? '' : (d.delta === 0 ? `igual que ${nom.anterior}` : `${d.delta > 0 ? '▲' : '▼'} ${Math.abs(d.delta)} vs. ${nom.uno} anterior`),
-        d.mejor ? `mejor: ${window.partirEnRenglones(d.mejor.nombre, 16, 1)[0]} ${d.mejor.promedio}%` : '']
+        d.delta === null ? '' : (d.delta === 0 ? `igual que ${nom.anterior}` : `${d.delta > 0 ? '▲' : '▼'} ${Math.abs(d.delta)} vs. ${nom.uno} anterior`)]
         .filter(Boolean).join(' · ');
     window.partirEnRenglones(comparado, 44, 2).forEach((t, n) => texto(64, by + 86 + n * 15, 250, 14, t, 11, C.secundario));
 
@@ -1555,25 +1560,45 @@ window.diapositivaDeLectura = (i, numero, cuantas) => {
               color: color(d.promedio), pista: window.tinteIOS(color(d.promedio)) });
     texto(cx - 40, cy - 14, 80, 28, `${d.promedio}%`, 22, C.texto, { peso: 700, alinear: 'center' });
 
-    // Lo que lo explica, en cuatro cifras.
-    const c = d.clasificaciones[0];
-    const datos = [
-        { valor: d.participacion === null ? '—' : `${d.participacion}%`, tono: color(d.participacion),
-          rotulo: `Participación · ${d.contestadas}/${d.asignadas} encuestas` },
-        { valor: String(d.sinNada), tono: d.sinNada ? C.rojo : C.verde,
-          rotulo: `${d.sinNada === 1 ? 'Persona' : 'Personas'} sin contestar ninguna` },
-        { valor: String(d.sinCalificar), tono: d.sinCalificar ? C.naranja : C.verde,
-          rotulo: 'Respuestas esperando calificación' },
-        { valor: c ? `${c.promedio}%` : '—', tono: color(c ? c.promedio : null),
-          rotulo: c ? `Más baja: ${c.nombre}` : 'Sin clasificaciones' }
-    ];
-    const x0 = 452, wc = (912 - 16 - x0) / 4;
-    datos.forEach((q, n) => {
-        const x = x0 + n * wc;
-        if (n) el.push({ tipo: 'linea', x1: x - 8, y1: by + 44, x2: x - 8, y2: by + bh - 20, color: C.separador, grosor: 1 });
-        texto(x, by + 44, wc - 16, 30, q.valor, 24, q.tono, { peso: 700 });
-        window.partirEnRenglones(q.rotulo, 18, 3).forEach((t, k) => texto(x, by + 80 + k * 14, wc - 16, 14, t, 10.5, C.secundario));
+    // Lo que lo explica: su participación, sus peores clasificaciones y su
+    // peor persona, cada cosa en su columna con su rótulo.
+    const sub = (x, t) => texto(x, by + 38, 180, 14, t.toUpperCase(), 10, C.secundario, { peso: 600, espaciado: 0.5 });
+    const sep = (x) => el.push({ tipo: 'linea', x1: x, y1: by + 40, x2: x, y2: by + bh - 18, color: C.separador, grosor: 1 });
+
+    const xp = 452;
+    sub(xp, 'Participación');
+    texto(xp, by + 58, 100, 30, d.participacion === null ? '—' : `${d.participacion}%`, 24, color(d.participacion), { peso: 700 });
+    texto(xp, by + 92, 100, 14, `${d.contestadas}/${d.asignadas} encuestas`, 10.5, C.secundario);
+
+    const xc = 568, wc = 172;
+    sep(xc - 12);
+    sub(xc, 'Peores clasificaciones');
+    const peores = d.clasificaciones.slice(0, 3);
+    if (!peores.length) texto(xc, by + 60, wc, 16, 'Sin clasificaciones', 11, C.secundario);
+    peores.forEach((c, n) => {
+        const y = by + 58 + n * 22;
+        texto(xc, y, wc - 42, 18, window.partirEnRenglones(c.nombre, 21, 1)[0], 11.5, C.texto, { peso: 600 });
+        texto(xc + wc - 40, y, 40, 18, `${c.promedio}%`, 12.5, color(c.promedio), { peso: 700, alinear: 'right' });
     });
+
+    const xq = 764, wq = 132;
+    sep(xq - 12);
+    sub(xq, 'Peor desempeño');
+    const q = d.peorPersona;
+    if (!q) {
+        texto(xq, by + 60, wq, 16, 'Sin resultados', 11, C.secundario);
+    } else {
+        el.push({ tipo: 'imagen', x: xq, y: by + 58, w: 32, h: 32,
+                  url: q.emp.avatar ? window.procesarUrlImagen(q.emp.avatar) : '',
+                  iniciales: window.inicialesDe(q.emp.name), fondo: '#E5E5EA' });
+        window.partirEnRenglones(q.emp.name, 15, 2)
+            .forEach((t, n) => texto(xq + 40, by + 58 + n * 14, wq - 40, 14, t, 11, C.texto, { peso: 700 }));
+        texto(xq, by + 94, 60, 22, `${q.promedio}%`, 18, color(q.promedio), { peso: 700 });
+        const detalle = q.contestadas === 0
+            ? (q.asignadas === 1 ? 'No contestó su encuesta' : `No contestó ninguna de ${q.asignadas}`)
+            : `${q.calificadas}/${q.asignadas} calificadas`;
+        texto(xq, by + 114, wq, 12, window.partirEnRenglones(detalle, 24, 1)[0], 9.5, C.secundario);
+    }
     return el;
 };
 

@@ -4818,9 +4818,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   (participación, calificación de lo contestado y lo que espera calificación),
   cada clasificación contra el periodo anterior y las que están lejos de la
   meta con lo que las frena. Al pie, a todo lo ancho, **el departamento con
-  menor desempeño**: su cifra, su lugar, cómo cambió, la participación, cuánta
-  gente no contestó nada, lo que espera calificación y su clasificación más
-  baja. La segunda, «¿Qué vamos a hacer?», **se enfoca en ese departamento**:
+  menor desempeño**: su cifra, su lugar, cómo cambió contra la planta y contra
+  el periodo anterior, su participación, **sus tres peores clasificaciones** y
+  **su peor persona** —con el mismo orden del menor desempeño de la planta: la
+  cifra, después quien más dejó sin contestar—. No dice quién es el mejor
+  departamento, ni cuánta gente no contestó nada, ni lo que espera
+  calificación: se quitaron a propósito, que la franja es para entender dónde
+  está el problema de ese departamento. La segunda, «¿Qué vamos a hacer?», **se enfoca en ese departamento**:
   lo dice debajo del título, y sus hasta cinco preguntas y la tabla vacía de
   compromisos (acción, responsable, fecha) son para él —su clasificación más
   baja, su gente sin contestar, lo que le falta, cómo cayó, el equipo más
