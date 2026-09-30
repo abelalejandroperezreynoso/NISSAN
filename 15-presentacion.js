@@ -220,7 +220,12 @@ window.resultadoDePlantaEn = (referencia) => {
             contestaron: f.resumen.contestaron, total: f.resumen.total
         })).sort((a, b) => (b.promedio === null ? -1 : b.promedio) - (a.promedio === null ? -1 : a.promedio)
             || a.nombre.localeCompare(b.nombre, 'es'));
-        return { clave: g.clave, nombre: g.nombre, promedio: t.promedio, contestaron: t.contestaron, total: t.total, encuestas };
+        // Lo que sacaron quienes sí contestaron: las diapositivas de reflexión
+        // lo separan de la participación para decir cuál de las dos resta.
+        const suma = g.filas.reduce((a, f) => a + (f.resumen.suma || 0), 0);
+        return { clave: g.clave, nombre: g.nombre, promedio: t.promedio, contestaron: t.contestaron, total: t.total,
+                 calificadas: t.calificadas, deLoContestado: t.calificadas ? Math.round(suma / t.calificadas) : null,
+                 encuestas };
     }).sort((a, b) => (b.promedio === null ? -1 : b.promedio) - (a.promedio === null ? -1 : a.promedio)
         || a.nombre.localeCompare(b.nombre, 'es'));
 
@@ -229,6 +234,7 @@ window.resultadoDePlantaEn = (referencia) => {
         promedio: window.promedioDeClasificaciones(filas),
         contestaron: total.contestaron,
         total: total.total,
+        calificadas: total.calificadas,
         encuestas: filas.length,
         clasificaciones
     };
@@ -269,11 +275,15 @@ window.diapositivasDeSemana = (i) => {
                 mazo.push({ id: `evidencias:${c.clave}`, clave: c.clave, evidencias: true });
             }
         });
+    // Al final, las dos de reflexión: se leen después de haber visto todo.
+    mazo.push({ id: 'reflexion:1', clave: '', reflexion: 1 }, { id: 'reflexion:2', clave: '', reflexion: 2 });
     return mazo;
 };
 
 // La diapositiva que toca a una entrada del mazo.
-window.laminaDe = (i, d, numero, cuantas) => d.evidencias
+window.laminaDe = (i, d, numero, cuantas) => d.reflexion
+    ? (d.reflexion === 1 ? window.diapositivaDeLectura(i, numero, cuantas) : window.diapositivaDeAcciones(i, numero, cuantas))
+    : d.evidencias
     ? window.diapositivaDeEvidencias(i, d.clave, numero, cuantas)
     : window.diapositiva(i, d.clave, numero, cuantas);
 
@@ -1169,6 +1179,282 @@ window.diapositivaDeEvidencias = (i, clave, numero, cuantas) => {
     return el;
 };
 
+// --- LA REFLEXIÓN ---
+//
+// Al final del mazo van dos diapositivas que no enseñan otra cifra sino que
+// **leen las que ya se enseñaron**: la primera dice qué pasó —de dónde sale el
+// resultado, qué subió y qué bajó, qué está lejos de la meta y por qué— y la
+// segunda lo convierte en preguntas para el equipo y en un renglón de
+// compromisos que se llena en la junta. Todo sale de `resultadoDeSemana`, el
+// mismo cálculo de las demás, así que no pueden decir otra cosa que ellas.
+//
+// `reflexionDeSemana` es la lectura; las dos diapositivas sólo la dibujan.
+window.MAX_CAMBIOS_REFLEXION = 8;
+window.MAX_LEJOS_REFLEXION = 4;
+window.MAX_PREGUNTAS_REFLEXION = 5;
+// Por debajo de estos puntos un cambio es ruido y no se pregunta por él.
+window.PUNTOS_PARA_PREGUNTAR = 5;
+
+window.reflexionDeSemana = (i) => {
+    const r = window.resultadoDeSemana(i);
+    if (r.reflexion) return r.reflexion;
+    const semana = window.presentacion.semanas[i];
+    const meta = window.UMBRAL_CERTIFICACION;
+    const nom = window.nombreDelPeriodo();
+    const ant = i > 0 ? window.resultadoDeSemana(i - 1) : null;
+    const antPorClave = {};
+    (ant ? ant.clasificaciones : []).forEach(c => { antPorClave[c.clave] = c; });
+    const pct = (a, b) => b > 0 ? Math.round(100 * a / b) : null;
+
+    const conCifra = r.clasificaciones.filter(c => c.promedio !== null);
+    const cambios = conCifra.map(c => {
+        const a = antPorClave[c.clave];
+        const antes = a && a.promedio !== null ? a.promedio : null;
+        return { c, antes, delta: antes === null ? null : c.promedio - antes };
+    }).sort((x, y) => (y.delta === null ? -1000 : y.delta) - (x.delta === null ? -1000 : x.delta)
+        || x.c.nombre.localeCompare(y.c.nombre, 'es'));
+
+    // Qué le resta a una cifra por debajo de la meta: que no se contesta, que
+    // se contesta mal o que lo contestado espera calificación. Se dice la
+    // primera que falle, que es por donde hay que empezar.
+    const causaDe = (x) => {
+        const part = pct(x.contestaron, x.total);
+        const sinCalificar = Math.max(0, x.contestaron - (x.calificadas || 0));
+        if (part !== null && part < meta) return { tipo: 'participacion', valor: part,
+            texto: `Participación ${part}% · faltan ${x.total - x.contestaron}` };
+        if (x.deLoContestado !== null && x.deLoContestado < meta) return { tipo: 'calificacion', valor: x.deLoContestado,
+            texto: `Quien contesta saca ${x.deLoContestado}%` };
+        if (sinCalificar > 0) return { tipo: 'revision', valor: sinCalificar,
+            texto: `${sinCalificar} sin calificar` };
+        return null;
+    };
+    const lejos = conCifra.filter(c => c.promedio < meta)
+        .sort((a, b) => a.promedio - b.promedio || a.nombre.localeCompare(b.nombre, 'es'))
+        .map(c => ({ c, faltan: meta - c.promedio, causa: causaDe(c) }));
+
+    // Las dos mitades de la cifra pesan como ella: cada clasificación igual.
+    // Sumando respuestas, la clasificación con más padrón volvería a hablar
+    // por todas (la trampa de `promedioDeClasificaciones`).
+    const media = (vals) => {
+        const v = vals.filter(x => x !== null);
+        return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null;
+    };
+    const participacion = media(conCifra.map(c => pct(c.contestaron, c.total)));
+    const deLoContestado = media(conCifra.map(c => c.deLoContestado));
+    const sinCalificar = Math.max(0, r.contestaron - (r.calificadas || 0));
+    const faltan = Math.max(0, r.total - r.contestaron);
+    const enMeta = conCifra.filter(c => c.promedio >= meta).length;
+    const delta = ant && ant.promedio !== null && r.promedio !== null ? r.promedio - ant.promedio : null;
+
+    // La frase de arriba: cómo quedó la cifra y cuántas clasificaciones
+    // llegaron a la meta.
+    let titular = r.promedio === null ? `Todavía no hay resultados calificados ${nom.del}.`
+        : (delta === null ? `El resultado general es ${r.promedio}%.`
+            : delta === 0 ? `El resultado general se mantuvo en ${r.promedio}%.`
+            : `El resultado general ${delta > 0 ? 'subió' : 'bajó'} ${Math.abs(delta)} ${Math.abs(delta) === 1 ? 'punto' : 'puntos'}, a ${r.promedio}%.`);
+    if (conCifra.length) titular += ` ${enMeta} de ${conCifra.length} ${conCifra.length === 1 ? 'clasificación está' : 'clasificaciones están'} en la meta del ${meta}%.`;
+
+    // Lo que más le resta a la planta: la causa que más se repite entre las
+    // clasificaciones que no llegan. Mirarla sobre los totales la decidiría
+    // la clasificación más grande, que puede ir bien mientras las demás no.
+    const cuenta = {};
+    lejos.forEach(x => { if (x.causa) cuenta[x.causa.tipo] = (cuenta[x.causa.tipo] || 0) + 1; });
+    const tipo = ['participacion', 'calificacion', 'revision'].reduce((a, b) => (cuenta[b] || 0) > (cuenta[a] || 0) ? b : a, 'participacion');
+    const cuantas = cuenta[tipo] || 0;
+    const de = `En ${cuantas} de ${lejos.length} ${lejos.length === 1 ? 'clasificación' : 'clasificaciones'} por debajo de la meta`;
+    const diagnostico = r.promedio === null ? 'Sin resultados no hay nada que leer todavía.'
+        : !lejos.length ? 'Todas las clasificaciones están en la meta: toca sostenerlo.'
+        : !cuantas ? 'Las que no llegan tienen participación y calificación en la meta: revisa cada una.'
+        : tipo === 'participacion' ? `Lo que más resta es la participación. ${de}, falta gente por contestar.`
+        : tipo === 'calificacion' ? `Lo que más resta es la calificación. ${de}, se contesta pero no se cumple.`
+        : `Lo que más resta es la revisión. ${de}, hay respuestas esperando calificación.`;
+
+    // Las preguntas para el equipo, sacadas de lo que se acaba de ver. Cada
+    // una nombra la clasificación y la cifra, que una pregunta genérica no
+    // lleva a ninguna conversación.
+    const preguntas = [];
+    const q = (t) => { if (preguntas.length < window.MAX_PREGUNTAS_REFLEXION) preguntas.push(t); };
+    const porCifra = conCifra.slice().sort((a, b) => b.promedio - a.promedio);
+    const mejor = porCifra[0], peor = porCifra[porCifra.length - 1];
+    if (peor && peor.promedio < meta) {
+        const cp = causaDe(peor);
+        q(`¿Qué impide avanzar en «${peor.nombre}» (${peor.promedio}%)?` + (cp
+            ? (cp.tipo === 'participacion' ? ' ¿Por qué no se está contestando?'
+                : cp.tipo === 'calificacion' ? ' ¿Falta capacitación, tiempo o seguimiento?'
+                : ' ¿Quién tiene que calificarla?') : ''));
+    }
+    const caida = cambios.filter(x => x.delta !== null && x.delta <= -window.PUNTOS_PARA_PREGUNTAR)
+        .sort((a, b) => a.delta - b.delta)[0];
+    if (caida && caida.c !== peor) q(`¿Qué cambió en «${caida.c.nombre}» para caer ${Math.abs(caida.delta)} puntos vs. ${nom.anterior}?`);
+    if (mejor && mejor !== peor) q(`¿Qué hace «${mejor.nombre}» (${mejor.promedio}%) que podamos llevar a las demás clasificaciones?`);
+    const subida = cambios.find(x => x.delta !== null && x.delta >= window.PUNTOS_PARA_PREGUNTAR && x.c !== mejor);
+    if (subida) q(`«${subida.c.nombre}» subió ${subida.delta} puntos: ¿qué funcionó y cómo lo sostenemos?`);
+    if (faltan > 0) q(semana.actual
+        ? `¿Cómo conseguimos las ${faltan} respuestas que faltan antes de cerrar ${nom.femenino ? 'la' : 'el'} ${nom.uno}?`
+        : `¿Por qué quedaron ${faltan} respuestas sin contestar, y cómo lo evitamos ${nom.femenino ? 'la próxima' : 'el próximo'}?`);
+    if (sinCalificar > 0) q(`¿Quién califica las ${sinCalificar} respuestas que esperan revisión, y para cuándo?`);
+    if (!preguntas.length) q(`¿Qué hicimos bien ${nom.femenino ? 'esta' : 'este'} ${nom.uno} y cómo lo repetimos?`);
+
+    r.reflexion = { r, delta, titular, diagnostico, participacion, deLoContestado, sinCalificar, faltan,
+                    cambios, lejos, preguntas, tieneAnterior: !!ant };
+    return r.reflexion;
+};
+
+// El encabezado y el pie de las dos: el mismo de las demás, con el rótulo de
+// reflexión a la derecha en vez de sólo el nombre del panel.
+window.marcoDeReflexion = (el, i, titulo, parte, numero, cuantas) => {
+    const C = window.COLORES_IOS;
+    const semana = window.presentacion.semanas[i];
+    const texto = (x, y, w, h, t, tam, col, extra) =>
+        el.push(Object.assign({ tipo: 'texto', x, y, w, h, texto: t, tam, color: col }, extra || {}));
+    el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
+    texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
+    texto(48, 58, 700, 44, titulo, 34, C.texto, { peso: 700 });
+    texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
+    const rot = `REFLEXIÓN · ${parte} DE 2`;
+    const ancho = rot.length * 7.2 + 20;
+    el.push({ tipo: 'rect', x: 912 - ancho, y: 66, w: ancho, h: 24, relleno: window.tinteIOS(C.azul, 0.88), radio: 12 });
+    texto(912 - ancho, 66, ancho, 24, rot, 11, C.azul, { peso: 700, alinear: 'center', espaciado: 0.6 });
+    const hoy = new Date();
+    if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
+    texto(48, 506, 760, 16,
+        `Se arma sola con las cifras de las diapositivas anteriores · meta ${window.UMBRAL_CERTIFICACION}% · ` +
+        `generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
+        `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
+        10, C.terciario);
+    return texto;
+};
+
+// La primera: ¿qué nos dicen los resultados? Una frase que lo resume y tres
+// columnas: de dónde sale la cifra, cómo cambió cada clasificación y qué está
+// lejos de la meta y por qué.
+window.diapositivaDeLectura = (i, numero, cuantas) => {
+    const C = window.COLORES_IOS;
+    const color = window.colorIOS;
+    const L = window.reflexionDeSemana(i);
+    const nom = window.nombreDelPeriodo();
+    const el = [];
+    const texto = window.marcoDeReflexion(el, i, '¿Qué nos dicen los resultados?', 1, numero, cuantas);
+    const rotulo = (x, y, w, t) => texto(x, y, w, 16, t.toUpperCase(), 11, C.secundario, { peso: 600, espaciado: 0.6 });
+
+    window.partirEnRenglones(L.titular, 110, 2)
+        .forEach((t, n) => texto(48, 110 + n * 20, 864, 20, t, 15, C.texto, { peso: 500 }));
+
+    // Columna 1: la cifra partida en lo que la forma.
+    rotulo(48, 166, 260, 'De dónde sale la cifra');
+    const barra = (y, titulo, valor, detalle, tono) => {
+        texto(48, y, 180, 18, titulo, 13, C.texto, { peso: 600 });
+        texto(228, y, 72, 18, valor === null ? '—' : `${valor}%`, 15, tono, { peso: 700, alinear: 'right' });
+        el.push({ tipo: 'rect', x: 48, y: y + 24, w: 252, h: 6, relleno: C.agrupado, radio: 3 });
+        if (valor) el.push({ tipo: 'rect', x: 48, y: y + 24, w: Math.max(6, 252 * Math.min(100, valor) / 100), h: 6, relleno: tono, radio: 3 });
+        const xm = 48 + 252 * window.UMBRAL_CERTIFICACION / 100;
+        el.push({ tipo: 'linea', x1: xm, y1: y + 22, x2: xm, y2: y + 32, color: C.terciario, grosor: 1 });
+        texto(48, y + 36, 252, 14, detalle, 10.5, C.secundario);
+    };
+    barra(194, 'Participación', L.participacion,
+        L.r.total > 0 ? `Cada clasificación pesa igual · ${L.r.contestaron}/${L.r.total} respuestas` : 'Sin padrón',
+        color(L.participacion));
+    barra(262, 'Calificación de lo contestado', L.deLoContestado,
+        'Lo que sacan quienes sí contestan', color(L.deLoContestado));
+    texto(48, 330, 252, 18, 'Esperan calificación', 13, C.texto, { peso: 600 });
+    texto(228, 330, 72, 18, String(L.sinCalificar), 15, L.sinCalificar ? C.naranja : C.verde, { peso: 700, alinear: 'right' });
+    texto(48, 348, 252, 14, L.sinCalificar ? 'Respuestas que todavía no suman' : 'Todo lo contestado está calificado',
+        10.5, C.secundario);
+    const lineas = window.partirEnRenglones(L.diagnostico, 38, 5);
+    const hd = 20 + lineas.length * 17;
+    el.push({ tipo: 'rect', x: 48, y: 380, w: 252, h: hd, relleno: C.agrupado, radio: 14 });
+    lineas.forEach((t, n) => texto(62, 390 + n * 17, 226, 17, t, 12, C.texto, { peso: 600 }));
+
+    // Columna 2: cada clasificación contra el periodo anterior, de la que más
+    // subió a la que más bajó.
+    rotulo(348, 166, 268, `Vs. ${nom.anterior}`);
+    const lista = L.cambios.slice(0, window.MAX_CAMBIOS_REFLEXION);
+    const alto = Math.min(36, 300 / Math.max(1, lista.length));
+    if (!lista.length) texto(348, 194, 268, 18, 'Sin clasificaciones con resultado.', 13, C.secundario);
+    lista.forEach((x, n) => {
+        const y = 190 + n * alto;
+        const nombre = window.partirEnRenglones(x.c.nombre, 25, 1)[0];
+        texto(348, y, 170, alto, nombre, 12.5, C.texto, { peso: 600 });
+        texto(510, y, 46, alto, x.antes === null ? `${x.c.promedio}%` : `${x.antes} → ${x.c.promedio}`, 11, C.secundario,
+            { alinear: 'right' });
+        const tono = x.delta === null || x.delta === 0 ? C.secundario : (x.delta > 0 ? C.verde : C.rojo);
+        const t = x.delta === null ? 'nueva' : (x.delta === 0 ? '=' : `${x.delta > 0 ? '▲' : '▼'} ${Math.abs(x.delta)}`);
+        el.push({ tipo: 'rect', x: 564, y: y + alto / 2 - 10, w: 52, h: 20, relleno: window.tinteIOS(tono, 0.86), radio: 10 });
+        texto(564, y + alto / 2 - 10, 52, 20, t, 11, tono, { peso: 700, alinear: 'center' });
+        if (n < lista.length - 1) el.push({ tipo: 'linea', x1: 348, y1: y + alto, x2: 616, y2: y + alto, color: C.agrupado, grosor: 1 });
+    });
+    const sobran = L.cambios.length - lista.length;
+    if (sobran > 0) texto(348, 190 + lista.length * alto + 2, 268, 16, `y ${sobran} más`, 11, C.secundario);
+
+    // Columna 3: lo que está por debajo de la meta, de lo más lejos a lo más
+    // cerca, cada una con lo que la frena.
+    rotulo(660, 166, 252, 'Lejos de la meta');
+    const cartas = L.lejos.slice(0, window.MAX_LEJOS_REFLEXION);
+    if (!cartas.length) {
+        el.push({ tipo: 'rect', x: 660, y: 190, w: 252, h: 64, relleno: window.tinteIOS(C.verde, 0.88), radio: 14 });
+        texto(676, 200, 220, 44, 'Todas las clasificaciones están en la meta.', 12.5, C.verde, { peso: 600 });
+    }
+    const hc = Math.min(70, (300 - 10 * (cartas.length - 1)) / Math.max(1, cartas.length));
+    cartas.forEach((x, n) => {
+        const y = 190 + n * (hc + 10);
+        el.push({ tipo: 'rect', x: 660, y, w: 252, h: hc, relleno: C.agrupado, radio: 14 });
+        el.push({ tipo: 'rect', x: 660, y: y + 12, w: 4, h: hc - 24, relleno: color(x.c.promedio), radio: 2 });
+        texto(676, y + 8, 170, 18, window.partirEnRenglones(x.c.nombre, 24, 1)[0], 12.5, C.texto, { peso: 600 });
+        texto(846, y + 8, 54, 18, `${x.c.promedio}%`, 14, color(x.c.promedio), { peso: 700, alinear: 'right' });
+        texto(676, y + 27, 224, 14, `Faltan ${x.faltan} ${x.faltan === 1 ? 'punto' : 'puntos'}`, 10.5, C.secundario);
+        if (x.causa && hc >= 58) texto(676, y + 43, 224, 14, x.causa.texto, 10.5, C.texto, { peso: 500 });
+    });
+    const restan = L.lejos.length - cartas.length;
+    if (restan > 0) texto(660, 190 + cartas.length * (hc + 10), 252, 16, `y ${restan} más por debajo`, 11, C.secundario);
+    return el;
+};
+
+// La segunda: ¿qué vamos a hacer? Las preguntas que salen de la primera y, a
+// la derecha, los compromisos: renglones vacíos de acción, responsable y fecha
+// para llenar en la junta —en el PowerPoint se escribe encima—.
+window.diapositivaDeAcciones = (i, numero, cuantas) => {
+    const C = window.COLORES_IOS;
+    const L = window.reflexionDeSemana(i);
+    const el = [];
+    const texto = window.marcoDeReflexion(el, i, '¿Qué vamos a hacer?', 2, numero, cuantas);
+    const rotulo = (x, y, w, t) => texto(x, y, w, 16, t.toUpperCase(), 11, C.secundario, { peso: 600, espaciado: 0.6 });
+
+    rotulo(48, 122, 420, 'Preguntas para el equipo');
+    let y = 146;
+    const hueco = 10;
+    const bloques = L.preguntas.map(t => window.partirEnRenglones(t, 56, 3));
+    const altoTotal = bloques.reduce((a, b) => a + 24 + b.length * 17, 0) + hueco * (bloques.length - 1);
+    const escala = altoTotal > 346 ? 346 / altoTotal : 1;
+    bloques.forEach((lineas, n) => {
+        const h = (24 + lineas.length * 17) * escala;
+        el.push({ tipo: 'rect', x: 48, y, w: 420, h, relleno: C.agrupado, radio: 14 });
+        el.push({ tipo: 'circulo', cx: 72, cy: y + h / 2, r: 12, relleno: C.azul });
+        texto(60, y + h / 2 - 12, 24, 24, String(n + 1), 12, '#ffffff', { peso: 700, alinear: 'center' });
+        const inicio = y + (h - lineas.length * 17 * escala) / 2;
+        lineas.forEach((t, k) => texto(96, inicio + k * 17 * escala, 360, 17 * escala, t, 12.5, C.texto, { peso: 500 }));
+        y += h + hueco * escala;
+    });
+
+    // Los compromisos: una tabla vacía, con sus columnas rotuladas.
+    const tx = 504, tw = 408;
+    rotulo(tx, 122, tw, 'Compromisos');
+    const cols = [{ t: 'Acción', x: tx, w: 220 }, { t: 'Responsable', x: tx + 228, w: 110 }, { t: 'Fecha', x: tx + 346, w: 62 }];
+    el.push({ tipo: 'rect', x: tx, y: 146, w: tw, h: 346, relleno: C.agrupado, radio: 18 });
+    cols.forEach(c => texto(c.x + 16, 158, c.w - 16, 16, c.t, 11.5, C.secundario, { peso: 600 }));
+    const filas = 5, hf = 54;
+    for (let k = 0; k < filas; k++) {
+        const yl = 184 + (k + 1) * hf;
+        el.push({ tipo: 'linea', x1: tx + 16, y1: yl, x2: tx + tw - 16, y2: yl, color: C.terciario, grosor: 1 });
+        texto(tx + 16, yl - 22, 20, 16, `${k + 1}.`, 11, C.terciario, { peso: 600 });
+    }
+    [cols[1].x, cols[2].x].forEach(xc =>
+        el.push({ tipo: 'linea', x1: xc + 4, y1: 188, x2: xc + 4, y2: 184 + filas * hf, color: C.separador, grosor: 1 }));
+    texto(tx + 16, 184 + filas * hf + 10, tw - 32, 16,
+        `Se revisan al abrir la presentación ${window.nombreDelPeriodo().femenino ? 'de la siguiente' : 'del siguiente'} ${window.nombreDelPeriodo().uno}.`,
+        10.5, C.secundario);
+    return el;
+};
+
 // --- DE LA LISTA AL SVG ---
 // Cada foto lleva su propio recorte, y los ids no pueden repetirse en el
 // documento: la hoja repinta la diapositiva a cada cambio de semana.
@@ -1880,7 +2166,7 @@ window.pintarPresentacion = () => {
         </div>`).join('');
     document.getElementById('semana-presentacion').innerText = window.textoDelPeriodo(semana);
     window.rotularFlechasDePeriodo(['btn-semana-anterior', 'btn-semana-siguiente']);
-    const clasificaciones = mazo.filter(d => d.id && !d.evidencias).length;
+    const clasificaciones = mazo.filter(d => d.id && !d.evidencias && !d.reflexion).length;
     const conFotos = mazo.filter(d => d.evidencias).length;
     document.getElementById('subtitulo-presentacion').innerText =
         `La planta y ${clasificaciones} ${clasificaciones === 1 ? 'clasificación' : 'clasificaciones'}` +

@@ -4798,6 +4798,38 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     un lienzo al doble de su tamaño y en JPEG sobre blanco
     (`fotoRecortadaParaPptx`); si no carga queda el recuadro gris.
 
+  **Y al final del mazo, dos de reflexión**, que no enseñan ninguna cifra
+  nueva: **leen las que ya se enseñaron**. La primera, «¿Qué nos dicen los
+  resultados?», dice en una frase cómo quedó la cifra y cuántas clasificaciones
+  están en la meta, y debajo tres columnas: de dónde sale la cifra
+  (participación, calificación de lo contestado y lo que espera calificación),
+  cada clasificación contra el periodo anterior y las que están lejos de la
+  meta con lo que las frena. La segunda, «¿Qué vamos a hacer?», convierte eso
+  en hasta cinco preguntas para el equipo —cada una nombra la clasificación y
+  su cifra— y en una tabla vacía de compromisos (acción, responsable, fecha)
+  que se llena en la junta; en el PowerPoint se escribe encima.
+
+  ```js
+  window.reflexionDeSemana(i)   // la lectura, con memoria en el resultado de la semana
+  window.diapositivaDeLectura(i, numero, cuantas)
+  window.diapositivaDeAcciones(i, numero, cuantas)
+  ```
+
+  Tres cosas que hay que mantener:
+
+  - **Las dos mitades de la cifra pesan como ella**: la participación y la
+    calificación de lo contestado son la media de las clasificaciones, no la
+    suma de respuestas, o la clasificación con más padrón hablaría por todas
+    (la trampa de `promedioDeClasificaciones`). Por eso `resultadoDePlantaEn`
+    guarda ahora `calificadas` y `deLoContestado` de cada clasificación.
+  - **La causa de cada una es la primera que falla**: participación, después
+    calificación de lo contestado, después revisión pendiente. El diagnóstico
+    de la planta es la causa que más se repite entre las que no llegan, no la
+    de los totales.
+  - **Su entrada del mazo lleva `reflexion`** y `laminaDe` la despacha antes
+    que las evidencias; el subtítulo de la hoja no las cuenta como
+    clasificaciones.
+
   **En la hoja van todas, una debajo de otra**, y tocar una la abre a pantalla
   completa. Ahí **izquierda y derecha pasan de diapositiva** —las flechas,
   deslizar el dedo sin zoom y las del teclado, como en Keynote— y **la semana
