@@ -39,7 +39,7 @@ Los mensajes de commit van en español.
 | `12-almacenamiento.js` | Consumo de Supabase: archivos por bucket y peso de la base |
 | `13-gestion.js` | Gestionar información: personal, departamentos, puestos, encargos, áreas, plantas y líneas, y la cadena de mando |
 | `14-vacaciones.js` | La hoja de cargar vacaciones y nombrar relevo; las reglas viven en `1-config.js` |
-| `15-presentacion.js` | La presentación semanal: la diapositiva del resultado de la planta, en la hoja y en `.pptx` |
+| `15-presentacion.js` | La presentación semanal y la mensual —una sola, con dos cortes—: la diapositiva del resultado de la planta, en la hoja y en `.pptx` |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -4665,6 +4665,43 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   resultado general de la planta: la cifra grande, las respuestas, la
   diferencia con la semana anterior, la tendencia de los últimos doce meses y
   una barra por clasificación. Se ve en la hoja y se descarga como `.pptx`.
+
+  **Y es la misma presentación por semana o por mes.** Al final de la tarjeta
+  van dos renglones, «Presentación de la semana» y «Presentación del mes», y los
+  dos abren `abrirPresentacion(modo)` con `'semanal'` o `'mensual'`: la misma
+  hoja, las mismas diapositivas y el mismo cálculo. Lo único que cambia es el
+  tamaño del periodo que se enseña y cómo se nombra, y eso vive **en un solo
+  sitio**:
+
+  ```js
+  window.CORTES_PRESENTACION     // { semanal, mensual }: frecuencia, recientes, títulos, textos, archivo
+  window.corteDePresentacion()   // el del modo abierto; sin modo, el semanal
+  window.nombreDelPeriodo()      // «semana»/«mes», «la semana anterior», «del mes», «Últimos 3 meses»
+  window.textoDelPeriodo(p)      // «Semana del 28 sep al 4 oct 2026 · en curso», «Septiembre 2026»
+  ```
+
+  **Nada del resto del archivo pregunta por el modo**: toda diapositiva, toda
+  cifra y todo texto se escribe una vez y vale para las dos. Un texto nuevo que
+  nombre el periodo pasa por `nombreDelPeriodo` —nunca «semana» escrito a
+  mano—, y un corte nuevo es una entrada más de `CORTES_PRESENTACION`.
+
+  Cuatro cosas que hay que mantener:
+
+  - **Los nombres dicen «semana» por historia.** `presentacion.semanas`,
+    `resultadoDeSemana`, `diapositivasDeSemana`, `evidenciasDeSemana`… hablan del
+    periodo de la presentación, que en el corte mensual es un mes. No se
+    renombraron para no tocar medio archivo a cambio de nada.
+  - **Los puntos pequeños de la tendencia son siempre semanas**, en los dos
+    cortes: salen de `presentacion.cierresSemanales`, que `abrirPresentacion`
+    calcula aparte, y no de los periodos que se enseñan. Si salieran de ahí, en
+    el mensual coincidirían con los puntos grandes y la gráfica dejaría de
+    parecerse a la de la tarjeta.
+  - **El primer desempate mira `recientes` periodos del corte**: las últimas
+    cuatro semanas, o los últimos tres meses. «Resuelve en» sigue mirando las
+    últimas cuatro semanas en los dos: es cuánto tarda **últimamente**.
+  - **`resultadoDeSemana` comparte memoria con `resultadoEnInstante`**: el
+    periodo que se mira y el cierre de la tendencia son el mismo instante y no
+    tienen por qué calcularse dos veces.
 
   **Detrás va una diapositiva por clasificación**, con la misma forma: su
   cifra, sus respuestas, su tendencia, una fila por cada una de sus encuestas y

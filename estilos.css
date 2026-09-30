@@ -6759,3 +6759,7 @@ html.fondo-anclado body {
 #modal-presentacion-completa.esta-ampliada:active { cursor: grabbing; }
 
 .zona-evidencia { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* Las dos presentaciones —la semanal y la mensual— van seguidas, como dos
+   renglones de la misma lista: la segunda no repite el hueco de arriba. */
+.tarjeta-presentacion + .tarjeta-presentacion { margin-top: -10px; }

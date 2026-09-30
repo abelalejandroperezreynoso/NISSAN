@@ -35,8 +35,54 @@
 
 window.LIBRERIA_PRESENTACIONES = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
 
-// Lo que se está mirando: las semanas que se pueden enseñar y cuál.
+// Lo que se está mirando: los periodos que se pueden enseñar y cuál. Se llaman
+// `semanas` porque la presentación nació semanal; con el corte mensual son
+// meses, y todo lo que dice «semana» en un nombre de función habla del periodo
+// de la presentación, sea cual sea.
 window.presentacion = { semanas: [], indice: 0, resultados: {} };
+
+// --- LOS DOS CORTES ---
+//
+// La presentación es **una sola** y se mira por semana o por mes: la misma
+// diapositiva, el mismo cálculo y las mismas reglas, y lo único que cambia es
+// de qué tamaño es el periodo que se enseña y cómo se nombra. Todo lo que
+// dependa del corte sale de aquí, y nada más en el archivo pregunta por él:
+// así un cambio en la diapositiva vale para las dos sin tocarlas por separado.
+//
+// `recientes` es cuántos periodos mira el primer desempate —la que se mira y
+// las de antes—: cuatro semanas, o tres meses.
+window.CORTES_PRESENTACION = {
+    semanal: {
+        frecuencia: 'weekly', recientes: 4, titulo: 'Presentación semanal',
+        boton: 'Presentación de la semana', archivo: 'semana',
+        texto: (s) => window.textoDeSemana(s),
+        corto: (s) => `${s.inicio.getDate()}\n${window.MESES_CORTOS[s.inicio.getMonth()]}`,
+        largo: (s) => window.textoDeSemana(s).replace('Semana del ', '')
+    },
+    mensual: {
+        frecuencia: 'monthly', recientes: 3, titulo: 'Presentación mensual',
+        boton: 'Presentación del mes', archivo: 'mes',
+        texto: (s) => window.textoDeMes(s),
+        corto: (s) => `${window.MESES_CORTOS[s.inicio.getMonth()]}\n${String(s.inicio.getFullYear()).slice(2)}`,
+        largo: (s) => window.textoDeMes(s).toLowerCase()
+    }
+};
+window.corteDePresentacion = (modo) =>
+    window.CORTES_PRESENTACION[modo || window.presentacion.modo] || window.CORTES_PRESENTACION.semanal;
+
+// Cómo se nombra el periodo del corte, sacado de `PLURAL_DE_PERIODO`:
+// «semana»/«mes», «la semana anterior»/«el mes anterior», «de la semana»/«del
+// mes», «Últimas 4 semanas»/«Últimos 3 meses».
+window.nombreDelPeriodo = () => {
+    const [uno, varios, femenino] = window.PLURAL_DE_PERIODO[window.corteDePresentacion().frecuencia];
+    return {
+        uno, varios, femenino: !!femenino,
+        anterior: `${femenino ? 'la' : 'el'} ${uno} anterior`,
+        del: femenino ? `de la ${uno}` : `del ${uno}`,
+        ultimos: (n) => `${femenino ? 'Últimas' : 'Últimos'} ${n} ${varios}`
+    };
+};
+window.textoDelPeriodo = (s) => window.corteDePresentacion().texto(s) + (s.actual ? ' · en curso' : '');
 
 // ¿Se puede ofrecer? Sólo con la tarjeta del administrador dibujada y sin haber
 // llegado al tope de respuestas, que es cuando la historia está entera.
@@ -47,8 +93,8 @@ window.hayPresentacion = () => !!window.tarjetaDeEncuestasEsAdmin
 // El botón del final de la tarjeta. Sin tarjeta de administrador, nada.
 window.botonDePresentacion = () => {
     if (!window.hayPresentacion()) return '';
-    return `
-        <button type="button" class="tarjeta-presentacion" onclick="window.abrirPresentacion()">
+    return Object.keys(window.CORTES_PRESENTACION).map(modo => `
+        <button type="button" class="tarjeta-presentacion" onclick="window.abrirPresentacion('${modo}')">
             <span class="tarjeta-presentacion-icono" aria-hidden="true">
                 <svg width="18" height="18" viewBox="0 0 24 24">
                     <rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/>
@@ -57,11 +103,11 @@ window.botonDePresentacion = () => {
                 </svg>
             </span>
             <span class="tarjeta-presentacion-texto">
-                <b>Presentación de la semana</b>
+                <b>${window.CORTES_PRESENTACION[modo].boton}</b>
                 <span>Resultado general de la planta</span>
             </span>
             <span class="fila-ios-chevron">›</span>
-        </button>`;
+        </button>`).join('');
 };
 
 // Las respuestas de la presentación. La gráfica mira hasta doce meses atrás y la
@@ -106,16 +152,18 @@ window.respuestasParaPresentar = () => window.presentacion.respuestas || window.
 // Las semanas que tienen datos: desde doce meses atrás —o desde donde las
 // respuestas están enteras— hasta la que corre, de la más vieja a la más nueva. La que corre se mira con la hora de
 // ahora, que su cierre todavía no ha llegado.
-window.semanasDeLaPresentacion = (cubreDesde) => {
+window.semanasDeLaPresentacion = (cubreDesde, frecuencia) => {
+    const ritmo = frecuencia || 'weekly';
     const meses = window.periodosDeClasificacion(
         [{ frequency: 'monthly' }], window.MESES_EN_LA_TENDENCIA);
     let desde = meses.length ? meses[meses.length - 1].inicio : null;
     if (!(desde instanceof Date)) return [];
     if (cubreDesde instanceof Date && cubreDesde > desde) desde = cubreDesde;
 
-    const cuantas = Math.ceil((Date.now() - desde.getTime()) / (7 * 86400000)) + 1;
+    const dias = ritmo === 'monthly' ? 28 : 7;
+    const cuantas = Math.ceil((Date.now() - desde.getTime()) / (dias * 86400000)) + 1;
     const ahora = new Date();
-    return window.periodosDeClasificacion([{ frequency: 'weekly' }], cuantas)
+    return window.periodosDeClasificacion([{ frequency: ritmo }], cuantas)
         .filter(p => p.inicio instanceof Date && p.inicio >= desde)
         .map(p => ({
             inicio: p.inicio,
@@ -134,6 +182,11 @@ window.textoDeSemana = (semana) => {
     const deA = a.getMonth() === b.getMonth() ? `${a.getDate()}` : `${a.getDate()} ${meses[a.getMonth()]}`;
     return `Semana del ${deA} al ${b.getDate()} ${meses[b.getMonth()]} ${b.getFullYear()}`;
 };
+
+// «Septiembre 2026».
+window.MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto',
+                       'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+window.textoDeMes = (mes) => `${window.MESES_LARGOS[mes.inicio.getMonth()]} ${mes.inicio.getFullYear()}`;
 
 // El resultado de la planta en un instante: el general —cada clasificación
 // pesa lo mismo— y el de cada clasificación. Lo que en ese instante todavía no
@@ -349,7 +402,7 @@ window.evidenciasParaDiapositiva = (fotos, cuantas) => {
 // de semana volvería a preguntar por siete de ellas.
 window.resultadoDeSemana = (i) => {
     const p = window.presentacion;
-    if (!p.resultados[i]) p.resultados[i] = window.resultadoDePlantaEn(p.semanas[i].referencia);
+    if (!p.resultados[i]) p.resultados[i] = window.resultadoEnInstante(p.semanas[i].referencia);
     return p.resultados[i];
 };
 
@@ -468,16 +521,20 @@ window.mesesDeLaTendencia = (i, clave) => {
 window.puntosSemanalesDeLaTendencia = (i, clave, tramo, px) => {
     const p = window.presentacion;
     if (tramo.length < 2 || tramo[0].ritmo === 'weekly') return [];
+    const hasta = p.semanas[i].referencia;
     const salida = [];
-    for (let k = 0; k < i; k++) {
-        const r = p.semanas[k].referencia;
+    // Los cierres de cada semana, sea cual sea el corte: en el mensual también
+    // van los puntos pequeños, que son semanas y no periodos de la presentación.
+    (p.cierresSemanales || []).forEach(c => {
+        const r = c.referencia;
+        if (c.actual || !(r < hasta)) return;
         const j = tramo.findIndex((t, n) => n > 0 && r > tramo[n - 1].ref && r < t.ref);
-        if (j < 0) continue;
+        if (j < 0) return;
         const a = tramo[j - 1].ref.getTime(), b = tramo[j].ref.getTime();
-        const v = window.vistaDe(window.resultadoDeSemana(k), clave);
-        if (!v || v.promedio === null) continue;
+        const v = window.vistaDe(window.resultadoEnInstante(r), clave);
+        if (!v || v.promedio === null) return;
         salida.push({ x: px(j - 1) + (px(j) - px(j - 1)) * (r.getTime() - a) / (b - a), valor: v.promedio });
-    }
+    });
     return salida;
 };
 
@@ -500,7 +557,7 @@ window.destacadosDeSemana = (i, clave) => {
     const llave = clave || '';
     if (!r.destacados[llave]) {
         const historia = {};
-        for (let k = Math.max(0, i - window.SEMANAS_DEL_DESEMPATE + 1); k <= i; k++) {
+        for (let k = Math.max(0, i - window.corteDePresentacion().recientes + 1); k <= i; k++) {
             window.personasDeSemana(k, clave).forEach(p => {
                 const id = String(p.emp.id);
                 (historia[id] = historia[id] || []).push(p.promedio);
@@ -782,7 +839,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
 
     // Encabezado: la semana en gris encima y el título grande debajo, como el
     // de una pantalla de iOS. Sin barras ni líneas.
-    texto(48, 38, 600, 18, (window.textoDeSemana(semana) + (semana.actual ? ' · en curso' : '')), 14, C.secundario, { peso: 500 });
+    texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
     texto(48, 58, 700, 44, window.partirEnRenglones(r.nombre, 36, 1)[0], 34, C.texto, { peso: 700 });
     texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
 
@@ -803,8 +860,9 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     if (anterior && anterior.promedio !== null && r.promedio !== null) {
         const d = r.promedio - anterior.promedio;
         const tono = d > 0 ? C.verde : (d < 0 ? C.rojo : C.secundario);
-        const t = d === 0 ? 'Igual que la semana anterior'
-            : `${d > 0 ? '▲' : '▼'} ${Math.abs(d)} ${Math.abs(d) === 1 ? 'punto' : 'puntos'} vs. semana anterior`;
+        const nom = window.nombreDelPeriodo();
+        const t = d === 0 ? `Igual que ${nom.anterior}`
+            : `${d > 0 ? '▲' : '▼'} ${Math.abs(d)} ${Math.abs(d) === 1 ? 'punto' : 'puntos'} vs. ${nom.uno} anterior`;
         const ancho = Math.min(260, t.length * 6.4 + 24);
         el.push({ tipo: 'rect', x: 48, y: 318, w: ancho, h: 24, relleno: window.tinteIOS(tono, 0.86), radio: 12 });
         texto(48, 318, ancho, 24, t, 11.5, tono, { peso: 600, alinear: 'center' });
@@ -911,7 +969,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         const desde = 160 + lista.length * alto + (sobran > 0 ? 20 : 0) + 20;
         const hf = Math.min(Math.round(bw * 3 / 4), 494 - desde - 16 - 36);
         if (f && hf >= 96) {
-            rotulo(bx, desde, bw, 'Evidencia de la semana');
+            rotulo(bx, desde, bw, `Evidencia ${window.nombreDelPeriodo().del}`);
             const yf = desde + 22;
             window.fotoDeEvidenciaEnDiapositiva(el, f, bx, yf, bw, hf);
         }
@@ -993,7 +1051,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             : `${p.calificadas}/${p.asignadas} calificadas`);
         if (p.porCalificar > 0) detalle.push(`${p.porCalificar} ${p.porCalificar === 1 ? 'respuesta' : 'respuestas'} sin calificar`);
         if (p.diasDeRespuesta !== null) detalle.push(`Resuelve en ${window.textoDeDias(p.diasDeRespuesta)}`);
-        if (p.semanasRecientes > 1) detalle.push(`Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`);
+        if (p.semanasRecientes > 1) detalle.push(`${window.nombreDelPeriodo().ultimos(p.semanasRecientes)}: ${p.promedioReciente}%`);
         if (p.empates > 0) detalle.push(`Empató con ${p.empates}`);
         const MAX_LETRAS = 42, renglones = [];
         detalle.forEach(t => {
@@ -1077,7 +1135,7 @@ window.diapositivaDeEvidencias = (i, clave, numero, cuantas) => {
         el.push(Object.assign({ tipo: 'texto', x, y, w, h, texto: t, tam, color: col }, extra || {}));
 
     el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
-    texto(48, 38, 600, 18, (window.textoDeSemana(semana) + (semana.actual ? ' · en curso' : '')), 14, C.secundario, { peso: 500 });
+    texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
     texto(48, 58, 700, 44, window.partirEnRenglones(r ? r.nombre : '', 36, 1)[0], 34, C.texto, { peso: 700 });
     texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
     texto(48, 106, 500, 16, 'EVIDENCIA FOTOGRÁFICA', 11, C.secundario, { peso: 600, espaciado: 0.6 });
@@ -1352,7 +1410,7 @@ window.montarHojaPresentacion = () => {
         <div class="hoja-contenido" style="max-width:760px; overflow:hidden; padding:12px 0 0;">
             <div class="hoja-encabezado-lista">
                 <div style="min-width:0;">
-                    <h3 class="hoja-titulo">Presentación semanal</h3>
+                    <h3 class="hoja-titulo" id="titulo-presentacion">Presentación semanal</h3>
                     <div class="hoja-subtitulo" id="subtitulo-presentacion"></div>
                 </div>
                 <div class="hoja-acciones">
@@ -1389,9 +1447,12 @@ window.montarHojaPresentacion = () => {
     return overlay;
 };
 
-window.abrirPresentacion = async () => {
+window.abrirPresentacion = async (modo) => {
     if (!window.hayPresentacion()) return;
+    modo = window.CORTES_PRESENTACION[modo] ? modo : 'semanal';
+    const corte = window.corteDePresentacion(modo);
     const hoja = window.montarHojaPresentacion();
+    document.getElementById('titulo-presentacion').innerText = corte.titulo;
     hoja.style.display = 'flex';
     const sub = document.getElementById('subtitulo-presentacion');
     const caja = document.getElementById('diapositiva-presentacion');
@@ -1408,9 +1469,10 @@ window.abrirPresentacion = async () => {
         return;
     }
     if (hoja.style.display !== 'flex') return;
-    const semanas = window.semanasDeLaPresentacion(datos.cubreDesde);
-    if (semanas.length === 0) { sub.innerText = 'Todavía no hay semanas que enseñar.'; caja.innerHTML = ''; return; }
-    window.presentacion = { semanas, indice: semanas.length - 1, resultados: {}, clave: '',
+    const semanas = window.semanasDeLaPresentacion(datos.cubreDesde, corte.frecuencia);
+    if (semanas.length === 0) { sub.innerText = 'Todavía no hay periodos que enseñar.'; caja.innerHTML = ''; return; }
+    window.presentacion = { modo, semanas, indice: semanas.length - 1, resultados: {}, clave: '',
+                            cierresSemanales: window.semanasDeLaPresentacion(datos.cubreDesde, 'weekly'),
                             respuestas: datos.respuestas, cubreDesde: datos.cubreDesde };
     window.pintarPresentacion();
 };
@@ -1511,9 +1573,10 @@ window.pintarPresentacionCompleta = () => {
     document.getElementById('btn-completa-siguiente').disabled = k === mazo.length - 1;
     document.getElementById('contador-completa').innerText = `${k + 1} / ${mazo.length}`;
     const semana = p.semanas[p.indice];
-    const d = semana.inicio;
-    document.getElementById('semana-completa-texto').dataset.corto = `${d.getDate()}\n${window.MESES_CORTOS[d.getMonth()]}`;
-    document.getElementById('semana-completa-texto').dataset.largo = window.textoDeSemana(semana).replace('Semana del ', '');
+    const corte = window.corteDePresentacion();
+    document.getElementById('semana-completa-texto').dataset.corto = corte.corto(semana);
+    document.getElementById('semana-completa-texto').dataset.largo = corte.largo(semana);
+    window.rotularFlechasDePeriodo(['btn-completa-semana-anterior', 'btn-completa-semana-siguiente']);
     document.getElementById('btn-completa-semana-anterior').disabled = p.indice === 0;
     document.getElementById('btn-completa-semana-siguiente').disabled = p.indice === p.semanas.length - 1;
     window.ajustarPresentacionCompleta();
@@ -1790,6 +1853,18 @@ window.moverSemanaPresentacion = (paso) => {
     window.pintarPresentacion();
 };
 
+// Las flechas de periodo dicen cuál: «Semana anterior», «Mes siguiente».
+window.rotularFlechasDePeriodo = (ids) => {
+    const nom = window.nombreDelPeriodo();
+    const mayus = nom.uno.charAt(0).toUpperCase() + nom.uno.slice(1);
+    ids.forEach((id, n) => {
+        const b = document.getElementById(id);
+        if (!b) return;
+        const t = `${mayus} ${n === 0 ? 'anterior' : 'siguiente'}`;
+        b.title = t; b.setAttribute('aria-label', t);
+    });
+};
+
 window.pintarPresentacion = () => {
     const p = window.presentacion;
     const semana = p.semanas[p.indice];
@@ -1803,8 +1878,8 @@ window.pintarPresentacion = () => {
              onclick="window.abrirPresentacionCompleta(${k})">
             ${window.svgDeDiapositiva(window.laminaDe(p.indice, d, k + 1, mazo.length))}
         </div>`).join('');
-    const rotulo = window.textoDeSemana(semana) + (semana.actual ? ' · en curso' : '');
-    document.getElementById('semana-presentacion').innerText = rotulo;
+    document.getElementById('semana-presentacion').innerText = window.textoDelPeriodo(semana);
+    window.rotularFlechasDePeriodo(['btn-semana-anterior', 'btn-semana-siguiente']);
     const clasificaciones = mazo.filter(d => d.id && !d.evidencias).length;
     const conFotos = mazo.filter(d => d.evidencias).length;
     document.getElementById('subtitulo-presentacion').innerText =
@@ -1840,7 +1915,7 @@ window.descargarPresentacion = async () => {
         await window.cargarLibreria(window.LIBRERIA_PRESENTACIONES);
         const pptx = new window.PptxGenJS();
         pptx.layout = 'LAYOUT_WIDE';
-        pptx.title = `Resultado de la planta · ${window.textoDeSemana(semana)}`;
+        pptx.title = `Resultado de la planta · ${window.corteDePresentacion().texto(semana)}`;
         // Todas las de la semana, en el orden de la hoja, con sus evidencias:
         // si todavía no habían llegado, se esperan aquí.
         await window.cargarEvidenciasDeSemana(p.indice);
@@ -1849,8 +1924,10 @@ window.descargarPresentacion = async () => {
         await window.fotosParaPptx([].concat(...hojas));
         hojas.forEach(elementos => window.agregarDiapositivaPptx(pptx, elementos));
         const d = semana.inicio;
-        const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        await pptx.writeFile({ fileName: `Resultado-planta-semana-${dia}.pptx` });
+        const corte = window.corteDePresentacion();
+        const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` +
+            (corte.frecuencia === 'monthly' ? '' : `-${String(d.getDate()).padStart(2, '0')}`);
+        await pptx.writeFile({ fileName: `Resultado-planta-${corte.archivo}-${dia}.pptx` });
     } catch (e) {
         alert('No se pudo preparar la presentación: ' + e.message);
     } finally {
