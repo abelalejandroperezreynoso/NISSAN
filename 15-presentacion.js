@@ -651,6 +651,8 @@ window.atrasoDeRevision = (encuestas, referencia) => {
 // El mejor y el peor, y con cuántos empataron esa semana. El empate se
 // deshace en este orden, que es el mismo para los dos, al revés:
 //
+//   0. Para el peor, a igual cifra, quien más respuestas deja sin calificar:
+//      un revisor atrasado detiene el resultado de todo su grupo.
 //   1. El promedio de las últimas cuatro semanas (`promedioReciente`): quien
 //      sostiene el resultado semana tras semana va delante de quien lo tuvo una.
 //      Entre quienes no contestaron nada, va delante quien tampoco contestó
@@ -662,10 +664,17 @@ window.atrasoDeRevision = (encuestas, referencia) => {
 //
 // El mejor sólo puede salir de quien tiene algo calificado; el peor, de
 // cualquiera —también de quien no contestó nada—, menos del propio mejor. Sin
-// nadie calificado no hay ninguno de los dos: no hay contra qué comparar.
+// nadie calificado no hay mejor, y el peor sólo puede ser un revisor con
+// respuestas esperándolo: que nadie tenga resultado es su atraso.
 window.destacadosDeLaSemana = (todas) => {
     const personas = todas.filter(p => p.calificadas > 0);
-    if (!personas.length) return { mejor: null, peor: null };
+    // Sin nada calificado no hay mejor, pero el peor puede ser el revisor que
+    // lo tiene detenido: que nadie tenga resultado es justo su atraso. Ahí
+    // sólo cuentan los revisores con respuestas esperándolos —quien no
+    // contestó no tiene contra quién compararse—.
+    const atrasados = todas.filter(p => (p.porCalificar || 0) > 0);
+    if (!personas.length && !atrasados.length) return { mejor: null, peor: null };
+    const candidatosPeor = personas.length ? todas : atrasados;
     const nombre = (p) => String(p.emp.name || '');
     const reciente = (p) => p.promedioReciente === undefined ? p.promedio : p.promedioReciente;
     const mejores = personas.slice().sort((a, b) => b.promedio - a.promedio
@@ -673,17 +682,18 @@ window.destacadosDeLaSemana = (todas) => {
         || b.calificadas - a.calificadas
         || (a.terminoEn || 0) - (b.terminoEn || 0)
         || nombre(a).localeCompare(nombre(b), 'es'));
-    const peores = todas.slice().sort((a, b) => a.promedio - b.promedio
+    const peores = candidatosPeor.slice().sort((a, b) => a.promedio - b.promedio
+        || (b.porCalificar || 0) - (a.porCalificar || 0)
         || reciente(a) - reciente(b)
         || (b.asignadas - b.contestadas) - (a.asignadas - a.contestadas)
         || (b.terminoEn || 0) - (a.terminoEn || 0)
         || nombre(a).localeCompare(nombre(b), 'es'));
-    const mejor = mejores[0];
+    const mejor = mejores[0] || null;
     const empates = (p, grupo) => grupo.filter(q => q !== p && q.promedio === p.promedio).length;
     const peor = peores.find(p => p !== mejor) || null;
     return {
-        mejor: Object.assign({ empates: empates(mejor, personas) }, mejor),
-        peor: peor ? Object.assign({ empates: empates(peor, todas) }, peor) : null
+        mejor: mejor ? Object.assign({ empates: empates(mejor, personas) }, mejor) : null,
+        peor: peor ? Object.assign({ empates: empates(peor, candidatosPeor) }, peor) : null
     };
 };
 

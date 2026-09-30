@@ -4907,6 +4907,17 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     se calificó solo o se anuló no se le pedía a nadie. Un revisor sin encuestas
     propias puede salir de «menor desempeño» por su atraso, pero no de «mejor»,
     y su tarjeta dice «N respuestas sin calificar».
+
+    **Y un revisor atrasado tiene que poder salir de verdad.** Con sólo eso casi
+    nunca salía: siempre había alguien que no contestó nada en 0%, y el caso
+    más claro —una encuesta con 24 respuestas y ninguna calificada— dejaba las
+    dos tarjetas en «Todavía nadie tiene resultados calificados», justo cuando
+    quien fallaba era él. Por eso, a igual cifra, el peor es **quien más deja
+    sin calificar** —detiene el resultado de todo su grupo—, y **sin nadie
+    calificado** no hay mejor pero el peor sale de entre los revisores con
+    respuestas esperándolos; quien no contestó no entra ahí, que no hay nadie
+    con resultado contra quien compararlo. El plazo de `DIAS_PARA_CALIFICAR`
+    sigue valiendo: lo enviado esta semana todavía no es atraso de nadie.
   - **El empate se deshace con un criterio que se pueda explicar**, el mismo
     para los dos y al revés para el peor: primero el **promedio de las últimas
     cuatro semanas** (`SEMANAS_DEL_DESEMPATE`, sólo las que tuvo algo
