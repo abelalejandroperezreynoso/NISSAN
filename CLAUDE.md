@@ -4804,18 +4804,36 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   están en la meta, y debajo tres columnas: de dónde sale la cifra
   (participación, calificación de lo contestado y lo que espera calificación),
   cada clasificación contra el periodo anterior y las que están lejos de la
-  meta con lo que las frena. La segunda, «¿Qué vamos a hacer?», convierte eso
-  en hasta cinco preguntas para el equipo —cada una nombra la clasificación y
-  su cifra— y en una tabla vacía de compromisos (acción, responsable, fecha)
-  que se llena en la junta; en el PowerPoint se escribe encima.
+  meta con lo que las frena. Al pie, a todo lo ancho, **el departamento con
+  menor desempeño**: su cifra, su lugar, cómo cambió, la participación, cuánta
+  gente no contestó nada, lo que espera calificación y su clasificación más
+  baja. La segunda, «¿Qué vamos a hacer?», **se enfoca en ese departamento**:
+  lo dice debajo del título, y sus hasta cinco preguntas y la tabla vacía de
+  compromisos (acción, responsable, fecha) son para él —su clasificación más
+  baja, su gente sin contestar, lo que le falta, cómo cayó, el equipo más
+  atrasado dentro de él, lo que espera calificación y qué copiarle al mejor—.
+  Sin departamentos, las preguntas vuelven a ser las de la planta. En el
+  PowerPoint los compromisos se escriben encima.
 
   ```js
-  window.reflexionDeSemana(i)   // la lectura, con memoria en el resultado de la semana
+  window.reflexionDeSemana(i)        // la lectura de la planta, con memoria
+  window.departamentosDeSemana(i)    // del peor al mejor, con memoria
+  window.departamentoRezagado(i)     // el primero, con su lugar, el mejor y su cambio
+  window.preguntasDelDepartamento(i)
   window.diapositivaDeLectura(i, numero, cuantas)
   window.diapositivaDeAcciones(i, numero, cuantas)
   ```
 
-  Tres cosas que hay que mantener:
+  Cuatro cosas que hay que mantener:
+
+  - **El departamento sale de las mismas personas que «quién destacó»**
+    (`personasDeSemana(i, '')`) y es la media de su gente, así que no puede
+    discrepar de esas tarjetas. Quien sólo entra por su atraso de revisor no
+    cuenta, y sólo compiten los de `MIN_PERSONAS_DEPARTAMENTO` (3) o más si hay
+    alguno: uno de una persona lo decide un solo resultado. A igual cifra va
+    delante el que más dejó sin contestar. Para saber qué se dejó sin contestar
+    en cada clasificación, `desempenoDePersonasEn` marca esas filas con
+    `sinContestar`.
 
   - **Las dos mitades de la cifra pesan como ella**: la participación y la
     calificación de lo contestado son la media de las clasificaciones, no la
