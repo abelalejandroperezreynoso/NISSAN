@@ -503,18 +503,26 @@ window.destacadosDeSemana = (i, clave) => {
 // sólo de quien tiene algo calificado (`destacadosDeLaSemana`).
 // Con `clave`, sólo las encuestas de esa clasificación: el mejor de
 // «Seguridad» es el mejor en «Seguridad», no el mejor de la planta.
+//
+// **Y a quien revisa le cuenta lo que deja sin calificar** (`atrasoDeRevision`),
+// pero sólo en contra: calificar es su trabajo y no un mérito, así que tenerlo
+// todo al día no le suma nada; tener respuestas esperándolo sí le resta. Entra
+// como una clasificación más de su promedio —la parte de lo que le tocaba
+// calificar que sí calificó— y sólo cuando hay atraso.
 window.desempenoDePersonasEn = (referencia, clave) => {
     const porPersona = {};
-    (window.filasDeLaTarjeta || [])
+    const nueva = (emp) => ({ emp, filas: [], asignadas: 0, contestadas: 0, calificadas: 0, terminoEn: 0,
+                              sumaDias: 0, conDias: 0, porCalificar: 0, debioCalificar: 0 });
+    const filasEnJuego = (window.filasDeLaTarjeta || [])
         .filter(f => window.encuestaExistiaEn(f.ev, referencia))
-        .filter(f => !clave || window.normalizarClasificacion(f.ev.category || '') === clave)
+        .filter(f => !clave || window.normalizarClasificacion(f.ev.category || '') === clave);
+    filasEnJuego
         .forEach(f => {
             const padron = (window.padronesDeLaTarjeta || {})[f.ev.id] || window.padronDeLaEncuesta(f.ev);
             const ultimas = window.ultimaDeCadaUnoEnPeriodo(f.ev, window.respuestasParaPresentar(), referencia);
             padron.forEach(emp => {
                 const id = String(emp.id);
-                const p = porPersona[id] || (porPersona[id] =
-                    { emp, filas: [], asignadas: 0, contestadas: 0, calificadas: 0, terminoEn: 0, sumaDias: 0, conDias: 0 });
+                const p = porPersona[id] || (porPersona[id] = nueva(emp));
                 p.asignadas++;
                 const r = ultimas[id];
                 if (!r) { p.filas.push({ ev: f.ev, puntaje: 0 }); return; }
@@ -537,12 +545,64 @@ window.desempenoDePersonasEn = (referencia, clave) => {
                 p.filas.push({ ev: f.ev, puntaje });
             });
         });
+    const atraso = window.atrasoDeRevision(filasEnJuego.map(f => f.ev), referencia);
+    Object.keys(atraso).forEach(id => {
+        const a = atraso[id];
+        if (a.pendientes === 0) return;
+        const p = porPersona[id] || (porPersona[id] = nueva(a.emp));
+        p.porCalificar = a.pendientes;
+        p.debioCalificar = a.debidas;
+        p.filas.push({ ev: { category: window.CLASIFICACION_DE_REVISION },
+                       puntaje: Math.round(100 * (a.debidas - a.pendientes) / a.debidas) });
+    });
     return Object.values(porPersona)
         .map(p => Object.assign(p, {
             promedio: window.promedioPorClasificacion(p.filas),
             diasDeRespuesta: p.conDias ? p.sumaDias / p.conDias : null
         }))
         .filter(p => p.promedio !== null);
+};
+
+// Lo que cada revisor tenía por calificar en un instante: las respuestas de
+// esas encuestas que le tocan (`revisoresDeLaRespuesta`, o su jefe inmediato si
+// la encuesta no nombra a nadie, que es la regla de `leTocaRevisar`), enviadas
+// hace más de `DIAS_PARA_CALIFICAR` y todavía sin calificar entonces —«Pendiente»
+// o «Mal Revisada» hoy, o calificadas después de ese instante si la base guarda
+// cuándo (`reviewed_at`)—. Lo que se calificó solo o se anuló no se le pedía a
+// nadie y queda fuera. Los plazos de gracia existen para no acusar a nadie de
+// lo que acaba de llegar.
+window.DIAS_PARA_CALIFICAR = 7;
+window.CLASIFICACION_DE_REVISION = '__revision_de_respuestas__';
+window.atrasoDeRevision = (encuestas, referencia) => {
+    const porId = {};
+    (encuestas || []).forEach(ev => { porId[String(ev.id)] = ev; });
+    const limite = referencia.getTime() - window.DIAS_PARA_CALIFICAR * 86400000;
+    const plantilla = {};
+    (window.todosLosEmpleadosData || []).forEach(e => { plantilla[String(e.id)] = e; });
+    const salida = {};
+    (window.respuestasParaPresentar() || []).forEach(r => {
+        const ev = porId[String(r.evaluation_id)];
+        if (!ev) return;
+        const enviada = new Date(r.submitted_at).getTime();
+        if (isNaN(enviada) || enviada > limite) return;
+        if (r.review_status === 'Falsa') return;
+        const revisadaDespues = r.reviewed_at && new Date(r.reviewed_at).getTime() > referencia.getTime();
+        const pendiente = r.review_status === 'Pendiente' || r.review_status === 'Mal Revisada' || revisadaDespues;
+        if (!pendiente && window.selloDeRevision(r).estado === 'sola') return;
+        let responsables = window.revisoresDeLaRespuesta(ev, r.employee_id);
+        if (responsables.length === 0) {
+            const quien = plantilla[String(r.employee_id)];
+            responsables = quien && quien.supId ? [String(quien.supId)] : [];
+        }
+        responsables.forEach(id => {
+            const emp = plantilla[String(id)];
+            if (!emp || !window.empleadoActivo(emp)) return;
+            const a = salida[String(id)] || (salida[String(id)] = { emp, debidas: 0, pendientes: 0 });
+            a.debidas++;
+            if (pendiente) a.pendientes++;
+        });
+    });
+    return salida;
 };
 
 // El mejor y el peor, y con cuántos empataron esa semana. El empate se
@@ -834,12 +894,16 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         // lo que decide un empate, así que se dice siempre— y con cuántos empató.
         // Quien no contestó nada lo dice con esas palabras: «0/5 calificadas»
         // se leería como un atraso del revisor.
-        const detalle = [p.contestadas === 0
+        const detalle = [];
+        if (p.asignadas > 0) detalle.push(p.contestadas === 0
             ? (p.asignadas === 1 ? 'No contestó su encuesta' : `No contestó ninguna de ${p.asignadas}`)
-            : `${p.calificadas}/${p.asignadas} encuestas calificadas`];
+            : `${p.calificadas}/${p.asignadas} encuestas calificadas`);
+        // Lo que tiene sin calificar como revisor, que es lo que le baja la cifra.
+        if (p.porCalificar > 0) detalle.push(`${p.porCalificar} ${p.porCalificar === 1 ? 'respuesta' : 'respuestas'} sin calificar`);
         if (p.diasDeRespuesta !== null) detalle.push(`Responde en ${window.textoDeDias(p.diasDeRespuesta)}`);
         if (p.semanasRecientes > 1) detalle.push(`Últimas ${p.semanasRecientes} semanas: ${p.promedioReciente}%`);
         if (p.empates > 0) detalle.push(`Empató con ${p.empates}`);
+        detalle.length = Math.min(detalle.length, 4);
         const arriba = y + 136 - detalle.length * 13 / 2;
         detalle.forEach((t, n) => texto(x + 108, arriba + n * 13, w - 120, 13, t, 10.5, C.secundario));
     };

@@ -4893,6 +4893,20 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     queda fuera. Sin nadie calificado no sale ninguno de los dos, y el peor
     nunca es el propio mejor. Su tarjeta dice «No contestó ninguna de N» en vez
     de «0/N encuestas calificadas», que se leería como atraso del revisor.
+  - **Al revisor le cuenta lo que deja sin calificar, y sólo en contra**
+    (`atrasoDeRevision`). Calificar es su trabajo y no un mérito: tenerlo todo
+    al día no le suma nada. Tener respuestas esperándolo sí le resta: entra
+    como una clasificación más de su promedio
+    (`CLASIFICACION_DE_REVISION`), con la parte de lo que le tocaba calificar
+    que sí calificó, y sólo cuando hay atraso. A quién le toca cada respuesta
+    es la regla de `leTocaRevisar`: sus revisores (`revisoresDeLaRespuesta`) o,
+    sin ninguno, el jefe inmediato. Cuenta lo enviado hace más de
+    `DIAS_PARA_CALIFICAR` (7) y sin calificar en ese instante —«Pendiente» o
+    «Mal Revisada» hoy, o calificado después si hay `reviewed_at`, que por eso
+    se trae ahora `respuestasDelPeriodoDeTodos` con `camposConRevisor`—; lo que
+    se calificó solo o se anuló no se le pedía a nadie. Un revisor sin encuestas
+    propias puede salir de «menor desempeño» por su atraso, pero no de «mejor»,
+    y su tarjeta dice «N respuestas sin calificar».
   - **El empate se deshace con un criterio que se pueda explicar**, el mismo
     para los dos y al revés para el peor: primero el **promedio de las últimas
     cuatro semanas** (`SEMANAS_DEL_DESEMPATE`, sólo las que tuvo algo

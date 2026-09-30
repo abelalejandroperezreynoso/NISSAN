@@ -844,7 +844,7 @@ window.respuestasDelPeriodoDeTodos = async (encuestas, ahora, frecuencia, cuanto
     let tope = false;
     for (let pagina = 0; pagina < window.MAX_PAGINAS_RESPUESTAS; pagina++) {
         let consulta = sb.from('evaluation_responses')
-            .select(await window.camposConApoyo('evaluation_id, employee_id, submitted_at, review_status, grades_json'))
+            .select(await window.camposConRevisor(await window.camposConApoyo('evaluation_id, employee_id, submitted_at, review_status, grades_json')))
             .in('evaluation_id', ids)
             .order('submitted_at', { ascending: false })
             .range(pagina * 1000, pagina * 1000 + 999);
