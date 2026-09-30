@@ -3710,6 +3710,19 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     jefes de baja con gente a cargo y fichas que apuntan a un número que no está
     en la plantilla—.
 
+  **Un departamento entero se da de baja de un toque**, desde su pantalla
+  («Estado», `window.estadoDepartamentoGestion(activar)`): es la misma baja de
+  la casilla «Activo» de la ficha —`is_active` en false, con todo el historial
+  intacto— aplicada a toda su gente, y «Reactivar a todo el departamento» la
+  deshace. Sólo existe para departamentos, que es lo que se cierra (una línea
+  que se desmonta, un turno que desaparece); un puesto o un encargo no. **Quien
+  la da no se da de baja a sí mismo** —se compara con el `id` de
+  `usuarioLogueado`, que es el `employee_id`—, y el aviso previo cuenta a la
+  gente de **otros** departamentos que se quedaría con su jefe de baja, que es
+  lo que la pantalla de supervisores señala después. La escritura es una sola
+  (`in('id', …)`) y compara las filas devueltas con las pedidas: una política
+  puede dejar pasar unas y no otras.
+
   El área que se escribe a mano en una ficha **se da de alta antes de guardarla**:
   la columna guarda su id y no su nombre. Y al terminar cualquier escritura se
   rehace la caché del panel de detrás (`cargarDatosEmpleados`,

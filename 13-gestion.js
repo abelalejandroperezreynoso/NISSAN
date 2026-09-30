@@ -868,10 +868,87 @@ window.PANTALLAS_GESTION.valor = (p) => {
         subtitulo: window.cuentaGestion(gente),
         guardar: p.valor ? { etiqueta: `Guardar el nombre del ${cat.singular}`, hacer: window.guardarValorGestion } : null,
         borrar: p.valor && gente.length ? { etiqueta: `Quitar el ${cat.singular} a todos`, hacer: window.quitarValorGestion } : null,
-        html: encabezado +
+        html: encabezado + window.bloqueEstadoDepartamentoGestion(p, gente) +
             `<div class="hoja-grupo-titulo">Quién lo lleva</div>` +
             window.listaPersonasGestion(gente)
     };
+};
+
+// --- Dar de baja un departamento entero ---
+//
+// Sólo en los departamentos: cerrar uno —una línea que se desmonta, un turno
+// que desaparece— es dar de baja a toda su gente, y ficha por ficha son decenas
+// de toques. Es la misma baja de la casilla «Activo» de la ficha (`is_active`),
+// así que conserva todo el historial y se deshace igual: con «Reactivar».
+//
+// Quien está usando la aplicación no se da de baja a sí mismo, igual que no
+// puede borrar su propia ficha: la sesión seguiría abierta sin nada detrás.
+window.miNumeroGestion = () => {
+    try { return String((JSON.parse(localStorage.getItem('usuarioLogueado') || 'null') || {}).id || ''); }
+    catch (e) { return ''; }
+};
+
+window.bloqueEstadoDepartamentoGestion = (p, gente) => {
+    if (p.campo !== 'department' || !p.valor || !gente.length) return '';
+    const activos = gente.filter(e => window.activoGestion(e));
+    const bajas = gente.length - activos.length;
+    const filas = [];
+    if (activos.length) filas.push(window.filaGestion({
+        icono: '⏸️',
+        titulo: 'Dar de baja a todo el departamento',
+        detalle: `${activos.length} persona${activos.length === 1 ? '' : 's'} activa${activos.length === 1 ? '' : 's'}`,
+        accion: 'window.estadoDepartamentoGestion(false)'
+    }));
+    if (bajas) filas.push(window.filaGestion({
+        icono: '▶️',
+        titulo: 'Reactivar a todo el departamento',
+        detalle: `${bajas} persona${bajas === 1 ? '' : 's'} de baja`,
+        accion: 'window.estadoDepartamentoGestion(true)'
+    }));
+    return `<div class="hoja-grupo-titulo">Estado</div>` + window.listaGestion(filas) +
+        window.notaGestion('Dar de baja conserva todo su historial y los saca de los pendientes, de las encuestas y de los conteos. Se deshace con «Reactivar».');
+};
+
+window.estadoDepartamentoGestion = (activar) => {
+    const p = window.pantallaGestionActual();
+    if (!p || p.campo !== 'department' || !p.valor) return;
+    const gente = window.personasDeValorGestion(p.campo, p.valor);
+    const yo = window.miNumeroGestion();
+    const aCambiar = gente.filter(e => window.activoGestion(e) !== activar);
+    const quedaFuera = activar ? null : aCambiar.find(e => yo && String(e.employee_id) === yo);
+    const objetivo = aCambiar.filter(e => e !== quedaFuera);
+    if (!objetivo.length) {
+        alert(quedaFuera ? 'La única ficha activa es la tuya, y no puedes darte de baja a ti mismo.' : 'No hay nadie a quien cambiar.');
+        return;
+    }
+
+    let aviso;
+    if (activar) {
+        aviso = `Se reactivará a ${objetivo.length} persona${objetivo.length === 1 ? '' : 's'} de «${p.valor}».\n\n` +
+            'Volverán a tener pendientes y a contar en las encuestas y en las estadísticas.\n\n¿Seguir?';
+    } else {
+        // Un jefe de baja con gente a cargo en otro departamento deja a esa
+        // gente sin quien la califique: se avisa antes, con nombres.
+        const numeros = new Set(objetivo.map(e => String(e.employee_id)));
+        const fuera = window.empleadosGestion().filter(e => window.activoGestion(e)
+            && numeros.has(String(e.supervisor_id || '')) && !objetivo.includes(e));
+        aviso = `Se dará de baja a ${objetivo.length} persona${objetivo.length === 1 ? '' : 's'} de «${p.valor}».\n\n` +
+            'Se conserva todo su historial, pero dejan de tener pendientes y de contar en encuestas y estadísticas.' +
+            (quedaFuera ? '\n\nTu propia ficha se queda activa: no puedes darte de baja a ti mismo.' : '') +
+            (fuera.length ? `\n\n⚠️ ${fuera.length} persona${fuera.length === 1 ? '' : 's'} de otros departamentos tiene${fuera.length === 1 ? '' : 'n'} a su jefe en esta lista y se quedará${fuera.length === 1 ? '' : 'n'} sin quien la${fuera.length === 1 ? '' : 's'} califique. Revisa la cadena de mando después.` : '') +
+            '\n\n¿Seguir?';
+    }
+    if (!confirm(aviso)) return;
+
+    return window.hacerEnGestion(activar ? 'Reactivando…' : 'Dando de baja…', async () => {
+        const filas = await window.escribirGestion(
+            sb.from('employees').update({ is_active: activar }).in('id', objetivo.map(e => e.id)).select('id'),
+            activar ? 'reactivar el departamento' : 'dar de baja el departamento');
+        // Una política puede dejar pasar unas filas y otras no: se dice.
+        if (filas.length < objetivo.length) {
+            alert(`Sólo se aplicó a ${filas.length} de ${objetivo.length} fichas: la base rechazó el resto.`);
+        }
+    }, () => window.pintarGestion());
 };
 
 // --- Las áreas ---
