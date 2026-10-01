@@ -1302,6 +1302,31 @@ window.MAX_PREGUNTAS_REFLEXION = 5;
 // Por debajo de estos puntos un cambio es ruido y no se pregunta por él.
 window.PUNTOS_PARA_PREGUNTAR = 5;
 
+// Lo que dice la fila de una clasificación en «vs. el periodo anterior», en las
+// unidades de su objetivo: una de «1 por grupo» cuenta grupos («12/20 → 14/20»),
+// una de participación su participación y una de resultado —o sin objetivo—
+// su resultado, las dos en porcentaje. `orden` pone en la misma escala las
+// diferencias de unidades distintas para poder ordenar la columna.
+window.cifraDeObjetivoEnReflexion = (i, c, antesPromedio) => {
+    const o = window.objetivoDeSemana(i, c.clave);
+    const oa = i > 0 ? window.objetivoDeSemana(i - 1, c.clave) : null;
+    const m = o && o.medida, ma = oa && oa.medida;
+    if (m && m.tipo === 'grupos' && m.grupos > 0) {
+        const hay = ma && ma.tipo === 'grupos' && ma.grupos > 0;
+        return { antes: hay ? `${ma.cumplen}/${ma.grupos}` : null, ahora: `${m.cumplen}/${m.grupos}`,
+                 delta: hay ? m.cumplen - ma.cumplen : null, unidad: '',
+                 orden: hay ? Math.round(100 * m.cumplen / m.grupos) - Math.round(100 * ma.cumplen / ma.grupos) : null };
+    }
+    if (m && m.tipo === 'participacion' && m.valor !== null) {
+        const hay = ma && ma.tipo === 'participacion' && ma.valor !== null;
+        const d = hay ? m.valor - ma.valor : null;
+        return { antes: hay ? `${ma.valor}%` : null, ahora: `${m.valor}%`, delta: d, unidad: '%', orden: d };
+    }
+    const d = antesPromedio === null ? null : c.promedio - antesPromedio;
+    return { antes: antesPromedio === null ? null : `${antesPromedio}%`, ahora: `${c.promedio}%`,
+             delta: d, unidad: '%', orden: d };
+};
+
 window.reflexionDeSemana = (i) => {
     const r = window.resultadoDeSemana(i);
     if (r.reflexion) return r.reflexion;
@@ -1320,16 +1345,21 @@ window.reflexionDeSemana = (i) => {
         const m = window.licenciasDeSemana(i, c.clave);
         if (!m) return null;
         const a = window.licenciasDeSemana(i - 1, c.clave);
-        return { c, licencias: true, ahora: m.valor, antes: a ? a.valor : null,
-                 delta: a ? m.valor - a.valor : null };
+        const d = a ? m.valor - a.valor : null;
+        return { c, licencias: true, ahora: m.valor, antes: a ? a.valor : null, delta: d,
+                 vista: { antes: a ? String(a.valor) : null, ahora: String(m.valor), delta: d, unidad: '' } };
     }).filter(Boolean);
     const deLicencias = new Set(licencias.map(x => x.c.clave));
     const conCifra = r.clasificaciones.filter(c => c.promedio !== null && !deLicencias.has(c.clave));
+    // `delta` es siempre el del resultado, que es del que hablan las
+    // preguntas; lo que se enseña en la fila (`vista`) es la cifra de su
+    // objetivo, y de ahí sale también el orden.
     const cambios = conCifra.map(c => {
         const a = antPorClave[c.clave];
         const antes = a && a.promedio !== null ? a.promedio : null;
-        return { c, antes, delta: antes === null ? null : c.promedio - antes };
-    }).sort((x, y) => (y.delta === null ? -1000 : y.delta) - (x.delta === null ? -1000 : x.delta)
+        return { c, antes, delta: antes === null ? null : c.promedio - antes,
+                 vista: window.cifraDeObjetivoEnReflexion(i, c, antes) };
+    }).sort((x, y) => (y.vista.orden === null ? -1000 : y.vista.orden) - (x.vista.orden === null ? -1000 : x.vista.orden)
         || x.c.nombre.localeCompare(y.c.nombre, 'es'));
 
     // Qué le resta a una cifra por debajo de la meta: que no se contesta, que
@@ -1627,23 +1657,28 @@ window.diapositivaDeLectura = (i, numero, cuantas) => {
     if (!lista.length) texto(348, 184, 268, 18, 'Sin clasificaciones con resultado.', 13, C.secundario);
     lista.forEach((x, n) => {
         const y = 182 + n * alto;
+        // La cifra va primero, que de su ancho depende cuánto nombre cabe.
+        const v = x.vista;
+        const cifra = v.antes === null ? (x.licencias ? `${v.ahora} lic.` : v.ahora) : `${v.antes} → ${v.ahora}`;
+        const anchoCifra = Math.ceil(cifra.length * 5.9);
+        const anchoNombre = Math.min(170, 556 - anchoCifra - 10 - 348);
+        texto(556 - anchoCifra, y, anchoCifra, alto, cifra, 10.5, x.licencias ? C.azul : C.secundario,
+            { alinear: 'right', peso: x.licencias ? 600 : 400 });
         // Con objetivo, el nombre sube y debajo va cuál es, en gris: se lee
         // la cifra sabiendo contra qué se mide.
         const obj = window.objetivoDeClasificacion ? window.objetivoDeClasificacion(x.c.nombre) : null;
         if (obj) {
-            texto(348, y + 1, 170, alto * 0.55, window.partirEnRenglones(x.c.nombre, 26, 1)[0], 11.5, C.texto, { peso: 600 });
-            texto(348, y + alto * 0.5, 170, alto * 0.45, `Objetivo: ${window.textoCortoDeObjetivo(obj)}`, 8.5, C.secundario);
+            texto(348, y + 1, anchoNombre, alto * 0.55,
+                window.partirEnRenglones(x.c.nombre, Math.floor(anchoNombre / 6.6), 1)[0], 11.5, C.texto, { peso: 600 });
+            texto(348, y + alto * 0.5, anchoNombre, alto * 0.45,
+                window.partirEnRenglones(`Objetivo: ${window.textoCortoDeObjetivo(obj)}`, Math.floor(anchoNombre / 4.4), 1)[0],
+                8.5, C.secundario);
         } else {
-            texto(348, y, 170, alto, window.partirEnRenglones(x.c.nombre, 25, 1)[0], 12, C.texto, { peso: 600 });
+            texto(348, y, anchoNombre, alto,
+                window.partirEnRenglones(x.c.nombre, Math.floor(anchoNombre / 6.8), 1)[0], 12, C.texto, { peso: 600 });
         }
-        // Una de licencias dice cuántas había y cuántas hay, en azul.
-        const cifra = x.licencias
-            ? (x.antes === null ? `${x.ahora} lic.` : `${x.antes} → ${x.ahora}`)
-            : (x.antes === null ? `${x.c.promedio}%` : `${x.antes} → ${x.c.promedio}`);
-        texto(510, y, 46, alto, cifra, 10.5, x.licencias ? C.azul : C.secundario,
-            { alinear: 'right', peso: x.licencias ? 600 : 400 });
-        const tono = x.delta === null || x.delta === 0 ? C.secundario : (x.delta > 0 ? C.verde : C.rojo);
-        const t = x.delta === null ? 'nueva' : (x.delta === 0 ? '=' : `${x.delta > 0 ? '▲' : '▼'} ${Math.abs(x.delta)}`);
+        const tono = v.delta === null || v.delta === 0 ? C.secundario : (v.delta > 0 ? C.verde : C.rojo);
+        const t = v.delta === null ? 'nueva' : (v.delta === 0 ? '=' : `${v.delta > 0 ? '▲' : '▼'} ${Math.abs(v.delta)}${v.unidad}`);
         el.push({ tipo: 'rect', x: 564, y: y + alto / 2 - 9, w: 52, h: 18, relleno: window.tinteIOS(tono, 0.86), radio: 9 });
         texto(564, y + alto / 2 - 9, 52, 18, t, 10.5, tono, { peso: 700, alinear: 'center' });
         if (n < lista.length - 1) el.push({ tipo: 'linea', x1: 348, y1: y + alto, x2: 616, y2: y + alto, color: C.agrupado, grosor: 1 });

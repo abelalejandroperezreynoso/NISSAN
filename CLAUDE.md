@@ -4024,6 +4024,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     renglón gris debajo de su nombre («Objetivo: participación 100%»), con el
     mismo texto corto que la píldora de su diapositiva
     (`window.textoCortoDeObjetivo`): la cifra se lee sabiendo contra qué se mide.
+  - **Y la cifra de esa fila es la de su objetivo**
+    (`window.cifraDeObjetivoEnReflexion`): «77/90 → 78/90» y «▲ 1» en una de
+    «1 por grupo», la participación en una de participación y el resultado, con
+    su «%», en una de resultado o sin objetivo. El orden de la columna sale de
+    esa diferencia —la de grupos, pasada a porcentaje para poder compararla—;
+    las preguntas siguen hablando del resultado (`delta`), que es de lo que
+    dicen «caer N puntos».
   - **Lo que no cambia es la cifra de la planta**, que sigue promediando todas
     las clasificaciones como la tarjeta del panel, o las dos discreparían.
 

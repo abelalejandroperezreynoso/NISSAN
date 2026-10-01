@@ -2643,6 +2643,8 @@ window.medirObjetivo = (objetivo, filas, respuestas, referencia, padrones) => {
     const cumplen = lista.filter(g => g.alcanzan > 0).length;
     const plantilla = window.todosLosEmpleadosData || [];
     salida.valor = pct(cumplen, lista.length);
+    salida.cumplen = cumplen;
+    salida.grupos = lista.length;
     salida.cumple = lista.length > 0 && cumplen === lista.length;
     salida.texto = lista.length ? `${cumplen}/${lista.length} grupos` : 'Sin grupos';
     salida.faltan = lista.filter(g => g.alcanzan === 0).map(g => {
