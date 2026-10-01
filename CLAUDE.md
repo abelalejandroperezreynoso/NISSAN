@@ -4970,6 +4970,13 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     en cada clasificación, `desempenoDePersonasEn` marca esas filas con
     `sinContestar`.
 
+  - **Las tres cifras de «De dónde sale la cifra» se comparan con el periodo
+    anterior**, a la derecha de su renglón de detalle («▲ 3% vs. 61%»), con la
+    misma regla para los dos periodos (`cifras` dentro de `reflexionDeSemana`,
+    que deja la del anterior en `cifrasAntes`). En «Esperan calificación»
+    bajar es lo bueno y va en verde. Para que quepa, el detalle se acortó:
+    «Cada clasificación pesa igual» se quitó del renglón de participación.
+
   - **Las dos mitades de la cifra pesan como ella**: la participación y la
     calificación de lo contestado son la media de las clasificaciones, no la
     suma de respuestas, o la clasificación con más padrón hablaría por todas

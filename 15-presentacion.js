@@ -1387,9 +1387,16 @@ window.reflexionDeSemana = (i) => {
         const v = vals.filter(x => x !== null);
         return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null;
     };
-    const participacion = media(conCifra.map(c => pct(c.contestaron, c.total)));
-    const deLoContestado = media(conCifra.map(c => c.deLoContestado));
-    const sinCalificar = Math.max(0, r.contestaron - (r.calificadas || 0));
+    // Las tres cifras de la primera columna, de esta semana y de la anterior,
+    // con la misma regla: las de licencias fuera, cada clasificación igual.
+    const cifras = (res) => {
+        const cc = res.clasificaciones.filter(c => c.promedio !== null && !deLicencias.has(c.clave));
+        return { participacion: media(cc.map(c => pct(c.contestaron, c.total))),
+                 deLoContestado: media(cc.map(c => c.deLoContestado)),
+                 sinCalificar: Math.max(0, res.contestaron - (res.calificadas || 0)) };
+    };
+    const { participacion, deLoContestado, sinCalificar } = cifras(r);
+    const cifrasAntes = ant ? cifras(ant) : null;
     const faltan = Math.max(0, r.total - r.contestaron);
     const enMeta = conCifra.filter(c => c.promedio >= meta).length;
     const delta = ant && ant.promedio !== null && r.promedio !== null ? r.promedio - ant.promedio : null;
@@ -1444,7 +1451,7 @@ window.reflexionDeSemana = (i) => {
     if (!preguntas.length) q(`¿Qué hicimos bien ${nom.femenino ? 'esta' : 'este'} ${nom.uno} y cómo lo repetimos?`);
 
     r.reflexion = { r, delta, titular, diagnostico, participacion, deLoContestado, sinCalificar, faltan,
-                    cambios, licencias, lejos, preguntas, tieneAnterior: !!ant };
+                    cambios, licencias, lejos, cifrasAntes, preguntas, tieneAnterior: !!ant };
     return r.reflexion;
 };
 
@@ -1638,15 +1645,30 @@ window.diapositivaDeLectura = (i, numero, cuantas) => {
         el.push({ tipo: 'linea', x1: xm, y1: y + 20, x2: xm, y2: y + 30, color: C.terciario, grosor: 1 });
         texto(48, y + 32, 252, 14, detalle, 10.5, C.secundario);
     };
+    // La comparación con el periodo anterior, a la derecha del renglón de
+    // detalle: cuánto cambió y desde dónde. En lo que espera calificación,
+    // bajar es lo bueno.
+    const A = L.cifrasAntes;
+    const contra = (y, ahora, antes, unidad, menosEsMejor) => {
+        if (ahora === null || antes === null || antes === undefined) return;
+        const d = ahora - antes;
+        const bueno = menosEsMejor ? d < 0 : d > 0;
+        const tono = d === 0 ? C.secundario : (bueno ? C.verde : C.rojo);
+        const t = d === 0 ? `= vs. ${antes}${unidad}` : `${d > 0 ? '▲' : '▼'} ${Math.abs(d)}${unidad} vs. ${antes}${unidad}`;
+        texto(160, y, 140, 14, t, 10.5, tono, { peso: 600, alinear: 'right' });
+    };
     barra(184, 'Participación', L.participacion,
-        L.r.total > 0 ? `Cada clasificación pesa igual · ${L.r.contestaron}/${L.r.total} respuestas` : 'Sin padrón',
+        L.r.total > 0 ? `${L.r.contestaron}/${L.r.total} respuestas` : 'Sin padrón',
         color(L.participacion));
+    if (A) contra(216, L.participacion, A.participacion, '%');
     barra(240, 'Calificación de lo contestado', L.deLoContestado,
-        'Lo que sacan quienes sí contestan', color(L.deLoContestado));
+        'Quienes sí contestan', color(L.deLoContestado));
+    if (A) contra(272, L.deLoContestado, A.deLoContestado, '%');
     texto(48, 298, 252, 18, 'Esperan calificación', 13, C.texto, { peso: 600 });
     texto(228, 298, 72, 18, String(L.sinCalificar), 15, L.sinCalificar ? C.naranja : C.verde, { peso: 700, alinear: 'right' });
-    texto(48, 316, 252, 14, L.sinCalificar ? 'Respuestas que todavía no suman' : 'Todo lo contestado está calificado',
+    texto(48, 316, 252, 14, L.sinCalificar ? 'Todavía no suman' : 'Todo calificado',
         10.5, C.secundario);
+    if (A) contra(316, L.sinCalificar, A.sinCalificar, '', true);
 
     // Columna 2: cada clasificación contra el periodo anterior, de la que más
     // subió a la que más bajó.
