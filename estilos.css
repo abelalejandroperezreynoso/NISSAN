@@ -6824,3 +6824,14 @@ html.fondo-anclado body {
 }
 .objetivo-clasif-pie { font-size: 0.75rem; color: #64748b; }
 .objetivo-faltan { font-size: 0.75rem; color: #b91c1c; margin-top: 4px; line-height: 1.35; }
+
+/* Las licencias de una clasificación, una por renglón con las obtenidas a la
+   derecha (`bloqueDeLicencias`). */
+.objetivo-licencias { margin-top: 10px; }
+.objetivo-licencia {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    padding: 7px 0; border-top: 1px solid #f1f1f4; font-size: 0.88rem; color: #1c1c1e;
+}
+.objetivo-licencia span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.objetivo-licencia b { flex-shrink: 0; font-weight: 700; }
+.objetivo-licencia small { font-weight: 500; color: #8e8e93; font-size: 0.78rem; }

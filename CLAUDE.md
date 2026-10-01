@@ -3935,7 +3935,7 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   plazo de reintento —como hasta ahora— y los controles se quedan apagados
   avisando de qué falta.
 - **Cada clasificación puede llevar un objetivo, y lo pone el administrador.**
-  Es lo que se le pide a la clasificación en el periodo, y es de uno de tres
+  Es lo que se le pide a la clasificación en el periodo, y es de uno de cuatro
   tipos —uno o ninguno por clasificación—:
 
   - **Participación**: qué parte de la gente a la que le tocan sus encuestas las
@@ -3944,6 +3944,9 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     en cero —la misma cifra de la tarjeta— (p. ej. 80%).
   - **Una persona por grupo**: en cada grupo de jefe inmediato, al menos una
     persona llega al mínimo (p. ej. 80%).
+  - **Licencias obtenidas**: cada encuesta es una licencia —«Trabajo en
+    alturas»— y la obtiene quien la contesta con la calificación mínima o más
+    (p. ej. 80%). No es una meta: se cuenta cuántas hay.
 
   Se pone con la **diana** del encabezado de la hoja de detalle de una
   clasificación (`#btn-objetivo-clasif`, y `#btn-objetivo-hoja-eval` en la
@@ -3988,6 +3991,37 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   elegido en la gráfica de la tarjeta, o el de ahora; la presentación, el
   cierre de la semana o el mes que se mira. La caché la piden
   `cargarEncuestasAsignadas` y `abrirPresentacion`.
+
+  **Una clasificación de licencias se lee por cuántas, no por su porcentaje.**
+  Su porcentaje —el de la tarjeta, con lo no contestado en cero— sale bajísimo
+  por construcción: a casi nadie le toca casi ninguna licencia todavía, y un
+  «0 → 0» en la reflexión se leía como un fracaso cuando lo que se quería saber
+  era cuántas se habían obtenido. Por eso:
+
+  ```js
+  window.esClasificacionDeLicencias(nombre)   // en 1-config.js
+  window.bloqueDeLicencias(obj, medida)       // el recuadro de la hoja de detalle
+  window.licenciasDeSemana(i, clave)          // la medida en la presentación, o null
+  ```
+
+  - **Se cuenta gente por licencia**: quien tiene alguna respuesta calificada
+    con el mínimo o más en el periodo de esa encuesta —una de «única vez» es
+    desde siempre— y hasta el instante que se mira. La aprobó una vez y la
+    tiene, aunque después la reprobara; quien la obtuvo y ya no está en el
+    padrón la sigue contando. Las respuestas de apoyo por vacaciones no cuentan:
+    una licencia es de quien la sacó. `medirObjetivo` devuelve `valor` (cuántas),
+    `total` (padrón más esos ajenos), `cumple` en null y `porEncuesta`.
+  - **En la hoja de detalle** va en azul y sin «se cumple»: la cifra, «de N»
+    a quienes les aplica, su barra y una fila por licencia.
+  - **En la presentación** el anillo de su diapositiva dice cuántas, en azul,
+    con la diferencia en licencias contra el periodo anterior; sus filas «Por
+    encuesta» y su fila de la diapositiva de la planta dicen «N de M». En la
+    reflexión, su fila de «Vs. el periodo anterior» dice «12 → 23» en azul, va
+    siempre —al final y sin recortarse— y **no entra en ninguna cuenta de la
+    meta**: ni en «Lejos de la meta», ni en cuántas están en la meta, ni en las
+    preguntas, ni en las peores clasificaciones del departamento.
+  - **Lo que no cambia es la cifra de la planta**, que sigue promediando todas
+    las clasificaciones como la tarjeta del panel, o las dos discreparían.
 
 - **Certificar es de una persona y de un periodo.** Certificar quiere decir dar
   fe de que las respuestas de alguien son verídicas, así que la unidad es

@@ -1,7 +1,7 @@
 -- Objetivos por clasificación
 -- ------------------------------------------------------------------
 -- Cada clasificación de encuestas puede llevar un objetivo, que es lo que se
--- le pide en el periodo. Hay tres tipos, y una clasificación lleva uno o
+-- le pide en el periodo. Hay cuatro tipos, y una clasificación lleva uno o
 -- ninguno:
 --
 --   participacion   qué parte de la gente a la que le toca la contestó
@@ -10,6 +10,9 @@
 --                   en cero (meta: el mínimo, p. ej. 80)
 --   grupos          en cada grupo de jefe inmediato, al menos una persona
 --                   llega al resultado mínimo (meta: ese mínimo, p. ej. 80)
+--   licencias       cada encuesta es una licencia y la obtiene quien la
+--                   aprueba; se cuenta cuántas hay (meta: la calificación
+--                   mínima para obtenerla, p. ej. 80)
 --
 -- La clasificación es texto libre, así que la llave es su nombre normalizado
 -- (`window.normalizarClasificacion`), como en `clasificaciones_certificacion`
@@ -23,10 +26,18 @@
 create table if not exists public.clasificaciones_objetivo (
     clave           text primary key,
     nombre          text not null,
-    tipo            text not null check (tipo in ('participacion', 'resultado', 'grupos')),
+    tipo            text not null check (tipo in ('participacion', 'resultado', 'grupos', 'licencias')),
     meta            numeric not null check (meta > 0 and meta <= 100),
     actualizado_en  timestamptz not null default now()
 );
+
+-- Si la tabla ya existía con los tres primeros tipos, su restricción no deja
+-- guardar «licencias»: se rehace con los cuatro.
+alter table public.clasificaciones_objetivo
+    drop constraint if exists clasificaciones_objetivo_tipo_check;
+alter table public.clasificaciones_objetivo
+    add constraint clasificaciones_objetivo_tipo_check
+    check (tipo in ('participacion', 'resultado', 'grupos', 'licencias'));
 
 comment on table public.clasificaciones_objetivo is
     'El objetivo de cada clasificación de encuestas. La que no tiene fila no tiene objetivo.';

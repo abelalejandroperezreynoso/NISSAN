@@ -216,7 +216,7 @@ window.resultadoDePlantaEn = (referencia) => {
         // Sus encuestas, para la diapositiva de la clasificación: cada una con
         // su cifra, la misma del renglón de la tarjeta.
         const encuestas = g.filas.map(f => ({
-            nombre: String(f.ev.title || 'Sin título').trim(), promedio: f.resumen.promedio,
+            id: String(f.ev.id), nombre: String(f.ev.title || 'Sin título').trim(), promedio: f.resumen.promedio,
             contestaron: f.resumen.contestaron, total: f.resumen.total
         })).sort((a, b) => (b.promedio === null ? -1 : b.promedio) - (a.promedio === null ? -1 : a.promedio)
             || a.nombre.localeCompare(b.nombre, 'es'));
@@ -441,6 +441,16 @@ window.objetivoDeSemana = (i, clave) => {
             window.presentacion.semanas[i].referencia, window.padronesDeLaTarjeta);
     }
     return { objetivo, medida: r.objetivos[llave] };
+};
+
+// Las licencias de una clasificación en el cierre de la semana `i`: la medida
+// de su objetivo cuando es de licencias, o null. Es lo que la presentación
+// enseña en lugar del porcentaje de esa clasificación —en ella lo que se lee es
+// cuántas se han obtenido, y un «0%» se tomaría por un fracaso—.
+window.licenciasDeSemana = (i, clave) => {
+    if (!clave || i < 0) return null;
+    const o = window.objetivoDeSemana(i, clave);
+    return o && o.objetivo.tipo === 'licencias' ? o.medida : null;
 };
 
 // Cuántas semanas mira el desempate: la que se mira y las tres de antes.
@@ -880,21 +890,55 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     texto(48, 58, 700, 44, window.partirEnRenglones(r.nombre, 36, 1)[0], 34, C.texto, { peso: 700 });
     texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
 
-    // Columna 1: el anillo, lo que lo acompaña y la tendencia.
-    rotulo(48, 132, 260, clave ? 'Resultado' : 'Resultado general');
+    // Columna 1: el anillo, lo que lo acompaña y la tendencia. En una
+    // clasificación de licencias el anillo dice cuántas se han obtenido, en
+    // azul y lleno hasta la parte de la gente a la que le aplica que ya la
+    // tiene: ahí el porcentaje no es lo que se viene a ver.
+    const lic = window.licenciasDeSemana(i, clave);
+    // Lo mismo de cada fila: en la de la planta, una clasificación de
+    // licencias; en la de una clasificación de licencias, cada encuesta.
+    const licDeFila = (c) => {
+        if (!clave) {
+            const m = c.clave ? window.licenciasDeSemana(i, c.clave) : null;
+            return m ? { n: m.valor, total: m.total } : null;
+        }
+        if (!lic) return null;
+        const e = (lic.porEncuesta || []).find(x => x.id === String(c.id));
+        return e ? { n: e.obtenidas, total: e.total } : { n: 0, total: 0 };
+    };
+    rotulo(48, 132, 260, lic ? 'Licencias obtenidas' : (clave ? 'Resultado' : 'Resultado general'));
     const cx = 128, cy = 232, radio = 64;
-    el.push({ tipo: 'anillo', cx, cy, r: radio, grosor: 16,
-              proporcion: r.promedio === null ? 0 : r.promedio / 100,
-              color: color(r.promedio), pista: window.tinteIOS(r.promedio === null ? C.terciario : color(r.promedio)) });
-    texto(cx - 60, cy - 24, 120, 40, r.promedio === null ? '—' : `${r.promedio}%`, 34, C.texto, { peso: 700, alinear: 'center' });
-    texto(cx - 60, cy + 14, 120, 16, clave ? 'promedio' : 'general', 12, C.secundario, { alinear: 'center' });
+    if (lic) {
+        el.push({ tipo: 'anillo', cx, cy, r: radio, grosor: 16,
+                  proporcion: lic.total > 0 ? Math.min(1, lic.valor / lic.total) : 0,
+                  color: C.azul, pista: window.tinteIOS(C.azul) });
+        texto(cx - 60, cy - 24, 120, 40, String(lic.valor), 34, C.texto, { peso: 700, alinear: 'center' });
+        texto(cx - 60, cy + 14, 120, 16, lic.total > 0 ? `de ${lic.total}` : (lic.valor === 1 ? 'licencia' : 'licencias'),
+            12, C.secundario, { alinear: 'center' });
+    } else {
+        el.push({ tipo: 'anillo', cx, cy, r: radio, grosor: 16,
+                  proporcion: r.promedio === null ? 0 : r.promedio / 100,
+                  color: color(r.promedio), pista: window.tinteIOS(r.promedio === null ? C.terciario : color(r.promedio)) });
+        texto(cx - 60, cy - 24, 120, 40, r.promedio === null ? '—' : `${r.promedio}%`, 34, C.texto, { peso: 700, alinear: 'center' });
+        texto(cx - 60, cy + 14, 120, 16, clave ? 'promedio' : 'general', 12, C.secundario, { alinear: 'center' });
+    }
 
     texto(212, 196, 100, 22, `${r.contestaron}`, 20, C.texto, { peso: 700 });
     texto(212, 218, 100, 14, r.total > 0 ? `de ${r.total} respuestas` : 'respuestas', 11, C.secundario);
     texto(212, 244, 100, 22, `${r.encuestas}`, 20, C.texto, { peso: 700 });
     texto(212, 266, 100, 14, r.encuestas === 1 ? 'encuesta' : 'encuestas', 11, C.secundario);
 
-    if (anterior && anterior.promedio !== null && r.promedio !== null) {
+    const licAntes = lic ? window.licenciasDeSemana(i - 1, clave) : null;
+    if (lic && licAntes) {
+        const d = lic.valor - licAntes.valor;
+        const tono = d > 0 ? C.verde : (d < 0 ? C.rojo : C.secundario);
+        const nom = window.nombreDelPeriodo();
+        const t = d === 0 ? `Las mismas que ${nom.anterior}`
+            : `${d > 0 ? '▲' : '▼'} ${Math.abs(d)} ${Math.abs(d) === 1 ? 'licencia' : 'licencias'} vs. ${nom.uno} anterior`;
+        const ancho = Math.min(260, t.length * 6.4 + 24);
+        el.push({ tipo: 'rect', x: 48, y: 318, w: ancho, h: 24, relleno: window.tinteIOS(tono, 0.86), radio: 12 });
+        texto(48, 318, ancho, 24, t, 11.5, tono, { peso: 600, alinear: 'center' });
+    } else if (!lic && anterior && anterior.promedio !== null && r.promedio !== null) {
         const d = r.promedio - anterior.promedio;
         const tono = d > 0 ? C.verde : (d < 0 ? C.rojo : C.secundario);
         const nom = window.nombreDelPeriodo();
@@ -909,7 +953,12 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     // en una píldora debajo de la de la diferencia. Verde si se cumple y rojo
     // si no; con la misma medida que la hoja de detalle (`medirObjetivo`).
     const objetivo = clave ? window.objetivoDeSemana(i, clave) : null;
-    if (objetivo) {
+    if (lic) {
+        const t = `Se obtiene con ${lic.meta}% o más`;
+        const ancho = Math.min(290, t.length * 6.1 + 24);
+        el.push({ tipo: 'rect', x: 48, y: 346, w: ancho, h: 22, relleno: window.tinteIOS(C.azul, 0.86), radio: 11 });
+        texto(48, 346, ancho, 22, t, 10.5, C.azul, { peso: 600, alinear: 'center' });
+    } else if (objetivo) {
         const m = objetivo.medida;
         const tono = m.valor === null ? C.secundario : (m.cumple ? C.verde : C.rojo);
         const corto = m.tipo === 'participacion' ? `participación ${m.meta}%`
@@ -990,6 +1039,13 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             const nombre = window.partirEnRenglones(c.nombre, Math.floor(138 / (tam * 0.56)), 1)[0];
             texto(bx, y, 140, alto, nombre, tam, C.texto, { peso: 600 });
             el.push({ tipo: 'rect', x: bx + 146, y: yb, w: 76, h: hb, relleno: C.agrupado, radio: 2.5 });
+            const lf = licDeFila(c);
+            if (lf) {
+                if (lf.n > 0 && lf.total > 0) el.push({ tipo: 'rect', x: bx + 146, y: yb, w: Math.max(hb, 76 * Math.min(1, lf.n / lf.total)), h: hb,
+                                                 relleno: C.azul, radio: 2.5 });
+                texto(bx + bw - 44, y, 44, alto, String(lf.n), tam, C.azul, { peso: 700, alinear: 'right' });
+                return;
+            }
             if (c.promedio !== null && c.promedio > 0) {
                 el.push({ tipo: 'rect', x: bx + 146, y: yb, w: Math.max(hb, 76 * c.promedio / 100), h: hb,
                           relleno: color(c.promedio), radio: 2.5 });
@@ -1003,6 +1059,15 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         const yb = y + alto * 0.62;
         const nombre = window.partirEnRenglones(c.nombre, Math.floor(210 / (tam * 0.58)), 1)[0];
         texto(bx, yb - tam * 1.5 - 2, 216, tam * 1.3, nombre, tam, C.texto, { peso: 600 });
+        const lf = licDeFila(c);
+        if (lf) {
+            texto(bx + bw - 80, yb - tam * 1.5 - 2, 80, tam * 1.3, lf.total > 0 ? `${lf.n} de ${lf.total}` : String(lf.n), tam, C.azul,
+                { peso: 700, alinear: 'right' });
+            el.push({ tipo: 'rect', x: bx, y: yb, w: bw, h: hb, relleno: C.agrupado, radio: hb / 2 });
+            if (lf.n > 0 && lf.total > 0) el.push({ tipo: 'rect', x: bx, y: yb, w: Math.max(hb, bw * Math.min(1, lf.n / lf.total)), h: hb,
+                                             relleno: C.azul, radio: hb / 2 });
+            return;
+        }
         texto(bx + bw - 60, yb - tam * 1.5 - 2, 60, tam * 1.3, c.promedio === null ? '—' : `${c.promedio}%`, tam, color(c.promedio),
             { peso: 700, alinear: 'right' });
         el.push({ tipo: 'rect', x: bx, y: yb, w: bw, h: hb, relleno: C.agrupado, radio: hb / 2 });
@@ -1240,7 +1305,18 @@ window.reflexionDeSemana = (i) => {
     (ant ? ant.clasificaciones : []).forEach(c => { antPorClave[c.clave] = c; });
     const pct = (a, b) => b > 0 ? Math.round(100 * a / b) : null;
 
-    const conCifra = r.clasificaciones.filter(c => c.promedio !== null);
+    // Las de licencias se leen por cuántas se han obtenido y no por su
+    // porcentaje: van aparte en «vs. el periodo anterior» y no entran en
+    // ninguna cuenta de la meta, que un «0%» ahí se leería como un fracaso.
+    const licencias = r.clasificaciones.map(c => {
+        const m = window.licenciasDeSemana(i, c.clave);
+        if (!m) return null;
+        const a = window.licenciasDeSemana(i - 1, c.clave);
+        return { c, licencias: true, ahora: m.valor, antes: a ? a.valor : null,
+                 delta: a ? m.valor - a.valor : null };
+    }).filter(Boolean);
+    const deLicencias = new Set(licencias.map(x => x.c.clave));
+    const conCifra = r.clasificaciones.filter(c => c.promedio !== null && !deLicencias.has(c.clave));
     const cambios = conCifra.map(c => {
         const a = antPorClave[c.clave];
         const antes = a && a.promedio !== null ? a.promedio : null;
@@ -1330,7 +1406,7 @@ window.reflexionDeSemana = (i) => {
     if (!preguntas.length) q(`¿Qué hicimos bien ${nom.femenino ? 'esta' : 'este'} ${nom.uno} y cómo lo repetimos?`);
 
     r.reflexion = { r, delta, titular, diagnostico, participacion, deLoContestado, sinCalificar, faltan,
-                    cambios, lejos, preguntas, tieneAnterior: !!ant };
+                    cambios, licencias, lejos, preguntas, tieneAnterior: !!ant };
     return r.reflexion;
 };
 
@@ -1398,6 +1474,8 @@ window.departamentosDeSemana = (i) => {
         if (p.contestadas === 0) d.sinNada++;
         p.filas.forEach(f => {
             if (f.ev.category === window.CLASIFICACION_DE_REVISION) return;
+            // Las de licencias no tienen «peor»: se cuentan, no se puntúan.
+            if (window.esClasificacionDeLicencias(f.ev.category || '')) return;
             const k = window.normalizarClasificacion(f.ev.category || '');
             const c = d.porClasificacion[k] || (d.porClasificacion[k] = {
                 nombre: String(f.ev.category || 'General').trim() || 'General',
@@ -1535,21 +1613,26 @@ window.diapositivaDeLectura = (i, numero, cuantas) => {
     // Columna 2: cada clasificación contra el periodo anterior, de la que más
     // subió a la que más bajó.
     rotulo(348, 160, 268, `Vs. ${nom.anterior}`);
-    const lista = L.cambios.slice(0, window.MAX_CAMBIOS_REFLEXION);
+    // Las de licencias van al final y siempre: ésas no se recortan.
+    const lista = L.cambios.slice(0, Math.max(0, window.MAX_CAMBIOS_REFLEXION - L.licencias.length)).concat(L.licencias);
     const alto = Math.min(30, 158 / Math.max(1, lista.length));
     if (!lista.length) texto(348, 184, 268, 18, 'Sin clasificaciones con resultado.', 13, C.secundario);
     lista.forEach((x, n) => {
         const y = 182 + n * alto;
         texto(348, y, 170, alto, window.partirEnRenglones(x.c.nombre, 25, 1)[0], 12, C.texto, { peso: 600 });
-        texto(510, y, 46, alto, x.antes === null ? `${x.c.promedio}%` : `${x.antes} → ${x.c.promedio}`, 10.5, C.secundario,
-            { alinear: 'right' });
+        // Una de licencias dice cuántas había y cuántas hay, en azul.
+        const cifra = x.licencias
+            ? (x.antes === null ? `${x.ahora} lic.` : `${x.antes} → ${x.ahora}`)
+            : (x.antes === null ? `${x.c.promedio}%` : `${x.antes} → ${x.c.promedio}`);
+        texto(510, y, 46, alto, cifra, 10.5, x.licencias ? C.azul : C.secundario,
+            { alinear: 'right', peso: x.licencias ? 600 : 400 });
         const tono = x.delta === null || x.delta === 0 ? C.secundario : (x.delta > 0 ? C.verde : C.rojo);
         const t = x.delta === null ? 'nueva' : (x.delta === 0 ? '=' : `${x.delta > 0 ? '▲' : '▼'} ${Math.abs(x.delta)}`);
         el.push({ tipo: 'rect', x: 564, y: y + alto / 2 - 9, w: 52, h: 18, relleno: window.tinteIOS(tono, 0.86), radio: 9 });
         texto(564, y + alto / 2 - 9, 52, 18, t, 10.5, tono, { peso: 700, alinear: 'center' });
         if (n < lista.length - 1) el.push({ tipo: 'linea', x1: 348, y1: y + alto, x2: 616, y2: y + alto, color: C.agrupado, grosor: 1 });
     });
-    const sobran = L.cambios.length - lista.length;
+    const sobran = L.cambios.length + L.licencias.length - lista.length;
     if (sobran > 0) texto(348, 160, 268, 16, `y ${sobran} más`, 11, C.secundario, { alinear: 'right' });
 
     // Columna 3: lo que está por debajo de la meta, de lo más lejos a lo más

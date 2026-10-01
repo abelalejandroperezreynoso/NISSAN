@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-01-1';
+window.VERSION_APP = '2026-10-01-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3022,8 +3022,9 @@ window.guardarCertificacionDeClasificacion = async (clasificacion, requiere) => 
 // EL OBJETIVO DE CADA CLASIFICACIÓN
 // ==========================================
 // El administrador le pone a una clasificación lo que se le pide en el
-// periodo, y es uno de tres tipos: una participación, un resultado mínimo, o
-// que en cada grupo de jefe inmediato llegue al mínimo al menos una persona.
+// periodo, y es uno de cuatro tipos: una participación, un resultado mínimo,
+// que en cada grupo de jefe inmediato llegue al mínimo al menos una persona, o
+// cuántas licencias se han obtenido —una encuesta aprobada con el mínimo—.
 // Vive en `clasificaciones_objetivo` (sql/objetivos-por-clasificacion.sql),
 // con el nombre normalizado por llave, y se mide con `medirObjetivo`, en
 // `2b-core-dashboard.js`, que es donde están las cifras de la empresa.
@@ -3037,8 +3038,18 @@ window.TIPOS_DE_OBJETIVO = [
     { valor: 'resultado', nombre: 'Resultado mínimo', metaPorDefecto: 80,
       detalle: 'El resultado de la clasificación, con lo no contestado en cero: el mismo de la tarjeta.' },
     { valor: 'grupos', nombre: 'Una persona por grupo', metaPorDefecto: 80,
-      detalle: 'En cada grupo de jefe inmediato, al menos una persona llega al resultado mínimo.' }
+      detalle: 'En cada grupo de jefe inmediato, al menos una persona llega al resultado mínimo.' },
+    { valor: 'licencias', nombre: 'Licencias obtenidas', metaPorDefecto: 80,
+      detalle: 'Cada encuesta es una licencia, y la obtiene quien la contesta con la calificación mínima o más. Se cuenta cuántas se han obtenido, sin porcentaje.' }
 ];
+
+// Una clasificación de licencias no se lee por su porcentaje: lo que dice es
+// cuántas se han obtenido. Lo preguntan la presentación y la reflexión, que la
+// apartan de las cifras en porcentaje —un «0%» ahí se leería como un fracaso—.
+window.esClasificacionDeLicencias = (clasificacion) => {
+    const obj = window.objetivoDeClasificacion ? window.objetivoDeClasificacion(clasificacion) : null;
+    return !!obj && obj.tipo === 'licencias';
+};
 window.tipoDeObjetivo = (valor) => window.TIPOS_DE_OBJETIVO.find(t => t.valor === valor) || null;
 
 window.OBJETIVOS_DE_CLASIFICACION = null;   // { clave: { tipo, meta } }
@@ -3080,6 +3091,7 @@ window.objetivoDeClasificacion = (clasificacion) => {
 window.textoDeObjetivo = (obj) => {
     if (!obj) return '';
     if (obj.tipo === 'grupos') return `Una persona ≥${obj.meta}% por grupo`;
+    if (obj.tipo === 'licencias') return `Licencias obtenidas con ≥${obj.meta}%`;
     const t = window.tipoDeObjetivo(obj.tipo);
     return `${t ? t.nombre : obj.tipo} ${obj.meta}%`;
 };

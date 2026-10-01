@@ -2563,6 +2563,42 @@ window.medirObjetivo = (objetivo, filas, respuestas, referencia, padrones) => {
     const salida = { tipo: objetivo.tipo, meta, valor: null, cumple: false, texto: '', faltan: [] };
     if (!vivas.length) { salida.texto = 'Sin encuestas en el periodo'; return salida; }
 
+    // Licencias: cada encuesta es una licencia y la obtiene quien la contesta
+    // con la calificación mínima o más, en el periodo de esa encuesta —una de
+    // «única vez» es desde siempre— y hasta el instante que se mira. Cuenta
+    // gente, no respuestas: quien la aprobó dos veces tiene una licencia, y
+    // quien la aprobó y después reprobó la sigue teniendo. Quien la obtuvo y
+    // hoy ya no está en el padrón la sigue contando, como en el pase de lista.
+    // No hay veredicto: lo que se pide es saber cuántas hay.
+    if (objetivo.tipo === 'licencias') {
+        let obtenidas = 0, total = 0;
+        salida.porEncuesta = vivas.map(f => {
+            const periodo = window.periodoDeEncuesta(f.ev, ref);
+            const padron = pads[f.ev.id] || window.padronDeLaEncuesta(f.ev);
+            const enPadron = new Set(padron.map(e => String(e.id)));
+            const quienes = new Set();
+            (respuestas || []).forEach(r => {
+                if (String(r.evaluation_id) !== String(f.ev.id)) return;
+                if (window.esRespuestaDeApoyo && window.esRespuestaDeApoyo(r)) return;
+                const enviada = new Date(r.submitted_at);
+                if (isNaN(enviada) || enviada < periodo.inicio || enviada > ref) return;
+                if (periodo.fin && enviada >= periodo.fin) return;
+                const puntaje = window.puntajeDeRespuesta(r);
+                if (puntaje !== null && puntaje >= meta) quienes.add(String(r.employee_id));
+            });
+            const ajenos = [...quienes].filter(id => !enPadron.has(id)).length;
+            obtenidas += quienes.size;
+            total += padron.length + ajenos;
+            return { id: String(f.ev.id), titulo: String(f.ev.title || 'Encuesta'), obtenidas: quienes.size, total: padron.length + ajenos };
+        }).sort((a, b) => b.obtenidas - a.obtenidas || a.titulo.localeCompare(b.titulo, 'es'));
+        salida.valor = obtenidas;
+        salida.total = total;
+        salida.cumple = null;
+        salida.texto = `${obtenidas} ${obtenidas === 1 ? 'licencia' : 'licencias'}` +
+            (total > 0 ? ` de ${total} a quienes les aplica` : '');
+        return salida;
+    }
+
     if (objetivo.tipo === 'participacion' || objetivo.tipo === 'resultado') {
         const conResumen = vivas.map(f => ({ ev: f.ev,
             resumen: window.resumenDeEncuestaAdmin(f.ev, respuestas || [], ref, pads[f.ev.id]) }));
@@ -2628,6 +2664,7 @@ window.bloqueDeObjetivo = (grupo) => {
     const m = window.medirObjetivo(obj, grupo.filas, window.respuestasAsignadas || [],
         window.referenciaElegidaTarjeta || new Date(), window.padronesDeLaTarjeta);
     if (!m) return '';
+    if (m.tipo === 'licencias') return window.bloqueDeLicencias(obj, m);
     const sinDato = m.valor === null;
     const color = sinDato ? '#94a3b8' : (m.cumple ? '#16a34a' : '#dc2626');
     const estado = sinDato ? 'Sin datos' : (m.cumple ? 'Se cumple' : 'No se cumple');
@@ -2655,6 +2692,35 @@ window.bloqueDeObjetivo = (grupo) => {
             </div>
             <div class="objetivo-clasif-pie">${window.sanitizeForHTML(m.texto)}</div>
             ${faltan}
+        </div>`;
+};
+
+// El recuadro de una clasificación de licencias: cuántas se han obtenido, en
+// azul y sin «se cumple» —no hay meta de cuántas—, y debajo cada licencia con
+// las suyas. La barra dice qué parte de la gente a la que le aplica ya la
+// tiene, que es lo único con lo que se puede comparar un conteo.
+window.bloqueDeLicencias = (obj, m) => {
+    const azul = '#007aff';
+    const ancho = m.total > 0 ? Math.min(100, 100 * m.valor / m.total) : 0;
+    const filas = (m.porEncuesta || []).map(e => `
+        <div class="objetivo-licencia">
+            <span>${window.sanitizeForHTML(e.titulo)}</span>
+            <b>${e.obtenidas}${e.total > 0 ? `<small> de ${e.total}</small>` : ''}</b>
+        </div>`).join('');
+    return `
+        <div class="objetivo-clasif">
+            <div class="objetivo-clasif-fila">
+                <div style="min-width:0;">
+                    <div class="objetivo-clasif-rotulo">Licencias obtenidas</div>
+                    <div class="objetivo-clasif-meta">Con calificación de ${obj.meta}% o más</div>
+                </div>
+                <div style="text-align:right; flex-shrink:0;">
+                    <div class="objetivo-clasif-valor" style="color:${azul};">${m.valor}</div>
+                    <div class="objetivo-clasif-estado" style="color:${azul};">${m.total > 0 ? `de ${m.total}` : (m.valor === 1 ? 'licencia' : 'licencias')}</div>
+                </div>
+            </div>
+            <div class="objetivo-clasif-barra"><span style="width:${ancho}%; background:${azul};"></span></div>
+            ${filas ? `<div class="objetivo-licencias">${filas}</div>` : ''}
         </div>`;
 };
 
@@ -2740,6 +2806,7 @@ window.cambioTipoObjetivo = () => {
     document.getElementById('ayuda-meta-objetivo').innerText =
         tipo.valor === 'participacion' ? 'Porcentaje de respuestas'
         : tipo.valor === 'resultado' ? 'Resultado mínimo (%)'
+        : tipo.valor === 'licencias' ? 'Calificación mínima para obtener la licencia (%)'
         : 'Resultado mínimo que tiene que alcanzar alguien de cada grupo (%)';
 };
 
