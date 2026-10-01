@@ -1544,6 +1544,10 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // lo pregunta sin poder esperar cuando se abre la hoja de detalle.
         await window.cargarRevisoresDeClasificaciones();
 
+        // El objetivo de cada clasificación, que la hoja de detalle mide sin
+        // poder esperar.
+        if (window.cargarObjetivosDeClasificaciones) await window.cargarObjetivosDeClasificaciones();
+
         // Y lo que se contestó a «¿te aplica esta encuesta?», que es lo que
         // separa la encuesta asignada de la que todavía está preguntando:
         // `leTocaEstaEncuesta` lo mira sin poder esperar.
@@ -2375,6 +2379,8 @@ window.filaDeRevisores = (grupo) => {
 window.botonesDeClasificacion = (nombre, cuantas, encuestas, opciones) => {
     const idOjo = (opciones && opciones.idOjo) || 'btn-revisores-clasif';
     const idMas = (opciones && opciones.idMas) || 'btn-nueva-encuesta-clasif';
+    const idObjetivo = (opciones && opciones.idObjetivo) || 'btn-objetivo-clasif';
+    const volver = (opciones && opciones.volver) || null;
     const cerrar = (opciones && opciones.cerrar) || window.cerrarDetalleClasificacion;
     const esAdmin = !!window.modoAdminActivo;
 
@@ -2391,6 +2397,21 @@ window.botonesDeClasificacion = (nombre, cuantas, encuestas, opciones) => {
         ojo.setAttribute('aria-label', etiqueta);
         ojo.onclick = puede
             ? () => { cerrar(); window.abrirRevisoresDeClasificacion(nombre, cuantas); }
+            : null;
+    }
+
+    // La diana del objetivo, sólo del administrador: es lo que se le pide a la
+    // clasificación entera. Al guardar o al cerrar se vuelve a esta hoja si
+    // quien la dibujó dijo cómo (`volver`).
+    const diana = document.getElementById(idObjetivo);
+    if (diana) {
+        const puede = esAdmin && !!window.abrirObjetivoDeClasificacion;
+        diana.hidden = !puede;
+        const etiqueta = `Objetivo de ${nombre}`;
+        diana.title = etiqueta;
+        diana.setAttribute('aria-label', etiqueta);
+        diana.onclick = puede
+            ? () => { cerrar(); window.abrirObjetivoDeClasificacion(nombre, volver); }
             : null;
     }
 
@@ -2515,7 +2536,263 @@ window.cuerpoDetalleClasificacion = (grupo, respuestas, abridor) => {
 
     // Quién las revisa va entre el resultado y la lista: lo que se viene a ver
     // es cómo va, así que el resultado se queda arriba del todo.
-    return resumen + window.filaDeRevisores(grupo) + renglones;
+    return resumen + window.bloqueDeObjetivo(grupo) + window.filaDeRevisores(grupo) + renglones;
+};
+
+// --- EL OBJETIVO DE UNA CLASIFICACIÓN, MEDIDO ---
+//
+// Cómo va una clasificación contra su objetivo en un instante, con las mismas
+// cifras de la tarjeta del administrador: `resumenDeEncuestaAdmin` por encuesta
+// sobre su padrón —lo no contestado en cero— y `totalDeEncuestasAdmin` para el
+// grupo. `filas` son las encuestas de la clasificación ({ ev }); las que en ese
+// instante no existían se quedan fuera, como en la tarjeta.
+//
+// La de grupos mide a cada persona con la regla de la planta —su última
+// respuesta de cada encuesta en su periodo, cero en lo que no contestó, sin
+// contar lo contestado y sin calificar— y la agrupa por su jefe inmediato
+// (`supId`). Quien no tiene jefe no forma grupo de nadie y queda fuera. Un
+// grupo cumple en cuanto **uno** de los suyos llega al mínimo, y el objetivo se
+// cumple cuando cumplen todos.
+window.medirObjetivo = (objetivo, filas, respuestas, referencia, padrones) => {
+    if (!objetivo) return null;
+    const ref = referencia || new Date();
+    const pads = padrones || window.padronesDeLaTarjeta || {};
+    const vivas = (filas || []).filter(f => f && f.ev && window.encuestaExistiaEn(f.ev, ref));
+    const meta = Number(objetivo.meta);
+    const pct = (a, b) => b > 0 ? Math.round(100 * a / b) : null;
+    const salida = { tipo: objetivo.tipo, meta, valor: null, cumple: false, texto: '', faltan: [] };
+    if (!vivas.length) { salida.texto = 'Sin encuestas en el periodo'; return salida; }
+
+    if (objetivo.tipo === 'participacion' || objetivo.tipo === 'resultado') {
+        const conResumen = vivas.map(f => ({ ev: f.ev,
+            resumen: window.resumenDeEncuestaAdmin(f.ev, respuestas || [], ref, pads[f.ev.id]) }));
+        const t = window.totalDeEncuestasAdmin(conResumen);
+        if (objetivo.tipo === 'participacion') {
+            salida.valor = pct(t.contestaron, t.total);
+            salida.texto = t.total > 0 ? `${t.contestaron}/${t.total} respuestas` : 'Sin padrón';
+        } else {
+            salida.valor = t.promedio;
+            salida.texto = t.total > 0 ? `${t.contestaron}/${t.total} respuestas` : 'Sin padrón';
+        }
+        salida.cumple = salida.valor !== null && salida.valor >= meta;
+        return salida;
+    }
+
+    // Grupos de jefe inmediato.
+    const personas = {};
+    vivas.forEach(f => {
+        const padron = pads[f.ev.id] || window.padronDeLaEncuesta(f.ev);
+        const ultimas = window.ultimaDeCadaUnoEnPeriodo(f.ev, respuestas || [], ref);
+        padron.forEach(emp => {
+            const id = String(emp.id);
+            const p = personas[id] || (personas[id] = { emp, puntajes: [] });
+            const r = ultimas[id];
+            if (!r) { p.puntajes.push(0); return; }
+            const puntaje = window.puntajeDeRespuesta(r);
+            if (puntaje !== null) p.puntajes.push(puntaje);
+        });
+    });
+    const grupos = {};
+    Object.values(personas).forEach(p => {
+        const jefe = String(p.emp.supId || '').trim();
+        if (!jefe) return;
+        const g = grupos[jefe] || (grupos[jefe] = { jefe, personas: 0, alcanzan: 0 });
+        g.personas++;
+        if (p.puntajes.length) {
+            const prom = p.puntajes.reduce((a, b) => a + b, 0) / p.puntajes.length;
+            if (Math.round(prom) >= meta) g.alcanzan++;
+        }
+    });
+    const lista = Object.values(grupos);
+    const cumplen = lista.filter(g => g.alcanzan > 0).length;
+    const plantilla = window.todosLosEmpleadosData || [];
+    salida.valor = pct(cumplen, lista.length);
+    salida.cumple = lista.length > 0 && cumplen === lista.length;
+    salida.texto = lista.length ? `${cumplen}/${lista.length} grupos` : 'Sin grupos';
+    salida.faltan = lista.filter(g => g.alcanzan === 0).map(g => {
+        const jefe = plantilla.find(e => String(e.id) === g.jefe);
+        return { nombre: jefe ? jefe.name : `ID ${g.jefe}`, personas: g.personas };
+    }).sort((a, b) => b.personas - a.personas || a.nombre.localeCompare(b.nombre, 'es'));
+    return salida;
+};
+
+// El recuadro del objetivo en la hoja de detalle de una clasificación. Sólo
+// administrando: se mide sobre las respuestas de toda la empresa, que son las
+// que trae la tarjeta en ese modo. Sin objetivo no se dibuja nada —la diana del
+// encabezado es la puerta para ponerlo—. El periodo es el elegido en la gráfica
+// de la tarjeta, o el de ahora.
+window.bloqueDeObjetivo = (grupo) => {
+    if (!window.modoAdminActivo || !window.objetivoDeClasificacion) return '';
+    const obj = window.objetivoDeClasificacion(grupo.nombre);
+    if (!obj) return '';
+    const m = window.medirObjetivo(obj, grupo.filas, window.respuestasAsignadas || [],
+        window.referenciaElegidaTarjeta || new Date(), window.padronesDeLaTarjeta);
+    if (!m) return '';
+    const sinDato = m.valor === null;
+    const color = sinDato ? '#94a3b8' : (m.cumple ? '#16a34a' : '#dc2626');
+    const estado = sinDato ? 'Sin datos' : (m.cumple ? 'Se cumple' : 'No se cumple');
+    const ancho = sinDato ? 0 : Math.max(0, Math.min(100, m.valor));
+    const marca = m.tipo === 'grupos' ? 100 : Math.min(100, m.meta);
+    const faltan = m.faltan.length
+        ? `<div class="objetivo-faltan">Grupos sin nadie al ${m.meta}%: ${m.faltan.slice(0, 4)
+            .map(g => window.sanitizeForHTML(String(g.nombre).split(' ').slice(0, 2).join(' '))).join(', ')}${m.faltan.length > 4 ? ` y ${m.faltan.length - 4} más` : ''}</div>`
+        : '';
+    return `
+        <div class="objetivo-clasif">
+            <div class="objetivo-clasif-fila">
+                <div style="min-width:0;">
+                    <div class="objetivo-clasif-rotulo">Objetivo</div>
+                    <div class="objetivo-clasif-meta">${window.sanitizeForHTML(window.textoDeObjetivo(obj))}</div>
+                </div>
+                <div style="text-align:right; flex-shrink:0;">
+                    <div class="objetivo-clasif-valor" style="color:${color};">${sinDato ? '—' : m.valor + '%'}</div>
+                    <div class="objetivo-clasif-estado" style="color:${color};">${estado}</div>
+                </div>
+            </div>
+            <div class="objetivo-clasif-barra">
+                <span style="width:${ancho}%; background:${color};"></span>
+                <i style="left:${marca}%;"></i>
+            </div>
+            <div class="objetivo-clasif-pie">${window.sanitizeForHTML(m.texto)}</div>
+            ${faltan}
+        </div>`;
+};
+
+// --- LA HOJA DE DEFINIR EL OBJETIVO ---
+//
+// Se monta la primera vez que se pide, como la de la contraseña. Va como una
+// hoja más y no encima de la de detalle: quien la abre cierra antes la suya, y
+// al guardar o al cerrar se vuelve a ella con `volver`. La acción principal
+// va en el encabezado, como en toda hoja con campos.
+window.objetivoEnEdicion = null;   // { nombre, volver }
+
+window.montarHojaObjetivo = () => {
+    let hoja = document.getElementById('modal-objetivo-clasif');
+    if (hoja) return hoja;
+    const tipos = window.TIPOS_DE_OBJETIVO.map(t => `
+        <label class="eval-opcion">
+            <input type="radio" name="tipo-objetivo" value="${t.valor}" onchange="window.cambioTipoObjetivo()">
+            <span class="eval-opcion-texto">
+                <span class="eval-opcion-titulo">${t.nombre}</span>
+                <span class="eval-opcion-ayuda">${t.detalle}</span>
+            </span>
+        </label>`).join('');
+    document.body.insertAdjacentHTML('beforeend', `
+        <div id="modal-objetivo-clasif" class="hoja-overlay" style="z-index:2000;">
+            <div class="hoja-contenido" style="max-width:500px; overflow:hidden; padding:12px 0 0;">
+                <div class="hoja-encabezado-lista">
+                    <div style="min-width:0;">
+                        <h3 class="hoja-titulo">Objetivo</h3>
+                        <div id="subtitulo-objetivo-clasif" class="hoja-subtitulo"></div>
+                    </div>
+                    <div class="hoja-acciones">
+                        <button id="btn-guardar-objetivo" class="ios-boton-icono" onclick="window.guardarObjetivoDeLaHoja()"
+                                title="Guardar el objetivo" aria-label="Guardar el objetivo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+                        </button>
+                        <button onclick="window.cerrarObjetivoDeClasificacion()" class="ios-boton-icono ios-boton-cerrar"
+                                title="Cerrar" aria-label="Cerrar"></button>
+                    </div>
+                </div>
+                <div class="hoja-cuerpo-formulario">
+                    <div class="hoja-grupo-titulo">Qué se le pide</div>
+                    <div class="hoja-grupo">
+                        <label class="eval-opcion">
+                            <input type="radio" name="tipo-objetivo" value="" onchange="window.cambioTipoObjetivo()">
+                            <span class="eval-opcion-texto">
+                                <span class="eval-opcion-titulo">Sin objetivo</span>
+                                <span class="eval-opcion-ayuda">La clasificación se mide como siempre, sin meta propia.</span>
+                            </span>
+                        </label>
+                        ${tipos}
+                    </div>
+                    <div id="campo-meta-objetivo">
+                        <div class="hoja-grupo-titulo" id="rotulo-meta-objetivo">Meta</div>
+                        <div class="hoja-grupo">
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label for="inp-meta-objetivo" id="ayuda-meta-objetivo">Porcentaje</label>
+                                <input type="number" id="inp-meta-objetivo" min="1" max="100" step="1" inputmode="numeric">
+                            </div>
+                        </div>
+                    </div>
+                    <div id="aviso-objetivo-clasif" class="gestion-nota gestion-nota--aviso" hidden></div>
+                </div>
+            </div>
+        </div>`);
+    return document.getElementById('modal-objetivo-clasif');
+};
+
+window.tipoObjetivoElegido = () => {
+    const r = document.querySelector('input[name="tipo-objetivo"]:checked');
+    return r ? r.value : '';
+};
+
+// Al cambiar de tipo, la meta toma su valor por defecto si el campo está vacío
+// o tenía el del tipo anterior, y el rótulo dice qué es la meta.
+window.cambioTipoObjetivo = () => {
+    const tipo = window.tipoDeObjetivo(window.tipoObjetivoElegido());
+    const campo = document.getElementById('campo-meta-objetivo');
+    const inp = document.getElementById('inp-meta-objetivo');
+    if (campo) campo.hidden = !tipo;
+    if (!tipo || !inp) return;
+    const porDefecto = window.TIPOS_DE_OBJETIVO.map(t => String(t.metaPorDefecto));
+    if (!inp.value || porDefecto.includes(String(inp.value))) inp.value = tipo.metaPorDefecto;
+    document.getElementById('ayuda-meta-objetivo').innerText =
+        tipo.valor === 'participacion' ? 'Porcentaje de respuestas'
+        : tipo.valor === 'resultado' ? 'Resultado mínimo (%)'
+        : 'Resultado mínimo que tiene que alcanzar alguien de cada grupo (%)';
+};
+
+window.abrirObjetivoDeClasificacion = async (nombre, volver) => {
+    const hoja = window.montarHojaObjetivo();
+    window.objetivoEnEdicion = { nombre, volver: typeof volver === 'function' ? volver : null };
+    document.getElementById('subtitulo-objetivo-clasif').innerText = nombre;
+    const aviso = document.getElementById('aviso-objetivo-clasif');
+    aviso.hidden = true;
+    document.getElementById('btn-guardar-objetivo').disabled = false;
+    await window.cargarObjetivosDeClasificaciones();
+    if (window.faltaTablaObjetivos) {
+        aviso.hidden = false;
+        aviso.innerText = 'Falta correr sql/objetivos-por-clasificacion.sql en Supabase: sin esa tabla no se puede guardar ningún objetivo.';
+        document.getElementById('btn-guardar-objetivo').disabled = true;
+    }
+    const obj = window.objetivoDeClasificacion(nombre);
+    document.querySelectorAll('input[name="tipo-objetivo"]').forEach(r => { r.checked = r.value === (obj ? obj.tipo : ''); });
+    document.getElementById('inp-meta-objetivo').value = obj ? obj.meta : '';
+    window.cambioTipoObjetivo();
+    hoja.style.display = 'flex';
+};
+
+window.cerrarObjetivoDeClasificacion = () => {
+    const hoja = document.getElementById('modal-objetivo-clasif');
+    if (hoja) hoja.style.display = 'none';
+    const volver = window.objetivoEnEdicion && window.objetivoEnEdicion.volver;
+    window.objetivoEnEdicion = null;
+    if (volver) volver();
+};
+
+window.guardarObjetivoDeLaHoja = async () => {
+    const edicion = window.objetivoEnEdicion;
+    const btn = document.getElementById('btn-guardar-objetivo');
+    const sub = document.getElementById('subtitulo-objetivo-clasif');
+    if (!edicion || (btn && btn.disabled)) return;
+    const tipo = window.tipoObjetivoElegido();
+    let objetivo = null;
+    if (tipo) {
+        const meta = Number(document.getElementById('inp-meta-objetivo').value);
+        if (!(meta > 0 && meta <= 100)) { alert('La meta tiene que ser un porcentaje entre 1 y 100.'); return; }
+        objetivo = { tipo, meta: Math.round(meta) };
+    }
+    btn.disabled = true;
+    sub.innerText = 'Guardando el objetivo…';
+    try {
+        await window.guardarObjetivoDeClasificacion(edicion.nombre, objetivo);
+        window.cerrarObjetivoDeClasificacion();
+    } catch (e) {
+        alert('No se pudo guardar el objetivo: ' + (e.message || e));
+        sub.innerText = edicion.nombre;
+        btn.disabled = false;
+    }
 };
 
 window.abrirDetalleClasificacion = (indice) => {
@@ -2533,7 +2810,8 @@ window.abrirDetalleClasificacion = (indice) => {
         ? `${total} encuesta${total === 1 ? '' : 's'} de la empresa`
         : `${total} encuesta${total === 1 ? '' : 's'} asignada${total === 1 ? '' : 's'}`;
 
-    window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev));
+    window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev),
+        { volver: () => window.abrirDetalleClasificacion(indice) });
 
     // La hoja se cierra ella misma antes de abrir la de la encuesta: el
     // observador de `1-config.js` apartaría ésta al ver dos abiertas, pero así
@@ -2966,7 +3244,8 @@ window.abrirDetalleClasificacionRevision = async (indice) => {
     document.getElementById('subtitulo-detalle-clasif').innerText =
         `${total} encuesta${total === 1 ? '' : 's'} que revisas`;
 
-    window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev));
+    window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev),
+        { volver: () => window.abrirDetalleClasificacionRevision(indice) });
 
     const renglones = grupo.filas.map(({ ev, porCalificar }) => {
         const estado = window.estadoDeRevision(porCalificar);

@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-09-30-10';
+window.VERSION_APP = '2026-10-01-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3016,6 +3016,94 @@ window.guardarCertificacionDeClasificacion = async (clasificacion, requiere) => 
         if (requiere) window.CLASIFICACIONES_SIN_CERTIFICAR.delete(clave);
         else window.CLASIFICACIONES_SIN_CERTIFICAR.add(clave);
     }
+};
+
+// ==========================================
+// EL OBJETIVO DE CADA CLASIFICACIÓN
+// ==========================================
+// El administrador le pone a una clasificación lo que se le pide en el
+// periodo, y es uno de tres tipos: una participación, un resultado mínimo, o
+// que en cada grupo de jefe inmediato llegue al mínimo al menos una persona.
+// Vive en `clasificaciones_objetivo` (sql/objetivos-por-clasificacion.sql),
+// con el nombre normalizado por llave, y se mide con `medirObjetivo`, en
+// `2b-core-dashboard.js`, que es donde están las cifras de la empresa.
+//
+// La caché se llena una vez por sesión —la promesa, no el resultado—, porque
+// quien pregunta lo hace sin poder esperar. Sin ella, o sin la tabla, ninguna
+// clasificación tiene objetivo y todo sigue como antes.
+window.TIPOS_DE_OBJETIVO = [
+    { valor: 'participacion', nombre: 'Participación', metaPorDefecto: 100,
+      detalle: 'Qué parte de la gente a la que le tocan sus encuestas las contestó en el periodo.' },
+    { valor: 'resultado', nombre: 'Resultado mínimo', metaPorDefecto: 80,
+      detalle: 'El resultado de la clasificación, con lo no contestado en cero: el mismo de la tarjeta.' },
+    { valor: 'grupos', nombre: 'Una persona por grupo', metaPorDefecto: 80,
+      detalle: 'En cada grupo de jefe inmediato, al menos una persona llega al resultado mínimo.' }
+];
+window.tipoDeObjetivo = (valor) => window.TIPOS_DE_OBJETIVO.find(t => t.valor === valor) || null;
+
+window.OBJETIVOS_DE_CLASIFICACION = null;   // { clave: { tipo, meta } }
+window.faltaTablaObjetivos = false;
+let promesaObjetivosClasif = null;
+
+window.cargarObjetivosDeClasificaciones = (recargar) => {
+    if (recargar) promesaObjetivosClasif = null;
+    if (!promesaObjetivosClasif) {
+        promesaObjetivosClasif = sb.from('clasificaciones_objetivo')
+            .select('clave, tipo, meta')
+            .then(({ data, error }) => {
+                if (error) {
+                    window.faltaTablaObjetivos = true;
+                    window.OBJETIVOS_DE_CLASIFICACION = null;
+                    return false;
+                }
+                window.faltaTablaObjetivos = false;
+                const mapa = {};
+                (data || []).forEach(f => {
+                    if (window.tipoDeObjetivo(f.tipo)) mapa[String(f.clave)] = { tipo: f.tipo, meta: Number(f.meta) };
+                });
+                window.OBJETIVOS_DE_CLASIFICACION = mapa;
+                return true;
+            })
+            .catch(() => { promesaObjetivosClasif = null; window.OBJETIVOS_DE_CLASIFICACION = null; return false; });
+    }
+    return promesaObjetivosClasif;
+};
+
+// El objetivo de una clasificación, o null. Sin esperar a nadie.
+window.objetivoDeClasificacion = (clasificacion) => {
+    const mapa = window.OBJETIVOS_DE_CLASIFICACION;
+    if (!mapa) return null;
+    return mapa[window.normalizarClasificacion(clasificacion)] || null;
+};
+
+// «Participación 100%», «Resultado mínimo 80%», «Una persona ≥80% por grupo».
+window.textoDeObjetivo = (obj) => {
+    if (!obj) return '';
+    if (obj.tipo === 'grupos') return `Una persona ≥${obj.meta}% por grupo`;
+    const t = window.tipoDeObjetivo(obj.tipo);
+    return `${t ? t.nombre : obj.tipo} ${obj.meta}%`;
+};
+
+// Con `objetivo` en null se quita. Las dos escrituras cuentan las filas del
+// `.select()`: una política de RLS que las rechace no da error.
+window.guardarObjetivoDeClasificacion = async (clasificacion, objetivo) => {
+    const clave = window.normalizarClasificacion(clasificacion);
+    if (objetivo) {
+        const { data, error } = await sb.from('clasificaciones_objetivo')
+            .upsert({ clave, nombre: String(clasificacion || '').trim(), tipo: objetivo.tipo,
+                      meta: objetivo.meta, actualizado_en: new Date().toISOString() }, { onConflict: 'clave' })
+            .select('clave');
+        if (error) throw error;
+        if (!data || !data.length) throw new Error('La base no guardó el objetivo: revisa las políticas de clasificaciones_objetivo.');
+    } else {
+        const habia = !!window.objetivoDeClasificacion(clasificacion);
+        const { data, error } = await sb.from('clasificaciones_objetivo').delete().eq('clave', clave).select('clave');
+        if (error) throw error;
+        if (habia && (!data || !data.length)) throw new Error('La base no quitó el objetivo: revisa las políticas de clasificaciones_objetivo.');
+    }
+    if (!window.OBJETIVOS_DE_CLASIFICACION) window.OBJETIVOS_DE_CLASIFICACION = {};
+    if (objetivo) window.OBJETIVOS_DE_CLASIFICACION[clave] = { tipo: objetivo.tipo, meta: Number(objetivo.meta) };
+    else delete window.OBJETIVOS_DE_CLASIFICACION[clave];
 };
 
 // Si esta encuesta tiene un puntaje mínimo que alcanzar. Es cosa aparte de la

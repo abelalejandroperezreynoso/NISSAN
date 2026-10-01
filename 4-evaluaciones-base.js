@@ -421,7 +421,7 @@ window.encabezadoHojaEvaluaciones = (titulo, alVolver, idEncuesta, subtitulo, re
     // pantalla que sabe de cuál se trata, llamando a `botonesDeClasificacion`
     // **después** de esto. Es lo mismo que hace el lápiz con la encuesta y por
     // lo mismo: si no, se quedaría el de la clasificación anterior.
-    ['btn-revisores-hoja-eval', 'btn-nueva-encuesta-hoja-eval'].forEach(id => {
+    ['btn-revisores-hoja-eval', 'btn-nueva-encuesta-hoja-eval', 'btn-objetivo-hoja-eval'].forEach(id => {
         const b = document.getElementById(id);
         if (b) { b.hidden = true; b.onclick = null; }
     });
@@ -480,6 +480,10 @@ window.montarHojaEvaluaciones = () => {
                              en las demás pantallas de la hoja. Sin acentos
                              graves aquí dentro: este marcado va en una
                              plantilla de JavaScript y uno la cerraría. -->
+                        <button id="btn-objetivo-hoja-eval" class="ios-boton-icono" hidden
+                                title="Objetivo" aria-label="Objetivo de esta clasificación">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>
+                        </button>
                         <button id="btn-revisores-hoja-eval" class="ios-boton-icono" hidden
                                 title="Revisores" aria-label="Revisores de esta clasificación">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -645,7 +649,9 @@ window.abrirClasificacionDeLaLista = (indice) => {
         window.botonesDeClasificacion(grupo.nombre, total, grupo.filas.map(f => f.ev), {
             idOjo: 'btn-revisores-hoja-eval',
             idMas: 'btn-nueva-encuesta-hoja-eval',
-            cerrar: window.cerrarModalEvaluaciones
+            idObjetivo: 'btn-objetivo-hoja-eval',
+            cerrar: window.cerrarModalEvaluaciones,
+            volver: () => window.abrirClasificacionDeLaLista(indice)
         });
     }
 

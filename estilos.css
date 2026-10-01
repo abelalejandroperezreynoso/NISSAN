@@ -6763,3 +6763,64 @@ html.fondo-anclado body {
 /* Las dos presentaciones —la semanal y la mensual— van seguidas, como dos
    renglones de la misma lista: la segunda no repite el hueco de arriba. */
 .tarjeta-presentacion + .tarjeta-presentacion { margin-top: -10px; }
+
+/* ==========================================
+   EL OBJETIVO DE UNA CLASIFICACIÓN
+   ==========================================
+   El recuadro de la hoja de detalle (`bloqueDeObjetivo`) y la hoja donde se
+   define (`#modal-objetivo-clasif`). La barra lleva una marca en la meta, como
+   las cápsulas de la presentación. */
+.eval-opcion input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    margin: 1px 0 0;
+    accent-color: #7c3aed;
+}
+#modal-objetivo-clasif .gestion-nota[hidden] { display: none; }
+.objetivo-clasif {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: -4px 0 14px;
+}
+.objetivo-clasif-fila {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+.objetivo-clasif-rotulo {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+.objetivo-clasif-meta { font-size: 0.9rem; font-weight: 700; color: #1e293b; }
+.objetivo-clasif-valor { font-size: 1.3rem; font-weight: 800; line-height: 1.1; }
+.objetivo-clasif-estado { font-size: 0.72rem; font-weight: 700; }
+.objetivo-clasif-barra {
+    position: relative;
+    height: 6px;
+    border-radius: 3px;
+    background: #e2e8f0;
+    margin: 10px 0 6px;
+}
+.objetivo-clasif-barra span {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 3px;
+}
+.objetivo-clasif-barra i {
+    position: absolute;
+    top: -3px;
+    width: 2px;
+    height: 12px;
+    margin-left: -1px;
+    background: #64748b;
+    border-radius: 1px;
+}
+.objetivo-clasif-pie { font-size: 0.75rem; color: #64748b; }
+.objetivo-faltan { font-size: 0.75rem; color: #b91c1c; margin-top: 4px; line-height: 1.35; }

@@ -3934,6 +3934,61 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   correrlo, todas las encuestas se consideran certificables y con mínimo, sin
   plazo de reintento —como hasta ahora— y los controles se quedan apagados
   avisando de qué falta.
+- **Cada clasificación puede llevar un objetivo, y lo pone el administrador.**
+  Es lo que se le pide a la clasificación en el periodo, y es de uno de tres
+  tipos —uno o ninguno por clasificación—:
+
+  - **Participación**: qué parte de la gente a la que le tocan sus encuestas las
+    contestó (p. ej. 100%).
+  - **Resultado mínimo**: el resultado de la clasificación, con lo no contestado
+    en cero —la misma cifra de la tarjeta— (p. ej. 80%).
+  - **Una persona por grupo**: en cada grupo de jefe inmediato, al menos una
+    persona llega al mínimo (p. ej. 80%).
+
+  Se pone con la **diana** del encabezado de la hoja de detalle de una
+  clasificación (`#btn-objetivo-clasif`, y `#btn-objetivo-hoja-eval` en la
+  pantalla de una clasificación de la hoja de evaluaciones), que abre la hoja
+  `#modal-objetivo-clasif` —montada la primera vez que se pide—. La engancha
+  `botonesDeClasificacion`, como al ojo y al «+», y sólo en modo administrador;
+  al guardar o cerrar se vuelve a la hoja de detalle con `opciones.volver`.
+
+  ```js
+  window.TIPOS_DE_OBJETIVO  window.tipoDeObjetivo(valor)
+  await window.cargarObjetivosDeClasificaciones()   // la caché; `true` la rehace
+  window.objetivoDeClasificacion(nombre)            // { tipo, meta } o null, sin esperar
+  await window.guardarObjetivoDeClasificacion(nombre, objetivo)   // null lo quita
+  window.textoDeObjetivo(obj)
+  window.medirObjetivo(obj, filas, respuestas, referencia, padrones)
+  // → { tipo, meta, valor, cumple, texto, faltan }
+  window.bloqueDeObjetivo(grupo)   // el recuadro de la hoja de detalle
+  window.objetivoDeSemana(i, clave)   // en la presentación, con memoria
+  ```
+
+  Vive en `clasificaciones_objetivo`, con el nombre normalizado por llave —el
+  molde de `clasificaciones_certificacion`—, y su script es
+  `sql/objetivos-por-clasificacion.sql`, que se corre a mano. Sin él ninguna
+  clasificación tiene objetivo y la hoja de definirlo lo dice y no deja guardar.
+  Las escrituras cuentan las filas del `.select()`.
+
+  **Se mide con las cifras de la tarjeta del administrador**
+  (`resumenDeEncuestaAdmin` y `totalDeEncuestasAdmin`, con los padrones de
+  `padronesDeLaTarjeta`), así que no puede discrepar de ella. La de grupos mide
+  a cada persona con la regla de la planta —su última respuesta de cada
+  encuesta en su periodo, cero en lo no contestado, sin contar lo contestado y
+  sin calificar—, la agrupa por su `supId` y da por cumplido un grupo en cuanto
+  uno de los suyos llega al mínimo; el objetivo se cumple cuando cumplen todos.
+  **Quien no tiene jefe no forma grupo** y queda fuera de la cuenta.
+
+  Se enseña en dos sitios, y en los dos sólo administrando, que es cuando se
+  tienen las respuestas de toda la empresa: en la **hoja de detalle**, debajo
+  del resultado, con su barra, la marca de la meta, si se cumple y —en la de
+  grupos— qué jefes tienen el grupo sin nadie al mínimo; y en la **diapositiva
+  de la clasificación** de la presentación, en una píldora verde o roja debajo
+  de la de la diferencia con el periodo anterior. La hoja mide el periodo
+  elegido en la gráfica de la tarjeta, o el de ahora; la presentación, el
+  cierre de la semana o el mes que se mira. La caché la piden
+  `cargarEncuestasAsignadas` y `abrirPresentacion`.
+
 - **Certificar es de una persona y de un periodo.** Certificar quiere decir dar
   fe de que las respuestas de alguien son verídicas, así que la unidad es
   **clasificación × empleado × periodo**. Sin el periodo, el sello de enero

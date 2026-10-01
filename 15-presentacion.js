@@ -423,6 +423,26 @@ window.resultadoDeSemana = (i) => {
     return p.resultados[i];
 };
 
+// El objetivo de una clasificación medido en el cierre de la semana `i`, con
+// memoria: { objetivo, medida }, o null si no tiene. Las mismas filas, las
+// mismas respuestas y los mismos padrones que el resto de la presentación.
+window.objetivoDeSemana = (i, clave) => {
+    if (!window.objetivoDeClasificacion) return null;
+    const filas = (window.filasDeLaTarjeta || [])
+        .filter(f => window.normalizarClasificacion(f.ev.category || '') === clave);
+    if (!filas.length) return null;
+    const objetivo = window.objetivoDeClasificacion(filas[0].ev.category || '');
+    if (!objetivo) return null;
+    const r = window.resultadoDeSemana(i);
+    r.objetivos = r.objetivos || {};
+    const llave = clave + '|' + objetivo.tipo + '|' + objetivo.meta;
+    if (!r.objetivos[llave]) {
+        r.objetivos[llave] = window.medirObjetivo(objetivo, filas, window.respuestasParaPresentar(),
+            window.presentacion.semanas[i].referencia, window.padronesDeLaTarjeta);
+    }
+    return { objetivo, medida: r.objetivos[llave] };
+};
+
 // Cuántas semanas mira el desempate: la que se mira y las tres de antes.
 window.SEMANAS_DEL_DESEMPATE = 4;
 
@@ -883,6 +903,24 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         const ancho = Math.min(260, t.length * 6.4 + 24);
         el.push({ tipo: 'rect', x: 48, y: 318, w: ancho, h: 24, relleno: window.tinteIOS(tono, 0.86), radio: 12 });
         texto(48, 318, ancho, 24, t, 11.5, tono, { peso: 600, alinear: 'center' });
+    }
+
+    // El objetivo de la clasificación, si lo tiene: qué se le pide y cómo va,
+    // en una píldora debajo de la de la diferencia. Verde si se cumple y rojo
+    // si no; con la misma medida que la hoja de detalle (`medirObjetivo`).
+    const objetivo = clave ? window.objetivoDeSemana(i, clave) : null;
+    if (objetivo) {
+        const m = objetivo.medida;
+        const tono = m.valor === null ? C.secundario : (m.cumple ? C.verde : C.rojo);
+        const corto = m.tipo === 'participacion' ? `participación ${m.meta}%`
+            : (m.tipo === 'resultado' ? `resultado ≥${m.meta}%` : `1 por grupo ≥${m.meta}%`);
+        const t = `Objetivo ${corto}: ` +
+            (m.valor === null ? 'sin datos' : (m.tipo === 'grupos' ? m.texto : `${m.valor}%`)) +
+            (m.valor === null ? '' : (m.cumple ? ' ✓' : ' ✗'));
+        const ancho = Math.min(290, t.length * 6.1 + 24);
+        el.push({ tipo: 'rect', x: 48, y: 346, w: ancho, h: 22, relleno: window.tinteIOS(tono, 0.86), radio: 11 });
+        texto(48, 346, ancho, 22, window.partirEnRenglones(t, Math.floor((ancho - 16) / 6.1), 1)[0], 10.5, tono,
+            { peso: 600, alinear: 'center' });
     }
 
     // La tendencia de los últimos meses —hasta doce, los que tengan resultado—,
@@ -2004,6 +2042,7 @@ window.abrirPresentacion = async (modo) => {
     caja.innerHTML = '<div class="presentacion-cargando"></div>';
     let datos;
     try {
+        if (window.cargarObjetivosDeClasificaciones) await window.cargarObjetivosDeClasificaciones();
         datos = await window.cargarRespuestasDeLaPresentacion();
     } catch (e) {
         sub.innerText = 'No se pudieron cargar las respuestas.';
