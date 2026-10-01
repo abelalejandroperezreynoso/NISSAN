@@ -4020,6 +4020,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
     siempre —al final y sin recortarse— y **no entra en ninguna cuenta de la
     meta**: ni en «Lejos de la meta», ni en cuántas están en la meta, ni en las
     preguntas, ni en las peores clasificaciones del departamento.
+  - **En la reflexión, cada clasificación con objetivo dice cuál** en un
+    renglón gris debajo de su nombre («Objetivo: participación 100%»), con el
+    mismo texto corto que la píldora de su diapositiva
+    (`window.textoCortoDeObjetivo`): la cifra se lee sabiendo contra qué se mide.
   - **Lo que no cambia es la cifra de la planta**, que sigue promediando todas
     las clasificaciones como la tarjeta del panel, o las dos discreparían.
 

@@ -453,6 +453,15 @@ window.licenciasDeSemana = (i, clave) => {
     return o && o.objetivo.tipo === 'licencias' ? o.medida : null;
 };
 
+// El objetivo en pocas palabras, para donde no cabe el texto entero: la
+// píldora de la diapositiva de una clasificación y el renglón de debajo de su
+// nombre en la reflexión. Las dos lo dicen igual.
+window.textoCortoDeObjetivo = (obj) => !obj ? ''
+    : obj.tipo === 'participacion' ? `participación ${obj.meta}%`
+    : obj.tipo === 'resultado' ? `resultado ≥${obj.meta}%`
+    : obj.tipo === 'licencias' ? `licencias con ≥${obj.meta}%`
+    : `1 por grupo ≥${obj.meta}%`;
+
 // Cuántas semanas mira el desempate: la que se mira y las tres de antes.
 window.SEMANAS_DEL_DESEMPATE = 4;
 
@@ -961,8 +970,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     } else if (objetivo) {
         const m = objetivo.medida;
         const tono = m.valor === null ? C.secundario : (m.cumple ? C.verde : C.rojo);
-        const corto = m.tipo === 'participacion' ? `participación ${m.meta}%`
-            : (m.tipo === 'resultado' ? `resultado ≥${m.meta}%` : `1 por grupo ≥${m.meta}%`);
+        const corto = window.textoCortoDeObjetivo(m);
         const t = `Objetivo ${corto}: ` +
             (m.valor === null ? 'sin datos' : (m.tipo === 'grupos' ? m.texto : `${m.valor}%`)) +
             (m.valor === null ? '' : (m.cumple ? ' ✓' : ' ✗'));
@@ -1619,7 +1627,15 @@ window.diapositivaDeLectura = (i, numero, cuantas) => {
     if (!lista.length) texto(348, 184, 268, 18, 'Sin clasificaciones con resultado.', 13, C.secundario);
     lista.forEach((x, n) => {
         const y = 182 + n * alto;
-        texto(348, y, 170, alto, window.partirEnRenglones(x.c.nombre, 25, 1)[0], 12, C.texto, { peso: 600 });
+        // Con objetivo, el nombre sube y debajo va cuál es, en gris: se lee
+        // la cifra sabiendo contra qué se mide.
+        const obj = window.objetivoDeClasificacion ? window.objetivoDeClasificacion(x.c.nombre) : null;
+        if (obj) {
+            texto(348, y + 1, 170, alto * 0.55, window.partirEnRenglones(x.c.nombre, 26, 1)[0], 11.5, C.texto, { peso: 600 });
+            texto(348, y + alto * 0.5, 170, alto * 0.45, `Objetivo: ${window.textoCortoDeObjetivo(obj)}`, 8.5, C.secundario);
+        } else {
+            texto(348, y, 170, alto, window.partirEnRenglones(x.c.nombre, 25, 1)[0], 12, C.texto, { peso: 600 });
+        }
         // Una de licencias dice cuántas había y cuántas hay, en azul.
         const cifra = x.licencias
             ? (x.antes === null ? `${x.ahora} lic.` : `${x.antes} → ${x.ahora}`)
