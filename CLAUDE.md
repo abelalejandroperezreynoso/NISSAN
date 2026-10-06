@@ -892,9 +892,12 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   el de ahora al abrir y el de cualquier punto al tocarlo
   (`verPreguntasDelPeriodo`, el `alElegir` de esa gráfica). Es lo que dice en
   qué pregunta se pierden los puntos. Cuenta la misma respuesta que la cifra
-  —`ultimaDeCadaUnoEnPeriodo`—, sólo las calificadas y **sin repartir sobre el
-  padrón**: quien no contestó no falló ninguna pregunta en concreto, y el
-  rótulo dice cuántas calificadas hay. La nota de cada pregunta sale de
+  —`ultimaDeCadaUnoEnPeriodo`— y **reparte sobre el mismo padrón: quien no
+  contestó cuenta como 0** en cada pregunta, con el divisor de
+  `resumenDeEncuestaAdmin` —lo calificado más lo que falta por contestar, sin lo
+  contestado y sin calificar—. Lo que sacaron quienes sí contestaron va en el
+  `title` de cada fila, y el rótulo dice «N/M respuestas». El padrón se calcula
+  una vez al abrir la hoja (`preguntasDeLaGrafica.padron`), no en cada toque. La nota de cada pregunta sale de
   `grades_json` con la regla de `calcularScoreRespuesta`
   (`window.pctDeCalificacion`), las de constancia no se listan y **no consulta
   nada**: las respuestas de la gráfica ya traen `grades_json`.

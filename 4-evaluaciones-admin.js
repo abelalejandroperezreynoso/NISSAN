@@ -129,22 +129,37 @@ window.pctDeCalificacion = (g) => {
     return st === 'correct' ? 100 : 0;
 };
 
-window.preguntasEnPeriodo = (ev, preguntas, respuestas, referencia) => {
-    const ultimas = Object.values(window.ultimaDeCadaUnoEnPeriodo(ev, respuestas, referencia))
+window.preguntasEnPeriodo = (ev, preguntas, respuestas, referencia, padronDado) => {
+    const todas = Object.values(window.ultimaDeCadaUnoEnPeriodo(ev, respuestas, referencia));
+    const ultimas = todas
         .filter(r => r.review_status === 'Revisado' || r.review_status === 'Certificada');
+
+    // **Quien no contestó cuenta como 0**, igual que en la cifra de la empresa:
+    // el divisor de cada pregunta es lo calificado más quien falta por
+    // contestar, sobre el mismo padrón —con los que ya no están en él— que
+    // `resumenDeEncuestaAdmin`. Lo contestado y sin calificar queda fuera, que
+    // su cero sería el atraso del revisor. Sin padrón se promedia lo calificado.
+    const resumen = window.resumenDeEncuestaAdmin
+        ? window.resumenDeEncuestaAdmin(ev, respuestas, referencia, padronDado) : null;
+    const total = resumen ? resumen.total : 0;
+    const faltan = Math.max(0, total - todas.length);
+
     const filas = (preguntas || [])
         .filter(q => !window.esPreguntaDeConstancia(q))
         .map(q => {
             const notas = ultimas
                 .map(r => window.pctDeCalificacion((r.grades_json || {})[q.id]))
                 .filter(v => v !== null);
+            const base = notas.length + faltan;
             return {
                 q,
                 cuantas: notas.length,
-                promedio: notas.length ? Math.round(notas.reduce((a, b) => a + b, 0) / notas.length) : null
+                promedio: base > 0 ? Math.round(notas.reduce((a, b) => a + b, 0) / base) : null,
+                promedioContestadas: notas.length
+                    ? Math.round(notas.reduce((a, b) => a + b, 0) / notas.length) : null
             };
         });
-    return { filas, calificadas: ultimas.length };
+    return { filas, calificadas: ultimas.length, contestaron: todas.length, total };
 };
 
 // El bloque, para el punto `indice` de la gráfica; null es el último con
@@ -158,10 +173,10 @@ window.bloqueDePreguntasDelPeriodo = (indice) => {
     const referencia = punto && punto.referencia instanceof Date ? punto.referencia : new Date();
     const nombre = punto ? (punto.nombre || punto.etiqueta || '') : '';
 
-    const { filas, calificadas } = window.preguntasEnPeriodo(d.ev, d.preguntas, d.respuestas, referencia);
+    const { filas, calificadas, contestaron, total } = window.preguntasEnPeriodo(d.ev, d.preguntas, d.respuestas, referencia, d.padron);
     if (filas.length === 0) return '';
 
-    const cuerpo = calificadas === 0
+    const cuerpo = (calificadas === 0 && !(total > contestaron))
         ? `<div class="preguntas-periodo-vacio">Ninguna respuesta calificada en este periodo.</div>`
         : filas.map((f, i) => {
             const texto = window.sanitizeForHTML(window.enunciadoDePregunta(f.q) || `Pregunta ${i + 1}`);
@@ -169,7 +184,7 @@ window.bloqueDePreguntasDelPeriodo = (indice) => {
             const color = f.promedio === null ? '#94a3b8' : window.getColorScore(f.promedio);
             const ancho = f.promedio === null ? 0 : Math.max(2, f.promedio);
             return `
-                <div class="pregunta-periodo" title="${texto} · ${f.cuantas} calificada${f.cuantas === 1 ? '' : 's'}">
+                <div class="pregunta-periodo" title="${texto} · ${f.cuantas} calificada${f.cuantas === 1 ? '' : 's'}${f.promedioContestadas !== null ? ` · ${f.promedioContestadas}% entre quienes la contestaron` : ''} · quien no contestó cuenta como 0">
                     <div class="pregunta-periodo-fila">
                         <span class="pregunta-periodo-num">${i + 1}</span>
                         <span class="pregunta-periodo-texto">${texto}</span>
@@ -183,7 +198,7 @@ window.bloqueDePreguntasDelPeriodo = (indice) => {
         <div class="preguntas-periodo">
             <div class="preguntas-periodo-titulo">
                 <span>Por pregunta${nombre ? ` · ${window.sanitizeForHTML(nombre)}` : ''}</span>
-                <span class="preguntas-periodo-nota">${calificadas} calificada${calificadas === 1 ? '' : 's'}</span>
+                <span class="preguntas-periodo-nota">${total ? `${contestaron}/${total} respuestas` : `${calificadas} calificada${calificadas === 1 ? '' : 's'}`}</span>
             </div>
             ${cuerpo}
         </div>`;
@@ -495,7 +510,10 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             // respuestas de la gráfica—, así que tocar un punto sólo repinta.
             window.preguntasDeLaGrafica = {
                 ev: evalData, respuestas: traidas.respuestas, puntos,
-                preguntas: window.preguntasCacheActual || []
+                preguntas: window.preguntasCacheActual || [],
+                // El padrón de hoy, calculado una vez: recorre la plantilla y
+                // cada toque de un punto lo volvería a pedir.
+                padron: window.padronDeLaEncuesta ? window.padronDeLaEncuesta(evalData) : undefined
             };
             graficaHtml = window.graficaDeLinea(puntos, 'verPreguntasDelPeriodo')
                 + `<div id="preguntas-del-periodo">${window.bloqueDePreguntasDelPeriodo(null)}</div>`;
