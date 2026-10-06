@@ -887,6 +887,18 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   `historialDeRevision`. Si el eje y el `gte` no hablaran del mismo tramo de
   tiempo, los puntos de atrás saldrían a medias.
 
+  **Y debajo de la línea, el resultado de cada pregunta en el periodo que se
+  mira** (`window.bloqueDePreguntasDelPeriodo`, en `4-evaluaciones-admin.js`):
+  el de ahora al abrir y el de cualquier punto al tocarlo
+  (`verPreguntasDelPeriodo`, el `alElegir` de esa gráfica). Es lo que dice en
+  qué pregunta se pierden los puntos. Cuenta la misma respuesta que la cifra
+  —`ultimaDeCadaUnoEnPeriodo`—, sólo las calificadas y **sin repartir sobre el
+  padrón**: quien no contestó no falló ninguna pregunta en concreto, y el
+  rótulo dice cuántas calificadas hay. La nota de cada pregunta sale de
+  `grades_json` con la regla de `calcularScoreRespuesta`
+  (`window.pctDeCalificacion`), las de constancia no se listan y **no consulta
+  nada**: las respuestas de la gráfica ya traen `grades_json`.
+
   **Y salen de su propia consulta, que alimenta también el recuadro.** Las
   respuestas que esta pantalla ya tiene a mano se piden con un `select('*')` sin
   acotar, así que PostgREST las corta en mil: de una encuesta con casi tres mil

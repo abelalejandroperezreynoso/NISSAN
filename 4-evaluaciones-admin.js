@@ -101,6 +101,100 @@ window.puedeCalificar = (ev, empleadoQueContesto) => {
     return window.leTocaRevisar(ev, empleadoQueContesto, user.id);
 };
 
+// --- EL RESULTADO DE CADA PREGUNTA EN UN PERIODO ---
+// La cifra de la encuesta dice cómo va y la línea, si va a mejor; ninguna dice
+// **en qué pregunta** se pierden los puntos, que es lo que hay que saber para
+// corregir algo. Debajo de la gráfica va una fila por pregunta con su promedio
+// en el periodo que se mira —el de ahora al abrir, el de un punto al tocarlo—.
+//
+// Se cuenta con la misma respuesta que cuenta la cifra de la empresa
+// (`ultimaDeCadaUnoEnPeriodo`: la última de cada persona en su periodo) y sólo
+// las calificadas: lo entregado y sin revisar no tiene nota por pregunta. Aquí
+// **no** se reparte sobre el padrón —quien no contestó no falló ninguna
+// pregunta en concreto—, así que es el promedio de lo calificado, y lo dice.
+//
+// La nota de una pregunta sale de su `grades_json` con la misma regla de
+// `calcularScoreRespuesta`, o la media de las filas no casaría con la cifra.
+// Las que dejan constancia no puntúan y no se listan.
+window.pctDeCalificacion = (g) => {
+    if (g === undefined || g === null) return null;
+    const type = (typeof g === 'object') ? g.type : 'standard';
+    if (type === 'numeric_score') return g.percentage || 0;
+    if (type === 'list_match' && Array.isArray(g.items)) {
+        const ok = g.items.filter(i => i.status === 'correct').length;
+        const tot = g.totalExpected || Math.max(g.items.length, 1);
+        return (ok / tot) * 100;
+    }
+    const st = (typeof g === 'object') ? g.status : g;
+    return st === 'correct' ? 100 : 0;
+};
+
+window.preguntasEnPeriodo = (ev, preguntas, respuestas, referencia) => {
+    const ultimas = Object.values(window.ultimaDeCadaUnoEnPeriodo(ev, respuestas, referencia))
+        .filter(r => r.review_status === 'Revisado' || r.review_status === 'Certificada');
+    const filas = (preguntas || [])
+        .filter(q => !window.esPreguntaDeConstancia(q))
+        .map(q => {
+            const notas = ultimas
+                .map(r => window.pctDeCalificacion((r.grades_json || {})[q.id]))
+                .filter(v => v !== null);
+            return {
+                q,
+                cuantas: notas.length,
+                promedio: notas.length ? Math.round(notas.reduce((a, b) => a + b, 0) / notas.length) : null
+            };
+        });
+    return { filas, calificadas: ultimas.length };
+};
+
+// El bloque, para el punto `indice` de la gráfica; null es el último con
+// resultado, que es el periodo que corre.
+window.bloqueDePreguntasDelPeriodo = (indice) => {
+    const d = window.preguntasDeLaGrafica;
+    if (!d || !d.ev) return '';
+    const puntos = d.puntos || [];
+    let punto = (indice !== null && indice !== undefined) ? puntos[indice] : null;
+    if (!punto) punto = [...puntos].reverse().find(p => p.promedio !== null) || puntos[puntos.length - 1];
+    const referencia = punto && punto.referencia instanceof Date ? punto.referencia : new Date();
+    const nombre = punto ? (punto.nombre || punto.etiqueta || '') : '';
+
+    const { filas, calificadas } = window.preguntasEnPeriodo(d.ev, d.preguntas, d.respuestas, referencia);
+    if (filas.length === 0) return '';
+
+    const cuerpo = calificadas === 0
+        ? `<div class="preguntas-periodo-vacio">Ninguna respuesta calificada en este periodo.</div>`
+        : filas.map((f, i) => {
+            const texto = window.sanitizeForHTML(window.enunciadoDePregunta(f.q) || `Pregunta ${i + 1}`);
+            const valor = f.promedio === null ? '—' : `${f.promedio}%`;
+            const color = f.promedio === null ? '#94a3b8' : window.getColorScore(f.promedio);
+            const ancho = f.promedio === null ? 0 : Math.max(2, f.promedio);
+            return `
+                <div class="pregunta-periodo" title="${texto} · ${f.cuantas} calificada${f.cuantas === 1 ? '' : 's'}">
+                    <div class="pregunta-periodo-fila">
+                        <span class="pregunta-periodo-num">${i + 1}</span>
+                        <span class="pregunta-periodo-texto">${texto}</span>
+                        <span class="pregunta-periodo-valor" style="color:${color};">${valor}</span>
+                    </div>
+                    <div class="pregunta-periodo-barra"><span style="width:${ancho}%; background:${color};"></span></div>
+                </div>`;
+        }).join('');
+
+    return `
+        <div class="preguntas-periodo">
+            <div class="preguntas-periodo-titulo">
+                <span>Por pregunta${nombre ? ` · ${window.sanitizeForHTML(nombre)}` : ''}</span>
+                <span class="preguntas-periodo-nota">${calificadas} calificada${calificadas === 1 ? '' : 's'}</span>
+            </div>
+            ${cuerpo}
+        </div>`;
+};
+
+// Lo que llama la gráfica al tocar un punto: sólo repinta el bloque.
+window.verPreguntasDelPeriodo = (indice) => {
+    const hueco = document.getElementById('preguntas-del-periodo');
+    if (hueco) hueco.innerHTML = window.bloqueDePreguntasDelPeriodo(indice);
+};
+
 // --- 1. HISTORIAL Y LISTA DE RESPUESTAS ---
 window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) => {
     window.evalIdRespondiendo = evalId;
@@ -391,9 +485,20 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         // nueva, así que lo que se queda fuera son los periodos de atrás y la
         // línea saldría subiendo desde un suelo falso.
         if (resumen && !traidas.tope && window.historialDeRevision && window.graficaDeLinea) {
-            graficaHtml = window.graficaDeLinea(window.historialDeRevision(
+            const puntos = window.historialDeRevision(
                 { filas: [{ ev: evalData }] }, traidas.respuestas,
-                { sobrePadron: true, frecuencia: ritmoDelEje }));
+                { sobrePadron: true, frecuencia: ritmoDelEje });
+
+            // Debajo de la línea, el resultado de cada pregunta en el periodo
+            // que se mira: el de ahora al abrir, y el de cualquier punto al
+            // tocarlo. No consulta nada —`grades_json` ya viene en las
+            // respuestas de la gráfica—, así que tocar un punto sólo repinta.
+            window.preguntasDeLaGrafica = {
+                ev: evalData, respuestas: traidas.respuestas, puntos,
+                preguntas: window.preguntasCacheActual || []
+            };
+            graficaHtml = window.graficaDeLinea(puntos, 'verPreguntasDelPeriodo')
+                + `<div id="preguntas-del-periodo">${window.bloqueDePreguntasDelPeriodo(null)}</div>`;
         }
         if (resumen) {
             const colorScore = resumen.promedio === null ? '#94a3b8' : window.getColorScore(resumen.promedio);
