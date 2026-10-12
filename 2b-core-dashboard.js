@@ -706,6 +706,19 @@ window.estadoDeAsignada = (v) => {
                  relevada: true, fondo: '#f0f9ff', color: '#0369a1', borde: '#bae6fd' };
     }
 
+    // El curso que le falta: no es «al día» —no la ha contestado— ni un
+    // pendiente suyo —no depende de él—. Esperando, lo tiene que programar su
+    // jefe; programado, dice cuándo es. Los dos con el neutro, que es lo que
+    // dibuja lo que no le pide nada a quien mira.
+    if (v && v.tipoAviso === 'esperando_curso') {
+        return { texto: 'Esperando curso · lo programa tu jefe', neutro: true, listo: true, diceTexto: true,
+                 fondo: '#fff7ed', color: '#c2410c', borde: '#fed7aa' };
+    }
+    if (v && v.tipoAviso === 'curso_programado') {
+        return { texto: `Curso: ${window.textoDeFechaCurso(v.fechaCurso)}`, neutro: true, listo: true, diceTexto: true,
+                 fondo: '#f0f9ff', color: '#0369a1', borde: '#bae6fd' };
+    }
+
     if (!v || !v.mostrar) return Object.assign({ texto: 'Al día', listo: true }, verde);
 
     switch (v.tipoAviso) {
@@ -1193,7 +1206,7 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
             // quedaría con la frecuencia sola—.
             let resultado = puntaje !== null
                 ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
-                : ((estado.listo && !estado.relevada) ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
+                : ((estado.listo && !estado.relevada && !estado.diceTexto) ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
 
             // Administrando, delante del promedio va cuánta gente la
             // contestó: el promedio se reparte sobre el padrón, así que sin
@@ -1274,12 +1287,20 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
         // sin filas que sumar, diría que nadie contestó algo que no se había
         // creado.
         const sinExistir = vigentes.length === 0;
+        // Las que esperan el curso no están «al día»: no las ha contestado,
+        // sólo que no depende de él. Se dicen aparte, que si no la
+        // clasificación entera se leería como resuelta.
+        const conCurso = vigentes.filter(f => f.vencimiento &&
+            (f.vencimiento.tipoAviso === 'esperando_curso' || f.vencimiento.tipoAviso === 'curso_programado')).length;
+        const alDia = vigentes.length - conCurso;
+        const textoAlDia = conCurso === 0 ? `${cuantasVig} al día`
+            : [alDia > 0 ? `${alDia} al día` : null, `${conCurso} esperando curso`].filter(Boolean).join(' · ');
         const pie = sinExistir ? cuantas : [
             esAdmin
                 ? window.textoDeRespuestasAdmin(totalGrupo)
                 : (pendientesGrupo > 0
                     ? `${pendientesGrupo} pendiente${pendientesGrupo === 1 ? '' : 's'} de ${vigentes.length}`
-                    : `${cuantasVig} al día`),
+                    : textoAlDia),
             promedioGrupo === null ? null
                 : `<span style="color:${colorGrupo}; font-weight:700;">${promedioGrupo}%</span>`
         ].filter(Boolean).join(' · ');
@@ -1552,6 +1573,8 @@ window.cargarEncuestasAsignadas = async (userId) => {
         // separa la encuesta asignada de la que todavía está preguntando:
         // `leTocaEstaEncuesta` lo mira sin poder esperar.
         if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+        // Y el curso que falta: si espera a que su jefe se lo programe, la encuesta no le pide nada.
+        if (window.cargarCursosPrevios) await window.cargarCursosPrevios();
         // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
         if (window.cargarVacaciones) await window.cargarVacaciones();
 
@@ -3787,6 +3810,9 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
         if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
         // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
         if (window.cargarVacaciones) await window.cargarVacaciones();
+        // Y los cursos que faltan, rehechos como en el panel de pendientes: los
+        // programa el jefe desde otro teléfono.
+        if (window.cargarCursosPrevios) await window.cargarCursosPrevios(true);
 
         const camposEvals = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
             'id, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))))));
@@ -4050,12 +4076,34 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
                 }
             }
 
+            // Lo que tiene que hacer por la gente y por sí mismo que no es
+            // contestar ni calificar: elegir a su jefe inmediato si no lo tiene,
+            // y programar los cursos que le falten a su equipo directo —uno por
+            // encuesta, que es una tarjeta del panel de pendientes—. Es la misma
+            // cuenta que dibuja ese panel, así que las dos cifras coinciden.
+            let countCursos = 0;
+            if (window.necesitaElegirJefe && window.necesitaElegirJefe(empleadoData)) countCursos++;
+            if (window.CURSOS_PREVIOS && esJefe) {
+                const misActivos = window.todosLosEmpleadosData.filter(e =>
+                    String(e.supId) === empStrId && window.empleadoActivo(e));
+                activeEvals.forEach(ev => {
+                    if ((ev.mode || 'self') === 'boss') return;
+                    const alguno = misActivos.some(sub => {
+                        const fila = window.filaDeCursoPrevio(ev.id, sub.id);
+                        return fila && fila.estado === 'esperando' &&
+                            window.leTocaEstaEncuesta(ev, sub, window.tieneEquipoDirecto(sub.id));
+                    });
+                    if (alguno) countCursos++;
+                });
+            }
+
             const stats = {
                 incidentes: countInc,
                 difusiones: countDif,
                 evaluaciones: countEvals,
                 porCalificar: countPorCalificar,
-                total: countInc + countDif + countEvals + countPorCalificar
+                cursos: countCursos,
+                total: countInc + countDif + countEvals + countPorCalificar + countCursos
             };
 
             window.statsPendientes[empId] = stats;

@@ -5738,6 +5738,46 @@ html.fondo-anclado body {
     color: #92400e;
 }
 
+/* --- Programar el curso que falta y elegir jefe (16-cursos.js) -------------
+   Las dos hojas reusan la lista de ajustes (`.lista-ios`) y el resumen de la
+   de vacaciones (`.vac-resumen`); lo suyo es sólo la marca de la fila elegida,
+   el botón de marcar a todos y el párrafo que explica para qué es el jefe. */
+.fila-ios-marca {
+    flex-shrink: 0;
+    width: 20px;
+    color: #ea580c;
+    font-weight: 700;
+    text-align: center;
+}
+
+.curso-marcar-todos {
+    display: block;
+    margin: 8px 4px 20px;
+    padding: 6px 0;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #ea580c;
+    cursor: pointer;
+}
+
+/* Tiene `display` de autor, y eso le gana al `[hidden]` del navegador: es la
+   trampa de `.tipos-pregunta`. */
+.curso-marcar-todos[hidden] { display: none; }
+
+.curso-marcar-todos[hidden] + .hoja-grupo-titulo { margin-top: 20px; }
+
+.jefe-explicacion {
+    margin: 0 4px 14px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    color: #475569;
+}
+
+#jefe-candidatos-titulo { margin-top: 18px; }
+
 .gestion-avatar {
     flex-shrink: 0;
     width: 34px;
@@ -6436,8 +6476,21 @@ html.fondo-anclado body {
     color: #0f172a;
 }
 
+/* El curso que su jefe le programó, encima de las dos filas: cuándo y con
+   quién. Es lo que viene a confirmar, así que va antes de elegir. */
+.curso-programado-nota {
+    padding: 10px 12px;
+    border: 1px solid #bae6fd;
+    border-radius: 10px;
+    background: #f0f9ff;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #0369a1;
+}
+
 /* El aviso de que falta el curso. Va debajo de las dos filas y dice las dos
-   cosas: a quién pedírselo y que hasta entonces no hay encuesta que contestar. */
+   cosas: que el pendiente pasó a su jefe y que hasta entonces no hay encuesta
+   que contestar. */
 .curso-aviso {
     display: flex;
     flex-direction: column;

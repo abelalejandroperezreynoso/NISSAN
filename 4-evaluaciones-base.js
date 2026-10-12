@@ -40,6 +40,18 @@ window.esModoPrestado = () => window.evalModeRespondiendo === 'prestado';
 window.apoyoEnCurso = null;
 window.esModoApoyo = () => window.evalModeRespondiendo === 'apoyo' && !!window.apoyoEnCurso;
 
+// De quién es la respuesta que se está escribiendo **como persona**: en
+// prestado, del colaborador que teclea en el teléfono de su jefe; en todo lo
+// demás, de quien inició sesión. Lo pregunta el curso previo, que es de quien
+// lo tiene que tomar y no de quien sostiene el teléfono.
+window.idDeQuienContesta = () => {
+    if (window.esModoPrestado() && window.targetUserForEval) return String(window.targetUserForEval.id);
+    try {
+        const user = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+        return user ? String(user.id) : null;
+    } catch (e) { return null; }
+};
+
 window.responderApoyo = (evalId, title, ausenteId, ausenteNombre) => {
     window.apoyoEnCurso = { id: String(ausenteId), name: ausenteNombre || '' };
     window.responderDirecto(evalId, title, 'apoyo');
@@ -702,6 +714,8 @@ window.cargarVistaEvaluaciones = async () => {
     // renglón que pide decidirlo como el de la que se descartó, y
     // `leTocaEstaEncuesta` lo mira sin poder esperar.
     if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+    // Y el curso que falta: si espera a que su jefe se lo programe, la encuesta no le pide nada.
+    if (window.cargarCursosPrevios) await window.cargarCursosPrevios();
     // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
     if (window.cargarVacaciones) await window.cargarVacaciones();
 
@@ -990,7 +1004,7 @@ window.cargarVistaEvaluaciones = async () => {
             // no es de quien mira, y el icono ya lo cuenta.
             const resultado = puntaje !== null
                 ? ` · <span style="color:${color}; font-weight:700;">${puntaje}%</span>`
-                : ((estado.listo || estado.neutro) && !estado.relevada ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
+                : ((estado.listo || estado.neutro) && !estado.relevada && !estado.diceTexto ? '' : ` · <span style="color:${estado.color}; font-weight:700;">${estado.texto}</span>`);
 
             // Quién la contesta se decía con el emoji del cuadro de la rejilla
             // —👥 contra 📋—, y sin cuadro hay que decirlo: en modo jefe la
@@ -1389,6 +1403,9 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
         // siempre 'adelante' y esto no frena nada, que es lo de antes.
         if (mode !== 'boss' && window.pasoDeAplica) {
             if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+            // Y el curso que le falta, si lo tiene programado: con él se llenan
+            // solos quién lo imparte y cuándo, al decir que ya lo tomó.
+            if (window.cargarCursosPrevios) await window.cargarCursosPrevios();
             // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
             if (window.cargarVacaciones) await window.cargarVacaciones();
             // En un apoyo la encuesta es de quien está de vacaciones: si le
@@ -1817,8 +1834,25 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
             // que no se distingue de un teléfono con el JavaScript viejo.
             const hoy = new Date();
             const maxFecha = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+
+            // **Si su jefe se lo programó**, se dice cuándo y con quién, y al
+            // decir que sí ya vienen escritos —sólo hay que confirmarlos o
+            // corregirlos—. La fecha sólo se llena si ya pasó: el campo no
+            // admite una futura, y antes del curso no hay nada que confirmar.
+            const filaCurso = (!vistaPrevia && window.filaDeCursoPrevio)
+                ? window.filaDeCursoPrevio(evalId, window.idDeQuienContesta()) : null;
+            const programado = filaCurso && filaCurso.estado === 'programado' && filaCurso.fecha_programada
+                ? new Date(filaCurso.fecha_programada) : null;
+            const instructorPuesto = programado ? window.sanitizeForHTML(filaCurso.instructor || '') : '';
+            const fechaPuesta = programado && programado <= hoy
+                ? `${programado.getFullYear()}-${String(programado.getMonth() + 1).padStart(2, '0')}-${String(programado.getDate()).padStart(2, '0')}`
+                : '';
+            const notaProgramado = programado
+                ? `<div class="curso-programado-nota">Tu jefe te lo programó: <b>${window.textoDeFechaCurso(programado)}</b>${instructorPuesto ? ` · con ${instructorPuesto}` : ''}</div>`
+                : '';
             inputHtml = `
                 <div class="curso-previo" id="curso-previo-${q.id}">
+                    ${notaProgramado}
                     <label class="curso-opcion" for="curso-si-${q.id}">
                         <input type="radio" id="curso-si-${q.id}" name="curso-${q.id}" value="si"
                                class="resp-curso" data-id="${q.id}" onchange="window.pintarCursoPrevio(this)">
@@ -1833,16 +1867,16 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                         <label class="curso-campo">
                             <span class="curso-campo-rotulo">Quién lo impartió <span style="color:#ef4444;">*</span></span>
                             <input type="text" class="resp-curso-instructor" data-id="${q.id}"
-                                   placeholder="Nombre del instructor" autocomplete="off">
+                                   placeholder="Nombre del instructor" autocomplete="off" value="${instructorPuesto}">
                         </label>
                         <label class="curso-campo">
                             <span class="curso-campo-rotulo">Cuándo lo tomaste <span style="color:#ef4444;">*</span></span>
-                            <input type="date" class="resp-curso-fecha" data-id="${q.id}" max="${maxFecha}">
+                            <input type="date" class="resp-curso-fecha" data-id="${q.id}" max="${maxFecha}" value="${fechaPuesta}">
                         </label>
                     </div>
                     <div class="curso-aviso" id="curso-aviso-${q.id}" hidden>
                         <span class="curso-aviso-titulo">${window.TEXTO_SIN_CURSO}</span>
-                        <span class="curso-aviso-texto">Sin el curso no se puede contestar esta encuesta. En cuanto te lo impartan, vuelve a abrirla.</span>
+                        <span class="curso-aviso-texto">Sin el curso no se puede contestar esta encuesta. Tu jefe lo tiene en sus pendientes, y cuando te lo programe la encuesta te volverá a salir con la fecha y la hora.</span>
                         <button type="button" class="curso-aviso-salir" onclick="window.salirDeLaEncuesta()">Salir de la encuesta</button>
                     </div>
                 </div>`;
@@ -1945,6 +1979,10 @@ window.pintarCursoPrevio = (radio) => {
     if (dijoNo) {
         const q = (window.preguntasCacheActual || []).find(p => String(p.id) === String(qid));
         window.abrirHojaSinCurso(window.cursoDeLaPregunta(q || {}));
+        // Y se guarda al momento: el «no» es lo que pasa el pendiente a su
+        // jefe, y esperar a que salga de la encuesta dejaría sin guardar a
+        // quien la cierra por la cruz o deslizando la hoja.
+        window.avisarJefeDelCurso();
     }
     // Las dos filas se pintan como elegida y no elegida: el botón de radio es
     // de 20px y no es lo que se ve desde lejos.
@@ -1992,7 +2030,7 @@ window.montarHojaSinCurso = () => {
             <div style="padding-top:18px;">
                 <div class="curso-aviso" style="margin-bottom:18px;">
                     <span class="curso-aviso-titulo">${window.TEXTO_SIN_CURSO}</span>
-                    <span class="curso-aviso-texto">Sin el curso no se puede contestar esta encuesta. En cuanto te lo impartan, vuelve a abrirla.</span>
+                    <span class="curso-aviso-texto" id="sin-curso-texto">Sin el curso no se puede contestar esta encuesta.</span>
                 </div>
                 <button type="button" onclick="window.confirmarSinCurso()"
                         style="width:100%; background:#ea580c; color:white; padding:15px; border:none; border-radius:12px; font-size:1.05rem; font-weight:bold; cursor:pointer;">
@@ -2031,11 +2069,55 @@ window.salirDeLaEncuesta = () => {
         return;
     }
     window.cancelarRespuesta('main');
+    // Si el «no» se guardó, lo que hay detrás habla de otra cosa: la encuesta
+    // dejó de ser su pendiente y pasó a su jefe.
+    if (window.cursoRegistradoEnLaHoja) {
+        window.cursoRegistradoEnLaHoja = false;
+        if (window.mostrandoPendientes && window.cargarVistaPendientes) window.cargarVistaPendientes('PROPIOS');
+        if (window.refrescarTarjetaDeEncuestas) window.refrescarTarjetaDeEncuestas();
+    }
 };
 
 window.confirmarSinCurso = () => {
     window.cerrarHojaSinCurso();
     window.salirDeLaEncuesta();
+};
+
+// **El «no» se guarda y el pendiente pasa a su jefe** (`registrarSinCurso`, en
+// `1-config.js`). La hoja dice a quién le llegó, que es lo que quien contesta
+// necesita saber para no quedarse esperando sin más: si tiene jefe, que ya lo
+// tiene en sus pendientes; si no lo tiene, que nadie puede programárselo
+// todavía y que lo elija.
+//
+// No se guarda nada en la vista previa —no es una respuesta de nadie— ni en el
+// modo jefe, que no admite esta pregunta.
+window.avisarJefeDelCurso = async () => {
+    const texto = document.getElementById('sin-curso-texto');
+    const poner = (t) => { if (texto) texto.innerText = t; };
+    if (window.enVistaPreviaDeEncuesta || window.evalModeRespondiendo === 'boss' || !window.registrarSinCurso) {
+        poner('Sin el curso no se puede contestar esta encuesta.');
+        return;
+    }
+    const quien = window.idDeQuienContesta();
+    const evalId = window.evalIdRespondiendo;
+    if (!quien || !evalId) return;
+
+    poner('Avisando a tu jefe inmediato…');
+    try {
+        await window.registrarSinCurso(evalId, quien);
+        window.cursoRegistradoEnLaHoja = true;
+        const jefe = window.jefeInmediatoDe ? window.jefeInmediatoDe(quien) : undefined;
+        if (jefe === null) {
+            poner('No tienes jefe inmediato registrado, así que nadie puede programarte el curso todavía. Elígelo desde «Mis Pendientes».');
+        } else {
+            const nombre = jefe ? `, ${String(jefe.name || '').trim()},` : '';
+            poner(`Tu jefe inmediato${nombre} ya lo tiene en sus pendientes para programarte el curso. Cuando lo programe, esta encuesta te volverá a salir con la fecha y la hora.`);
+        }
+    } catch (e) {
+        // Sin la tabla —el script no se ha corrido— queda el recado de antes,
+        // que es lo único que se puede hacer desde aquí.
+        poner('Pídele a tu jefe inmediato que te programe el curso. No se le pudo avisar desde aquí: ' + e.message);
+    }
 };
 
 // Los cursos que se dijeron no tomados. Es lo que miran el freno de la pantalla
@@ -2680,6 +2762,14 @@ window.enviarRespuestasEval = async () => {
         const { error } = await sb.from('evaluation_responses').insert(fila);
         
         if (error) throw error;
+
+        // Si contestó con el curso que su jefe le había programado, esa fila
+        // se cierra. No detiene nada si falla: la respuesta ya está guardada y
+        // una respuesta posterior manda sobre la fila de todos modos.
+        if (!isBossMode && window.marcarCursoTomado &&
+            (window.preguntasCacheActual || []).some(q => window.esPreguntaDeCursoPrevio(q) && window.constanciaDeCurso(answersMap[q.id]))) {
+            await window.marcarCursoTomado(window.evalIdRespondiendo, targetEmployeeId);
+        }
         
         let successMsg = "Respuestas enviadas correctamente. Pendiente de revisión.";
         if (isBossMode) {

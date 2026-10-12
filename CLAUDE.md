@@ -40,6 +40,7 @@ Los mensajes de commit van en español.
 | `13-gestion.js` | Gestionar información: personal, departamentos, puestos, encargos, áreas, plantas y líneas, y la cadena de mando |
 | `14-vacaciones.js` | La hoja de cargar vacaciones y nombrar relevo; las reglas viven en `1-config.js` |
 | `15-presentacion.js` | La presentación semanal y la mensual —una sola, con dos cortes—: la diapositiva del resultado de la planta, en la hoja y en `.pptx` |
+| `16-cursos.js` | Las hojas de «Programar curso» (el jefe, para quien no ha tomado el curso de una encuesta) y «Elige a tu jefe inmediato»; las reglas viven en `1-config.js` |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -2022,14 +2023,14 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
 
   - **Sí** → salen dos campos, **quién lo impartió y cuándo**, y la encuesta
     sigue como cualquier otra.
-  - **No** → sale el aviso de **«Solicita la capacitación a tu jefe
-    inmediato»**, el resto de las preguntas se apaga y el botón de enviar deja
-    de poder pulsarse.
+  - **No** → sale el aviso de **«Tu jefe inmediato te programará el curso»**,
+    el resto de las preguntas se apaga, el botón de enviar deja de poder
+    pulsarse y **el pendiente pasa a su jefe** (justo aquí debajo).
 
   ```js
   window.TIPO_PREGUNTA_CURSO      // 'course'
   window.TIPOS_DE_CURSO_PREVIO    // ['course', 'prerequisite']: el de hoy y el que no cupo
-  window.TEXTO_SIN_CURSO          // «Solicita la capacitación a tu jefe inmediato»
+  window.TEXTO_SIN_CURSO          // «Tu jefe inmediato te programará el curso»
   window.esPreguntaDeCursoPrevio(pregunta)
   window.cursoDeLaPregunta(pregunta)      // el nombre, o «el curso requerido»
   window.enunciadoDePregunta(pregunta)    // lo que se lee encima de los controles
@@ -2056,10 +2057,10 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   tocar a mano es `sql/cerrar-pendientes-sin-nada-que-calificar.sql`, que nombra
   los tipos de constancia uno a uno.
 
-  **Un «no» no llega nunca a la base**, y por eso la lectura es siempre la
-  constancia de quien sí lo tomó: esa encuesta no se puede enviar, así que no
-  hay qué guardar. Lo que el «no» deja es el pendiente en pie, que es lo que
-  pedía —hasta que le impartan el curso, esa encuesta le sigue tocando—.
+  **Un «no» no llega nunca a `answers_json`**, y por eso la lectura es siempre
+  la constancia de quien sí lo tomó: esa encuesta no se puede enviar. Lo que sí
+  se guarda es el «no» mismo, en `cursos_previos`, y eso es lo que le pasa el
+  pendiente a su jefe —se cuenta justo debajo—.
 
   Siete cosas que hay que mantener:
 
@@ -2163,6 +2164,124 @@ Conviene que el código aguante mientras el script no se haya corrido todavía.
   no entra en ninguna rama del `if` que dibuja los controles y
   enseña el nombre del curso con nada debajo —y sin el enunciado armado, que
   tampoco conoce—. Por eso la versión se sube en el mismo cambio.
+
+- **Quien no ha tomado el curso no carga con el pendiente: se le pasa a su
+  jefe.** Contestar «Todavía no» dejaba la encuesta en rojo en el panel de una
+  persona que no podía hacer nada con ella —no depende de ella que le impartan
+  el curso—, y nadie más se enteraba. Hoy ese «no» se guarda y **el pendiente
+  cambia de dueño**:
+
+  1. **Dice que no** → se guarda al momento (`registrarSinCurso`, desde
+     `pintarCursoPrevio`) y la hoja de «Te falta el curso» dice a quién le llegó:
+     «Tu jefe inmediato, Fulano, ya lo tiene en sus pendientes». A él la
+     encuesta deja de salirle como pendiente; en su tarjeta del inicio y en su
+     lista sale con el neutro, «Esperando curso · lo programa tu jefe».
+  2. **Su jefe** ve en «Mis Pendientes» una tarjeta **«Programar curso: ‹curso›»
+     por encuesta**, con la gente de su equipo directo que espera. La hoja
+     `#modal-programar-curso` deja marcar **a unos cuantos** y ponerles fecha,
+     hora y —opcional— quién lo imparte: lo normal es mandarlos en grupos de
+     pocos y en días distintos, así que los que no se marquen siguen esperando
+     y la tarjeta se queda mientras quede alguno. Una fecha pasada vale: es un
+     curso que ya se dio.
+  3. **Con fecha por venir**, la encuesta le vuelve a salir en «Mis Pendientes»
+     con «Curso: jue 15 oct, 7:00 a.m.» y quién lo imparte, **sin contar** en el
+     círculo ni en el badge —todavía no hay nada que pueda hacer—.
+  4. **Pasada la hora** es un pendiente como cualquier otro. Al abrirla, la
+     tarjeta del curso dice «Tu jefe te lo programó: …» y al decir que sí ya
+     vienen escritos el instructor y la fecha. Al enviarla, la fila pasa a
+     `tomado` (`marcarCursoTomado`).
+  5. **Si vuelve a decir que no**, la fila regresa a «esperando» con el curso
+     que no tomó en `fecha_fallida`, y la tarjeta del jefe lo dice: «Ana no lo
+     tomó el …».
+
+  ```js
+  await window.cargarCursosPrevios(recargar)   // la caché, y las encuestas que piden curso
+  window.filaDeCursoPrevio(evId, empId)        // la fila, o null
+  window.estadoDeCursoPrevio(evId, empId, respuestas, ahora)
+  // → null | { estado: 'esperando', fila } | { estado: 'programado', fila, fecha }
+  window.registrarSinCurso(evId, empId)
+  window.programarCursoPrevio(evId, empIds, fecha, instructor, programadoPor)
+  window.marcarCursoTomado(evId, empId)
+  window.textoDeFechaCurso(fecha)              // «jue 15 oct, 7:00 a.m.»
+  window.cursoDeEncuesta(evId, ev)             // el nombre del curso
+  window.bloqueDeCursoPrevio(ev)               // el recuadro de quien la imparte
+  ```
+
+  **No cambia el padrón**, y es a propósito: quien espera el curso sigue
+  contando como asignado y sin contestar en las estadísticas, que es lo que mide
+  el avance de todos los asignados. Lo único que cambia es a quién se le pide
+  hacer algo. Para que quien la imparte sepa por qué no avanza, la hoja de la
+  encuesta lleva el recuadro **«Curso previo»** (sólo administrador y revisor)
+  con tres listas: quién espera —y qué jefe se lo tiene que programar—, a quién
+  ya se le programó y quién lo tomó.
+
+  Seis cosas que hay que mantener:
+
+  - **Se decide en `esEvaluacionPendiente`**, justo detrás de las vacaciones:
+    `esperando_curso` y `curso_programado` vuelven con `mostrar: false`, así
+    que el badge, las tarjetas del equipo del jefe («Encuesta Atrasada») y la
+    tarjeta del inicio se enteran solos. El panel de pendientes es el único que
+    además dibuja la de `curso_programado`, como tarjeta **informativa**
+    (`item.informativo`), que el círculo de la cuenta no suma.
+  - **La caché se rehace en el panel de pendientes y en el badge**
+    (`cargarCursosPrevios(true)`): aquí escriben dos personas desde dos
+    teléfonos —quien dice que no y su jefe—, y con la de cuando se abrió la
+    aplicación la encuesta programada no le volvería a salir a nadie. Mientras
+    se rehace se sigue leyendo la anterior. Las demás pantallas la piden sin
+    rehacerla.
+  - **Una respuesta posterior a la fila manda sobre ella.** Si se contestó
+    después del «no», la fila ya no esconde nada aunque no se haya llegado a
+    marcar `tomado`: es lo que evita que una fila olvidada le quite a alguien
+    el pendiente del periodo siguiente. Y **una encuesta que ya no pide curso
+    no mira sus filas** —la caché trae también qué encuestas tienen la
+    pregunta—.
+  - **Un «no» con un curso ya programado y por venir no borra la fecha.** Abrió
+    la encuesta antes del curso, y su «no» es justo lo que se esperaba.
+  - **Es por encuesta**, no por curso: dos encuestas que pidan el mismo curso se
+    programan cada una por su lado.
+  - **La hoja de programar va encima de la de pendientes** (z-index 2000 sobre
+    1900), como la de vacaciones: es lo que hay que resolver del pendiente que
+    se acaba de tocar. Su acción principal va en el encabezado, que la hoja
+    lleva un campo de fecha y hora con rueda.
+
+  La tabla es `cursos_previos` (`sql/curso-previo-programado.sql`, que se corre
+  a mano) y está en `RASTROS_DEL_EMPLEADO`: lo suyo se borra con su ficha y lo
+  que programó como jefe sólo se desliga. **Sin el script todo se comporta como
+  antes**: el «no» no se guarda, la hoja dice «Pídele a tu jefe inmediato que te
+  programe el curso» y la encuesta le sigue saliendo.
+
+  Toca lo que decide pendientes, así que **la versión se sube en el mismo
+  cambio**: un teléfono con el código viejo no guarda el «no» ni sabe esconder
+  la encuesta de quien espera.
+
+- **Quien no tiene jefe inmediato lo elige él mismo, desde un pendiente.** De
+  `supervisor_id` cuelga a quién le llega el curso que le falta, quién califica
+  sus encuestas y quién ve sus pendientes; sin él todo eso se queda sin nadie.
+  Por eso **«Elige a tu jefe inmediato»** sale en «Mis Pendientes» —y suma en el
+  badge— a toda persona activa sin jefe o con el jefe dado de baja, y abre la
+  hoja `#modal-elegir-jefe`: sin buscar propone a los jefes de su departamento;
+  buscando, a cualquiera.
+
+  ```js
+  window.jefeInmediatoDe(empId)        // el jefe activo; null sin jefe; undefined sin plantilla
+  window.necesitaElegirJefe(emp)
+  window.elegirJefeInmediato(empId, jefeId)
+  window.abrirHojaElegirJefe()
+  ```
+
+  Tres cosas que hay que mantener:
+
+  - **Los puestos exentos de firmar no lo reciben** (`JR. MANAGER`, `SR
+    MANAGER`): son la punta de la cadena. Cualquier otro puesto sin jefe sí, y
+    si alguien de verdad no tiene a quién reportar en la aplicación, lo resuelve
+    el administrador desde «Gestionar información».
+  - **La cadena no se muerde la cola**: la hoja no ofrece a nadie que dependa de
+    esa persona, y `elegirJefeInmediato` lo vuelve a comprobar antes de
+    escribir.
+  - **Cuenta las filas del `.select()`**: escribe su propia ficha alguien que no
+    es administrador, y una política que no lo deje no da error. La plantilla
+    de memoria se corrige en el acto (`supId`), que de ella cuelgan el badge y
+    los pendientes de su nuevo jefe.
 
 - **Una foto se encoge antes de subirla, y ya no hay ninguna foto del área.**
   Las encuestas con `evaluates_area` pidieron un tiempo **una fotografía del

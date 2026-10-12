@@ -46,6 +46,8 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     // `leTocaEstaEncuesta` lo mira sin poder esperar. Va también antes del
     // atajo de la caché de encuestas, o se saltaría con la primera.
     if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+    // Y el curso que falta: si espera a que su jefe se lo programe, la encuesta no le pide nada.
+    if (window.cargarCursosPrevios) await window.cargarCursosPrevios();
     if (window.cargarVacaciones) await window.cargarVacaciones();
 
     const yaEsta = window.encuestaEnCache(evaluationId);
@@ -633,6 +635,21 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     }
     const quienAplicaHtml = window.bloqueDeQuienAplica(evalData, imparte);
 
+    // **Y quién espera el curso que pide esta encuesta.** Es de quien la
+    // imparte, como «Le aplica a»: dice cuánta gente no puede contestarla
+    // todavía porque su jefe no le ha programado el curso, y de quién depende.
+    // Sólo se pregunta si la encuesta pide curso, y se rehace —lo escriben los
+    // jefes desde sus teléfonos—.
+    let cursoPrevioHtml = '';
+    if (imparte && evalData && window.cargarCursosPrevios &&
+        (qs || []).some(q => window.esPreguntaDeCursoPrevio(q))) {
+        await window.cargarCursosPrevios(true);
+        if ((window.todosLosEmpleadosData || []).length === 0 && window.cargarDatosEmpleados) {
+            await window.cargarDatosEmpleados();
+        }
+        cursoPrevioHtml = window.bloqueDeCursoPrevio(evalData);
+    }
+
     // **Aquí el material se lee y, quien la imparte, lo agrega.** Quitarlo se
     // hace en la hoja de editar la encuesta, que es donde se escribe todo lo
     // demás de ella; en ésta quedan la portada de arriba —que abre el visor con
@@ -675,6 +692,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
         ${bannerHtml}
         ${materialHtml}
         ${quienAplicaHtml}
+        ${cursoPrevioHtml}
         ${paseDeListaHtml}
         <div id="stats-dashboard" style="display:none; margin-top:20px;"></div>
         <details id="lista-wrapper" class="hoja-plegable" ${cuantasMeTocan > 0 ? 'open' : ''}>
@@ -872,6 +890,53 @@ window.bloqueDeQuienAplica = (ev, verNombres) => {
             </div>
             <div class="pase-barra"><div class="pase-barra-relleno" style="width:${Math.round((si.length / candidatos.length) * 100)}%;"></div></div>
             ${nombresHtml}
+        </div>`;
+};
+
+// El recuadro «Curso previo» de la hoja de una encuesta, para quien la imparte.
+// Sale de `cursos_previos` y no de las respuestas: quien espera el curso no ha
+// contestado nada todavía. Son tres listas —quién espera a que su jefe se lo
+// programe, a quién ya le pusieron fecha y quién lo tomó— y la cifra grande es
+// la primera, que es la que dice de quién depende que la encuesta avance.
+//
+// Quien espera **sigue en el padrón** de la encuesta: aquí se dice por qué no
+// ha contestado, no se le quita de ninguna cuenta.
+window.bloqueDeCursoPrevio = (ev) => {
+    if (!ev || !window.CURSOS_PREVIOS) return '';
+    const gente = window.todosLosEmpleadosData || [];
+    if (gente.length === 0) return '';
+
+    const ahora = new Date();
+    const esperan = [], programados = [], tomados = [];
+    Object.values(window.CURSOS_PREVIOS).forEach(f => {
+        if (String(f.evaluation_id) !== String(ev.id)) return;
+        const emp = gente.find(e => String(e.id) === String(f.employee_id));
+        if (!emp || !window.empleadoActivo(emp)) return;
+        const jefe = window.jefeInmediatoDe(emp.id);
+        if (f.estado === 'esperando') {
+            esperan.push({ ...emp, puesto: jefe ? `Lo programa ${jefe.name}` : 'Sin jefe inmediato que lo programe' });
+        } else if (f.estado === 'programado') {
+            const fecha = f.fecha_programada ? new Date(f.fecha_programada) : null;
+            programados.push({ ...emp, puesto: fecha
+                ? `${fecha > ahora ? 'Curso el' : 'Curso fue el'} ${window.textoDeFechaCurso(fecha)}` : 'Programado' });
+        } else if (f.estado === 'tomado') {
+            tomados.push(emp);
+        }
+    });
+    if (esperan.length + programados.length + tomados.length === 0) return '';
+
+    const nota = esperan.length > 0
+        ? `${esperan.length} ${esperan.length === 1 ? 'espera' : 'esperan'} a que su jefe le${esperan.length === 1 ? '' : 's'} programe el curso`
+        : 'Nadie espera a que le programen el curso';
+
+    return `
+        <div class="pase-tarjeta">
+            <div class="pase-rotulo">Curso previo</div>
+            <div class="pase-evento">${window.sanitizeForHTML(window.cursoDeEncuesta(ev.id, ev))}</div>
+            <div class="pase-nota">${window.sanitizeForHTML(nota)}</div>
+            ${window.listaDePaseDeLista('Esperan que lo programen', esperan, 'falto')}
+            ${window.listaDePaseDeLista('Con curso programado', programados, 'asistio')}
+            ${window.listaDePaseDeLista('Ya lo tomaron', tomados, 'asistio')}
         </div>`;
 };
 

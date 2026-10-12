@@ -345,6 +345,26 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             }
         }
 
+        // **El curso que le falta.** Si dijo que no lo ha tomado, el pendiente
+        // es de su jefe —programárselo— y a él no se le pide nada; si su jefe
+        // ya le puso fecha y todavía no llega, la encuesta sale diciendo cuándo
+        // es el curso pero sin contar como pendiente. Lo decide
+        // `window.estadoDeCursoPrevio`, en `1-config.js`. Sólo para hoy: de un
+        // periodo pasado no se sabe en qué estaba, y en modo jefe no hay curso
+        // que pedir. Sin la caché —o sin el script corrido— no hay nada que
+        // esperar y todo sigue como antes.
+        if (!mirandoAtras && empleadoId != null && encuesta && (encuesta.mode || 'self') !== 'boss' && window.estadoDeCursoPrevio) {
+            const curso = window.estadoDeCursoPrevio(evalId, empleadoId, todas, cuandoMira);
+            if (curso) {
+                return {
+                    mostrar: false, frecuencia,
+                    tipoAviso: curso.estado === 'esperando' ? 'esperando_curso' : 'curso_programado',
+                    fechaCurso: curso.fecha || null,
+                    cursoPrevio: curso.fila
+                };
+            }
+        }
+
         // Relanzar la encuesta es un instante: lo contestado antes sigue en el
         // historial pero deja de cerrar el pendiente, así que aquí se aparta.
         // Sin relanzamiento —o sin la columna, que su script se corre a mano—
@@ -595,6 +615,21 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
             if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
             // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
             if (window.cargarVacaciones) await window.cargarVacaciones();
+            // Y los cursos que faltan, **rehechos**: quien los programa es el
+            // jefe, desde otro teléfono, y con la caché de cuando se abrió la
+            // aplicación la encuesta programada no le volvería a salir.
+            if (window.cargarCursosPrevios) await window.cargarCursosPrevios(true);
+
+            // **Quien no tiene jefe inmediato lo elige.** De ese dato cuelga a
+            // quién le llega el curso que le falta, quién califica sus encuestas
+            // y quién ve sus pendientes; sin él, todo eso se queda sin nadie.
+            if (window.necesitaElegirJefe && window.necesitaElegirJefe(miFicha)) {
+                items.push({
+                    id: 'elegir_jefe', title: 'Elige a tu jefe inmediato',
+                    date: window.diaLocal(new Date()),
+                    tipo: 'Aviso', grado: 'Sin jefe', virtual_type: 'elegir_jefe'
+                });
+            }
 
             const camposEvals = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(await window.camposConRevisores(
                 'id, title, category, target_positions, target_departments, target_employees, mode, is_obligatory, active, frequency, created_at')))))));
@@ -681,6 +716,20 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                                                 // Solo agregamos la encuesta si hace match
                                                 if (esObligatoria && esParaMi) {
                                                     const requiereRespuesta = window.esEvaluacionPendiente(myResponses, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, (ev.mode || 'self') !== 'boss', null, user.id);
+                                                    // Su jefe ya le programó el curso y todavía no
+                                                    // llega: no es un pendiente —no hay nada que pueda
+                                                    // hacer aún, y por eso no cuenta en el badge—, pero
+                                                    // la tarjeta sale para que sepa cuándo le toca.
+                                                    if (requiereRespuesta.tipoAviso === 'curso_programado') {
+                                                        items.push({
+                                                            id: ev.id, title: ev.title,
+                                                            date: window.diaDeInicioDeEncuesta(ev),
+                                                            tipo: 'Encuesta', grado: 'Curso programado',
+                                                            original_data: ev, virtual_type: 'curso_programado',
+                                                            vencimiento: requiereRespuesta, informativo: true
+                                                        });
+                                                        return;
+                                                    }
                                     if (requiereRespuesta.mostrar) {
     if (ev.mode === 'boss') {
         // Generamos un item especial para indicar que el usuario está esperando a su jefe
@@ -783,7 +832,42 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
             const misDirectosFull = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id));
             const equipoDirectoIds = misDirectosFull.map(e => String(e.id));
-            
+
+            // **Los cursos que le toca programar.** Quien de su equipo directo
+            // dijo que no ha tomado el curso de una encuesta le pasó ese
+            // pendiente a él. Va **una tarjeta por encuesta**, con toda la gente
+            // que espera: lo normal es programarlos en grupos de pocos y en días
+            // distintos, y la tarjeta se queda mientras quede alguien esperando.
+            window.cursosPorProgramar = {};
+            if (window.CURSOS_PREVIOS) {
+                (activeEvals || []).forEach(ev => {
+                    if ((ev.mode || 'self') === 'boss') return;
+                    const esperan = [];
+                    const programados = [];
+                    misDirectosFull.forEach(sub => {
+                        if (!window.empleadoActivo(sub)) return;
+                        const fila = window.filaDeCursoPrevio(ev.id, sub.id);
+                        if (!fila || fila.estado === 'tomado') return;
+                        // Y sólo si la encuesta le sigue tocando: si se la
+                        // quitaron, no hay curso que programarle.
+                        if (!window.leTocaEstaEncuesta(ev, sub, window.tieneEquipoDirecto(sub.id))) return;
+                        const futuro = fila.estado === 'programado' && fila.fecha_programada &&
+                            new Date(fila.fecha_programada) > new Date();
+                        if (fila.estado === 'esperando') esperan.push({ emp: sub, fila });
+                        else if (futuro) programados.push({ emp: sub, fila });
+                    });
+                    if (esperan.length === 0) return;
+                    window.cursosPorProgramar[String(ev.id)] = {
+                        ev, curso: window.cursoDeEncuesta(ev.id, ev), esperan, programados
+                    };
+                    items.push({
+                        id: `curso_${ev.id}`, real_eval_id: ev.id, title: ev.title,
+                        date: window.diaLocal(new Date()),
+                        tipo: 'Curso', grado: 'Por programar', virtual_type: 'programar_curso'
+                    });
+                });
+            }
+
             if (equipoDirectoIds.length > 0) {
                 const teamObligatorias = activeEvalsDb ? activeEvalsDb.filter(ev => ev.is_obligatory !== false && String(ev.is_obligatory) !== 'false') : [];
                 
@@ -1052,7 +1136,7 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
         // Set antes de consultar, y a un jefe al que le toca la misma encuesta
         // le salen las dos tarjetas con el mismo id de encuesta.
         const idsConPortada = items
-            .filter(i => i.virtual_type === 'survey' || i.virtual_type === 'aplica'
+            .filter(i => i.virtual_type === 'survey' || i.virtual_type === 'aplica' || i.virtual_type === 'curso_programado'
                       || i.virtual_type === 'team_missing_survey' || i.virtual_type === 'apoyo')
             .map(i => (i.virtual_type === 'team_missing_survey' || i.virtual_type === 'apoyo') ? i.real_eval_id : i.id)
             .filter(Boolean);
@@ -1422,6 +1506,94 @@ if (item.virtual_type === 'waiting_boss') {
                 </div>`;
             }
 
+            // **Quien no tiene jefe inmediato lo elige**, desde su propio
+            // pendiente. Es el primero que hay que resolver: sin jefe, el curso
+            // que le falte no le llega a nadie para programarlo.
+            if (item.virtual_type === 'elegir_jefe') {
+                const miFichaJefe = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(user.id));
+                const supAnterior = miFichaJefe ? String(miFichaJefe.supId || '').trim() : '';
+                const anterior = supAnterior
+                    ? (window.todosLosEmpleadosData || []).find(e => String(e.id) === supAnterior) : null;
+                const porque = anterior
+                    ? `Tu jefe inmediato, ${window.sanitizeForHTML(anterior.name || '')}, está dado de baja.`
+                    : 'No tienes jefe inmediato registrado.';
+                return `
+                <div class="incident-card" style="border-left: 5px solid #0891b2;">
+                    <div class="card-header" style="align-items: flex-start;">
+                        <div class="card-info" onclick="window.abrirHojaElegirJefe()" style="cursor:pointer; flex:1;">
+                            <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
+                            <div style="font-size:0.85rem; color:#475569; line-height:1.4;">${porque} Es quien califica tus encuestas y te programa los cursos que te falten.</div>
+                        </div>
+                        <div class="card-actions" style="align-self: center;">
+                            <button class="btn-firmar" onclick="window.abrirHojaElegirJefe()" style="color:white; background:#0891b2; border:none;">Elegir</button>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            // **Los cursos que le toca programar a este jefe.** Una tarjeta por
+            // encuesta con la gente que espera, que es la que el botón deja
+            // programar —toda o unos cuantos, y el resto otro día—.
+            if (item.virtual_type === 'programar_curso') {
+                const grupo = (window.cursosPorProgramar || {})[String(item.real_eval_id)];
+                if (!grupo) return null;
+                const nombres = grupo.esperan.map(x => window.sanitizeForHTML(String(x.emp.name || '').trim().split(' ')[0])).join(', ');
+                const fallidas = grupo.esperan.filter(x => x.fila.fecha_fallida);
+                const fallidasHtml = fallidas.length === 0 ? '' : `
+                            <div style="font-size:0.8rem; color:#b91c1c; margin-top:4px;">${fallidas.map(x =>
+                                `${window.sanitizeForHTML(String(x.emp.name || '').trim().split(' ')[0])} no lo tomó el ${window.textoDeFechaCurso(x.fila.fecha_fallida)}`).join(' · ')}</div>`;
+                const esperanTexto = `${grupo.esperan.length} ${grupo.esperan.length === 1 ? 'espera' : 'esperan'}`;
+                const programadosHtml = grupo.programados.length === 0 ? ''
+                    : `<span style="background:#e0f2fe; color:#0369a1; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; border:1px solid #bae6fd;">${grupo.programados.length} ${grupo.programados.length === 1 ? 'programado' : 'programados'}</span>`;
+                const mismoNombre = String(grupo.curso).trim().toUpperCase() === String(item.title || '').trim().toUpperCase();
+                return `
+                <div class="incident-card" style="border-left: 5px solid #ea580c;">
+                    <div class="card-header" style="align-items: flex-start;">
+                        <div class="card-info" onclick="window.abrirHojaProgramarCurso('${item.real_eval_id}')" style="cursor:pointer; flex:1;">
+                            <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">Programar curso: ${window.sanitizeForHTML(grupo.curso)}</h3>
+                            <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:6px; margin-top:0;">
+                                <span class="badge-type" style="background-color:#ea580c">${esperanTexto}</span>
+                                ${programadosHtml}
+                            </div>
+                            <div style="font-size:0.85rem; color:#475569; line-height:1.4;">${nombres}</div>
+                            ${fallidasHtml}
+                            ${mismoNombre ? '' : `<div style="font-size:0.8rem; color:#64748b; margin-top:4px;">Lo pide la encuesta «${window.sanitizeForHTML(item.title || '')}»</div>`}
+                        </div>
+                        <div class="card-actions" style="align-self: center;">
+                            <button class="btn-firmar" onclick="window.abrirHojaProgramarCurso('${item.real_eval_id}')" style="color:white; background:#ea580c; border:none;">Programar</button>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
+            // **La encuesta con el curso ya programado.** No es un pendiente
+            // todavía —no cuenta en el círculo ni en el badge—: dice cuándo es
+            // el curso para que sepa cuándo contestarla. Se puede abrir igual,
+            // que el curso pudo adelantarse.
+            if (item.virtual_type === 'curso_programado') {
+                const safeTitleCurso = (item.title || "Evaluación").replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+                const v = item.vencimiento || {};
+                const curso = window.cursoDeEncuesta(item.id, item.original_data);
+                const instructor = v.cursoPrevio && v.cursoPrevio.instructor
+                    ? ` con ${window.sanitizeForHTML(v.cursoPrevio.instructor)}` : '';
+                return `
+                <div class="incident-card" style="border-left: 5px solid #0369a1;">
+                    ${window.portadaDePendienteHtml(item.id)}
+                    <div class="card-header" style="align-items: flex-start;">
+                        <div class="card-info" onclick="window.responderDirecto('${item.id}', '${safeTitleCurso}')" style="cursor:pointer; flex:1;">
+                            <h3 class="card-title" style="margin-bottom:6px; font-size:1.05rem;">${item.title}</h3>
+                            <div class="card-meta" style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-bottom:6px; margin-top:0;">
+                                <span style="background:#e0f2fe; color:#0369a1; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; border:1px solid #bae6fd;">Curso: ${window.textoDeFechaCurso(v.fechaCurso)}</span>
+                            </div>
+                            <div style="font-size:0.85rem; color:#475569; line-height:1.4;">Tu jefe te programó el curso «${window.sanitizeForHTML(curso)}»${instructor}. Contesta la encuesta después de tomarlo.</div>
+                        </div>
+                        <div class="card-actions" style="align-self: center;">
+                            <button class="btn-firmar" onclick="window.responderDirecto('${item.id}', '${safeTitleCurso}')" style="color:#0369a1; border-color:#0369a1; background:white;">Abrir</button>
+                        </div>
+                    </div>
+                </div>`;
+            }
+
             if (item.virtual_type === 'survey') {
                             const safeTitle = (item.title || "Evaluación").replace(/'/g, "&apos;").replace(/"/g, "&quot;");
                 
@@ -1570,7 +1742,11 @@ if (item.virtual_type === 'waiting_boss') {
                             // la cuenta sale de las que de verdad se dibujan.
                             const validCards = cards.filter(c => c !== null);
                             container.insertAdjacentHTML('beforeend', validCards.join(''));
-                            window.pintarCuentaPendientes(validCards.length);
+                            // Lo informativo —el curso que ya tiene fecha— se
+                            // ve pero no se cuenta: el badge de la foto tampoco
+                            // lo cuenta, y las dos cifras tienen que coincidir.
+                            const informativas = items.filter((it, i) => it.informativo && cards[i] !== null).length;
+                            window.pintarCuentaPendientes(validCards.length - informativas);
 
                         } catch (e) {
                     console.error(e);

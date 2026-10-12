@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-06-2';
+window.VERSION_APP = '2026-10-12-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -983,7 +983,10 @@ window.esPreguntaDeAsistencia = (pregunta) =>
 // `<select>` sólo tiene el de hoy—.
 window.TIPO_PREGUNTA_CURSO = 'course';
 window.TIPOS_DE_CURSO_PREVIO = ['course', 'prerequisite'];
-window.TEXTO_SIN_CURSO = 'Solicita la capacitaci\u00f3n a tu jefe inmediato';
+// Lo que se le dice a quien todavía no lo tiene. Fue «Solicita la capacitación
+// a tu jefe inmediato», de cuando el «no» no se guardaba y el recado lo tenía
+// que llevar cada quien; hoy el pendiente le llega solo a su jefe.
+window.TEXTO_SIN_CURSO = 'Tu jefe inmediato te programar\u00e1 el curso';
 window.esPreguntaDeCursoPrevio = (pregunta) =>
     !!pregunta && window.TIPOS_DE_CURSO_PREVIO.includes(pregunta.question_type);
 
@@ -1035,6 +1038,299 @@ window.textoDeCursoTomado = (valor) => {
     const d = window.fechaDeRegistro(c.fecha);
     const cuando = (d && !isNaN(d.getTime())) ? d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : c.fecha;
     return `Lo imparti\u00f3 ${c.instructor} \u00b7 ${cuando}`;
+};
+
+// ==========================================
+// EL CURSO QUE FALTA: EL PENDIENTE PASA AL JEFE
+// ==========================================
+// Quien contesta \u00abTodav\u00eda no\u00bb no tiene nada que hacer con esa encuesta: no
+// depende de \u00e9l que le impartan el curso. Antes se quedaba con el pendiente en
+// rojo igual; hoy ese \u00abno\u00bb se guarda y **el pendiente cambia de due\u00f1o**:
+//
+//   esperando   a \u00e9l no le sale; a su jefe inmediato le sale \u00abProgramar curso\u00bb.
+//   programado  su jefe le puso fecha y hora, y la encuesta le vuelve a salir
+//               diciendo cu\u00e1ndo es el curso \u2014antes de esa hora no le cuenta en
+//               el badge: no hay nada que pueda hacer todav\u00eda\u2014.
+//   tomado      contest\u00f3 la encuesta con el curso. La fila ya no decide nada.
+//
+// **Es por encuesta**, y **no cambia el padr\u00f3n**: quien espera el curso sigue
+// contando como asignado y sin contestar en las estad\u00edsticas, que es lo que
+// mide el avance de todos los asignados. Lo \u00fanico que cambia es a qui\u00e9n se le
+// pide hacer algo.
+//
+// La tabla es `cursos_previos` y su script, `sql/curso-previo-programado.sql`.
+// Sin \u00e9l todo se comporta como antes.
+window.CURSOS_PREVIOS = null;        // { 'encuesta|empleado': fila }, null = no se sabe
+window.ENCUESTAS_CON_CURSO = null;   // { encuesta: nombre del curso }
+let promesaCursosPrevios = null;
+
+// Se pide una vez y se guarda **la promesa**, como las dem\u00e1s cach\u00e9s: quien
+// pregunta lo hace sin poder esperar. Pero aqu\u00ed escriben dos personas \u2014quien
+// dice que no y su jefe, en otro tel\u00e9fono\u2014, as\u00ed que el panel de pendientes y el
+// badge la rehacen (`recargar`): si no, la encuesta programada no le volver\u00eda a
+// salir a nadie hasta cerrar la aplicaci\u00f3n. Mientras se rehace se sigue leyendo
+// la anterior, que es preferible a que todo el mundo vea un instante lo de antes.
+//
+// Las preguntas de curso van en la misma vuelta: una fila de una encuesta que
+// ya no pide curso \u2014se quit\u00f3 la pregunta\u2014 no puede seguir escondi\u00e9ndole el
+// pendiente a nadie.
+window.cargarCursosPrevios = (recargar) => {
+    if (promesaCursosPrevios && !recargar) return promesaCursosPrevios;
+
+    const filas = sb.from('cursos_previos').select('*');
+    const preguntas = sb.from('evaluation_questions')
+        .select('evaluation_id, question_text, question_type')
+        .in('question_type', window.TIPOS_DE_CURSO_PREVIO);
+
+    promesaCursosPrevios = Promise.all([filas, preguntas])
+        .then(([rf, rp]) => {
+            if (rp && !rp.error) {
+                const enc = {};
+                (rp.data || []).forEach(q => {
+                    const clave = String(q.evaluation_id);
+                    if (!enc[clave]) enc[clave] = window.cursoDeLaPregunta(q);
+                });
+                window.ENCUESTAS_CON_CURSO = enc;
+            }
+            if (!rf || rf.error) {
+                // Sin la tabla \u2014el script no se ha corrido\u2014 o sin red: no se
+                // sabe nada y todo se comporta como antes.
+                window.CURSOS_PREVIOS = null;
+                return false;
+            }
+            const mapa = {};
+            (rf.data || []).forEach(f => {
+                mapa[`${String(f.evaluation_id)}|${String(f.employee_id)}`] = f;
+            });
+            window.CURSOS_PREVIOS = mapa;
+            return true;
+        })
+        .catch(() => { window.CURSOS_PREVIOS = null; return false; });
+
+    return promesaCursosPrevios;
+};
+
+// La fila de esa persona y esa encuesta, o null. Una encuesta que ya no tiene
+// pregunta de curso no la mira: la fila se queda, pero ya no decide nada.
+window.filaDeCursoPrevio = (evaluationId, empleadoId) => {
+    const mapa = window.CURSOS_PREVIOS;
+    if (!mapa) return null;
+    const enc = window.ENCUESTAS_CON_CURSO;
+    if (enc && !enc[String(evaluationId)]) return null;
+    return mapa[`${String(evaluationId)}|${String(empleadoId)}`] || null;
+};
+
+// El nombre del curso de una encuesta, que es el enunciado de su pregunta. Sin
+// la cach\u00e9 se dice el t\u00edtulo de la encuesta, que es como se llama casi siempre.
+window.cursoDeEncuesta = (evaluationId, ev) =>
+    (window.ENCUESTAS_CON_CURSO || {})[String(evaluationId)] || (ev && ev.title) || 'el curso';
+
+// En qu\u00e9 punto est\u00e1 esa persona con el curso de esa encuesta, que es lo \u00fanico
+// que miran el pendiente, el badge y la tarjeta del inicio:
+//
+//   null                       no hay nada que esperar: la encuesta va como siempre.
+//   { estado: 'esperando' }    el pendiente es de su jefe.
+//   { estado: 'programado' }   tiene fecha y todav\u00eda no llega.
+//
+// Un curso programado cuya hora ya pas\u00f3 devuelve null: ah\u00ed ya puede contestar,
+// y la encuesta es un pendiente como cualquier otro.
+//
+// Y **una respuesta posterior a la fila manda sobre ella**: si la contest\u00f3
+// despu\u00e9s de decir que no \u2014le impartieron el curso y dijo que s\u00ed\u2014, lo que
+// cuenta es la respuesta. Es lo que evita que una fila que no lleg\u00f3 a marcarse
+// 'tomado' le esconda para siempre el pendiente del periodo siguiente.
+window.estadoDeCursoPrevio = (evaluationId, empleadoId, respuestas, ahora) => {
+    const fila = window.filaDeCursoPrevio(evaluationId, empleadoId);
+    if (!fila || fila.estado === 'tomado') return null;
+
+    const desde = new Date(fila.actualizado_en);
+    if (!isNaN(desde) && (respuestas || []).some(r =>
+        String(r.evaluation_id) === String(evaluationId) && new Date(r.submitted_at) > desde)) return null;
+
+    if (fila.estado === 'esperando') return { estado: 'esperando', fila };
+
+    const fecha = fila.fecha_programada ? new Date(fila.fecha_programada) : null;
+    const cuando = ahora instanceof Date ? ahora : new Date();
+    if (fila.estado === 'programado' && fecha && !isNaN(fecha) && fecha > cuando) {
+        return { estado: 'programado', fila, fecha };
+    }
+    return null;
+};
+
+// \u00ablun 20 oct, 7:00 a.m.\u00bb: el d\u00eda de la semana va porque es lo primero que se
+// busca para saber cu\u00e1ndo toca, y la hora con a.m./p.m. como el resto de la
+// aplicaci\u00f3n.
+window.textoDeFechaCurso = (fecha) => {
+    const d = fecha instanceof Date ? fecha : new Date(fecha);
+    if (!d || isNaN(d)) return '';
+    const dias = ['dom', 'lun', 'mar', 'mi\u00e9', 'jue', 'vie', 's\u00e1b'];
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const hora = d.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
+    return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}, ${hora}`;
+};
+
+// El jefe inmediato de alguien, **activo**: un jefe dado de baja no va a ver
+// ning\u00fan pendiente, as\u00ed que para esto es como no tenerlo. Sin la plantilla
+// cargada devuelve undefined, que no es lo mismo que no tener jefe.
+window.jefeInmediatoDe = (empleadoId) => {
+    const gente = window.todosLosEmpleadosData || [];
+    if (gente.length === 0) return undefined;
+    const emp = gente.find(e => String(e.id) === String(empleadoId));
+    if (!emp) return undefined;
+    const supId = String(emp.supId || '').trim();
+    if (!supId) return null;
+    const jefe = gente.find(e => String(e.id) === supId);
+    return jefe && window.empleadoActivo(jefe) ? jefe : null;
+};
+
+// \u00bfLe falta decir qui\u00e9n es su jefe inmediato? De ese dato cuelga a qui\u00e9n le
+// llega el curso que le falta, qui\u00e9n califica sus encuestas y qui\u00e9n ve sus
+// pendientes, as\u00ed que quien no lo tiene \u2014o lo tiene dado de baja\u2014 lo elige \u00e9l
+// mismo desde un pendiente. Los puestos exentos de firmar \u2014los gerentes\u2014 se
+// quedan fuera: son la punta de la cadena y no tienen a qui\u00e9n reportar aqu\u00ed.
+window.necesitaElegirJefe = (emp) => {
+    if (!emp || !window.empleadoActivo(emp)) return false;
+    if (window.esPuestoExentoDeFirmar(emp.puesto)) return false;
+    return window.jefeInmediatoDe(emp.id) === null;
+};
+
+// Guarda que no ha tomado el curso. S\u00f3lo escribe cuando hace falta:
+//
+//   - sin fila, o ya 'tomado' (es otro periodo): pasa a 'esperando'.
+//   - 'programado' con la hora ya pasada: pasa a 'esperando' y apunta en
+//     `fecha_fallida` el curso que no tom\u00f3, para que su jefe lo vea.
+//   - 'programado' con la hora por venir: no se toca. Abri\u00f3 la encuesta antes
+//     del curso, y su \u00abno\u00bb es justo lo que se esperaba \u2014borrarle la fecha ser\u00eda
+//     deshacer lo que program\u00f3 su jefe\u2014.
+//   - 'esperando': ya est\u00e1.
+//
+// **Cuenta las filas del `.select()`**: aqu\u00ed escribe alguien que no es
+// administrador y una pol\u00edtica de RLS que lo rechace no da error.
+window.registrarSinCurso = async (evaluationId, empleadoId) => {
+    const clave = `${String(evaluationId)}|${String(empleadoId)}`;
+    const previa = window.CURSOS_PREVIOS ? window.CURSOS_PREVIOS[clave] : null;
+    const ahora = new Date();
+    if (previa && previa.estado === 'esperando') return previa;
+    if (previa && previa.estado === 'programado' && previa.fecha_programada &&
+        new Date(previa.fecha_programada) > ahora) return previa;
+
+    const fallida = previa && previa.estado === 'programado' && previa.fecha_programada
+        ? previa.fecha_programada
+        : (previa && previa.estado !== 'tomado' ? previa.fecha_fallida || null : null);
+
+    const fila = {
+        evaluation_id: String(evaluationId),
+        employee_id: String(empleadoId),
+        estado: 'esperando',
+        fecha_programada: null,
+        instructor: null,
+        programado_por: null,
+        fecha_fallida: fallida,
+        actualizado_en: ahora.toISOString()
+    };
+    const { data, error } = await sb.from('cursos_previos')
+        .upsert(fila, { onConflict: 'evaluation_id,employee_id' })
+        .select();
+    if (error) throw error;
+    if (!data || data.length === 0) {
+        throw new Error('La base no guard\u00f3 la respuesta. Falta correr sql/curso-previo-programado.sql o revisar sus pol\u00edticas.');
+    }
+    if (window.CURSOS_PREVIOS) window.CURSOS_PREVIOS[clave] = data[0];
+    if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+    return data[0];
+};
+
+// El jefe le pone fecha y hora a una o varias personas de la misma encuesta.
+// No hace falta que sean todas: lo normal es repartirlas en grupos de pocos en
+// d\u00edas distintos, y las que no se marquen siguen esperando.
+//
+// La fecha puede estar en el pasado \u2014el curso ya se dio y se apunta despu\u00e9s\u2014, y
+// entonces la encuesta le vuelve a salir ya como pendiente normal.
+window.programarCursoPrevio = async (evaluationId, empleadoIds, fecha, instructor, programadoPor) => {
+    const ids = (empleadoIds || []).map(String);
+    if (ids.length === 0) return [];
+    const { data, error } = await sb.from('cursos_previos')
+        .update({
+            estado: 'programado',
+            fecha_programada: fecha.toISOString(),
+            instructor: String(instructor || '').trim() || null,
+            programado_por: programadoPor != null ? String(programadoPor) : null,
+            actualizado_en: new Date().toISOString()
+        })
+        .eq('evaluation_id', String(evaluationId))
+        .in('employee_id', ids)
+        .select();
+    if (error) throw error;
+    (data || []).forEach(f => {
+        if (window.CURSOS_PREVIOS) window.CURSOS_PREVIOS[`${String(f.evaluation_id)}|${String(f.employee_id)}`] = f;
+    });
+    if (!data || data.length < ids.length) {
+        const faltan = ids.length - (data ? data.length : 0);
+        throw new Error(faltan === ids.length
+            ? 'La base no guard\u00f3 nada. Falta correr sql/curso-previo-programado.sql o revisar sus pol\u00edticas.'
+            : `${faltan} de ${ids.length} no se guardaron. Vuelve a abrir la lista e int\u00e9ntalo otra vez.`);
+    }
+    if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+    return data;
+};
+
+// Al enviar la encuesta diciendo que s\u00ed lo tom\u00f3, la fila se cierra. No es
+// imprescindible \u2014una respuesta posterior ya manda sobre ella\u2014 y por eso un
+// fallo aqu\u00ed no detiene nada: la respuesta ya est\u00e1 guardada.
+window.marcarCursoTomado = async (evaluationId, empleadoId) => {
+    const clave = `${String(evaluationId)}|${String(empleadoId)}`;
+    const fila = window.CURSOS_PREVIOS ? window.CURSOS_PREVIOS[clave] : null;
+    if (!fila || fila.estado === 'tomado') return;
+    try {
+        const { data } = await sb.from('cursos_previos')
+            .update({ estado: 'tomado', actualizado_en: new Date().toISOString() })
+            .eq('evaluation_id', String(evaluationId))
+            .eq('employee_id', String(empleadoId))
+            .select();
+        if (data && data[0] && window.CURSOS_PREVIOS) window.CURSOS_PREVIOS[clave] = data[0];
+    } catch (e) { /* la respuesta ya manda sobre la fila */ }
+};
+
+// La persona elige qui\u00e9n es su jefe inmediato. Escribe `employees.supervisor_id`
+// de su propia ficha \u2014el mismo dato de \u00abGestionar informaci\u00f3n\u00bb\u2014 y **cuenta las
+// filas**: una pol\u00edtica que no deje cambiarla no da error.
+//
+// La cadena de mando no se puede morder la cola: quien depende de esta persona
+// no puede ser su jefe, que media aplicaci\u00f3n recorre esa cadena hacia arriba.
+window.elegirJefeInmediato = async (empleadoId, jefeId) => {
+    const gente = window.todosLosEmpleadosData || [];
+    if (String(jefeId) === String(empleadoId)) throw new Error('nadie puede ser su propio jefe.');
+
+    const vistos = new Set();
+    let actual = gente.find(e => String(e.id) === String(jefeId));
+    while (actual && actual.supId && !vistos.has(String(actual.id))) {
+        vistos.add(String(actual.id));
+        if (String(actual.supId) === String(empleadoId)) {
+            throw new Error('esa persona depende de ti, as\u00ed que no puede ser tu jefe.');
+        }
+        actual = gente.find(e => String(e.id) === String(actual.supId));
+    }
+
+    const { data, error } = await sb.from('employees')
+        .update({ supervisor_id: String(jefeId) })
+        .eq('employee_id', String(empleadoId))
+        .select('employee_id');
+    if (error) throw error;
+    if (!data || data.length === 0) {
+        throw new Error('la base no dej\u00f3 guardar el cambio. P\u00eddele al administrador que lo ponga desde \u00abGestionar informaci\u00f3n\u00bb.');
+    }
+
+    // La plantilla de memoria se corrige en el acto: de ella cuelgan el badge,
+    // los pendientes de su nuevo jefe y la cadena de mando.
+    const emp = gente.find(e => String(e.id) === String(empleadoId));
+    const jefe = gente.find(e => String(e.id) === String(jefeId));
+    if (emp) {
+        emp.supId = String(jefeId);
+        emp.sup = jefe ? jefe.name : emp.sup;
+    }
+    if (window.employeeSupMap && jefe) window.employeeSupMap[String(empleadoId)] = jefe.name;
+    if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+    return true;
 };
 
 // ==========================================
@@ -3582,6 +3878,9 @@ window.RASTROS_DEL_EMPLEADO = [
     // que la fila entera se va con la ficha; si no, un alta futura con ese mismo
     // número heredaría un «no me aplica» que nunca dijo.
     { tabla: 'evaluaciones_aplica',   suyas: ['employee_id'],                                que: 'respuestas de «¿te aplica?»' },
+    // El curso que dijo no haber tomado es suyo; el que programó como jefe de
+    // otro sólo se le desliga, que sigue siendo el curso de ese otro.
+    { tabla: 'cursos_previos',        suyas: ['employee_id'], menciones: ['programado_por'], que: 'cursos previos por programar' },
     // Sus vacaciones son suyas; las de otro en las que era el relevo sólo se
     // desligan, que siguen siendo las vacaciones de ese otro.
     { tabla: 'vacaciones',            suyas: ['employee_id'], menciones: ['relevo_id'],      que: 'vacaciones' },
