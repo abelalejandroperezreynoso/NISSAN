@@ -1582,6 +1582,9 @@ window.guardarMaterialPendiente = async () => {
 
         for (let i = 0; i < p.paginas.length; i++) {
             if (btn) btn.innerText = `Guardando ${i + 1} de ${p.paginas.length}…`;
+            window.avanceDelGuardado(p.paginas.length === 1
+                ? 'Subiendo el material…'
+                : `Subiendo página ${i + 1} de ${p.paginas.length}…`);
             const blob = p.paginas[i].blob;
             const ruta = window.rutaDePagina(carpeta, i, blob.extensionSugerida);
             const { archivo, url } = await window.subirPaginaMaterial(blob, ruta);
@@ -7326,6 +7329,15 @@ window.preguntasDeLaHoja = () => {
 window.guardandoEncuesta = false;
 window.subtituloAntesDeGuardar = null;
 
+// Lo que dice el subtítulo mientras se guarda, a media marcha: subir las
+// páginas del material es lo que más tarda —cada una son cientos de KB por 4G—
+// y «Publicando la encuesta…» quieto durante medio minuto se lee como colgado.
+window.avanceDelGuardado = (texto) => {
+    if (!window.guardandoEncuesta) return;
+    const sub = document.getElementById('subtitulo-crear-eval');
+    if (sub) sub.innerText = texto;
+};
+
 window.marcarGuardandoEncuesta = (activo, queVa) => {
     window.guardandoEncuesta = !!activo;
     const btn = document.getElementById('btn-guardar-eval');
@@ -7335,7 +7347,10 @@ window.marcarGuardandoEncuesta = (activo, queVa) => {
     // El bote de basura se apaga también: eliminar la encuesta a mitad de
     // guardarla es la otra manera de acabar con la hoja diciendo una cosa y la
     // base otra.
-    if (btn) btn.disabled = !!activo;
+    if (btn) {
+        btn.disabled = !!activo;
+        window.ponerIndicadorDeActividad(btn, !!activo);
+    }
     if (borrar) borrar.disabled = !!activo;
 
     if (!sub) return;

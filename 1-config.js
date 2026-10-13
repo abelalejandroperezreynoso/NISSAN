@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-13-3';
+window.VERSION_APP = '2026-10-13-4';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -788,6 +788,29 @@ window.esSupervisorDirectoDe = (empleadoId, supervisorId) => {
 // **Cada intento se dibuja desde el original**, no desde el intento anterior:
 // encoger lo ya encogido acumula pérdida, y en el texto pequeño de una
 // diapositiva eso se lee.
+// --- EL INDICADOR DE ACTIVIDAD DE iOS ---
+//
+// Las ocho aspas grises que giran a saltos: lo que pone iOS en el botón que se
+// acaba de pulsar mientras trabaja. Se le pone a un botón de icono **encima de
+// su `<svg>`**, que se esconde y no se borra —escribirle dentro con
+// `innerText` se lo llevaría—, y quitarlo devuelve el botón tal cual estaba.
+// Las clases están en `estilos.css` (`.indicador-ios`, `.esta-trabajando`).
+window.ponerIndicadorDeActividad = (boton, activo) => {
+    if (!boton) return;
+    const puesto = boton.querySelector(':scope > .indicador-ios');
+    if (activo && !puesto) {
+        const ind = document.createElement('span');
+        ind.className = 'indicador-ios';
+        ind.setAttribute('aria-hidden', 'true');
+        ind.innerHTML = '<i></i>'.repeat(8);
+        boton.appendChild(ind);
+    } else if (!activo && puesto) {
+        puesto.remove();
+    }
+    boton.classList.toggle('esta-trabajando', !!activo);
+    boton.setAttribute('aria-busy', activo ? 'true' : 'false');
+};
+
 window.comprimirDibujo = async (fuente, opciones) => {
     const { maxLado = 800, maxBytes = 1048576 } = opciones || {};
 

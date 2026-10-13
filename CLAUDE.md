@@ -5984,6 +5984,17 @@ Las reglas para usarlo:
     que atenuar, así que lo único que puede decirlo es él mismo. Sin esa regla se
     veía igual que antes de pulsarlo, que es lo que lleva a pulsarlo otra vez.
 
+  **Y mientras guarda, el botón gira.** La palomita se cambia por el indicador
+  de actividad de iOS —ocho aspas grises que se apagan en corro—, que pone
+  `window.ponerIndicadorDeActividad(boton, activo)` (en `1-config.js`, con sus
+  clases `.indicador-ios` y `.esta-trabajando` en `estilos.css`): esconde el
+  `<svg>` en vez de borrarlo y el botón apagado no se atenúa, que el indicador
+  tiene que verse entero. Y el subtítulo avanza con lo que más tarda, la subida
+  del material —«Subiendo página 2 de 3…», con `window.avanceDelGuardado`, que
+  sólo escribe mientras haya un guardado de camino—: «Publicando la encuesta…»
+  quieto durante medio minuto en 4G se leía como colgado. Cabe en un renglón a
+  375px; con «el material» delante se partía en dos.
+
   `guardarDestinatariosEncuesta` ya no toca el botón: lo apaga y lo enciende el
   pestillo, que es quien lo tiene apagado desde antes de su primera consulta
   —ella lo hacía después de dos, que es justo el hueco en el que se volvía a
