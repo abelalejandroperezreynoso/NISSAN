@@ -217,6 +217,7 @@ window.resultadoDePlantaEn = (referencia) => {
         // su cifra, la misma del renglón de la tarjeta.
         const encuestas = g.filas.map(f => ({
             id: String(f.ev.id), nombre: String(f.ev.title || 'Sin título').trim(), promedio: f.resumen.promedio,
+            alta: window.fechaDeLaFila(f.ev),
             contestaron: f.resumen.contestaron, total: f.resumen.total
         })).sort((a, b) => (b.promedio === null ? -1 : b.promedio) - (a.promedio === null ? -1 : a.promedio)
             || a.nombre.localeCompare(b.nombre, 'es'));
@@ -245,6 +246,19 @@ window.resultadoDePlantaEn = (referencia) => {
 // misma forma: la cifra, las respuestas, cuántas encuestas y las filas de la
 // columna del centro —las clasificaciones de la planta, o las encuestas de una
 // clasificación—. Una clasificación que en ese instante no existía da null.
+// Cuándo es una encuesta, para ordenar una serie de eventos: la fecha que
+// lleva el título entre paréntesis —la que le pone `tituloDeCopia`, que es la
+// del evento— y, sin ella, desde cuándo aplica. El alta no basta: la junta del
+// 1 de septiembre se dio de alta el 11 y se colaba encima de la del 8.
+window.fechaDeLaFila = (ev) => {
+    const m = String((ev && ev.title) || '').match(/\((\d{2})\/(\d{2})\/(\d{2})\)\s*$/);
+    if (m) {
+        const d = new Date(2000 + Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+        if (!isNaN(d)) return +d;
+    }
+    return +(window.inicioDeEncuesta(ev) || 0) || 0;
+};
+
 window.vistaDe = (r, clave) => {
     if (!r) return null;
     if (!clave) {
@@ -253,8 +267,17 @@ window.vistaDe = (r, clave) => {
     }
     const c = r.clasificaciones.find(x => x.clave === clave);
     if (!c) return null;
+    // Una clasificación donde ninguna encuesta puntúa —las juntas, que sólo
+    // pasan lista— es una serie de eventos, y se lee de la más reciente a la
+    // más vieja: ahí la cifra es la participación, y ordenar por ella mezcla
+    // las fechas. Las que sí puntúan siguen de la mejor cifra a la peor, que es
+    // lo que dice dónde se pierden los puntos.
+    const serie = c.encuestas.length > 1 && c.encuestas.every(e => !window.encuestaPuntua(e.id));
+    const filas = serie
+        ? c.encuestas.slice().sort((a, b) => (b.alta - a.alta) || (Number(b.id) - Number(a.id)))
+        : c.encuestas;
     return { nombre: c.nombre, promedio: c.promedio, contestaron: c.contestaron, total: c.total,
-             encuestas: c.encuestas.length, filas: c.encuestas, rotuloFilas: 'Por encuesta' };
+             encuestas: c.encuestas.length, filas, rotuloFilas: 'Por encuesta' };
 };
 
 // Las diapositivas de una semana: la de la planta y detrás una por cada
@@ -916,6 +939,20 @@ window.destacadosDeLaSemana = (todas) => {
 // Parte un texto en renglones de hasta `max` letras, por palabras, y recorta
 // con «…» lo que no quepa en `lineas`. La diapositiva no sabe partir sola: es
 // una lista de cajas y cada renglón es la suya.
+// El nombre de una fila en un solo renglón, sin perder el paréntesis del
+// final: las copias de una encuesta se llaman igual salvo por su fecha
+// —«Junta de seguridad M100 (06/10/26)»—, y recortarlas por el final las
+// dejaba todas en «Junta de seguridad M100…», sin manera de distinguirlas.
+window.nombreDeFila = (texto, max) => {
+    const t = String(texto || '').trim();
+    if (t.length <= max) return t;
+    const m = t.match(/^(.*\S)\s*(\([^()]{1,12}\))$/);
+    if (m && max - m[2].length - 2 >= 6) {
+        return m[1].slice(0, max - m[2].length - 2).trimEnd() + '… ' + m[2];
+    }
+    return window.partirEnRenglones(t, max, 1)[0];
+};
+
 window.partirEnRenglones = (texto, max, lineas) => {
     const palabras = String(texto || '').trim().split(/\s+/).filter(Boolean);
     const salida = [];
@@ -1186,7 +1223,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         if (compacta) {
             const y = 160 + j * alto, hb = 5, yb = y + alto / 2 - 2.5;
             const ancho = 140 - iconos(c, bx + 140, y + alto / 2);
-            const nombre = window.partirEnRenglones(c.nombre, Math.floor((ancho - 2) / (tam * 0.56)), 1)[0];
+            const nombre = window.nombreDeFila(c.nombre, Math.floor((ancho - 2) / (tam * 0.56)));
             texto(bx, y, ancho, alto, nombre, tam, C.texto, { peso: 600 });
             el.push({ tipo: 'rect', x: bx + 146, y: yb, w: 76, h: hb, relleno: C.agrupado, radio: 2.5 });
             const lf = licDeFila(c);
@@ -1220,7 +1257,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         if (frec) texto(finFrec - anchoFrec, yb - tam * 1.5 - 2 + (tam - tamFrec) * 0.6, anchoFrec, tam * 1.3, frec, tamFrec,
             C.secundario, { alinear: 'right' });
         const ancho = Math.min(216, bw - (lf ? 80 : 40) - usados - anchoFrec);
-        const nombre = window.partirEnRenglones(c.nombre, Math.floor((ancho - 6) / (tam * 0.58)), 1)[0];
+        const nombre = window.nombreDeFila(c.nombre, Math.floor((ancho - 6) / (tam * 0.58)));
         texto(bx, yb - tam * 1.5 - 2, ancho, tam * 1.3, nombre, tam, C.texto, { peso: 600 });
         if (lf) {
             texto(bx + bw - 80, yb - tam * 1.5 - 2, 80, tam * 1.3, lf.total > 0 ? `${lf.n} de ${lf.total}` : String(lf.n), tam, C.azul,

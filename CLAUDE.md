@@ -5084,6 +5084,21 @@ Las reglas para usarlo:
   la del rótulo, cuando es común. La diapositiva de la planta no la lleva, que
   ahí cada fila es una clasificación entera.
 
+  **Una clasificación donde ninguna encuesta puntúa va de la más reciente a la
+  más vieja**, no por su cifra (`vistaDe`). Son las juntas, que sólo pasan lista:
+  cada encuesta es un evento —una copia de la anterior con su fecha— y su cifra
+  es la participación, así que ordenar por ella mezclaba las fechas. Cuándo es
+  cada una lo dice **la fecha que lleva el título** entre paréntesis
+  (`window.fechaDeLaFila`, la de `tituloDeCopia`) y, sin ella,
+  `inicioDeEncuesta`: el alta no basta, que la junta del 1 de septiembre se dio
+  de alta el 11 y se colaba encima de la del 8. Las que sí puntúan siguen de la
+  mejor cifra a la peor.
+
+  **Y al recortar un nombre se conserva su paréntesis del final**
+  (`window.nombreDeFila`): todas las juntas empiezan igual, y cortadas por el
+  final salían cinco «Junta de seguridad M100…» idénticas. Hoy dicen «Junta de
+  seguri… (06/10/26)».
+
   **Y la que pregunta antes si le aplica lleva el suyo**, detrás de las
   constancias: una persona con su interrogación. No es un tipo de pregunta sino
   la casilla «Pregunta si le aplica», así que sale de la fila de la encuesta
