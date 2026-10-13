@@ -1041,11 +1041,25 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     // Con muchas filas no caben dos renglones: el nombre, la cápsula y la cifra
     // van en uno.
     const compacta = alto < 30;
+    // En la de una clasificación, cada encuesta dice con iconos grises qué
+    // constancias pide —evidencia, firma, asistencia, curso previo—, pegados a
+    // la izquierda de su cifra: así se sabe qué clase de encuesta es sin
+    // abrirla. Le quitan al nombre el ancho que ocupan.
+    const ladoIcono = Math.round(Math.max(12, Math.min(16, tam * 1.25)));
+    const iconos = (c, xFin, yCentro) => {
+        const tipos = clave ? window.constanciasDeEncuesta(c.id) : [];
+        tipos.forEach((t, k) => {
+            const x = xFin - (tipos.length - k) * (ladoIcono + 4) + 4;
+            el.push({ tipo: 'icono', glifo: t, x, y: yCentro - ladoIcono / 2, lado: ladoIcono, color: C.secundario });
+        });
+        return tipos.length ? tipos.length * (ladoIcono + 4) + 2 : 0;
+    };
     lista.forEach((c, j) => {
         if (compacta) {
             const y = 160 + j * alto, hb = 5, yb = y + alto / 2 - 2.5;
-            const nombre = window.partirEnRenglones(c.nombre, Math.floor(138 / (tam * 0.56)), 1)[0];
-            texto(bx, y, 140, alto, nombre, tam, C.texto, { peso: 600 });
+            const ancho = 140 - iconos(c, bx + 140, y + alto / 2);
+            const nombre = window.partirEnRenglones(c.nombre, Math.floor((ancho - 2) / (tam * 0.56)), 1)[0];
+            texto(bx, y, ancho, alto, nombre, tam, C.texto, { peso: 600 });
             el.push({ tipo: 'rect', x: bx + 146, y: yb, w: 76, h: hb, relleno: C.agrupado, radio: 2.5 });
             const lf = licDeFila(c);
             if (lf) {
@@ -1065,9 +1079,13 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         const y = 160 + j * alto;
         const hb = Math.max(4, Math.min(6, alto * 0.14));
         const yb = y + alto * 0.62;
-        const nombre = window.partirEnRenglones(c.nombre, Math.floor(210 / (tam * 0.58)), 1)[0];
-        texto(bx, yb - tam * 1.5 - 2, 216, tam * 1.3, nombre, tam, C.texto, { peso: 600 });
         const lf = licDeFila(c);
+        // La cifra mide como mucho «100%» a la derecha, o «N de M» en una de
+        // licencias; los iconos van justo a su izquierda.
+        const usados = iconos(c, bx + bw - (lf ? 80 : 40), yb - tam * 1.5 - 2 + tam * 0.65);
+        const ancho = Math.min(216, bw - (lf ? 80 : 40) - usados);
+        const nombre = window.partirEnRenglones(c.nombre, Math.floor((ancho - 6) / (tam * 0.58)), 1)[0];
+        texto(bx, yb - tam * 1.5 - 2, ancho, tam * 1.3, nombre, tam, C.texto, { peso: 600 });
         if (lf) {
             texto(bx + bw - 80, yb - tam * 1.5 - 2, 80, tam * 1.3, lf.total > 0 ? `${lf.n} de ${lf.total}` : String(lf.n), tam, C.azul,
                 { peso: 700, alinear: 'right' });
@@ -1914,9 +1932,33 @@ window.contadorRecortesDiapositiva = 0;
 // está, y en Windows PowerPoint la sustituye solo.
 window.FUENTE_DIAPOSITIVA = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif';
 window.FUENTE_PPTX = 'Helvetica Neue';
+// Los iconos de las constancias, a trazo como los SF Symbols y sobre una
+// rejilla de 24: una cámara, una firma sobre su renglón, una persona con su
+// palomita y un birrete. Se dibujan igual en la hoja y en el PowerPoint, que
+// recibe el mismo SVG ya pasado a imagen (`iconoParaPptx`).
+window.GLIFOS_DE_CONSTANCIA = {
+    photo: { nombre: 'Evidencia fotográfica',
+             d: 'M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z M15.5 13a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0z' },
+    signature: { nombre: 'Firma',
+             d: 'M3 16c2.5-5 4.5-8 5.5-7.2S7 15 8.6 15.2 11.5 11 12.6 11.5 12 15 13.6 15s2.6-1.6 3.6-1.6 1.4 1 3.8 1 M3 20h18' },
+    attendance: { nombre: 'Registro de asistencia',
+             d: 'M12 7.5a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0z M2.5 20c0-3.6 2.7-6 6-6 1.6 0 3 .5 4 1.4 M14.5 17l2.3 2.3 4.7-4.8' },
+    course: { nombre: 'Curso previo requerido',
+             d: 'M2 9.5 12 5l10 4.5L12 14 2 9.5z M6 11.6V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.4 M22 9.5V15' }
+};
+window.svgDeIcono = (e, conTitulo) => {
+    const g = window.GLIFOS_DE_CONSTANCIA[e.glifo];
+    if (!g) return '';
+    return `<svg x="${e.x}" y="${e.y}" width="${e.lado}" height="${e.lado}" viewBox="0 0 24 24" fill="none"
+                 stroke="${e.color}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"
+                 xmlns="http://www.w3.org/2000/svg">${conTitulo ? `<title>${g.nombre}</title>` : ''}
+                <rect x="0" y="0" width="24" height="24" fill="transparent" stroke="none"/><path d="${g.d}"/></svg>`;
+};
+
 window.svgDeDiapositiva = (elementos) => {
     const esc = window.sanitizeForHTML;
     const partes = elementos.map(e => {
+        if (e.tipo === 'icono') return window.svgDeIcono(e, true);
         if (e.tipo === 'rect') return `<rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx="${e.radio || 0}" fill="${e.relleno}"/>`;
         if (e.tipo === 'linea') return `<line x1="${e.x1}" y1="${e.y1}" x2="${e.x2}" y2="${e.y2}" stroke="${e.color}" stroke-width="${e.grosor}"${e.guiones ? ' stroke-dasharray="5 4"' : ''} stroke-linecap="round"/>`;
         if (e.tipo === 'circulo') return `<circle cx="${e.cx}" cy="${e.cy}" r="${e.r}" fill="${e.relleno}"${e.borde ? ` stroke="${e.borde}" stroke-width="2"` : ''}/>`;
@@ -2046,6 +2088,10 @@ window.agregarDiapositivaPptx = (pptx, elementos) => {
             // círculo. Sin él quedan las iniciales, que es lo que se ve también
             // en la hoja cuando la foto no carga.
             if (e.datos) s.addImage({ data: e.datos, x: pulg(e.x), y: pulg(e.y), w: pulg(e.w), h: pulg(e.h) });
+        } else if (e.tipo === 'icono') {
+            // `datos` lo deja puesto `fotosParaPptx`: el mismo SVG de la hoja,
+            // pasado a imagen. Sin él se queda sin icono, que no tumba nada.
+            if (e.datos) s.addImage({ data: e.datos, x: pulg(e.x), y: pulg(e.y), w: pulg(e.lado), h: pulg(e.lado) });
         } else if (e.tipo === 'foto') {
             s.addShape(pptx.ShapeType.roundRect, {
                 x: pulg(e.x), y: pulg(e.y), w: pulg(e.w), h: pulg(e.h),
@@ -2126,9 +2172,30 @@ window.fotoRecortadaParaPptx = (url, w, h, radio) => new Promise(resolve => {
     img.src = url;
 });
 
+// Un icono para el PowerPoint: su SVG en un lienzo al cuádruple, en PNG para
+// que conserve la transparencia. Es un `data:`, así que el lienzo no se ensucia.
+window.iconoParaPptx = (e) => new Promise(resolve => {
+    const svg = window.svgDeIcono(Object.assign({}, e, { x: 0, y: 0, lado: 24 }), false);
+    if (!svg) return resolve(null);
+    const lado = Math.round(e.lado * 4);
+    const img = new Image();
+    img.onload = () => {
+        try {
+            const c = document.createElement('canvas');
+            c.width = c.height = lado;
+            c.getContext('2d').drawImage(img, 0, 0, lado, lado);
+            resolve(c.toDataURL('image/png'));
+        } catch (err) { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+        svg.replace('width="24" height="24" viewBox', `width="${lado}" height="${lado}" viewBox`));
+});
+
 window.fotosParaPptx = (elementos) => Promise.all(elementos
-    .filter(e => (e.tipo === 'imagen' || e.tipo === 'foto') && e.url)
+    .filter(e => ((e.tipo === 'imagen' || e.tipo === 'foto') && e.url) || e.tipo === 'icono')
     .map(async e => {
+        if (e.tipo === 'icono') { e.datos = await window.iconoParaPptx(e); return; }
         e.datos = e.tipo === 'foto'
             ? await window.fotoRecortadaParaPptx(e.url, e.w, e.h, e.radio)
             : await window.fotoRedondaParaPptx(e.url, 240);
@@ -2199,6 +2266,9 @@ window.abrirPresentacion = async (modo) => {
     let datos;
     try {
         if (window.cargarObjetivosDeClasificaciones) await window.cargarObjetivosDeClasificaciones();
+        // De aquí salen los iconos de constancia de cada encuesta; sin ella
+        // las filas se dibujan sin iconos, que es lo de antes.
+        if (window.cargarEncuestasQuePuntuan) await window.cargarEncuestasQuePuntuan();
         datos = await window.cargarRespuestasDeLaPresentacion();
     } catch (e) {
         sub.innerText = 'No se pudieron cargar las respuestas.';

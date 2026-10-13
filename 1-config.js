@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-13-5';
+window.VERSION_APP = '2026-10-13-6';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1430,12 +1430,13 @@ window.encuestasQuePuntuan = null;   // Set de ids, o null mientras no se sepa
 let promesaEncuestasQuePuntuan = null;
 
 window.cargarEncuestasQuePuntuan = (recargar = false) => {
-    if (recargar) { promesaEncuestasQuePuntuan = null; window.encuestasQuePuntuan = null; }
+    if (recargar) { promesaEncuestasQuePuntuan = null; window.encuestasQuePuntuan = null; window.constanciasPorEncuesta = null; }
     if (promesaEncuestasQuePuntuan) return promesaEncuestasQuePuntuan;
 
     promesaEncuestasQuePuntuan = (async () => {
         try {
             const puntuan = new Set();
+            const constancias = {};
             for (let pagina = 0; pagina < window.MAX_PAGINAS_PREGUNTAS; pagina++) {
                 // El tipo se decide aquí con `esPreguntaDeConstancia` y no con un
                 // filtro de la consulta: así hay una sola definición de qué deja
@@ -1448,11 +1449,17 @@ window.cargarEncuestasQuePuntuan = (recargar = false) => {
                 if (error || !data) return null;
 
                 data.forEach(q => {
-                    if (!window.esPreguntaDeConstancia(q)) puntuan.add(String(q.evaluation_id));
+                    const id = String(q.evaluation_id);
+                    if (!window.esPreguntaDeConstancia(q)) { puntuan.add(id); return; }
+                    // De paso, qué tipos de constancia lleva cada una: es lo
+                    // que dicen los iconos de su fila en la presentación.
+                    (constancias[id] = constancias[id] || new Set()).add(
+                        window.TIPOS_DE_CURSO_PREVIO.includes(q.question_type) ? window.TIPO_PREGUNTA_CURSO : q.question_type);
                 });
 
                 // La última página. Sólo aquí se da la caché por buena.
                 if (data.length < 1000) {
+                    window.constanciasPorEncuesta = constancias;
                     window.encuestasQuePuntuan = puntuan;
                     return puntuan;
                 }
@@ -1475,6 +1482,19 @@ window.cargarEncuestasQuePuntuan = (recargar = false) => {
 // eso la encuesta vuelve a medirse como las demás en vez de quedarse fuera de
 // toda cifra, y su porcentaje es su participación.
 window.PUNTAJE_POR_ENTREGAR = 100;
+
+// Los tipos de constancia que lleva una encuesta —evidencia, firma, asistencia,
+// curso previo—, en el orden de `TIPOS_DE_CONSTANCIA` y sin repetir. Sale de la
+// misma consulta que `encuestasQuePuntuan`, así que sin esa caché cargada
+// devuelve [] y no se dibuja ningún icono.
+window.constanciasPorEncuesta = null;   // { id: Set de tipos }
+window.constanciasDeEncuesta = (ev) => {
+    const id = ev && typeof ev === 'object' ? ev.id : ev;
+    const tipos = (window.constanciasPorEncuesta || {})[String(id)];
+    if (!tipos) return [];
+    return [window.TIPO_PREGUNTA_FOTO, window.TIPO_PREGUNTA_FIRMA,
+            window.TIPO_PREGUNTA_ASISTENCIA, window.TIPO_PREGUNTA_CURSO].filter(t => tipos.has(t));
+};
 
 // ¿Esta encuesta tiene alguna pregunta que se califique? Ante la duda, sí.
 window.encuestaPuntua = (ev) => {

@@ -5059,6 +5059,30 @@ Las reglas para usarlo:
   window.moverDiapositivaPresentacion(paso)
   ```
 
+  **Y cada encuesta dice con iconos qué constancias pide.** A la izquierda de
+  su cifra, en gris y a trazo como los SF Symbols —nada de emoji—, va un icono
+  por cada tipo que lleva: una cámara la evidencia fotográfica, una firma sobre
+  su renglón la firma, una persona con su palomita el registro de asistencia y
+  un birrete el curso previo. Así se sabe qué clase de encuesta se está
+  leyendo —una junta que pasa lista, un examen con curso previo— sin abrirla.
+  Le quitan al nombre el ancho que ocupan, y sólo van en la diapositiva de una
+  clasificación: en la de la planta cada fila es una clasificación entera.
+
+  ```js
+  window.constanciasDeEncuesta(ev)   // en 1-config.js: ['photo', 'signature', …], o []
+  window.GLIFOS_DE_CONSTANCIA        // { tipo: { nombre, d } }, sobre una rejilla de 24
+  window.svgDeIcono(e, conTitulo)  window.iconoParaPptx(e)
+  ```
+
+  **No consultan nada**: salen de la misma pasada por `evaluation_questions` que
+  llena `encuestasQuePuntuan` (`constanciasPorEncuesta`), que
+  `abrirPresentacion` pide antes de dibujar. Sin esa caché no hay iconos y la
+  fila se dibuja como antes. Son un elemento más, **`icono`**: en el SVG, un
+  `<svg>` anidado con su `<title>`; en el PowerPoint, ese mismo SVG pasado a PNG
+  en un lienzo (lo hace `fotosParaPptx`, con las fotos), así que los dos dicen lo
+  mismo. Un tipo de constancia nuevo necesita su glifo aquí y su lugar en
+  `constanciasDeEncuesta`.
+
   Tres cosas que hay que mantener:
 
   - **Una sola función dibuja las dos** (`diapositiva`), sobre `vistaDe`, que
