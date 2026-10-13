@@ -1133,7 +1133,16 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     // Columna 2: una fila por clasificación, de la mejor a la peor. El nombre y
     // la cifra en un renglón y debajo una cápsula fina, como las de Tiempo en
     // pantalla; la marca gris de cada cápsula es la meta.
-    rotulo(348, 132, 280, r.rotuloFilas);
+    // En la de una clasificación, cada encuesta dice además su frecuencia. Si
+    // todas tienen la misma, se dice una sola vez en el rótulo —«Por encuesta ·
+    // Mensual»—, como los iconos comunes; si no, cada fila la lleva en gris a la
+    // derecha de su nombre (`frecuenciaDeFila`). En la de la planta cada fila es
+    // una clasificación entera, que no tiene una frecuencia suya.
+    const encuestaDeFila = (c) => ((window.filasDeLaTarjeta || []).find(f => String(f.ev.id) === String(c.id)) || {}).ev || null;
+    const frecuencias = clave ? r.filas.map(c => window.textoDeFrecuencia((encuestaDeFila(c) || {}).frequency)) : [];
+    const frecuenciaComun = frecuencias.length && frecuencias.every(f => f === frecuencias[0]) ? frecuencias[0] : null;
+    const frecuenciaDeFila = (c) => (clave && !frecuenciaComun) ? window.textoDeFrecuencia((encuestaDeFila(c) || {}).frequency) : '';
+    rotulo(348, 132, 280, r.rotuloFilas + (frecuenciaComun ? ` · ${frecuenciaComun}` : ''));
     // Caben catorce; si hay más, las de abajo se cuentan en un renglón.
     const MAX_FILAS = 14;
     const lista = r.filas.slice(0, MAX_FILAS);
@@ -1154,8 +1163,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     // serían el mismo dibujo cinco veces y le quitarían ancho a cada nombre.
     // Cuentan todas, también las que no caben y se cuentan en «y N más».
     const ladoIcono = Math.round(Math.max(12, Math.min(16, tam * 1.25)));
-    const fichaDe = (id) => ((window.filasDeLaTarjeta || []).find(f => String(f.ev.id) === String(id)) || {}).ev || id;
-    const iconosDe = (c) => window.iconosDeEncuesta(fichaDe(c.id));
+    const iconosDe = (c) => window.iconosDeEncuesta(encuestaDeFila(c) || c.id);
     const huellas = clave ? r.filas.map(c => iconosDe(c).join(',')) : [];
     const comunes = huellas.length > 1 && huellas[0] && huellas.every(h => h === huellas[0])
         ? huellas[0].split(',') : null;
@@ -1203,7 +1211,15 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         // La cifra mide como mucho «100%» a la derecha, o «N de M» en una de
         // licencias; los iconos van justo a su izquierda.
         const usados = iconos(c, bx + bw - (lf ? 80 : 40), yb - tam * 1.5 - 2 + tam * 0.65);
-        const ancho = Math.min(216, bw - (lf ? 80 : 40) - usados);
+        // La frecuencia, en gris y más pequeña, va pegada a la izquierda de los
+        // iconos y le quita al nombre el ancho que ocupa.
+        const frec = frecuenciaDeFila(c);
+        const tamFrec = Math.max(9, tam - 2);
+        const anchoFrec = frec ? Math.ceil(frec.length * tamFrec * 0.56) + 8 : 0;
+        const finFrec = bx + bw - (lf ? 80 : 40) - usados;
+        if (frec) texto(finFrec - anchoFrec, yb - tam * 1.5 - 2 + (tam - tamFrec) * 0.6, anchoFrec, tam * 1.3, frec, tamFrec,
+            C.secundario, { alinear: 'right' });
+        const ancho = Math.min(216, bw - (lf ? 80 : 40) - usados - anchoFrec);
         const nombre = window.partirEnRenglones(c.nombre, Math.floor((ancho - 6) / (tam * 0.58)), 1)[0];
         texto(bx, yb - tam * 1.5 - 2, ancho, tam * 1.3, nombre, tam, C.texto, { peso: 600 });
         if (lf) {

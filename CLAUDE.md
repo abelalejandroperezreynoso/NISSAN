@@ -5075,6 +5075,15 @@ Las reglas para usarlo:
   sus encuestas, también las que no caben y se cuentan en «y N más», y con una
   sola encuesta se quedan en su fila.
 
+  **Y su frecuencia**, con la misma regla: si todas las encuestas de la
+  clasificación la comparten se dice una sola vez en el rótulo —«Por encuesta ·
+  Mensual»—, y si no, cada fila la lleva en gris y más pequeña a la izquierda de
+  sus iconos, quitándole al nombre el ancho que ocupa. Sale de
+  `textoDeFrecuencia`, así que una de única vez dice «Única vez». En las filas de
+  un solo renglón (más de once encuestas) no cabe y no se dibuja: ahí sólo queda
+  la del rótulo, cuando es común. La diapositiva de la planta no la lleva, que
+  ahí cada fila es una clasificación entera.
+
   **Y la que pregunta antes si le aplica lleva el suyo**, detrás de las
   constancias: una persona con su interrogación. No es un tipo de pregunta sino
   la casilla «Pregunta si le aplica», así que sale de la fila de la encuesta
