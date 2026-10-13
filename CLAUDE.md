@@ -5418,6 +5418,25 @@ Las reglas para usarlo:
     una por el alfabeto. La tarjeta dice siempre ese promedio («Últimas 4
     semanas: 96%»), que es lo que explica por qué salió esa persona, y con
     cuántos empató esa semana.
+  - **Y si sólo la separa el nombre, no se nombra a nadie** (`grupoEmpatado`).
+    Cuando el peor es igual a otros en todo lo de arriba —la cifra, lo que deja
+    sin calificar, el promedio reciente, lo que dejó sin contestar y cuándo
+    terminó—, elegirlo era elegir por el alfabeto: en «Capacitación», con 433
+    personas en 0%, salía cada semana «Aguilar Flores Luis Enrique», el primer
+    empleado activo de la plantilla por orden alfabético. Ahí la tarjeta dice
+    «433 personas empatadas», lo que tienen en común y **cuántas son de cada
+    departamento** —los tres que más aportan y el resto en un renglón—, sin foto
+    ni gráfica, que no son de nadie. El «Peor desempeño» del departamento
+    rezagado, en la reflexión, hace lo mismo (`peorEmpatados`): ahí son todas
+    del mismo departamento y basta con contarlas. El mejor sigue nombrándose: el
+    alfabeto ahí no acusa a nadie.
+  - **Quien espera el curso previo no cuenta en las personas**
+    (`esperaElCursoEn`): dijo «Todavía no» antes del instante que se mira y su
+    jefe no se lo había programado, o se lo programó para después. Contestarla
+    no estaba en su mano, así que esa encuesta no le suma ni le resta —y si era
+    la única que tenía, no entra—. La cifra de la planta y la de la
+    clasificación no cambian: el padrón sigue contándolo, que es la regla del
+    curso previo. `abrirPresentacion` rehace la caché (`cargarCursosPrevios(true)`).
   - **Y dice en cuánto resuelve un pendiente** («Resuelve en 1.8 días»): el
     promedio, sobre **todo lo que contestó en las últimas cuatro semanas**
     (`SEMANAS_DEL_DESEMPATE`), de lo que tardó desde que cada encuesta le
