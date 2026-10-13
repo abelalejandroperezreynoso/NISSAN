@@ -651,6 +651,18 @@ window.destacadosDeSemana = (i, clave) => {
 // todo al día no le suma nada; tener respuestas esperándolo sí le resta. Entra
 // como una clasificación más de su promedio —la parte de lo que le tocaba
 // calificar que sí calificó— y sólo cuando hay atraso.
+// ¿Esperaba esa persona el curso previo de esa encuesta en ese instante? Dijo
+// «Todavía no» antes de él (`actualizado_en`) y su jefe no se lo había
+// programado, o se lo programó para después: contestarla no dependía de ella.
+// Sin la caché de cursos, nadie espera, que es lo de antes.
+window.esperaElCursoEn = (ev, empleadoId, referencia) => {
+    if (!window.estadoDeCursoPrevio || !window.CURSOS_PREVIOS) return false;
+    const estado = window.estadoDeCursoPrevio(ev.id, empleadoId, [], referencia);
+    if (!estado) return false;
+    const desde = new Date(estado.fila.actualizado_en);
+    return isNaN(desde) || desde <= referencia;
+};
+
 window.desempenoDePersonasEn = (referencia, clave) => {
     const porPersona = {};
     const nueva = (emp) => ({ emp, filas: [], asignadas: 0, contestadas: 0, calificadas: 0, terminoEn: 0,
@@ -664,9 +676,13 @@ window.desempenoDePersonasEn = (referencia, clave) => {
             const ultimas = window.ultimaDeCadaUnoEnPeriodo(f.ev, window.respuestasParaPresentar(), referencia);
             padron.forEach(emp => {
                 const id = String(emp.id);
+                const r = ultimas[id];
+                // Quien espera el curso previo no tiene esta encuesta en su
+                // mano: el pendiente es de su jefe, así que aquí no le cuenta
+                // ni a favor ni en contra.
+                if (!r && window.esperaElCursoEn(f.ev, id, referencia)) return;
                 const p = porPersona[id] || (porPersona[id] = nueva(emp));
                 p.asignadas++;
-                const r = ultimas[id];
                 if (!r) { p.filas.push({ ev: f.ev, puntaje: 0, sinContestar: true }); return; }
                 p.contestadas++;
                 // Cuándo terminó: la más tardía de las respuestas que cuentan.
@@ -779,6 +795,26 @@ window.atrasoDeRevision = (encuestas, referencia) => {
 // cualquiera —también de quien no contestó nada—, menos del propio mejor. Sin
 // nadie calificado no hay mejor, y el peor sólo puede ser un revisor con
 // respuestas esperándolo: que nadie tenga resultado es su atraso.
+// Un empate que no se deshace más que por el nombre: el grupo, con lo que sus
+// miembros tienen en común —son iguales en todo lo que se mira— y la cuenta por
+// departamento, del que más aporta al que menos.
+window.grupoEmpatado = (gente) => {
+    const muestra = gente[0];
+    const porDepto = {};
+    gente.forEach(q => {
+        const d = String(q.emp.dept || q.emp.department || '').trim() || 'Sin departamento';
+        porDepto[d] = (porDepto[d] || 0) + 1;
+    });
+    const departamentos = Object.keys(porDepto).map(nombre => ({ nombre, personas: porDepto[nombre] }))
+        .sort((a, b) => b.personas - a.personas || a.nombre.localeCompare(b.nombre, 'es'));
+    const mismasAsignadas = gente.every(q => q.asignadas === muestra.asignadas);
+    return { grupo: true, personas: gente.length, departamentos, promedio: muestra.promedio,
+             promedioReciente: muestra.promedioReciente, semanasRecientes: muestra.semanasRecientes,
+             ningunaContestada: gente.every(q => q.contestadas === 0),
+             asignadas: mismasAsignadas ? muestra.asignadas : null,
+             porCalificar: muestra.porCalificar || 0 };
+};
+
 window.destacadosDeLaSemana = (todas) => {
     const personas = todas.filter(p => p.calificadas > 0);
     // Sin nada calificado no hay mejor, pero el peor puede ser el revisor que
@@ -804,9 +840,21 @@ window.destacadosDeLaSemana = (todas) => {
     const mejor = mejores[0] || null;
     const empates = (p, grupo) => grupo.filter(q => q !== p && q.promedio === p.promedio).length;
     const peor = peores.find(p => p !== mejor) || null;
+    // Si el peor sólo se distingue de los demás por el nombre, no se nombra a
+    // nadie: se dice el grupo entero, repartido por departamento. Señalar al
+    // primero del alfabeto entre cuatrocientos en cero es acusarlo por su
+    // apellido.
+    const igual = (a, b) => a.promedio === b.promedio
+        && (a.porCalificar || 0) === (b.porCalificar || 0)
+        && reciente(a) === reciente(b)
+        && (a.asignadas - a.contestadas) === (b.asignadas - b.contestadas)
+        && (a.terminoEn || 0) === (b.terminoEn || 0);
+    const empatados = peor ? candidatosPeor.filter(q => q !== mejor && igual(q, peor)) : [];
     return {
         mejor: mejor ? Object.assign({ empates: empates(mejor, personas) }, mejor) : null,
-        peor: peor ? Object.assign({ empates: empates(peor, candidatosPeor) }, peor) : null
+        peor: !peor ? null
+            : empatados.length > 1 ? window.grupoEmpatado(empatados)
+            : Object.assign({ empates: empates(peor, candidatosPeor) }, peor)
     };
 };
 
@@ -1147,6 +1195,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             vacio.forEach((t, n) => texto(x + 16, y + 46 + n * 18, w - 32, 18, t, 13, C.secundario));
             return;
         }
+        if (p.grupo) { tarjetaDeGrupo(p, x, y, w); return; }
         const emp = p.emp;
         el.push({ tipo: 'imagen', x: x + 16, y: y + 36, w: 46, h: 46,
                   url: emp.avatar ? window.procesarUrlImagen(emp.avatar) : '',
@@ -1221,6 +1270,36 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             else renglones.push(t);
         });
         renglones.slice(0, 3).forEach((t, n) => texto(x + 16, y + 132 + n * 13, w - 32, 13, t, 10.5, C.secundario));
+    };
+    // Un empate que sólo deshace el nombre: quiénes son, por departamento, y lo
+    // que tienen en común. Sin foto ni gráfica, que no son de nadie.
+    const tarjetaDeGrupo = (p, x, y, w) => {
+        texto(x + 16, y + 35, w - 32, 17, `${p.personas} personas empatadas`, 13.5, C.texto, { peso: 700 });
+        const comun = p.ningunaContestada
+            ? (p.asignadas === 1 ? 'Ninguna contestó su encuesta'
+                : p.asignadas ? `Ninguna contestó sus ${p.asignadas}` : 'Ninguna contestó sus encuestas')
+            : 'Con el mismo resultado en todo';
+        texto(x + 16, y + 53, w - 32, 14, comun, 11, C.secundario);
+        texto(x + 16, y + 90, 80, 36, `${p.promedio}%`, 28, color(p.promedio), { peso: 700 });
+        const lx = x + 102, lw = w - 102 - 16, filas = 4;
+        const deptos = p.departamentos;
+        const caben = deptos.length > filas ? filas - 1 : filas;
+        deptos.slice(0, caben).forEach((d, n) => {
+            const yy = y + 76 + n * 15;
+            texto(lx, yy, lw - 30, 14, window.partirEnRenglones(d.nombre, 19, 1)[0], 10.5, C.texto);
+            texto(lx + lw - 30, yy, 30, 14, String(d.personas), 10.5, C.secundario, { alinear: 'right', peso: 600 });
+        });
+        if (deptos.length > caben) {
+            const resto = deptos.slice(caben);
+            const yy = y + 76 + caben * 15;
+            texto(lx, yy, lw - 30, 14, `${resto.length} departamentos más`, 10.5, C.secundario);
+            texto(lx + lw - 30, yy, 30, 14, String(resto.reduce((a, d) => a + d.personas, 0)), 10.5, C.secundario,
+                { alinear: 'right', peso: 600 });
+        }
+        const detalle = [];
+        if (p.semanasRecientes > 1) detalle.push(`${window.nombreDelPeriodo().ultimos(p.semanasRecientes)}: ${p.promedioReciente}%`);
+        detalle.push('Nadie se distingue del resto');
+        texto(x + 16, y + 145, w - 32, 13, detalle.join(' · '), 10.5, C.secundario);
     };
     const nadie = ['Todavía nadie tiene', 'resultados calificados.'];
     tarjetaDePersona(mejor, 132, 'Mejor desempeño', C.verde, nadie);
@@ -1586,7 +1665,11 @@ window.departamentosDeSemana = (i) => {
         const peorPersona = d.gente.slice().sort((a, b) => a.promedio - b.promedio
             || (b.asignadas - b.contestadas) - (a.asignadas - a.contestadas)
             || String(a.emp.name || '').localeCompare(String(b.emp.name || ''), 'es'))[0] || null;
-        return { nombre: d.nombre, personas: d.personas, promedio: Math.round(d.suma / d.personas), peorPersona,
+        // Si sólo la separa el nombre de otros, no se la nombra: se cuenta el
+        // grupo (`peorEmpatados`), como en la tarjeta de menor desempeño.
+        const peorEmpatados = peorPersona ? d.gente.filter(q => q.promedio === peorPersona.promedio
+            && (q.asignadas - q.contestadas) === (peorPersona.asignadas - peorPersona.contestadas)).length : 0;
+        return { nombre: d.nombre, personas: d.personas, promedio: Math.round(d.suma / d.personas), peorPersona, peorEmpatados,
                  asignadas: d.asignadas, contestadas: d.contestadas, calificadas: d.calificadas,
                  participacion: pct(d.contestadas, d.asignadas), sinNada: d.sinNada,
                  faltan: d.asignadas - d.contestadas, sinCalificar: Math.max(0, d.contestadas - d.calificadas),
@@ -1814,6 +1897,11 @@ window.diapositivaDeLectura = (i, numero, cuantas) => {
     const q = d.peorPersona;
     if (!q) {
         texto(xq, by + 60, wq, 16, 'Sin resultados', 11, C.secundario);
+    } else if (d.peorEmpatados > 1) {
+        texto(xq, by + 58, wq, 14, `${d.peorEmpatados} personas`, 11, C.texto, { peso: 700 });
+        texto(xq, by + 72, wq, 14, 'empatadas', 11, C.texto, { peso: 700 });
+        texto(xq, by + 94, 60, 22, `${q.promedio}%`, 18, color(q.promedio), { peso: 700 });
+        texto(xq, by + 114, wq, 12, q.contestadas === 0 ? 'Ninguna contestó' : 'Mismo resultado', 9.5, C.secundario);
     } else {
         el.push({ tipo: 'imagen', x: xq, y: by + 58, w: 32, h: 32,
                   url: q.emp.avatar ? window.procesarUrlImagen(q.emp.avatar) : '',
@@ -2277,6 +2365,9 @@ window.abrirPresentacion = async (modo) => {
         // De aquí salen los iconos de constancia de cada encuesta; sin ella
         // las filas se dibujan sin iconos, que es lo de antes.
         if (window.cargarEncuestasQuePuntuan) await window.cargarEncuestasQuePuntuan();
+        // Quién espera un curso previo: ése no puede salir de «menor desempeño»
+        // por una encuesta que no estaba en su mano.
+        if (window.cargarCursosPrevios) await window.cargarCursosPrevios(true);
         datos = await window.cargarRespuestasDeLaPresentacion();
     } catch (e) {
         sub.innerText = 'No se pudieron cargar las respuestas.';
