@@ -6343,12 +6343,14 @@ window.abrirOrigenDeEncuesta = async (categoria) => {
     // Se traen todas y se filtra aquí: la clasificación es texto libre y quien
     // decide si dos nombres son el mismo es `normalizarClasificacion`, no la
     // base. Las apagadas entran —copiar una encuesta retirada es de las razones
-    // para tenerla guardada—.
+    // para tenerla guardada—. Van de la más reciente a la más vieja: lo que se
+    // copia casi siempre es la vuelta anterior, que así queda la primera.
     let candidatas = [];
     try {
         const { data } = await sb.from('evaluations')
-            .select('id, title, category, frequency, active')
-            .order('title');
+            .select('id, title, category, frequency, active, created_at')
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false });
         candidatas = (data || []).filter(ev =>
             !clave || window.normalizarClasificacion(ev.category) === clave);
     } catch (e) {
