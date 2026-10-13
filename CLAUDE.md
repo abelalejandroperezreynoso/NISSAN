@@ -73,6 +73,41 @@ reglas:
 Una migración se aplica en cuanto se fusiona, así que **una escritura sobre la
 base de producción sale de cada merge a `main`**: se revisa antes, no después.
 
+**Claude también puede correr SQL directamente en producción.** El entorno de
+nube lleva la variable `SUPABASE_ACCESS_TOKEN`, un token personal de Supabase, y
+con él la Management API acepta cualquier consulta:
+
+```
+POST https://api.supabase.com/v1/projects/gyoyubhftsbihzpivzrf/database/query
+Authorization: Bearer $SUPABASE_ACCESS_TOKEN
+{ "query": "select …", "read_only": true }
+```
+
+Sólo lo tienen las sesiones abiertas después de ponerlo en el entorno. Ese token
+da control total sobre la cuenta de Supabase, no sólo sobre esta base, así que
+su valor **no se imprime nunca**: ni en la terminal, ni en un archivo, ni en un
+commit. Si hace falta comprobarlo, se dice si está puesto y cuánto mide. La
+clave `anon` de `1-config.js` es otra cosa: es la de la aplicación, pasa por las
+políticas de RLS y no sirve para cambiar la estructura de la base.
+
+Las reglas para usarlo:
+
+- **Las consultas de sólo lectura se corren sin preguntar**, siempre con
+  `"read_only": true`: revisar datos, contar, diagnosticar o comprobar que una
+  migración se aplicó.
+- **Toda escritura se consulta antes con el usuario**: `insert`, `update`,
+  `delete`, crear o cambiar tablas, columnas, funciones o políticas. Se le
+  enseña el SQL exacto que se va a correr y cuántas filas va a tocar —contadas
+  antes con un `select`— y se espera su «sí». Esa aprobación vale para ese SQL
+  y nada más: la siguiente escritura se vuelve a consultar.
+- **Los cambios de estructura se guardan además en `supabase/migrations/`**,
+  aunque ya se hayan corrido a mano, para que el repositorio lleve el historial
+  de lo que se le pidió a la base. Al ser idempotentes, que se vuelvan a aplicar
+  al fusionar no hace nada. Las correcciones de datos sueltas no van ahí: correr
+  un `update` de limpieza en cada despliegue no tiene sentido.
+- **Después de escribir, se comprueba**: se vuelve a consultar y se le dice al
+  usuario lo que de verdad quedó, no lo que se esperaba que quedara.
+
 ## Convenciones del código
 
 - Las funciones que se invocan desde atributos `onclick` del HTML se declaran
