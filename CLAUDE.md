@@ -5068,6 +5068,13 @@ Las reglas para usarlo:
   Le quitan al nombre el ancho que ocupan, y sólo van en la diapositiva de una
   clasificación: en la de la planta cada fila es una clasificación entera.
 
+  **Si todas sus encuestas piden las mismas, se dicen una sola vez**, a la
+  derecha del rótulo «Por encuesta» y un poco más grandes, y las filas van sin
+  iconos: una clasificación de juntas donde las cinco pasan lista enseñaba el
+  mismo dibujo cinco veces y le quitaba ancho a cada nombre. Se comparan todas
+  sus encuestas, también las que no caben y se cuentan en «y N más», y con una
+  sola encuesta se quedan en su fila.
+
   ```js
   window.constanciasDeEncuesta(ev)   // en 1-config.js: ['photo', 'signature', …], o []
   window.GLIFOS_DE_PREGUNTA          // en 1-config.js: { tipo: d }, sobre una rejilla de 24

@@ -1045,9 +1045,24 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     // constancias pide —evidencia, firma, asistencia, curso previo—, pegados a
     // la izquierda de su cifra: así se sabe qué clase de encuesta es sin
     // abrirla. Le quitan al nombre el ancho que ocupan.
+    //
+    // Si todas sus encuestas piden las mismas, se dicen una sola vez, en el
+    // renglón del rótulo «Por encuesta» y a la derecha: repetidos en cada fila
+    // serían el mismo dibujo cinco veces y le quitarían ancho a cada nombre.
+    // Cuentan todas, también las que no caben y se cuentan en «y N más».
     const ladoIcono = Math.round(Math.max(12, Math.min(16, tam * 1.25)));
+    const huellas = clave ? r.filas.map(c => window.constanciasDeEncuesta(c.id).join(',')) : [];
+    const comunes = huellas.length > 1 && huellas[0] && huellas.every(h => h === huellas[0])
+        ? huellas[0].split(',') : null;
+    const ponerIconos = (tipos, xFin, yCentro, lado) => {
+        tipos.forEach((t, k) => {
+            const x = xFin - (tipos.length - k) * (lado + 4) + 4;
+            el.push({ tipo: 'icono', glifo: t, x, y: yCentro - lado / 2, lado, color: C.secundario });
+        });
+    };
+    if (comunes) ponerIconos(comunes, bx + bw, 140, 16);
     const iconos = (c, xFin, yCentro) => {
-        const tipos = clave ? window.constanciasDeEncuesta(c.id) : [];
+        const tipos = (clave && !comunes) ? window.constanciasDeEncuesta(c.id) : [];
         tipos.forEach((t, k) => {
             const x = xFin - (tipos.length - k) * (ladoIcono + 4) + 4;
             el.push({ tipo: 'icono', glifo: t, x, y: yCentro - ladoIcono / 2, lado: ladoIcono, color: C.secundario });
