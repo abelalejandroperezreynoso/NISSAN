@@ -3341,8 +3341,14 @@ Las reglas para usarlo:
     `drawImage` y las dos dicen su ancho y su alto. `optimizarImagen` es hoy
     leer el archivo a una `<img>` y llamarlo, así que **no hay dos maneras de
     comprimir en la aplicación** y lo que se ajuste aquí vale para las fotos de
-    evaluación, las de refacciones y el material. Cada intento se dibuja **desde
-    el original**: encoger lo ya encogido acumula pérdida, y en el texto pequeño
+    evaluación, las de refacciones y el material. **Safari en iOS no sabe hacer
+    WebP y `toBlob` no devuelve null: devuelve un PNG**, así que la caída a
+    JPEG mira el tipo del blob y no sólo si lo hubo. Sin eso el PNG ignoraba la
+    calidad, el bucle sólo podía encoger las medidas —el material subido desde
+    un iPhone salía borroso— y se guardaba como `.webp` siendo PNG. Y
+    `subirPaginaMaterial` **reintenta tres veces**: en 4G una página de varias
+    se cae a mitad de subida, y un «ya existe» de un intento anterior es éxito.
+    Cada intento se dibuja **desde el original**: encoger lo ya encogido acumula pérdida, y en el texto pequeño
     de una diapositiva eso se lee.
   - **Las librerías se piden cuando hacen falta.** Son 1.5 MB entre las dos, así
     que no van en el `<head>`: `cargarLibreria` las cuelga del `<body>` la

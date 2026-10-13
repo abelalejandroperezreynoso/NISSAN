@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-13-2';
+window.VERSION_APP = '2026-10-13-3';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -822,8 +822,13 @@ window.comprimirDibujo = async (fuente, opciones) => {
     let formato = 'image/webp';
     let blob = await intentarCompresion(ancho, alto, calidad, formato);
 
-    // Fallback a JPEG si WebP falla en iOS
-    if (!blob) {
+    // Fallback a JPEG si el navegador no sabe hacer WebP. **Safari en iOS no
+    // devuelve null: devuelve un PNG** —`toBlob` cae a PNG con cualquier tipo
+    // que no conozca—, así que hay que mirar el tipo y no sólo si hubo blob.
+    // Sin eso, el PNG ignora la calidad, el bucle de abajo sólo podía encoger
+    // las medidas hasta caber —una página de material acababa borrosa— y se
+    // guardaba con extensión .webp siendo un PNG.
+    if (!blob || blob.type !== formato) {
         formato = 'image/jpeg';
         blob = await intentarCompresion(ancho, alto, calidad, formato);
     }
@@ -2376,14 +2381,26 @@ window.portadasDeEncuestas = async (ids) => {
     return portadas;
 };
 
+// Con reintentos: en 4G una página de un documento de varias se cae de vez en
+// cuando a mitad de subida, y perder el documento entero por una sola es lo que
+// pasaba con el reporte FR1 —subían dos páginas y la tercera no—. Un archivo
+// que sí llegó en un intento anterior responde «ya existe», y eso es éxito.
 window.subirPaginaMaterial = async (blob, ruta) => {
-    const { error } = await sb.storage
-        .from(window.BUCKET_MATERIALES)
-        .upload(ruta, blob, { contentType: blob.type || 'image/webp', upsert: false });
+    let error = null;
+    for (let intento = 0; intento < 3; intento++) {
+        if (intento) await new Promise(r => setTimeout(r, 1500 * intento));
+        ({ error } = await sb.storage
+            .from(window.BUCKET_MATERIALES)
+            .upload(ruta, blob, { contentType: blob.type || 'image/webp', upsert: false }));
+        if (!error) break;
+        const texto = String(error.message || error.error || '') + ' ' + String(error.statusCode || '');
+        if (/already exists|duplicate|409/i.test(texto)) { error = null; break; }
+        console.error(`Error al subir el material (intento ${intento + 1}):`, error);
+    }
 
     if (error) {
-        console.error('Error al subir el material:', error);
-        throw new Error(`No se pudo subir la página. Si el problema sigue, revisa que exista el bucket '${window.BUCKET_MATERIALES}' en Supabase (script sql/materiales-encuesta.sql).`);
+        const motivo = error.message ? ` (${error.message})` : '';
+        throw new Error(`No se pudo subir la página${motivo}. Revisa la conexión e inténtalo de nuevo.`);
     }
 
     const { data } = sb.storage.from(window.BUCKET_MATERIALES).getPublicUrl(ruta);
