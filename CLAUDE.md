@@ -5418,18 +5418,24 @@ Las reglas para usarlo:
     una por el alfabeto. La tarjeta dice siempre ese promedio («Últimas 4
     semanas: 96%»), que es lo que explica por qué salió esa persona, y con
     cuántos empató esa semana.
-  - **Y si sólo la separa el nombre, no se nombra a nadie** (`grupoEmpatado`).
-    Cuando el peor es igual a otros en todo lo de arriba —la cifra, lo que deja
-    sin calificar, el promedio reciente, lo que dejó sin contestar y cuándo
+  - **Y si sólo la separa el nombre, no se nombra a nadie: se dice el
+    departamento con menor avance** (`departamentoDeMenorAvance`). Cuando el
+    peor es igual a otros en todo lo de arriba —la cifra, lo que deja sin
+    calificar, el promedio reciente, lo que dejó sin contestar y cuándo
     terminó—, elegirlo era elegir por el alfabeto: en «Capacitación», con 433
     personas en 0%, salía cada semana «Aguilar Flores Luis Enrique», el primer
-    empleado activo de la plantilla por orden alfabético. Ahí la tarjeta dice
-    «433 personas empatadas», lo que tienen en común y **cuántas son de cada
-    departamento** —los tres que más aportan y el resto en un renglón—, sin foto
-    ni gráfica, que no son de nadie. El «Peor desempeño» del departamento
-    rezagado, en la reflexión, hace lo mismo (`peorEmpatados`): ahí son todas
-    del mismo departamento y basta con contarlas. El mejor sigue nombrándose: el
-    alfabeto ahí no acusa a nadie.
+    empleado activo de la plantilla por orden alfabético. Ahí la tarjeta enseña
+    el departamento cuya gente contestó la menor parte de lo asignado
+    (`contestadas / asignadas`, sobre las mismas personas que compiten por el
+    menor desempeño, y sólo los de `MIN_PERSONAS_DEPARTAMENTO` o más si hay
+    alguno); a igual avance, el de peor resultado y después el que más dejó sin
+    contestar. Dice su avance en grande, cuántos contestaron, su resultado y su
+    lugar, y al pie por qué no hay una persona («Nadie se distingue: 433
+    personas en 0%»). Se probó antes a contar el grupo repartido por
+    departamento, y era una lista de cifras que no señalaba nada. El «Peor
+    desempeño» del departamento rezagado, en la reflexión, cuenta a los
+    empatados (`peorEmpatados`): ahí ya se está hablando de un departamento. El
+    mejor sigue nombrándose: el alfabeto ahí no acusa a nadie.
   - **Quien espera el curso previo no cuenta en las personas**
     (`esperaElCursoEn`): dijo «Todavía no» antes del instante que se mira y su
     jefe no se lo había programado, o se lo programó para después. Contestarla

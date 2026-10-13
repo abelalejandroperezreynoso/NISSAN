@@ -795,24 +795,34 @@ window.atrasoDeRevision = (encuestas, referencia) => {
 // cualquiera —también de quien no contestó nada—, menos del propio mejor. Sin
 // nadie calificado no hay mejor, y el peor sólo puede ser un revisor con
 // respuestas esperándolo: que nadie tenga resultado es su atraso.
-// Un empate que no se deshace más que por el nombre: el grupo, con lo que sus
-// miembros tienen en común —son iguales en todo lo que se mira— y la cuenta por
-// departamento, del que más aporta al que menos.
-window.grupoEmpatado = (gente) => {
-    const muestra = gente[0];
+// Cuando el peor sólo se distingue por el nombre, la tarjeta habla del
+// departamento con menor avance: la parte de lo asignado que su gente contestó
+// (`contestadas / asignadas`), sobre las mismas personas que compiten por el
+// menor desempeño. A igual avance, el de peor resultado y después el que más
+// dejó sin contestar, que es el que más pesa en el empate. Sólo compiten los de
+// `MIN_PERSONAS_DEPARTAMENTO` o más si hay alguno, como en la reflexión.
+window.departamentoDeMenorAvance = (gente, empatados, promedioEmpate) => {
     const porDepto = {};
     gente.forEach(q => {
-        const d = String(q.emp.dept || q.emp.department || '').trim() || 'Sin departamento';
-        porDepto[d] = (porDepto[d] || 0) + 1;
+        const nombre = String(q.emp.dept || q.emp.department || '').trim() || 'Sin departamento';
+        const d = porDepto[nombre] || (porDepto[nombre] = { nombre, personas: 0, asignadas: 0, contestadas: 0, suma: 0 });
+        d.personas++;
+        d.asignadas += q.asignadas || 0;
+        d.contestadas += q.contestadas || 0;
+        d.suma += q.promedio;
     });
-    const departamentos = Object.keys(porDepto).map(nombre => ({ nombre, personas: porDepto[nombre] }))
-        .sort((a, b) => b.personas - a.personas || a.nombre.localeCompare(b.nombre, 'es'));
-    const mismasAsignadas = gente.every(q => q.asignadas === muestra.asignadas);
-    return { grupo: true, personas: gente.length, departamentos, promedio: muestra.promedio,
-             promedioReciente: muestra.promedioReciente, semanasRecientes: muestra.semanasRecientes,
-             ningunaContestada: gente.every(q => q.contestadas === 0),
-             asignadas: mismasAsignadas ? muestra.asignadas : null,
-             porCalificar: muestra.porCalificar || 0 };
+    const lista = Object.values(porDepto).filter(d => d.asignadas > 0).map(d => Object.assign(d, {
+        avance: d.contestadas / d.asignadas,
+        promedio: Math.round(d.suma / d.personas),
+        faltan: d.asignadas - d.contestadas
+    }));
+    const grandes = lista.filter(d => d.personas >= window.MIN_PERSONAS_DEPARTAMENTO);
+    const compiten = grandes.length ? grandes : lista;
+    if (!compiten.length) return null;
+    compiten.sort((a, b) => a.avance - b.avance || a.promedio - b.promedio || b.faltan - a.faltan
+        || a.nombre.localeCompare(b.nombre, 'es'));
+    return Object.assign({ departamento: true, lugar: compiten.length, de: compiten.length,
+                           empatados, promedioEmpate }, compiten[0]);
 };
 
 window.destacadosDeLaSemana = (todas) => {
@@ -841,9 +851,8 @@ window.destacadosDeLaSemana = (todas) => {
     const empates = (p, grupo) => grupo.filter(q => q !== p && q.promedio === p.promedio).length;
     const peor = peores.find(p => p !== mejor) || null;
     // Si el peor sólo se distingue de los demás por el nombre, no se nombra a
-    // nadie: se dice el grupo entero, repartido por departamento. Señalar al
-    // primero del alfabeto entre cuatrocientos en cero es acusarlo por su
-    // apellido.
+    // nadie: señalar al primero del alfabeto entre cuatrocientos en cero es
+    // acusarlo por su apellido. Se dice el departamento con menor avance.
     const igual = (a, b) => a.promedio === b.promedio
         && (a.porCalificar || 0) === (b.porCalificar || 0)
         && reciente(a) === reciente(b)
@@ -853,7 +862,8 @@ window.destacadosDeLaSemana = (todas) => {
     return {
         mejor: mejor ? Object.assign({ empates: empates(mejor, personas) }, mejor) : null,
         peor: !peor ? null
-            : empatados.length > 1 ? window.grupoEmpatado(empatados)
+            : empatados.length > 1 ? (window.departamentoDeMenorAvance(candidatosPeor.filter(q => q !== mejor), empatados.length, peor.promedio)
+                || Object.assign({ empates: empates(peor, candidatosPeor) }, peor))
             : Object.assign({ empates: empates(peor, candidatosPeor) }, peor)
     };
 };
@@ -1195,7 +1205,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             vacio.forEach((t, n) => texto(x + 16, y + 46 + n * 18, w - 32, 18, t, 13, C.secundario));
             return;
         }
-        if (p.grupo) { tarjetaDeGrupo(p, x, y, w); return; }
+        if (p.departamento) { tarjetaDeDepartamento(p, x, y, w); return; }
         const emp = p.emp;
         el.push({ tipo: 'imagen', x: x + 16, y: y + 36, w: 46, h: 46,
                   url: emp.avatar ? window.procesarUrlImagen(emp.avatar) : '',
@@ -1271,35 +1281,29 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         });
         renglones.slice(0, 3).forEach((t, n) => texto(x + 16, y + 132 + n * 13, w - 32, 13, t, 10.5, C.secundario));
     };
-    // Un empate que sólo deshace el nombre: quiénes son, por departamento, y lo
-    // que tienen en común. Sin foto ni gráfica, que no son de nadie.
-    const tarjetaDeGrupo = (p, x, y, w) => {
-        texto(x + 16, y + 35, w - 32, 17, `${p.personas} personas empatadas`, 13.5, C.texto, { peso: 700 });
-        const comun = p.ningunaContestada
-            ? (p.asignadas === 1 ? 'Ninguna contestó su encuesta'
-                : p.asignadas ? `Ninguna contestó sus ${p.asignadas}` : 'Ninguna contestó sus encuestas')
-            : 'Con el mismo resultado en todo';
-        texto(x + 16, y + 53, w - 32, 14, comun, 11, C.secundario);
-        texto(x + 16, y + 90, 80, 36, `${p.promedio}%`, 28, color(p.promedio), { peso: 700 });
-        const lx = x + 102, lw = w - 102 - 16, filas = 4;
-        const deptos = p.departamentos;
-        const caben = deptos.length > filas ? filas - 1 : filas;
-        deptos.slice(0, caben).forEach((d, n) => {
-            const yy = y + 76 + n * 15;
-            texto(lx, yy, lw - 30, 14, window.partirEnRenglones(d.nombre, 19, 1)[0], 10.5, C.texto);
-            texto(lx + lw - 30, yy, 30, 14, String(d.personas), 10.5, C.secundario, { alinear: 'right', peso: 600 });
+    // Un empate que sólo deshace el nombre: el departamento con menor avance,
+    // su avance en grande y, al pie, por qué no hay una persona.
+    const tarjetaDeDepartamento = (p, x, y, w) => {
+        window.partirEnRenglones(p.nombre, 24, 1).forEach(t =>
+            texto(x + 16, y + 35, w - 32, 17, t, 13.5, C.texto, { peso: 700 }));
+        texto(x + 16, y + 53, w - 32, 14,
+            `Menor avance · ${p.personas} ${p.personas === 1 ? 'persona' : 'personas'}`, 11, C.secundario);
+        const avance = window.pctTexto ? window.pctTexto(p.contestadas, p.asignadas) : Math.round(100 * p.avance);
+        texto(x + 16, y + 82, 84, 36, `${avance}%`, 28, color(Number(avance)), { peso: 700 });
+        texto(x + 16, y + 116, 84, 12, 'de avance', 10, C.secundario);
+        const filas = [
+            ['Contestaron', `${p.contestadas}/${p.asignadas}`],
+            ['Resultado', `${p.promedio}%`],
+            ['Lugar', `${p.lugar} de ${p.de}`]
+        ];
+        const lx = x + 110, lw = w - 110 - 16;
+        filas.forEach(([r, v], n) => {
+            const yy = y + 80 + n * 16;
+            texto(lx, yy, lw - 50, 14, r, 10.5, C.secundario);
+            texto(lx + lw - 50, yy, 50, 14, v, 10.5, C.texto, { alinear: 'right', peso: 600 });
         });
-        if (deptos.length > caben) {
-            const resto = deptos.slice(caben);
-            const yy = y + 76 + caben * 15;
-            texto(lx, yy, lw - 30, 14, `${resto.length} departamentos más`, 10.5, C.secundario);
-            texto(lx + lw - 30, yy, 30, 14, String(resto.reduce((a, d) => a + d.personas, 0)), 10.5, C.secundario,
-                { alinear: 'right', peso: 600 });
-        }
-        const detalle = [];
-        if (p.semanasRecientes > 1) detalle.push(`${window.nombreDelPeriodo().ultimos(p.semanasRecientes)}: ${p.promedioReciente}%`);
-        detalle.push('Nadie se distingue del resto');
-        texto(x + 16, y + 145, w - 32, 13, detalle.join(' · '), 10.5, C.secundario);
+        texto(x + 16, y + 145, w - 32, 13,
+            `Nadie se distingue: ${p.empatados} personas en ${p.promedioEmpate}%`, 10.5, C.secundario);
     };
     const nadie = ['Todavía nadie tiene', 'resultados calificados.'];
     tarjetaDePersona(mejor, 132, 'Mejor desempeño', C.verde, nadie);
