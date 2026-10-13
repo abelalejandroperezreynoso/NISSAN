@@ -5418,6 +5418,17 @@ Las reglas para usarlo:
     una por el alfabeto. La tarjeta dice siempre ese promedio («Últimas 4
     semanas: 96%»), que es lo que explica por qué salió esa persona, y con
     cuántos empató esa semana.
+  - **Entre quienes están en 0%, cuenta cuánto llevan así** (`historialEnCero`).
+    El promedio de las últimas cuatro semanas no los separa —todos están en
+    cero—, así que después de él el peor es **quien lleva más periodos
+    seguidos en 0%** y, a igual racha, **quien tiene peor promedio en todos los
+    periodos de la tendencia**. Son los puntos de su gráfica
+    (`trayectoriaDePersona`), en el ritmo de esa diapositiva: en «Diagnosis de
+    5s», que es mensual, de dieciocho personas sin su foto de octubre salía un
+    departamento; hoy sale quien lleva «2 meses seguidos en 0%» con un
+    «Promedio de 8 meses: 10%», y la tarjeta lo dice en esas palabras. Un
+    periodo en que no le tocaba nada corta la racha y no entra en el promedio.
+    Sólo se calcula para quien está en cero, y sólo desempata al peor.
   - **Y si sólo la separa el nombre, no se nombra a nadie: se dice el
     departamento con menor avance** (`departamentoDeMenorAvance`). Cuando el
     peor es igual a otros en todo lo de arriba —la cifra, lo que deja sin

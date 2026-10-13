@@ -607,6 +607,38 @@ window.rotuloDePeriodo = (inicio, ritmo) => {
 // A cada persona se le pone su promedio de las últimas semanas —las que tuvo
 // algo asignado, con el cero de las que no contestó—, que es el primer
 // desempate.
+// Para quien está en cero, cómo le ha ido en los periodos de la tendencia de
+// la diapositiva —los mismos puntos de su gráfica (`trayectoriaDePersona`)—:
+// cuántos lleva seguidos en 0%, contando el que se mira y hacia atrás, y el
+// promedio de todos los que tuvo asignados. Son los dos desempates del peor
+// cuando el cero es de muchos: entre dieciocho personas que no mandaron su
+// foto este mes, la que no la manda desde marzo no es igual que la que se la
+// saltó una vez, y la que sacó 100 todo el año tampoco es igual que la que casi
+// nunca la manda. Un periodo en que no le tocaba nada corta la racha y no
+// cuenta en el promedio. A quien no está en cero no se le calcula: ahí no
+// desempata nada.
+window.historialEnCero = (i, clave, p) => {
+    if (p.promedio !== 0) return { racha: 0, promedio: null, periodos: 0 };
+    const tray = window.trayectoriaDePersona(i, clave, p);
+    let racha = 0;
+    for (let j = tray.length - 1; j >= 0 && tray[j].valor === 0; j--) racha++;
+    const con = tray.filter(t => t.valor !== null);
+    return { racha, periodos: con.length,
+             promedio: con.length ? Math.round(con.reduce((a, t) => a + t.valor, 0) / con.length) : null };
+};
+
+// «Promedio de 8 meses», en el ritmo de la tendencia de esa diapositiva.
+window.textoDePromedioHistorico = (clave, n) => {
+    const plural = window.PLURAL_DE_PERIODO[window.ritmoDeLaTendencia(clave)] || ['periodo', 'periodos'];
+    return `Promedio de ${n} ${plural[1]}`;
+};
+
+// «4 meses seguidos en 0%», en el ritmo de la tendencia de esa diapositiva.
+window.textoDeRachaEnCero = (clave, n) => {
+    const plural = window.PLURAL_DE_PERIODO[window.ritmoDeLaTendencia(clave)] || ['periodo', 'periodos'];
+    return `${n} ${plural[1]} ${plural[2] ? 'seguidas' : 'seguidos'} en 0%`;
+};
+
 window.destacadosDeSemana = (i, clave) => {
     const r = window.resultadoDeSemana(i);
     r.destacados = r.destacados || {};
@@ -623,7 +655,8 @@ window.destacadosDeSemana = (i, clave) => {
             const vals = historia[String(p.emp.id)] || [p.promedio];
             return Object.assign({}, p, {
                 promedioReciente: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
-                semanasRecientes: vals.length
+                semanasRecientes: vals.length,
+                historialEnCero: window.historialEnCero(i, clave, p)
             });
         });
         r.destacados[llave] = window.destacadosDeLaSemana(personas);
@@ -786,6 +819,9 @@ window.atrasoDeRevision = (encuestas, referencia) => {
 //      sostiene el resultado semana tras semana va delante de quien lo tuvo una.
 //      Entre quienes no contestaron nada, va delante quien tampoco contestó
 //      las semanas anteriores.
+//   1b. Para el peor en 0%, cuántos periodos seguidos lleva así y, después,
+//      su promedio en todos los de la tendencia (`historialEnCero`): quien no
+//      contesta desde hace meses, o casi nunca, va delante.
 //   2. Cuántas encuestas tiene calificadas: un 100% sobre nueve dice más que
 //      sobre dos. Para el peor, cuántas dejó sin contestar.
 //   3. Quién terminó antes de contestar la semana. Para el peor, quién después.
@@ -836,6 +872,11 @@ window.destacadosDeLaSemana = (todas) => {
     const candidatosPeor = personas.length ? todas : atrasados;
     const nombre = (p) => String(p.emp.name || '');
     const reciente = (p) => p.promedioReciente === undefined ? p.promedio : p.promedioReciente;
+    const racha = (p) => (p.historialEnCero && p.historialEnCero.racha) || 0;
+    const historico = (p) => {
+        const h = p.historialEnCero;
+        return h && h.promedio !== null ? h.promedio : 0;
+    };
     const mejores = personas.slice().sort((a, b) => b.promedio - a.promedio
         || reciente(b) - reciente(a)
         || b.calificadas - a.calificadas
@@ -844,6 +885,8 @@ window.destacadosDeLaSemana = (todas) => {
     const peores = candidatosPeor.slice().sort((a, b) => a.promedio - b.promedio
         || (b.porCalificar || 0) - (a.porCalificar || 0)
         || reciente(a) - reciente(b)
+        || racha(b) - racha(a)
+        || historico(a) - historico(b)
         || (b.asignadas - b.contestadas) - (a.asignadas - a.contestadas)
         || (b.terminoEn || 0) - (a.terminoEn || 0)
         || nombre(a).localeCompare(nombre(b), 'es'));
@@ -856,6 +899,8 @@ window.destacadosDeLaSemana = (todas) => {
     const igual = (a, b) => a.promedio === b.promedio
         && (a.porCalificar || 0) === (b.porCalificar || 0)
         && reciente(a) === reciente(b)
+        && racha(a) === racha(b)
+        && historico(a) === historico(b)
         && (a.asignadas - a.contestadas) === (b.asignadas - b.contestadas)
         && (a.terminoEn || 0) === (b.terminoEn || 0);
     const empatados = peor ? candidatosPeor.filter(q => q !== mejor && igual(q, peor)) : [];
@@ -1271,7 +1316,13 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             : `${p.calificadas}/${p.asignadas} calificadas`);
         if (p.porCalificar > 0) detalle.push(`${p.porCalificar} ${p.porCalificar === 1 ? 'respuesta' : 'respuestas'} sin calificar`);
         if (p.diasDeRespuesta !== null) detalle.push(`Resuelve en ${window.textoDeDias(p.diasDeRespuesta)}`);
-        if (p.semanasRecientes > 1) detalle.push(`${window.nombreDelPeriodo().ultimos(p.semanasRecientes)}: ${p.promedioReciente}%`);
+        // Quien está en cero dice cuánto lleva así y cómo le había ido antes:
+        // es lo que lo separó del resto.
+        const hc = p.historialEnCero;
+        if (hc && hc.racha > 1) detalle.push(window.textoDeRachaEnCero(clave, hc.racha));
+        if (hc && hc.periodos > 1 && hc.racha < hc.periodos) detalle.push(`${window.textoDePromedioHistorico(clave, hc.periodos)}: ${hc.promedio}%`);
+        else if (hc && hc.racha > 1) { /* todos sus periodos en cero: la racha ya lo dice */ }
+        else if (p.semanasRecientes > 1) detalle.push(`${window.nombreDelPeriodo().ultimos(p.semanasRecientes)}: ${p.promedioReciente}%`);
         if (p.empates > 0) detalle.push(`Empató con ${p.empates}`);
         const MAX_LETRAS = 42, renglones = [];
         detalle.forEach(t => {
