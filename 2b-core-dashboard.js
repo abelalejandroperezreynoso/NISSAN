@@ -1178,11 +1178,26 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
         porClave[clave].filas.push(f);
     });
 
-    // Dentro del grupo manda lo que urge; entre grupos, el que peor está.
-    // Con el mismo estado, por nombre, para que la tarjeta no baile de una
-    // carga a otra.
-    grupos.forEach(g => g.filas.sort((a, b) => peso(a) - peso(b)));
-    grupos.sort((a, b) => (peso(a.filas[0]) - peso(b.filas[0]))
+    // La más reciente primero, que es la que se acaba de lanzar y la que se
+    // viene a mirar: una clasificación que se repite cada mes acumula copias
+    // y la nueva quedaba la última. Lo dice el alta de la encuesta, y a igual
+    // alta el id, que también crece con el tiempo.
+    const reciente = (a, b) => {
+        const ta = Date.parse(a.ev.created_at) || 0;
+        const tb = Date.parse(b.ev.created_at) || 0;
+        return (tb - ta) || ((Number(b.ev.id) || 0) - (Number(a.ev.id) || 0));
+    };
+
+    // Dentro del grupo: administrando, la más reciente primero —ahí no hay
+    // nada que urja de quien mira—, con lo que en el periodo elegido todavía
+    // no existía al final; contestando, manda lo que urge y la más reciente
+    // sólo desempata. Entre grupos, el que peor está y, con el mismo estado,
+    // por nombre, para que la tarjeta no baile de una carga a otra.
+    grupos.forEach(g => g.filas.sort(esAdmin
+        ? (a, b) => ((a.existia === false) - (b.existia === false)) || reciente(a, b)
+        : (a, b) => (peso(a) - peso(b)) || reciente(a, b)));
+    const pesoDelGrupo = (g) => Math.min(...g.filas.map(peso));
+    grupos.sort((a, b) => (pesoDelGrupo(a) - pesoDelGrupo(b))
         || a.nombre.localeCompare(b.nombre, 'es'));
 
     const pendientes = filas.filter(f => f.vencimiento.mostrar).length;
@@ -1261,7 +1276,7 @@ window.cuerpoTarjetaEncuestas = (filas, esAdmin, topeRespuestas) => {
         // clasificación no esté al día—, y su pie, cuántas faltan y el
         // promedio de lo ya calificado.
         const pendientesGrupo = g.filas.filter(f => f.vencimiento.mostrar).length;
-        const estadoGrupo = g.filas[0].estado;   // ya vienen ordenadas por lo que urge
+        const estadoGrupo = g.filas[0].estado;   // contestando, vienen ordenadas por lo que urge; administrando todas llevan el neutro
         // Las que existían en el periodo que se está mirando, que son las
         // únicas que suman: `totalDeEncuestasAdmin` ya se salta a las demás
         // —vienen sin resumen— y aquí hace falta además para no decir «0

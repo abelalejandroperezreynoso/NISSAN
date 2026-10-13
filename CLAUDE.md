@@ -6683,7 +6683,17 @@ Las reglas para usarlo:
   «Repetir», «Vence en N días» o «Al día») y el orden: dentro del grupo, lo
   vencido primero, lo que aún tiene plazo después y lo que está al día al final;
   entre grupos, el que peor está, y con el mismo estado por nombre —o la tarjeta
-  bailaría de una carga a otra—.
+  bailaría de una carga a otra—. A igual estado, **la encuesta más reciente
+  primero** (por `created_at`, y a igual alta por `id`).
+
+  **Administrando, dentro del grupo manda la más reciente y nada más**: ahí
+  todos los renglones llevan el neutro, así que no hay urgencia que ordenar, y
+  una clasificación que se repite cada mes acumula copias —«Choque entre
+  unidades (07/09/26)», «Herida en dedo (14/09/26)»…— con la recién lanzada,
+  que es la que se viene a mirar, al final. Lo que en el periodo elegido
+  todavía no existía sigue yéndose abajo. Y como el primer renglón ya no es
+  por fuerza el que peor está, **el orden entre grupos mira el peor de cada
+  uno** (`pesoDelGrupo`) y no su primera fila.
 
   **El estado va como icono a la izquierda del renglón, no como etiqueta a la
   derecha** (`window.iconoDeAsignada`): con siete encuestas al día, siete «Al
