@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-13-1';
+window.VERSION_APP = '2026-10-13-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1955,7 +1955,11 @@ window.TIPOS_DE_MATERIAL = [
     { ext: 'webp', icono: '🖼️', nombre: 'Imagen',        via: 'imagen' },
     { ext: 'heic', icono: '🖼️', nombre: 'Imagen',        via: 'imagen' },
     { ext: 'pdf',  icono: '📕', nombre: 'PDF',           via: 'pdf' },
-    { ext: 'pptx', icono: '📊', nombre: 'Presentación',  via: 'presentacion' }
+    { ext: 'pptx', icono: '📊', nombre: 'Presentación',  via: 'presentacion' },
+    // Lo dibuja 17-hoja-excel.js, que sólo carga el panel principal: es el
+    // único documento desde el que se sube material.
+    { ext: 'xlsx', icono: '📗', nombre: 'Excel',         via: 'hoja' },
+    { ext: 'xlsm', icono: '📗', nombre: 'Excel',         via: 'hoja' }
 ];
 
 window.extensionDeArchivo = (nombre) => {
@@ -2144,12 +2148,17 @@ window.paginasDeArchivo = async (file, avisar) => {
     }
     if (via === 'pdf') return window.paginasDePdf(file, decir);
     if (via === 'presentacion') return window.paginasDePresentacion(file, decir);
+    if (via === 'hoja') {
+        if (!window.paginasDeHojaDeCalculo) throw new Error('Esta pantalla no sabe convertir un Excel. Súbelo desde el panel principal, o expórtalo a PDF.');
+        return window.paginasDeHojaDeCalculo(file, decir);
+    }
 
     // `.ppt` y `.doc` son formatos binarios de hace veinte años que ninguna
     // librería del navegador lee; lo demás no es material de una encuesta.
     const ext = window.extensionDeArchivo(file.name);
     if (ext === 'ppt') throw new Error('Ese PowerPoint es del formato antiguo (.ppt). Ábrelo y guárdalo como .pptx, o expórtalo a PDF.');
-    throw new Error('Sólo se pueden subir imágenes, PDF y presentaciones .pptx. Un Excel o un Word se exportan a PDF y se suben así.');
+    if (ext === 'xls') throw new Error('Ese Excel es del formato antiguo (.xls). Ábrelo y guárdalo como .xlsx, o expórtalo a PDF.');
+    throw new Error('Sólo se pueden subir imágenes, PDF, presentaciones .pptx y libros de Excel .xlsx. Un Word se exporta a PDF y se sube así.');
 };
 
 // Un PDF, página por página. Se pinta al doble de lo que se va a guardar y el

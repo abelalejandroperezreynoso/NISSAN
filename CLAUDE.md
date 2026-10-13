@@ -41,6 +41,7 @@ Los mensajes de commit van en español.
 | `14-vacaciones.js` | La hoja de cargar vacaciones y nombrar relevo; las reglas viven en `1-config.js` |
 | `15-presentacion.js` | La presentación semanal y la mensual —una sola, con dos cortes—: la diapositiva del resultado de la planta, en la hoja y en `.pptx` |
 | `16-cursos.js` | Las hojas de «Programar curso» (el jefe, para quien no ha tomado el curso de una encuesta) y «Elige a tu jefe inmediato»; las reglas viven en `1-config.js` |
+| `17-hoja-excel.js` | Convierte un libro de Excel en páginas de material: dibuja sus celdas, fotos y figuras en un lienzo |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -3226,12 +3227,48 @@ Las reglas para usarlo:
   dentro de la encuesta, en el visor a pantalla completa y una debajo de otra,
   sin salir de ella.
 
-  **Son tres puertas y un solo camino** (`window.paginasDeArchivo`):
+  **Son cuatro puertas y un solo camino** (`window.paginasDeArchivo`):
 
   - **Imágenes**, que ya son lo que se guarda: se comprimen y ya.
   - **PDF**, que se abre con **pdf.js** y se pinta página por página.
   - **PowerPoint `.pptx`**, que se dibuja con **pptx-preview** y se rasteriza
     con **html2canvas**, diapositiva por diapositiva.
+  - **Excel `.xlsx` y `.xlsm`**, que se dibuja **a mano** en un lienzo
+    (`window.paginasDeHojaDeCalculo`, en `17-hoja-excel.js`) —se cuenta justo
+    aquí abajo—.
+
+  **Un Excel no tiene librería que lo dibuje, y por eso el dibujo es nuestro.**
+  SheetJS lee los valores pero no las fotos ni las figuras, y el material típico
+  de aquí —el reporte FR1 de un incidente— es justamente eso: fotos, círculos
+  verdes, cruces rojas y recuadros con texto encima de una rejilla de celdas
+  combinadas. De SheetJS se usan sólo `CFB` para abrir el zip y `SSF` para
+  formatear números; es la misma `xlsx@0.18.5` de la descarga del Excel de una
+  respuesta, así que no se carga nada nuevo. Lo demás se lee del XML del libro:
+  anchos y altos, combinadas, fuentes, rellenos, bordes, alineación y ajuste,
+  las imágenes con su recorte y las figuras (rectángulos, redondeados, elipses,
+  anillos, cruces, flechas y líneas) con su relleno, su contorno y su texto. Una
+  figura desconocida se dibuja como su rectángulo. **No** se dibujan gráficos,
+  formato condicional ni comentarios, y el aviso de la previa lo dice.
+
+  Cinco cosas que hay que mantener:
+
+  - **La hoja se corta en páginas de carta vertical**
+    (`PROPORCION_PAGINA_EXCEL`), por los bordes de fila y sin partir una foto
+    si se puede: una hoja de Excel no tiene páginas, y entera saldría tan
+    alargada que a 1400 px no se leería nada. El reporte FR1 sale en tres.
+  - **El área de impresión no se mira.** La del FR1 dejaba fuera la mitad de
+    arriba —justo la de las fotos—. Lo que se dibuja es lo que tiene algo: un
+    valor, un relleno de color o una figura; los bordes y los rellenos blancos
+    sólo ensanchan la hoja si están pegados a eso, que el formato arrastra
+    celdas sueltas con un borde punteado diez columnas a la derecha.
+  - **Una figura girada de lado se ancla por la caja que se ve**, no por la
+    suya: se le cambian los lados antes de girarla, o la barra vertical de
+    «Método» sale acostada. Y `upright="1"` deja su texto derecho aunque la
+    figura esté girada.
+  - **Dentro de una combinada no hay bordes**: sólo su contorno, aunque las
+    celdas de dentro traigan los de cuando no lo estaban.
+  - **Sólo lo carga `index.html`**, que es desde donde se sube material;
+    `paginasDeArchivo` dice que no sabe si se le pide desde otra pantalla.
 
   ```js
   window.BUCKET_MATERIALES      // 'materiales-evaluaciones'
@@ -3445,8 +3482,9 @@ Las reglas para usarlo:
     se perdía recortándolo siempre a una línea.
 
   Un formato nuevo se agrega a `TIPOS_DE_MATERIAL` con su `via`, que es lo único
-  que decide por qué puerta entra. Un Excel o un Word no entran por ninguna: se
-  exportan a PDF y se suben así, y el aviso lo dice con esas palabras.
+  que decide por qué puerta entra. Un Word no entra por ninguna, ni el `.xls`
+  antiguo: se exportan a PDF —o se guardan como `.xlsx`— y el aviso lo dice con
+  esas palabras.
 
 - **Cuánto ocupa todo esto en Supabase.** La cuenta es gratuita y tiene un tope
   —1 GB de archivos y 500 MB de base—, y hasta ahora no había manera de saber

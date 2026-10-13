@@ -1111,7 +1111,7 @@ window.detalleDeDocumento = (doc) => {
 };
 
 window.notaDeMaterial = () =>
-    `Imágenes, PDF o PowerPoint. Se guardan como imágenes comprimidas: un documento de doce páginas no llega a 1 MB.`;
+    `Imágenes, PDF, PowerPoint o Excel. Se guardan como imágenes comprimidas: un documento de doce páginas no llega a 1 MB.`;
 
 // El recuadro. Se dibuja en dos sitios y no en uno, y cada uno enseña una
 // mitad:
@@ -1429,6 +1429,8 @@ window.bloqueDeConversion = () => {
     // es donde se está mirando lo que salió.
     const aviso = p.via === 'presentacion'
         ? `<div class="material-nota material-nota--ojo">Una presentación se convierte de forma aproximada: las fuentes y algunas tablas o gráficos pueden cambiar. Si algo no se ve bien, expórtala a PDF desde PowerPoint y súbela así.</div>`
+        : p.via === 'hoja'
+        ? `<div class="material-nota material-nota--ojo">Un Excel se convierte de forma aproximada: las fuentes pueden cambiar y los gráficos no se dibujan. Si algo no se ve bien, expórtalo a PDF desde Excel y súbelo así.</div>`
         : '';
 
     // **Sin fila todavía no hay botón de guardar**, y no es que esté apagado:
@@ -1473,7 +1475,9 @@ window.agregarMaterial = async (input, evalId) => {
         const ext = window.extensionDeArchivo(file.name);
         alert(ext === 'ppt'
             ? `«${file.name}» es del formato antiguo de PowerPoint (.ppt), que el navegador no sabe abrir.\n\nÁbrela y guárdala como .pptx, o expórtala a PDF.`
-            : `«${file.name}» no se puede convertir a imágenes.\n\nSe pueden subir imágenes, PDF y presentaciones .pptx; un Excel o un Word se exportan a PDF y se suben así.`);
+            : ext === 'xls'
+            ? `«${file.name}» es del formato antiguo de Excel (.xls), que el navegador no sabe abrir.\n\nÁbrelo y guárdalo como .xlsx, o expórtalo a PDF.`
+            : `«${file.name}» no se puede convertir a imágenes.\n\nSe pueden subir imágenes, PDF, presentaciones .pptx y libros de Excel .xlsx; un Word se exporta a PDF y se sube así.`);
         return;
     }
 
