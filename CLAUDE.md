@@ -5075,8 +5075,18 @@ Las reglas para usarlo:
   sus encuestas, también las que no caben y se cuentan en «y N más», y con una
   sola encuesta se quedan en su fila.
 
+  **Y la que pregunta antes si le aplica lleva el suyo**, detrás de las
+  constancias: una persona con su interrogación. No es un tipo de pregunta sino
+  la casilla «Pregunta si le aplica», así que sale de la fila de la encuesta
+  (`preguntaSiAplica`) y no de sus preguntas: es lo que explica que una licencia
+  diga «0 de 168» cuando casi nadie ha dicho todavía si le aplica. Su glifo vive
+  con los demás (`GLIFOS_DE_PREGUNTA.aplica`) y su nombre, que no está en
+  `TIPOS_DE_PREGUNTA`, en `NOMBRE_DE_GLIFO`. Cuenta igual para decidir si los
+  iconos se dicen una sola vez junto a «Por encuesta».
+
   ```js
   window.constanciasDeEncuesta(ev)   // en 1-config.js: ['photo', 'signature', …], o []
+  window.iconosDeEncuesta(ev)        // lo que se dibuja: las constancias y, si pregunta, 'aplica'
   window.GLIFOS_DE_PREGUNTA          // en 1-config.js: { tipo: d }, sobre una rejilla de 24
   window.svgDeIcono(e, conTitulo)  window.iconoParaPptx(e)
   ```

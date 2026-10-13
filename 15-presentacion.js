@@ -1154,7 +1154,9 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     // serían el mismo dibujo cinco veces y le quitarían ancho a cada nombre.
     // Cuentan todas, también las que no caben y se cuentan en «y N más».
     const ladoIcono = Math.round(Math.max(12, Math.min(16, tam * 1.25)));
-    const huellas = clave ? r.filas.map(c => window.constanciasDeEncuesta(c.id).join(',')) : [];
+    const fichaDe = (id) => ((window.filasDeLaTarjeta || []).find(f => String(f.ev.id) === String(id)) || {}).ev || id;
+    const iconosDe = (c) => window.iconosDeEncuesta(fichaDe(c.id));
+    const huellas = clave ? r.filas.map(c => iconosDe(c).join(',')) : [];
     const comunes = huellas.length > 1 && huellas[0] && huellas.every(h => h === huellas[0])
         ? huellas[0].split(',') : null;
     const ponerIconos = (tipos, xFin, yCentro, lado) => {
@@ -1165,7 +1167,7 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     };
     if (comunes) ponerIconos(comunes, bx + bw, 140, 16);
     const iconos = (c, xFin, yCentro) => {
-        const tipos = (clave && !comunes) ? window.constanciasDeEncuesta(c.id) : [];
+        const tipos = (clave && !comunes) ? iconosDe(c) : [];
         tipos.forEach((t, k) => {
             const x = xFin - (tipos.length - k) * (ladoIcono + 4) + 4;
             el.push({ tipo: 'icono', glifo: t, x, y: yCentro - ladoIcono / 2, lado: ladoIcono, color: C.secundario });
@@ -2099,7 +2101,7 @@ window.svgDeIcono = (e, conTitulo) => {
     const d = window.GLIFOS_DE_PREGUNTA[e.glifo];
     if (!d) return '';
     const tipo = window.tipoDePregunta(e.glifo);
-    const g = { d, nombre: tipo ? tipo.nombre : '' };
+    const g = { d, nombre: tipo ? tipo.nombre : ((window.NOMBRE_DE_GLIFO || {})[e.glifo] || '') };
     return `<svg x="${e.x}" y="${e.y}" width="${e.lado}" height="${e.lado}" viewBox="0 0 24 24" fill="none"
                  stroke="${e.color}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"
                  xmlns="http://www.w3.org/2000/svg">${conTitulo ? `<title>${g.nombre}</title>` : ''}

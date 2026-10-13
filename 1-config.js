@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-13-11';
+window.VERSION_APP = '2026-10-13-12';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1488,6 +1488,15 @@ window.PUNTAJE_POR_ENTREGAR = 100;
 // misma consulta que `encuestasQuePuntuan`, así que sin esa caché cargada
 // devuelve [] y no se dibuja ningún icono.
 window.constanciasPorEncuesta = null;   // { id: Set de tipos }
+// Lo que la presentación dice con iconos de una encuesta: sus constancias y,
+// detrás, si pregunta antes a quién le aplica. Esa casilla vive en la fila de la
+// encuesta (`pregunta_si_aplica`), así que hace falta la encuesta y no sólo su id.
+window.iconosDeEncuesta = (ev) => {
+    const tipos = window.constanciasDeEncuesta(ev);
+    if (ev && typeof ev === 'object' && window.preguntaSiAplica(ev)) tipos.push(window.GLIFO_PREGUNTA_SI_APLICA);
+    return tipos;
+};
+
 window.constanciasDeEncuesta = (ev) => {
     const id = ev && typeof ev === 'object' ? ev.id : ev;
     const tipos = (window.constanciasPorEncuesta || {})[String(id)];
@@ -1789,6 +1798,12 @@ window.GLIFOS_DE_PREGUNTA = {
     course:     'M2 9.5 12 5l10 4.5L12 14 2 9.5z M6 11.6V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.4 M22 9.5V15'
 };
 window.GLIFOS_DE_PREGUNTA.prerequisite = window.GLIFOS_DE_PREGUNTA.course;
+// No es un tipo de pregunta sino una forma de ser de la encuesta —la casilla
+// «Pregunta si le aplica»—, pero se dibuja junto a ellos en la presentación: una
+// persona con su interrogación. Su nombre lo da `NOMBRE_DE_GLIFO`.
+window.GLIFO_PREGUNTA_SI_APLICA = 'aplica';
+window.GLIFOS_DE_PREGUNTA.aplica = 'M11.5 7.5a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0z M2 20c0-3.6 2.7-6 6-6 1.3 0 2.5.4 3.5 1 M15.2 10.6a2.6 2.6 0 1 1 3.7 2.4c-.8.4-1.2 1-1.2 1.8v.4 M17.7 18.6h.01';
+window.NOMBRE_DE_GLIFO = { aplica: 'Pregunta si le aplica' };
 
 // El `<svg>` de un tipo, en `currentColor`: el color lo pone quien lo envuelve.
 // Un tipo sin glifo —uno viejo, o uno que alguien escribió a mano— sale con el
