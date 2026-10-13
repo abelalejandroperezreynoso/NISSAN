@@ -1932,23 +1932,16 @@ window.contadorRecortesDiapositiva = 0;
 // está, y en Windows PowerPoint la sustituye solo.
 window.FUENTE_DIAPOSITIVA = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif';
 window.FUENTE_PPTX = 'Helvetica Neue';
-// Los iconos de las constancias, a trazo como los SF Symbols y sobre una
-// rejilla de 24: una cámara, una firma sobre su renglón, una persona con su
-// palomita y un birrete. Se dibujan igual en la hoja y en el PowerPoint, que
-// recibe el mismo SVG ya pasado a imagen (`iconoParaPptx`).
-window.GLIFOS_DE_CONSTANCIA = {
-    photo: { nombre: 'Evidencia fotográfica',
-             d: 'M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z M15.5 13a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0z' },
-    signature: { nombre: 'Firma',
-             d: 'M3 16c2.5-5 4.5-8 5.5-7.2S7 15 8.6 15.2 11.5 11 12.6 11.5 12 15 13.6 15s2.6-1.6 3.6-1.6 1.4 1 3.8 1 M3 20h18' },
-    attendance: { nombre: 'Registro de asistencia',
-             d: 'M12 7.5a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0z M2.5 20c0-3.6 2.7-6 6-6 1.6 0 3 .5 4 1.4 M14.5 17l2.3 2.3 4.7-4.8' },
-    course: { nombre: 'Curso previo requerido',
-             d: 'M2 9.5 12 5l10 4.5L12 14 2 9.5z M6 11.6V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.4 M22 9.5V15' }
-};
+// Los iconos de las constancias son los de su tipo de pregunta
+// (`GLIFOS_DE_PREGUNTA`, en 1-config.js): una cámara, una firma sobre su
+// renglón, una persona con su palomita y un birrete. Se dibujan igual en la
+// hoja y en el PowerPoint, que recibe el mismo SVG ya pasado a imagen
+// (`iconoParaPptx`).
 window.svgDeIcono = (e, conTitulo) => {
-    const g = window.GLIFOS_DE_CONSTANCIA[e.glifo];
-    if (!g) return '';
+    const d = window.GLIFOS_DE_PREGUNTA[e.glifo];
+    if (!d) return '';
+    const tipo = window.tipoDePregunta(e.glifo);
+    const g = { d, nombre: tipo ? tipo.nombre : '' };
     return `<svg x="${e.x}" y="${e.y}" width="${e.lado}" height="${e.lado}" viewBox="0 0 24 24" fill="none"
                  stroke="${e.color}" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"
                  xmlns="http://www.w3.org/2000/svg">${conTitulo ? `<title>${g.nombre}</title>` : ''}

@@ -6530,7 +6530,7 @@ window.pintarBotonTipo = (wrapper) => {
 
     const tipo = window.tipoDePregunta(sel.value);
     const nombre = tipo ? tipo.nombre : sel.value;
-    btn.innerHTML = `<span class="tipo-pregunta-icono">${tipo ? tipo.icono : '❓'}</span>
+    btn.innerHTML = `<span class="tipo-pregunta-icono">${window.svgDeTipoDePregunta(sel.value, 22)}</span>
         <span class="tipo-pregunta-nombre">${window.sanitizeForHTML(nombre)}</span>
         <span class="tipo-pregunta-flecha" aria-hidden="true">▾</span>`;
     btn.title = tipo ? tipo.detalle : '';
@@ -6567,7 +6567,7 @@ window.listaDeTiposHTML = (wrapper) => {
         return `<button type="button" class="tipo-opcion${elegido ? ' es-elegido' : ''}"
                         ${bloqueado ? 'disabled' : ''} ${elegido ? 'aria-current="true"' : ''}
                         onclick="window.elegirTipoPregunta(this, '${t.valor}')">
-            <span class="tipo-opcion-icono" aria-hidden="true">${t.icono}</span>
+            <span class="tipo-opcion-icono" aria-hidden="true">${window.svgDeTipoDePregunta(t.valor, 22)}</span>
             <span class="tipo-opcion-texto">
                 <span class="tipo-opcion-nombre">${window.sanitizeForHTML(t.nombre)}</span>
                 <span class="tipo-opcion-detalle">${window.sanitizeForHTML(t.detalle)}</span>

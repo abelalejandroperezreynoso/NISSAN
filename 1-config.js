@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-13-6';
+window.VERSION_APP = '2026-10-13-7';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1719,58 +1719,49 @@ window.TIPOS_EN_MODO_JEFE = ['range', window.TIPO_PREGUNTA_FOTO, window.TIPO_PRE
 window.TIPOS_DE_PREGUNTA = [
     {
         valor: 'text',
-        icono: '\u270D\uFE0F',
         nombre: 'Texto Abierto',
         detalle: 'Se contesta escribiendo. Puedes dejar una respuesta modelo como referencia, pero la califica quien revise.'
     },
     {
         valor: 'multiple',
-        icono: '\u{1F518}',
         nombre: 'Opci\u00f3n M\u00faltiple',
         detalle: 'Se elige una sola opci\u00f3n. Si marcas cu\u00e1l es la correcta se califica sola; si no, se pide adem\u00e1s el porqu\u00e9 y la califica quien revise.'
     },
     {
         valor: 'checklist',
-        icono: '\u2611\uFE0F',
         nombre: 'Checklist',
         detalle: 'Se marcan todas las que apliquen. Marcando las correctas se califica sola, y hay que acertarlas todas sin ninguna de m\u00e1s.'
     },
     {
         valor: 'list_match',
-        icono: '\u{1F9E0}',
         nombre: 'Recall (Lista de Memoria)',
         detalle: 'Sale un rengl\u00f3n en blanco por cada elemento que registres y se escriben de memoria. Quien revise da por bueno cada uno por separado.'
     },
     {
         valor: 'range',
-        icono: '\u{1F4CA}',
         nombre: 'Rango Num\u00e9rico',
         detalle: 'Una escala del 0 al puntaje m\u00e1ximo de la encuesta. Se califica sola, pide explicar todo lo que baje del tope y puedes decir qu\u00e9 significa cada valor.'
     },
     {
         valor: window.TIPO_PREGUNTA_FOTO,
-        icono: '\u{1F4F7}',
         nombre: 'Evidencia fotogr\u00e1fica',
         detalle: 'El enunciado dice qu\u00e9 hay que fotografiar y la respuesta es la foto, que se reduce antes de subirla. Queda como constancia y nadie tiene que calificarla. Para pedir varias, agrega otra pregunta as\u00ed.',
         enunciado: 'Qu\u00e9 hay que fotografiar\u2026'
     },
     {
         valor: window.TIPO_PREGUNTA_ASISTENCIA,
-        icono: '\u{1F64B}',
         nombre: 'Registro de asistencia',
         detalle: 'No se contesta: se confirma. Para pasar lista de una junta o una capacitaci\u00f3n; queda registrada al enviar, nadie tiene que calificarla y no cuenta para la calificaci\u00f3n.',
         enunciado: 'A qu\u00e9 se asisti\u00f3\u2026'
     },
     {
         valor: window.TIPO_PREGUNTA_FIRMA,
-        icono: '\u{1F58A}\uFE0F',
         nombre: 'Firma',
         detalle: 'Se firma con el dedo en la pantalla, como la de enterado de una difusi\u00f3n. Se pide escribir el primer nombre y no la firma oficial. Queda como constancia y no cuenta para la calificaci\u00f3n.',
         enunciado: 'De qu\u00e9 se deja constancia al firmar\u2026'
     },
     {
         valor: window.TIPO_PREGUNTA_CURSO,
-        icono: '\u{1F393}',
         nombre: 'Curso previo requerido',
         detalle: 'El enunciado es el nombre del curso y se pregunta si ya se imparti\u00f3. Con un \u00abs\u00ed\u00bb se piden el instructor y la fecha; con un \u00abno\u00bb la encuesta no se puede enviar y se manda a pedirle la capacitaci\u00f3n al jefe inmediato. Queda como constancia y no cuenta para la calificaci\u00f3n.',
         enunciado: 'Nombre del curso que hay que haber tomado\u2026'
@@ -1779,6 +1770,35 @@ window.TIPOS_DE_PREGUNTA = [
 
 window.tipoDePregunta = (valor) =>
     window.TIPOS_DE_PREGUNTA.find(t => t.valor === valor) || null;
+
+// El icono de cada tipo, a trazo como los SF Symbols y sobre una rejilla de 24.
+// Eran emoji, y cada sistema dibuja los suyos a su manera —de colores, de
+// tamaños distintos, y el cerebro del «Recall» no decía nada—; un trazo gris
+// se lee igual en todos y no compite con el texto. Los usan la lista de tipos
+// de la hoja de edición y las filas «Por encuesta» de la presentación, que es
+// por lo que viven aquí: dos copias acabarían dibujando cosas distintas.
+window.GLIFOS_DE_PREGUNTA = {
+    text:       'M4 6h16 M4 10.5h16 M4 15h10 M4 19.5h6',
+    multiple:   'M21 12a9 9 0 1 1-18 0a9 9 0 0 1 18 0z M13.6 12a1.6 1.6 0 1 1-3.2 0a1.6 1.6 0 0 1 3.2 0z',
+    checklist:  'M3 6.5l2 2 3.5-3.8 M12 7h9 M3 16.5l2 2 3.5-3.8 M12 17h9',
+    list_match: 'M4.5 6h.01 M4.5 12h.01 M4.5 18h.01 M9 6h11 M9 12h11 M9 18h11',
+    range:      'M5 20v-3 M10 20v-7 M15 20v-11 M20 20V4',
+    photo:      'M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z M15.5 13a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0z',
+    signature:  'M3 16c2.5-5 4.5-8 5.5-7.2S7 15 8.6 15.2 11.5 11 12.6 11.5 12 15 13.6 15s2.6-1.6 3.6-1.6 1.4 1 3.8 1 M3 20h18',
+    attendance: 'M12 7.5a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0z M2.5 20c0-3.6 2.7-6 6-6 1.6 0 3 .5 4 1.4 M14.5 17l2.3 2.3 4.7-4.8',
+    course:     'M2 9.5 12 5l10 4.5L12 14 2 9.5z M6 11.6V16c0 1.4 2.7 3 6 3s6-1.6 6-3v-4.4 M22 9.5V15'
+};
+window.GLIFOS_DE_PREGUNTA.prerequisite = window.GLIFOS_DE_PREGUNTA.course;
+
+// El `<svg>` de un tipo, en `currentColor`: el color lo pone quien lo envuelve.
+// Un tipo sin glifo —uno viejo, o uno que alguien escribió a mano— sale con el
+// círculo de la opción múltiple vacío antes que con un hueco.
+window.svgDeTipoDePregunta = (valor, lado = 22) => {
+    const d = window.GLIFOS_DE_PREGUNTA[valor] || 'M21 12a9 9 0 1 1-18 0a9 9 0 0 1 18 0z';
+    return `<svg width="${lado}" height="${lado}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                 style="display:block;"><path d="${d}"/></svg>`;
+};
 
 // Lo que el campo del enunciado pide para cada tipo. Casi todos preguntan algo
 // —«Escribe la pregunta»— pero una evidencia pide qué fotografiar y una

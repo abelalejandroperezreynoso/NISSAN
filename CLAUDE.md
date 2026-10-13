@@ -5070,7 +5070,7 @@ Las reglas para usarlo:
 
   ```js
   window.constanciasDeEncuesta(ev)   // en 1-config.js: ['photo', 'signature', …], o []
-  window.GLIFOS_DE_CONSTANCIA        // { tipo: { nombre, d } }, sobre una rejilla de 24
+  window.GLIFOS_DE_PREGUNTA          // en 1-config.js: { tipo: d }, sobre una rejilla de 24
   window.svgDeIcono(e, conTitulo)  window.iconoParaPptx(e)
   ```
 
@@ -5800,9 +5800,19 @@ Las reglas para usarlo:
   cada tipo:
 
   ```js
-  window.TIPOS_DE_PREGUNTA      // [{ valor, icono, nombre, detalle }, …]
+  window.TIPOS_DE_PREGUNTA      // [{ valor, nombre, detalle, enunciado }, …]
   window.tipoDePregunta(valor)  // null si no está
+  window.GLIFOS_DE_PREGUNTA     // { valor: d }: el trazo de su icono, sobre 24
+  window.svgDeTipoDePregunta(valor, lado)   // el <svg>, en currentColor
   ```
+
+  **El icono de cada tipo es un trazo, no un emoji**, como los SF Symbols: eran
+  emoji —un ✍️, un 🧠, un 🔘— y cada sistema los dibuja a su manera, de colores
+  y de tamaños distintos, compitiendo con el nombre. Va en gris en la lista y
+  en el morado de la hoja en el elegido y en el botón. Los mismos glifos son
+  los de las filas «Por encuesta» de la presentación, y por eso viven en
+  `1-config.js` y no en cada pantalla: un tipo nuevo necesita su trazo ahí, o
+  sale con un círculo vacío.
 
   Está ahí y no en el marcado porque la hoja lo dibuja **dos veces** —el botón
   que dice el tipo elegido y la lista donde se elige— y dos copias acabarían
