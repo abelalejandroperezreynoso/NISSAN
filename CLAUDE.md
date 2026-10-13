@@ -56,6 +56,23 @@ de Supabase cuando un cambio necesita una columna o una tabla nueva. La
 aplicación no los ejecuta: son un registro de lo que se le pidió a la base.
 Conviene que el código aguante mientras el script no se haya corrido todavía.
 
+**Desde el 13 de octubre de 2026 Supabase está conectado a este repositorio**
+(Project Settings → Integrations → GitHub, con «Deploy to production» sobre
+`main`): lo que entra en `supabase/migrations/` se aplica solo a la base de
+producción al fusionar a `main`. Un script nuevo de `sql/` se copia ahí con
+nombre `AAAAMMDDHHMMSS_descripcion.sql` y ya no hay que correrlo a mano. Dos
+reglas:
+
+- **Sólo van los scripts nuevos.** La base se armó corriendo los de `sql/` a
+  mano y no tiene historial de migraciones; meter ahí los viejos los volvería a
+  correr todos en producción.
+- **Cada migración se puede correr dos veces sin romper nada** (`if not exists`,
+  `drop policy if exists` antes de `create policy`), como los de `sql/`: si se
+  corrió a mano antes de que llegara la migración, no pasa nada.
+
+Una migración se aplica en cuanto se fusiona, así que **una escritura sobre la
+base de producción sale de cada merge a `main`**: se revisa antes, no después.
+
 ## Convenciones del código
 
 - Las funciones que se invocan desde atributos `onclick` del HTML se declaran
