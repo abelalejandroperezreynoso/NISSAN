@@ -5252,7 +5252,8 @@ Las reglas para usarlo:
   **Y el corte se guarda, que es lo que lo deja fijo**: la presentación se
   calcula al vuelo con el padrón de hoy, así que sin guardarlo la lista podría
   cambiar entre la junta en que se anunció y la junta en que se presenta. Va a
-  `cortes_reflexion` (`sql/cortes-reflexion.sql`), una fila por corte y periodo
+  `cortes_reflexion` (`sql/cortes-reflexion.sql`, corrida en producción el 14 de
+  octubre de 2026 y también en `supabase/migrations/`), una fila por corte y periodo
   con los departamentos, su responsable y sus temas **con las cifras de ese
   momento**, y la política sólo deja leer e insertar: no se reescribe. Para
   rehacer uno se borra su fila desde el editor SQL. Como no hay servidor, **lo
