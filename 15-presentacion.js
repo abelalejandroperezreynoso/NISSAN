@@ -1291,6 +1291,8 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             rotulo(bx, desde, bw, `Evidencia ${window.nombreDelPeriodo().del}`);
             const yf = desde + 22;
             window.fotoDeEvidenciaEnDiapositiva(el, f, bx, yf, bw, hf);
+        } else {
+            window.materialEnDiapositiva(el, lista, bx, desde, bw, 494 - desde, rotulo);
         }
     }
 
@@ -1426,6 +1428,49 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
         10, C.terciario);
     return el;
+};
+
+// Sin evidencias de la semana, el hueco de debajo de «Por encuesta» se llena
+// con la portada del material de cada encuesta: las de firma —un acta de
+// enterado de un incidente, una junta— no dejan fotos, pero casi siempre
+// llevan su presentación, y es lo que dice de qué trató cada una mejor que su
+// título recortado. Van en el orden de las filas, con el nombre debajo, y del
+// mayor tamaño al que caben todas; si ni a 80 px de ancho caben, las que
+// quepan. Sin material no se dibuja nada, que es lo de antes.
+window.MIN_ANCHO_MATERIAL_DIAPOSITIVA = 80;
+window.materialEnDiapositiva = (el, filas, x, y, w, alto, rotulo) => {
+    const C = window.COLORES_IOS;
+    const material = (window.presentacion && window.presentacion.material) || {};
+    const portadas = filas.map(c => ({ c, m: material[String(c.id)] })).filter(o => o.m && o.m.url);
+    if (!portadas.length) return;
+    const disponible = alto - 22;
+    const PIE = 18, HUECO = 8;
+    const medidas = cols => {
+        const ancho = (w - (cols - 1) * HUECO) / cols;
+        const caben = Math.max(0, Math.floor((disponible + HUECO) / (ancho * 9 / 16 + PIE + HUECO))) * cols;
+        return { cols, ancho, caben };
+    };
+    let elegida = null;
+    for (let cols = 1; cols <= portadas.length; cols++) {
+        const m = medidas(cols);
+        if (m.ancho < window.MIN_ANCHO_MATERIAL_DIAPOSITIVA) break;
+        if (m.caben >= portadas.length) { elegida = m; break; }
+        if (!elegida || m.caben > elegida.caben) elegida = m;
+    }
+    if (!elegida || elegida.caben === 0) return;
+    const hp = elegida.ancho * 9 / 16;
+    rotulo(x, y, w, 'Material');
+    portadas.slice(0, elegida.caben).forEach((o, k) => {
+        const px = x + (k % elegida.cols) * (elegida.ancho + HUECO);
+        const py = y + 22 + Math.floor(k / elegida.cols) * (hp + PIE + HUECO);
+        el.push({ tipo: 'foto', x: px, y: py, w: elegida.ancho, h: hp, radio: 8,
+                  url: window.procesarUrlImagen ? window.procesarUrlImagen(o.m.url) : o.m.url, fondo: C.agrupado });
+        const letras = Math.floor((elegida.ancho - 4) / (10.5 * 0.56));
+        const paginas = o.m.cuantas > 1 && elegida.ancho >= 120 ? ` · ${o.m.cuantas} pág.` : '';
+        el.push({ tipo: 'texto', x: px + 2, y: py + hp + 3, w: elegida.ancho - 4, h: 14,
+                  texto: window.nombreDeFila(o.c.nombre, Math.max(6, letras - paginas.length)) + paginas,
+                  tam: 10.5, color: C.secundario });
+    });
 };
 
 // Una foto de evidencia con lo que la acompaña: el resultado en una píldora de
@@ -2469,7 +2514,7 @@ window.abrirPresentacion = async (modo) => {
     // de una hoja, y la diapositiva espera en blanco.
     sub.innerText = 'Cargando el último año…';
     caja.innerHTML = '<div class="presentacion-cargando"></div>';
-    let datos;
+    let datos, material = {};
     try {
         if (window.cargarObjetivosDeClasificaciones) await window.cargarObjetivosDeClasificaciones();
         // De aquí salen los iconos de constancia de cada encuesta; sin ella
@@ -2478,7 +2523,13 @@ window.abrirPresentacion = async (modo) => {
         // Quién espera un curso previo: ése no puede salir de «menor desempeño»
         // por una encuesta que no estaba en su mano.
         if (window.cargarCursosPrevios) await window.cargarCursosPrevios(true);
-        datos = await window.cargarRespuestasDeLaPresentacion();
+        // La primera página del material de cada encuesta, que llena el hueco
+        // de la diapositiva de una clasificación sin evidencias. Va en
+        // paralelo con las respuestas y, si falla, sin material: es adorno.
+        const ids = (window.filasDeLaTarjeta || []).map(f => f.ev.id);
+        const pedirMaterial = window.portadasDeEncuestas
+            ? window.portadasDeEncuestas(ids).catch(() => ({})) : Promise.resolve({});
+        [datos, material] = await Promise.all([window.cargarRespuestasDeLaPresentacion(), pedirMaterial]);
     } catch (e) {
         sub.innerText = 'No se pudieron cargar las respuestas.';
         caja.innerHTML = '';
@@ -2489,7 +2540,8 @@ window.abrirPresentacion = async (modo) => {
     if (semanas.length === 0) { sub.innerText = 'Todavía no hay periodos que enseñar.'; caja.innerHTML = ''; return; }
     window.presentacion = { modo, semanas, indice: semanas.length - 1, resultados: {}, clave: '',
                             cierresSemanales: window.semanasDeLaPresentacion(datos.cubreDesde, 'weekly'),
-                            respuestas: datos.respuestas, cubreDesde: datos.cubreDesde };
+                            respuestas: datos.respuestas, cubreDesde: datos.cubreDesde,
+                            material: material || {} };
     window.pintarPresentacion();
 };
 

@@ -5099,6 +5099,19 @@ Las reglas para usarlo:
   final salían cinco «Junta de seguridad M100…» idénticas. Hoy dicen «Junta de
   seguri… (06/10/26)».
 
+  **Sin evidencias que enseñar, el hueco de abajo lleva el material**
+  (`window.materialEnDiapositiva`): la portada de cada encuesta que tenga
+  material convertido, en el orden de las filas y con su nombre debajo —el
+  paréntesis de la fecha a la vista—. Las encuestas de firma —el acta de
+  enterado de un incidente, una junta— no dejan fotos, pero casi siempre llevan
+  su presentación, y la portada dice de qué trató mejor que un título recortado.
+  Se elige el mayor tamaño al que caben todas; por debajo de 80 px de ancho,
+  las que quepan. La evidencia de la semana manda sobre el material, que es de
+  siempre y no de esa semana. Las portadas salen de `portadasDeEncuestas`, que
+  `abrirPresentacion` pide **una vez y en paralelo con las respuestas**
+  (`presentacion.material`); si falla, la diapositiva queda como antes. En el
+  PowerPoint van como cualquier `foto`.
+
   **Y la que pregunta antes si le aplica lleva el suyo**, detrás de las
   constancias: una persona con su interrogación. No es un tipo de pregunta sino
   la casilla «Pregunta si le aplica», así que sale de la fila de la encuesta
@@ -7267,7 +7280,7 @@ Las reglas para usarlo:
   iba la plantilla sin bajar a certificación o a estadísticas.
 
   ```js
-  window.MAX_PAGINAS_RESPUESTAS            // 6, o sea 6000 filas
+  window.MAX_PAGINAS_RESPUESTAS            // 12, o sea 12000 filas (fueron 6 hasta octubre de 2026)
   await window.respuestasDelPeriodoDeTodos(encuestas, ahora, frecuencia)  // { respuestas, tope }
   window.resumenDeEncuestaAdmin(ev, respuestas, ahora)
   // → { contestaron, calificadas, padron, suma, promedio, promedioContestadas }

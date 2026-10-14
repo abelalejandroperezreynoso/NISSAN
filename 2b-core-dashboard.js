@@ -785,7 +785,12 @@ window.iconoDeAsignada = (estado) => {
 // que la tarjeta enseña de una persona, sólo que de todo el mundo. Eso además
 // acota la consulta: el historial entero de 455 personas no cabe en el arranque
 // de un panel.
-window.MAX_PAGINAS_RESPUESTAS = 6;   // 6000 filas, el tope de esta pantalla
+// Fueron 6: el 14 de octubre de 2026 las respuestas de las encuestas activas
+// pasaron de 6000 —las de «única vez» arrastran la consulta hasta la primera— y
+// con el tope la tarjeta se quedó sin gráfica y sin presentación. Una fila
+// pesa unos 800 bytes antes de comprimir, así que doce páginas son unos 10 MB
+// de JSON, del orden de 1–2 MB por el cable, y sólo en modo administrador.
+window.MAX_PAGINAS_RESPUESTAS = 12;   // 12000 filas, el tope de esta pantalla
 
 // El ritmo del eje de la gráfica de la tarjeta. Va fijo y no sale de las
 // encuestas: la tarjeta habla de todas las de la empresa a la vez, y el mes es
