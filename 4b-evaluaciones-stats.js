@@ -614,9 +614,9 @@ window.CRITERIOS_STATS = [
       cuentaAlGrupo: (ficha) => window.cumpleMinimoEnTodas(ficha) },
     { clave: 'certificadas', etiqueta: 'Certificadas', nombre: 'certificadas', color: '#eab308', relleno: '#fde68a',
       valor: (d) => d.assignedCount > 0 ? (d.certificadas || 0) / d.assignedCount : 0 },
-    // En falsas y mal revisadas lo malo es tener muchas, así que el puesto #1
+    // En anuladas y mal revisadas lo malo es tener muchas, así que el puesto #1
     // del cuadro es el que menos tiene y no el que más (`peorEsAlto`).
-    { clave: 'falsas', etiqueta: 'Falsas', nombre: 'falsas', color: '#ef4444', relleno: '#fecaca',
+    { clave: 'falsas', etiqueta: 'Anuladas', nombre: 'anuladas', color: '#ef4444', relleno: '#fecaca',
       peorEsAlto: true,
       valor: (d) => d.assignedCount > 0 ? (d.falsas || 0) / d.assignedCount : 0 },
     { clave: 'mal_revisadas', etiqueta: 'Mal rev.', nombre: 'mal revisadas', color: '#a855f7', relleno: '#e9d5ff',
@@ -3157,7 +3157,7 @@ window.globoDeFila = (encabezado, fila) => {
         + `&#10;Contestadas: ${fila.responses || 0}`
         + `&#10;Revisadas: ${window.procesadasDe(fila)}`
         + `&#10;Certificadas: ${fila.certificadas || 0}`
-        + `&#10;Falsas/Anuladas: ${fila.falsas || 0}`
+        + `&#10;Anuladas: ${fila.falsas || 0}`
         + `&#10;Mal Revisadas: ${fila.malRevisadas || 0}`
         + (calificacion === null ? '' : `&#10;⭐ Calificación de lo contestado: ${calificacion}%`)
         + `&#10;${criterio.etiqueta}: ${window.cifraDelCriterio(fila)}`

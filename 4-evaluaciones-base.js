@@ -2951,7 +2951,7 @@ window.abrirHistorialEvaluacion = (evalId, title) => {
                 <div>
                     <div style="font-weight:bold; color:#334155; font-size: 1rem;">Intento #${respuestas.length - i}</div>
                     <div style="font-size:0.8rem; color:#64748b; margin-top:2px; margin-bottom: 8px;">📅 ${fechaStr}</div>
-                    <span style="display:inline-block; background:${statusBg}; color:${statusColor}; font-size:0.75rem; padding:3px 8px; border-radius:12px; font-weight:bold; border: 1px solid ${statusBorder};">${r.review_status}</span>
+                    <span style="display:inline-block; background:${statusBg}; color:${statusColor}; font-size:0.75rem; padding:3px 8px; border-radius:12px; font-weight:bold; border: 1px solid ${statusBorder};">${r.review_status === 'Falsa' ? 'Anulada' : r.review_status}</span>
                 </div>
                 <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
                     ${scoreText}

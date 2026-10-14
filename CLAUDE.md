@@ -6474,7 +6474,7 @@ Las reglas para usarlo:
   (`window.globoDeFila`). Un treemap coloca por tamaño y no por medida, así
   que con valores parecidos los rellenos se ven iguales y no hay forma de ver
   quién va peor: para eso cada cuadro lleva su puesto en la tabla (`#3 · 6.5
-  días`), que en falsas y mal revisadas cuenta al revés —el #1 es el que menos
+  días`), que en anuladas y mal revisadas cuenta al revés —el #1 es el que menos
   tiene, y eso es lo que dice `peorEsAlto`—.
 
   **El encabezado del gráfico dice el total del nivel**, con la misma medida

@@ -2168,7 +2168,7 @@ window.renderizarListaRespuestas = () => {
         
         let textoEstado = isCertificada ? '<span style="color:#1d4ed8; font-weight:bold; font-size:0.75rem;">Certificada</span>' :
                          (isRevisado ? '<span style="color:#166534; font-weight:bold; font-size:0.75rem;">Revisado</span>' : 
-                         (isFalsa ? '<span style="color:#991b1b; font-weight:bold; font-size:0.75rem;">Falsa / Anulada</span>' : 
+                         (isFalsa ? '<span style="color:#991b1b; font-weight:bold; font-size:0.75rem;">Anulada</span>' : 
                          (isMalRevisada ? '<span style="color:#7e22ce; font-weight:bold; font-size:0.75rem;">Mal Revisada</span>' : 
                          '<span style="color:#ea580c; font-weight:bold; font-size:0.75rem;">En espera</span>')));
         
@@ -3277,7 +3277,7 @@ window.borrarRespuestaIndividual = async (id) => {
 window.cambiarEstadoRespuesta = async (id, nuevoEstado) => {
     let msg = "";
     if (nuevoEstado === 'Falsa') {
-        msg = "¿Estás seguro de anular esta respuesta por datos falsos? Se conservará como evidencia pero no sumará a las estadísticas.";
+        msg = "¿Anular esta respuesta? Se conservará como evidencia pero no sumará a las estadísticas.";
     } else if (nuevoEstado === 'Certificada') {
         msg = "¿Quieres certificar esta respuesta? Esto indicará visualmente que ha sido auditada y es legítima.";
     } else if (nuevoEstado === 'Mal Revisada') {
