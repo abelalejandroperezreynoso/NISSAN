@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-14-10';
+window.VERSION_APP = '2026-10-14-11';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -484,6 +484,22 @@ window.padronDeLaEncuesta = (ev) => {
     const conEquipo = new Set(gente.map(e => e.supId).filter(Boolean).map(String));
     return gente.filter(emp => window.empleadoActivo(emp) &&
         window.leTocaEstaEncuesta(ev, emp, conEquipo.has(String(emp.id))));
+};
+
+// Cuánta gente tiene todavía sin contestar si una encuesta le aplica: los
+// candidatos activos —la regla de destinatarios de siempre— que no han dicho
+// ni sí ni no. No están en el padrón, así que no suman en ningún «de M»; esto
+// es lo que dice cuántos podrían sumarse todavía. Sin la caché de decisiones,
+// o en una encuesta que no pregunta, cero.
+window.sinDecidirSiAplica = (ev) => {
+    const gente = window.todosLosEmpleadosData || [];
+    if (!ev || !gente.length || !window.DECISIONES_DE_APLICA || !window.preguntaSiAplica(ev)) return 0;
+    if (ev.target_employees === undefined || ev.target_positions === undefined ||
+        ev.target_departments === undefined) return 0;
+    const conEquipo = new Set(gente.map(e => e.supId).filter(Boolean).map(String));
+    return gente.filter(emp => window.empleadoActivo(emp) &&
+        window.esCandidataDeEncuesta(ev, emp, conEquipo.has(String(emp.id))) &&
+        window.decisionDeAplica(ev.id, emp.id) === null).length;
 };
 
 // ==========================================

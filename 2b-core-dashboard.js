@@ -2613,29 +2613,64 @@ window.medirObjetivo = (objetivo, filas, respuestas, referencia, padrones) => {
     // quien la aprobó y después reprobó la sigue teniendo. Quien la obtuvo y
     // hoy ya no está en el padrón la sigue contando, como en el pase de lista.
     // No hay veredicto: lo que se pide es saber cuántas hay.
+    //
+    // Y cada quien cae en **uno** de cinco montones (`desglose`), que es lo que
+    // explica un «0 de 171»: la obtuvo; la contestó y espera calificación; la
+    // contestó y no llegó al mínimo; espera el curso previo, o no la ha
+    // contestado. Se miran en ese orden y gana el primero: quien reprobó y
+    // volvió a contestarla espera su calificación, no está reprobado. Una
+    // respuesta anulada no cuenta como contestada. Aparte va `sinDecidir`:
+    // a quién se le pregunta si le aplica y no ha dicho nada, que no está en
+    // el padrón y por eso no suma en el «de 171».
     if (objetivo.tipo === 'licencias') {
         let obtenidas = 0, total = 0;
+        const vacio = () => ({ obtenidas: 0, porCalificar: 0, noAprobaron: 0, esperanCurso: 0, sinContestar: 0 });
+        const desglose = vacio();
+        let sinDecidir = 0;
         salida.porEncuesta = vivas.map(f => {
             const periodo = window.periodoDeEncuesta(f.ev, ref);
             const padron = pads[f.ev.id] || window.padronDeLaEncuesta(f.ev);
             const enPadron = new Set(padron.map(e => String(e.id)));
-            const quienes = new Set();
+            const quienes = new Set(), pendientes = new Set(), reprobados = new Set();
+            const suyas = {};
             (respuestas || []).forEach(r => {
                 if (String(r.evaluation_id) !== String(f.ev.id)) return;
                 if (window.esRespuestaDeApoyo && window.esRespuestaDeApoyo(r)) return;
                 const enviada = new Date(r.submitted_at);
                 if (isNaN(enviada) || enviada < periodo.inicio || enviada > ref) return;
                 if (periodo.fin && enviada >= periodo.fin) return;
+                const id = String(r.employee_id);
+                (suyas[id] = suyas[id] || []).push(r);
+                if (r.review_status === 'Falsa') return;
                 const puntaje = window.puntajeDeRespuesta(r);
-                if (puntaje !== null && puntaje >= meta) quienes.add(String(r.employee_id));
+                if (puntaje === null) pendientes.add(id);
+                else if (puntaje >= meta) quienes.add(id);
+                else reprobados.add(id);
             });
-            const ajenos = [...quienes].filter(id => !enPadron.has(id)).length;
-            obtenidas += quienes.size;
-            total += padron.length + ajenos;
-            return { id: String(f.ev.id), titulo: String(f.ev.title || 'Encuesta'), obtenidas: quienes.size, total: padron.length + ajenos };
+            // Fuera del padrón sólo sigue contando quien la obtuvo: la tiene.
+            const ajenos = [...quienes].filter(id => !enPadron.has(id));
+            const gente = [...enPadron, ...ajenos];
+            const d = vacio();
+            gente.forEach(id => {
+                if (quienes.has(id)) d.obtenidas++;
+                else if (pendientes.has(id)) d.porCalificar++;
+                else if (reprobados.has(id)) d.noAprobaron++;
+                else if (window.CURSOS_PREVIOS && window.estadoDeCursoPrevio
+                    && window.estadoDeCursoPrevio(f.ev.id, id, suyas[id] || [], ref)) d.esperanCurso++;
+                else d.sinContestar++;
+            });
+            Object.keys(d).forEach(k => { desglose[k] += d[k]; });
+            const indecisos = window.sinDecidirSiAplica ? window.sinDecidirSiAplica(f.ev) : 0;
+            sinDecidir += indecisos;
+            obtenidas += d.obtenidas;
+            total += gente.length;
+            return { id: String(f.ev.id), titulo: String(f.ev.title || 'Encuesta'), obtenidas: d.obtenidas,
+                     total: gente.length, desglose: d, sinDecidir: indecisos };
         }).sort((a, b) => b.obtenidas - a.obtenidas || a.titulo.localeCompare(b.titulo, 'es'));
         salida.valor = obtenidas;
         salida.total = total;
+        salida.desglose = desglose;
+        salida.sinDecidir = sinDecidir;
         salida.cumple = null;
         salida.texto = `${obtenidas} ${obtenidas === 1 ? 'licencia' : 'licencias'}` +
             (total > 0 ? ` de ${total} a quienes les aplica` : '');
@@ -2747,6 +2782,15 @@ window.bloqueDeObjetivo = (grupo) => {
 window.bloqueDeLicencias = (obj, m) => {
     const azul = '#007aff';
     const ancho = m.total > 0 ? Math.min(100, 100 * m.valor / m.total) : 0;
+    // De qué está hecho el «de N», como al lado del anillo de la presentación:
+    // los montones vacíos no se dicen, y quien no ha dicho si le aplica va
+    // aparte porque no está en el total.
+    const d = m.desglose || {};
+    const desglose = [
+        [d.porCalificar, 'por calificar'], [d.noAprobaron, `bajo ${m.meta}%`],
+        [d.esperanCurso, 'esperan curso'], [d.sinContestar, 'sin contestar']
+    ].filter(x => x[0] > 0).map(x => `${x[0]} ${x[1]}`)
+        .concat(m.sinDecidir > 0 ? [`${m.sinDecidir} sin decir si les aplica`] : []).join(' · ');
     const filas = (m.porEncuesta || []).map(e => `
         <div class="objetivo-licencia">
             <span>${window.sanitizeForHTML(e.titulo)}</span>
@@ -2765,6 +2809,7 @@ window.bloqueDeLicencias = (obj, m) => {
                 </div>
             </div>
             <div class="objetivo-clasif-barra"><span style="width:${ancho}%; background:${azul};"></span></div>
+            ${desglose ? `<div class="objetivo-clasif-pie">${desglose}</div>` : ''}
             ${filas ? `<div class="objetivo-licencias">${filas}</div>` : ''}
         </div>`;
 };

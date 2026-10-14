@@ -4289,6 +4289,26 @@ Las reglas para usarlo:
     siempre —al final y sin recortarse— y **no entra en ninguna cuenta de la
     meta**: ni en «Lejos de la meta», ni en cuántas están en la meta, ni en las
     preguntas, ni en las peores clasificaciones del departamento.
+  - **Y dice de qué está hecho el «de N»** (`desglose`). «0 de 171» al lado de
+    «53 de 171 respuestas» se leía como que 53 ya habían tomado el curso: eran
+    53 respuestas **esperando calificación**, que todavía no son licencia de
+    nadie. Cada persona del total cae en uno de cinco montones, mirados en este
+    orden y ganando el primero —quien reprobó y volvió a contestarla espera su
+    calificación—: **obtenidas**, **por calificar**, **bajo el mínimo**,
+    **esperan curso** (`estadoDeCursoPrevio`) y **sin contestar**. Suman el
+    total; una anulada no cuenta como contestada, y fuera del padrón sólo sigue
+    contando quien la obtuvo. Aparte va **`sinDecidir`**
+    (`window.sinDecidirSiAplica(ev)`, en `1-config.js`): los candidatos que no
+    han dicho si les aplica, que no están en el total pero pueden sumarse.
+
+    En la diapositiva sustituye a «N de M respuestas · N encuestas» al lado del
+    anillo, sin los montones vacíos —«obtenidas» va siempre— y con «sin decir si
+    aplica» debajo de una raya. El anillo y la barra de cada encuesta llevan
+    además, detrás del azul, **lo que espera calificación en naranja claro**,
+    que es lo que puede volverse licencia en cuanto se revise: son dos anillos
+    apilados, y el de encima va sin pista (`pista: null`, que los dos
+    traductores entienden). En la hoja de detalle va en un renglón debajo de la
+    barra. `abrirPresentacion` pide la caché de decisiones para lo de aparte.
   - **En la reflexión, cada clasificación con objetivo dice cuál** en un
     renglón gris debajo de su nombre («Objetivo: participación 100%»), con el
     mismo texto corto que la píldora de su diapositiva

@@ -999,7 +999,8 @@ window.ALTO_DIAPOSITIVA = 540;
 // `getColorScore`—, sólo que con los tonos de iOS.
 window.COLORES_IOS = {
     texto: '#1C1C1E', secundario: '#8E8E93', terciario: '#AEAEB2', separador: '#E5E5EA',
-    agrupado: '#F2F2F7', verde: '#34C759', naranja: '#FF9500', rojo: '#FF3B30', azul: '#007AFF'
+    agrupado: '#F2F2F7', verde: '#34C759', naranja: '#FF9500', rojo: '#FF3B30', azul: '#007AFF',
+    morado: '#AF52DE'
 };
 window.colorIOS = (v) => {
     const c = window.COLORES_IOS;
@@ -1049,18 +1050,27 @@ window.diapositiva = (i, clave, numero, cuantas) => {
     const licDeFila = (c) => {
         if (!clave) {
             const m = c.clave ? window.licenciasDeSemana(i, c.clave) : null;
-            return m ? { n: m.valor, total: m.total } : null;
+            return m ? { n: m.valor, total: m.total, pc: (m.desglose || {}).porCalificar || 0 } : null;
         }
         if (!lic) return null;
         const e = (lic.porEncuesta || []).find(x => x.id === String(c.id));
-        return e ? { n: e.obtenidas, total: e.total } : { n: 0, total: 0 };
+        return e ? { n: e.obtenidas, total: e.total, pc: (e.desglose || {}).porCalificar || 0 } : { n: 0, total: 0 };
     };
     rotulo(48, 132, 260, lic ? 'Licencias obtenidas' : (clave ? 'Resultado' : 'Resultado general'));
     const cx = 128, cy = 232, radio = 64;
     if (lic) {
+        // Debajo del azul, en naranja claro, lo contestado que espera
+        // calificación: lo que puede volverse licencia en cuanto se revise.
+        // Es el mismo color de su renglón al lado y de la barra de su encuesta.
+        const pc = (lic.desglose || {}).porCalificar || 0;
+        if (pc > 0 && lic.total > 0) {
+            el.push({ tipo: 'anillo', cx, cy, r: radio, grosor: 16,
+                      proporcion: Math.min(1, (lic.valor + pc) / lic.total),
+                      color: window.tinteIOS(C.naranja, 0.55), pista: window.tinteIOS(C.azul) });
+        }
         el.push({ tipo: 'anillo', cx, cy, r: radio, grosor: 16,
                   proporcion: lic.total > 0 ? Math.min(1, lic.valor / lic.total) : 0,
-                  color: C.azul, pista: window.tinteIOS(C.azul) });
+                  color: C.azul, pista: pc > 0 && lic.total > 0 ? null : window.tinteIOS(C.azul) });
         texto(cx - 60, cy - 24, 120, 40, String(lic.valor), 34, C.texto, { peso: 700, alinear: 'center' });
         texto(cx - 60, cy + 14, 120, 16, lic.total > 0 ? `de ${lic.total}` : (lic.valor === 1 ? 'licencia' : 'licencias'),
             12, C.secundario, { alinear: 'center' });
@@ -1072,10 +1082,43 @@ window.diapositiva = (i, clave, numero, cuantas) => {
         texto(cx - 60, cy + 14, 120, 16, clave ? 'promedio' : 'general', 12, C.secundario, { alinear: 'center' });
     }
 
-    texto(212, 196, 100, 22, `${r.contestaron}`, 20, C.texto, { peso: 700 });
-    texto(212, 218, 100, 14, r.total > 0 ? `de ${r.total} respuestas` : 'respuestas', 11, C.secundario);
-    texto(212, 244, 100, 22, `${r.encuestas}`, 20, C.texto, { peso: 700 });
-    texto(212, 266, 100, 14, r.encuestas === 1 ? 'encuesta' : 'encuestas', 11, C.secundario);
+    if (lic && lic.desglose) {
+        // En una de licencias, al lado del anillo va **de qué está hecho el
+        // «de N»**: cada persona a la que le aplica cae en uno de estos
+        // montones (`medirObjetivo`), así que suman el total. «53 de 171
+        // respuestas» decía que había respuestas, pero no por qué ninguna era
+        // todavía una licencia —esperaban calificación—. Los montones vacíos
+        // no se dibujan, salvo «obtenidas», que es lo que dice el anillo.
+        // Debajo de una raya, quien no ha dicho si le aplica: no está en el
+        // total, pero es quien todavía puede sumarse.
+        const d = lic.desglose;
+        const filasLic = [
+            [d.obtenidas, 'obtenidas', C.azul, true],
+            [d.porCalificar, 'por calificar', C.naranja],
+            [d.noAprobaron, `bajo ${lic.meta}%`, C.rojo],
+            [d.esperanCurso, 'esperan curso', C.morado],
+            [d.sinContestar, 'sin contestar', C.secundario]
+        ].filter(f => f[3] || f[0] > 0);
+        const extra = lic.sinDecidir > 0;
+        const paso = 20;
+        let y = cy - (filasLic.length * paso + (extra ? paso + 8 : 0)) / 2;
+        filasLic.forEach(([n, t, col]) => {
+            texto(212, y, 36, paso, String(n), 15, col, { peso: 700, alinear: 'right' });
+            texto(254, y + 1, 92, paso, t, 11, C.secundario);
+            y += paso;
+        });
+        if (extra) {
+            el.push({ tipo: 'linea', x1: 216, y1: y + 4, x2: 336, y2: y + 4, color: C.separador, grosor: 1 });
+            y += 8;
+            texto(212, y, 36, paso, String(lic.sinDecidir), 15, C.terciario, { peso: 700, alinear: 'right' });
+            texto(254, y + 1, 92, paso, 'sin decir si aplica', 11, C.terciario);
+        }
+    } else {
+        texto(212, 196, 100, 22, `${r.contestaron}`, 20, C.texto, { peso: 700 });
+        texto(212, 218, 100, 14, r.total > 0 ? `de ${r.total} respuestas` : 'respuestas', 11, C.secundario);
+        texto(212, 244, 100, 22, `${r.encuestas}`, 20, C.texto, { peso: 700 });
+        texto(212, 266, 100, 14, r.encuestas === 1 ? 'encuesta' : 'encuestas', 11, C.secundario);
+    }
 
     const licAntes = lic ? window.licenciasDeSemana(i - 1, clave) : null;
     if (lic && licAntes) {
@@ -1263,6 +1306,10 @@ window.diapositiva = (i, clave, numero, cuantas) => {
             texto(bx + bw - 80, yb - tam * 1.5 - 2, 80, tam * 1.3, lf.total > 0 ? `${lf.n} de ${lf.total}` : String(lf.n), tam, C.azul,
                 { peso: 700, alinear: 'right' });
             el.push({ tipo: 'rect', x: bx, y: yb, w: bw, h: hb, relleno: C.agrupado, radio: hb / 2 });
+            // Detrás del azul, en naranja claro, lo que ya se contestó y espera
+            // calificación: lo que puede volverse licencia en cuanto se revise.
+            if (lf.pc > 0 && lf.total > 0) el.push({ tipo: 'rect', x: bx, y: yb, h: hb, radio: hb / 2,
+                w: Math.max(hb, bw * Math.min(1, (lf.n + lf.pc) / lf.total)), relleno: window.tinteIOS(C.naranja, 0.55) });
             if (lf.n > 0 && lf.total > 0) el.push({ tipo: 'rect', x: bx, y: yb, w: Math.max(hb, bw * Math.min(1, lf.n / lf.total)), h: hb,
                                              relleno: C.azul, radio: hb / 2 });
             return;
@@ -2222,7 +2269,9 @@ window.svgDeDiapositiva = (elementos) => {
             // anillos de Salud. Empieza arriba y va en el sentido del reloj.
             const largo = 2 * Math.PI * e.r;
             const p = Math.max(0, Math.min(1, e.proporcion));
-            return `<circle cx="${e.cx}" cy="${e.cy}" r="${e.r}" fill="none" stroke="${e.pista}" stroke-width="${e.grosor}"/>`
+            // Sin pista, sólo el arco: así se apilan dos anillos en el mismo
+            // sitio —el de licencias pone lo que espera calificación debajo—.
+            return (e.pista ? `<circle cx="${e.cx}" cy="${e.cy}" r="${e.r}" fill="none" stroke="${e.pista}" stroke-width="${e.grosor}"/>` : '')
                 + (p > 0 ? `<circle cx="${e.cx}" cy="${e.cy}" r="${e.r}" fill="none" stroke="${e.color}" stroke-width="${e.grosor}"
                       stroke-linecap="round" stroke-dasharray="${largo * p} ${largo}"
                       transform="rotate(-90 ${e.cx} ${e.cy})"/>` : '');
@@ -2305,7 +2354,7 @@ window.agregarDiapositivaPptx = (pptx, elementos) => {
             // sentido de las agujas: empezar arriba es empezar en 270. Sus
             // extremos no se redondean, así que se les pone un círculo encima.
             const p = Math.max(0, Math.min(1, e.proporcion));
-            s.addShape(pptx.ShapeType.ellipse, {
+            if (e.pista) s.addShape(pptx.ShapeType.ellipse, {
                 x: pulg(e.cx - e.r), y: pulg(e.cy - e.r), w: pulg(e.r * 2), h: pulg(e.r * 2),
                 fill: { type: 'none' }, line: { color: hex(e.pista), width: e.grosor * 0.75 }
             });
@@ -2529,6 +2578,8 @@ window.abrirPresentacion = async (modo) => {
         // Quién espera un curso previo: ése no puede salir de «menor desempeño»
         // por una encuesta que no estaba en su mano.
         if (window.cargarCursosPrevios) await window.cargarCursosPrevios(true);
+        // Quién no ha dicho si le aplica una licencia: va debajo del desglose.
+        if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
         // La primera página del material de cada encuesta, que llena el hueco
         // de la diapositiva de una clasificación sin evidencias. Va en
         // paralelo con las respuestas y, si falla, sin material: es adorno.
