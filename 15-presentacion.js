@@ -327,6 +327,37 @@ window.diapositivasDeSemana = (i) => {
 // (`MINUTOS_AGENDA`) y se suman en el encabezado.
 window.MINUTOS_AGENDA = { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10 };
 
+// La junta dura una hora. Lo fijo —la agenda, la planta y la reflexión— se
+// queda como está, y lo que sobra de la hora se reparte entre las
+// clasificaciones en proporción a lo que pedirían —con evidencias, más—, sin
+// bajar ninguna de `MIN_MINUTOS_CLASIFICACION`. Los minutos que se pierden al
+// redondear van a las que más perdieron, así que el total es la hora justa. Si
+// caben sin apretar no se estiran: una junta corta no tiene por qué alargarse.
+window.DURACION_JUNTA = 60;
+window.MIN_MINUTOS_CLASIFICACION = 2;
+window.ajustarMinutosAgenda = (filas, tope) => {
+    const hora = tope || window.DURACION_JUNTA;
+    const clas = filas.filter(f => f.clasificacion);
+    const fijo = filas.filter(f => !f.clasificacion).reduce((a, f) => a + f.min, 0);
+    const pedido = clas.reduce((a, f) => a + f.min, 0);
+    const queda = hora - fijo;
+    if (!clas.length || pedido <= queda) return false;
+    const minimo = window.MIN_MINUTOS_CLASIFICACION;
+    // Sin sitio ni para el mínimo de cada una, se quedan en el mínimo.
+    if (queda <= minimo * clas.length) { clas.forEach(f => { f.min = minimo; }); return true; }
+    const ideal = clas.map(f => ({ f, x: f.min * queda / pedido }));
+    ideal.forEach(o => { o.f.min = Math.max(minimo, Math.floor(o.x)); });
+    let sobra = queda - clas.reduce((a, f) => a + f.min, 0);
+    ideal.sort((a, b) => (b.x - b.f.min) - (a.x - a.f.min));
+    for (let k = 0; sobra > 0 && ideal.length; k = (k + 1) % ideal.length) { ideal[k].f.min++; sobra--; }
+    // El mínimo pudo pasarse del reparto: se le quita a las más largas.
+    ideal.sort((a, b) => b.f.min - a.f.min);
+    for (let k = 0; sobra < 0 && ideal.some(o => o.f.min > minimo); k = (k + 1) % ideal.length) {
+        if (ideal[k].f.min > minimo) { ideal[k].f.min--; sobra++; }
+    }
+    return true;
+};
+
 // «Pérez Reynoso Abel Alejandro» → «Abel Pérez»: aquí los nombres empiezan por
 // los apellidos, y en una agenda se lee el nombre de pila y el primer apellido.
 window.nombreDeAgenda = (nombre) => {
@@ -406,6 +437,7 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
         else filas.push({ min: M.acciones, actividad: '¿Qué vamos a hacer? · compromisos',
             detalle: 'acción, responsable y fecha', atiende: atiendeDepto, pag: pagina(d.id) });
     });
+    const ajustada = window.ajustarMinutosAgenda(filas);
     const total = filas.reduce((a, f) => a + f.min, 0);
 
     // Encabezado: el periodo, el título y, a la derecha, la duración.
@@ -473,7 +505,7 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     const hoy = new Date();
     if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
     texto(48, 506, 760, 16,
-        `Tiempos sugeridos · se arma sola con las diapositivas de este periodo · ` +
+        `${ajustada ? `Tiempos ajustados a ${window.DURACION_JUNTA} min` : 'Tiempos sugeridos'} · se arma sola con las diapositivas de este periodo · ` +
         `generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
         `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
         10, C.terciario);

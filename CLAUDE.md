@@ -5172,6 +5172,17 @@ Las reglas para usarlo:
   —su JR. Manager y, sin él, la cabeza de su cadena con más gente del
   departamento a cargo directo—. Los minutos son sugeridos y lo dice el pie.
 
+  **Y la junta dura una hora** (`DURACION_JUNTA`, `ajustarMinutosAgenda`). Lo
+  fijo —la agenda, la planta y la reflexión— se queda como está y lo que sobra
+  de la hora se reparte entre las clasificaciones en proporción a lo que
+  pedirían —con evidencias, más—, sin bajar ninguna de
+  `MIN_MINUTOS_CLASIFICACION` (2). Los minutos que se pierden al redondear van a
+  las que más perdieron, así que el total es la hora justa, y el pie dice
+  «Tiempos ajustados a 60 min». Si caben sin apretar no se estiran: una junta
+  corta no tiene por qué alargarse. Con tantas clasificaciones que ni el mínimo
+  cabe —más de 17 hoy— se quedan en el mínimo y el total pasa de la hora, que es
+  preferible a darle un minuto a cada una.
+
   Lo que la agenda de planta lleva y ésta no son **los invitados con su
   asistencia a la junta anterior y el lugar**: la aplicación no sabe de esa
   junta. Con muchas clasificaciones los renglones se aprietan hasta 22 px y las
