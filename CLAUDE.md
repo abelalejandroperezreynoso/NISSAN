@@ -5150,7 +5150,8 @@ Las reglas para usarlo:
   las listas agrupadas con **tiempo, actividad, quién atiende y página**, y la
   duración total arriba a la derecha. Un renglón para explicar la agenda, otro
   para el resultado de la planta, uno por clasificación y los de la reflexión
-  —lectura, evidencias del departamento si las hay y compromisos—. **No se
+  —la lectura de los resultados, las evidencias del departamento rezagado si
+  las hay y la reflexión del mayor atraso—. **No se
   escribe a mano: sale del mismo mazo que se va a enseñar**
   (`diapositivasDeSemana`, que la pone delante con `id: 'agenda'`), así que una
   clasificación que no existía ese periodo no aparece, la que dejó evidencias
@@ -5168,7 +5169,9 @@ Las reglas para usarlo:
   agenda y la planta, quien la presenta (la ficha de la sesión); una
   clasificación, quien la revisa (`revisoresDelGrupo`, hasta dos nombres y
   «y N más»; sin revisores nombrados, «Su jefe inmediato» en gris, que es quien
-  califica entonces); la reflexión, el departamento rezagado y su responsable
+  califica entonces); la lectura de los resultados, quien presenta, que es de
+  la planta; sus evidencias y la reflexión del mayor atraso, el departamento
+  rezagado y su responsable
   —su JR. Manager y, sin él, la cabeza de su cadena con más gente del
   departamento a cargo directo—. Los minutos son sugeridos y lo dice el pie.
 
@@ -5379,7 +5382,8 @@ Las reglas para usarlo:
   cifra, después quien más dejó sin contestar—. No dice quién es el mejor
   departamento, ni cuánta gente no contestó nada, ni lo que espera
   calificación: se quitaron a propósito, que la franja es para entender dónde
-  está el problema de ese departamento. La segunda, «¿Qué vamos a hacer?», **se enfoca en ese departamento**:
+  está el problema de ese departamento. La segunda es **la reflexión del mayor atraso** —así se titula; sin
+  departamentos, «¿Qué vamos a hacer?»— y **se enfoca en ese departamento**:
   lo dice debajo del título, y sus hasta cinco preguntas y la tabla vacía de
   compromisos (acción, responsable, fecha) son para él —su clasificación más
   baja, su gente sin contestar, lo que le falta, cómo cayó, el equipo más

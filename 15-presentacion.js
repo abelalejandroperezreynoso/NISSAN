@@ -429,13 +429,17 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     const responsable = rezagado ? window.responsableDeDepartamento(rezagado.nombre) : null;
     const atiendeDepto = rezagado
         ? rezagado.nombre + (responsable ? ` · ${window.nombreDeAgenda(responsable.name)}` : '') : presenta;
+    // La lectura es de la planta y la presenta quien presenta; lo que viene
+    // detrás —sus evidencias y «¿Qué vamos a hacer?»— es la reflexión del
+    // departamento con mayor atraso, y la atiende él.
     mazo.filter(d => d.reflexion).forEach(d => {
-        if (d.reflexion === 1) filas.push({ min: M.lectura, actividad: 'Reflexión · ¿qué nos dicen los resultados?',
-            detalle: rezagado ? `enfocada en ${rezagado.nombre}` : '', atiende: atiendeDepto, pag: pagina(d.id) });
+        if (d.reflexion === 1) filas.push({ min: M.lectura, actividad: '¿Qué nos dicen los resultados?',
+            detalle: 'de dónde sale la cifra y qué clasificaciones frenan', atiende: presenta, pag: pagina(d.id) });
         else if (d.reflexion === 'evidencias') filas.push({ min: M.evidencias, fotos: true,
             actividad: `Evidencias de ${rezagado ? rezagado.nombre : 'el departamento'}`, atiende: atiendeDepto, pag: pagina(d.id) });
-        else filas.push({ min: M.acciones, actividad: '¿Qué vamos a hacer? · compromisos',
-            detalle: 'acción, responsable y fecha', atiende: atiendeDepto, pag: pagina(d.id) });
+        else filas.push({ min: M.acciones,
+            actividad: rezagado ? `Reflexión del mayor atraso · ${rezagado.nombre}` : '¿Qué vamos a hacer? · compromisos',
+            detalle: '¿qué vamos a hacer? · acción, responsable y fecha', atiende: atiendeDepto, pag: pagina(d.id) });
     });
     const ajustada = window.ajustarMinutosAgenda(filas);
     const total = filas.reduce((a, f) => a + f.min, 0);
@@ -2365,14 +2369,16 @@ window.diapositivaDeEvidenciasDelDepartamento = (i, numero, cuantas) => {
     return el;
 };
 
-// La última: ¿qué vamos a hacer? Enfocada al departamento de menor
-// desempeño: las preguntas son las suyas y los compromisos, para él. Debajo
+// La última: la reflexión del mayor atraso —«¿qué vamos a hacer?» con el
+// departamento de menor desempeño—: las preguntas son las suyas y los
+// compromisos, para él. Sin departamentos se llama «¿Qué vamos a hacer?». Debajo
 // del título se dice cuál es, que es lo que da sentido a lo demás.
 window.diapositivaDeAcciones = (i, numero, cuantas) => {
     const C = window.COLORES_IOS;
     const d = window.departamentoRezagado(i);
     const el = [];
-    const texto = window.marcoDeReflexion(el, i, '¿Qué vamos a hacer?', window.partesDeReflexion(i), numero, cuantas);
+    const texto = window.marcoDeReflexion(el, i,
+        d ? 'Reflexión del mayor atraso' : '¿Qué vamos a hacer?', window.partesDeReflexion(i), numero, cuantas);
     const rotulo = (x, y, w, t) => texto(x, y, w, 16, t.toUpperCase(), 11, C.secundario, { peso: 600, espaciado: 0.6 });
 
     if (d) {
@@ -2386,7 +2392,9 @@ window.diapositivaDeAcciones = (i, numero, cuantas) => {
     rotulo(48, 144, 420, d ? `Preguntas para ${window.partirEnRenglones(d.nombre, 30, 1)[0]}` : 'Preguntas para el equipo');
     let y = 168;
     const hueco = 8;
-    const bloques = window.preguntasDelDepartamento(i).map(t => window.partirEnRenglones(t, 56, 3));
+    // 50 letras en 360 px: con 56 cabía el texto corriente, pero un nombre de
+    // departamento en mayúsculas se salía de la tarjeta.
+    const bloques = window.preguntasDelDepartamento(i).map(t => window.partirEnRenglones(t, 50, 3));
     const altoTotal = bloques.reduce((a, b) => a + 22 + b.length * 17, 0) + hueco * (bloques.length - 1);
     const escala = altoTotal > 324 ? 324 / altoTotal : 1;
     bloques.forEach((lineas, n) => {
