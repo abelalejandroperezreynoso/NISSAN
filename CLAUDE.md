@@ -5165,15 +5165,26 @@ Las reglas para usarlo:
   window.responsableDeDepartamento(nombre)   // su JR. Manager, o quien encabeza su cadena
   ```
 
-  **Quién atiende sale de lo que ya sabe la aplicación**, no se escribe: la
-  agenda y la planta, quien la presenta (la ficha de la sesión); una
-  clasificación, quien la revisa (`revisoresDelGrupo`, hasta dos nombres y
-  «y N más»; sin revisores nombrados, «Su jefe inmediato» en gris, que es quien
-  califica entonces); la lectura de los resultados, quien presenta, que es de
-  la planta; sus evidencias y la reflexión del mayor atraso, el departamento
-  rezagado y su responsable
-  —su JR. Manager y, sin él, la cabeza de su cadena con más gente del
-  departamento a cargo directo—. Los minutos son sugeridos y lo dice el pie.
+  **Quién atiende sale de lo que ya sabe la aplicación**, no se escribe:
+
+  - **La agenda, la planta y la lectura de los resultados**, quien la presenta
+    (la ficha de la sesión): son de la planta entera.
+  - **Cada clasificación, el departamento con mayor atraso en ella**
+    (`window.rezagadoDeClasificacion(i, clave)`), con el mismo criterio que el
+    rezagado de la planta —su resultado en esa clasificación con lo no
+    contestado en cero, y a igual cifra el que más dejó sin contestar— y entre
+    los mismos departamentos que compiten (`MIN_PERSONAS_DEPARTAMENTO`). En una
+    de licencias, que no se puntúa, manda lo que dejó sin contestar. Sale de
+    `porClave`, que `departamentosDeSemana` lleva aparte de `porClasificacion`
+    porque ésa deja fuera las licencias. Sin ningún departamento que la deba,
+    quien la revisa (`revisoresDelGrupo`) y, sin revisores, «Su jefe
+    inmediato» en gris.
+  - **Las evidencias y la reflexión del mayor atraso**, el departamento
+    rezagado.
+
+  Todo departamento va con su responsable —su JR. Manager y, sin él, la cabeza
+  de su cadena con más gente del departamento a cargo directo—. Los minutos son
+  sugeridos y lo dice el pie.
 
   **Y la junta dura una hora** (`DURACION_JUNTA`, `ajustarMinutosAgenda`). Lo
   fijo —la agenda, la planta y la reflexión— se queda como está y lo que sobra

@@ -321,9 +321,11 @@ window.diapositivasDeSemana = (i) => {
 // salió, que para eso está la diapositiva siguiente.
 //
 // Quién atiende cada punto sale de lo que ya dice la aplicación: la planta y la
-// propia agenda, quien la presenta (la sesión); una clasificación, quien la
-// revisa (`revisoresDelGrupo`); la reflexión, el departamento rezagado y su
-// responsable (`responsableDeDepartamento`). Los minutos son sugeridos
+// propia agenda y la lectura de los resultados, quien la presenta (la sesión);
+// una clasificación, el departamento con mayor atraso en ella
+// (`rezagadoDeClasificacion`) y, sin ninguno, quien la revisa; las evidencias y
+// la reflexión del mayor atraso, el departamento rezagado. Los departamentos van
+// con su responsable (`responsableDeDepartamento`). Los minutos son sugeridos
 // (`MINUTOS_AGENDA`) y se suman en el encabezado.
 window.MINUTOS_AGENDA = { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10 };
 
@@ -411,24 +413,32 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     r.clasificaciones.forEach(c => { porClave[c.clave] = c; });
     const conFotos = new Set(mazo.filter(d => d.evidencias).map(d => d.clave));
     const evDe = (id) => ((window.filasDeLaTarjeta || []).find(f => String(f.ev.id) === String(id)) || {}).ev || null;
+    // Cada tema lo atiende el departamento con mayor atraso en él, con su
+    // responsable; sin departamento que lo deba, quien la revisa.
+    const conResponsable = (nombre) => {
+        const r = window.responsableDeDepartamento(nombre);
+        return nombre + (r ? ` · ${window.nombreDeAgenda(r.name)}` : '');
+    };
     mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion).forEach(d => {
         const c = porClave[d.clave] || { nombre: d.clave, encuestas: [] };
-        const grupo = { filas: (c.encuestas || []).map(e => evDe(e.id)).filter(Boolean).map(ev => ({ ev })) };
-        const revisores = grupo.filas.length ? window.revisoresDelGrupo(grupo) : [];
-        const nombres = revisores.slice(0, 2).map(x => window.nombreDeAgenda(x.emp ? x.emp.name : `ID ${x.id}`));
+        const atrasado = window.rezagadoDeClasificacion(i, d.clave);
+        let atiende = atrasado ? conResponsable(atrasado.nombre) : '';
+        if (!atiende) {
+            const grupo = { filas: (c.encuestas || []).map(e => evDe(e.id)).filter(Boolean).map(ev => ({ ev })) };
+            const revisores = grupo.filas.length ? window.revisoresDelGrupo(grupo) : [];
+            const nombres = revisores.slice(0, 2).map(x => window.nombreDeAgenda(x.emp ? x.emp.name : `ID ${x.id}`));
+            atiende = nombres.length ? nombres.join(', ') + (revisores.length > 2 ? ` y ${revisores.length - 2} más` : '') : '';
+        }
         const fotos = conFotos.has(d.clave);
         const pIni = pagina(d.id), pFin = fotos ? pagina(`evidencias:${d.clave}`) : null;
         filas.push({
-            min: M.clasificacion + (fotos ? M.evidencias : 0), actividad: c.nombre, fotos,
-            atiende: nombres.length ? nombres.join(', ') + (revisores.length > 2 ? ` y ${revisores.length - 2} más` : '') : '',
+            min: M.clasificacion + (fotos ? M.evidencias : 0), actividad: c.nombre, fotos, atiende,
             pag: pFin ? `${pIni}–${pFin}` : pIni, clasificacion: true
         });
     });
 
     const rezagado = window.departamentoRezagado(i);
-    const responsable = rezagado ? window.responsableDeDepartamento(rezagado.nombre) : null;
-    const atiendeDepto = rezagado
-        ? rezagado.nombre + (responsable ? ` · ${window.nombreDeAgenda(responsable.name)}` : '') : presenta;
+    const atiendeDepto = rezagado ? conResponsable(rezagado.nombre) : presenta;
     // La lectura es de la planta y la presenta quien presenta; lo que viene
     // detrás —sus evidencias y «¿Qué vamos a hacer?»— es la reflexión del
     // departamento con mayor atraso, y la atiende él.
@@ -2037,7 +2047,7 @@ window.departamentosDeSemana = (i) => {
         const nombre = deptDe(p.emp);
         const d = porDepto[nombre] || (porDepto[nombre] = {
             nombre, personas: 0, suma: 0, asignadas: 0, contestadas: 0, calificadas: 0, sinNada: 0,
-            porClasificacion: {}, porSupervisor: {}, gente: [] });
+            porClasificacion: {}, porClave: {}, porSupervisor: {}, gente: [] });
         d.personas++;
         d.gente.push(p);
         d.suma += p.promedio;
@@ -2047,9 +2057,16 @@ window.departamentosDeSemana = (i) => {
         if (p.contestadas === 0) d.sinNada++;
         p.filas.forEach(f => {
             if (f.ev.category === window.CLASIFICACION_DE_REVISION) return;
+            const k = window.normalizarClasificacion(f.ev.category || '');
+            // Cuánto debe el departamento en cada clasificación, también en las
+            // de licencias: es de donde la agenda saca quién atiende cada tema
+            // (`rezagadoDeClasificacion`).
+            const a = d.porClave[k] || (d.porClave[k] = { suma: 0, n: 0, sinContestar: 0 });
+            a.suma += f.puntaje;
+            a.n++;
+            if (f.sinContestar) a.sinContestar++;
             // Las de licencias no tienen «peor»: se cuentan, no se puntúan.
             if (window.esClasificacionDeLicencias(f.ev.category || '')) return;
-            const k = window.normalizarClasificacion(f.ev.category || '');
             const c = d.porClasificacion[k] || (d.porClasificacion[k] = {
                 nombre: String(f.ev.category || 'General').trim() || 'General',
                 suma: 0, n: 0, sinContestar: 0, sumaContestadas: 0 });
@@ -2089,7 +2106,7 @@ window.departamentosDeSemana = (i) => {
                  asignadas: d.asignadas, contestadas: d.contestadas, calificadas: d.calificadas,
                  participacion: pct(d.contestadas, d.asignadas), sinNada: d.sinNada,
                  faltan: d.asignadas - d.contestadas, sinCalificar: Math.max(0, d.contestadas - d.calificadas),
-                 clasificaciones, supervisores };
+                 clasificaciones, supervisores, porClave: d.porClave };
     });
     const grandes = lista.filter(d => d.personas >= window.MIN_PERSONAS_DEPARTAMENTO);
     const compiten = grandes.length ? grandes : lista;
@@ -2112,6 +2129,24 @@ window.departamentoRezagado = (i) => {
         antes: antes ? antes.promedio : null,
         delta: antes ? d.promedio - antes.promedio : null
     });
+};
+
+// El departamento con mayor atraso en una clasificación, que es quien atiende
+// su tema en la agenda: el mismo criterio que el rezagado de la planta —su
+// resultado en ella, con lo no contestado en cero, y a igual cifra el que más
+// dejó sin contestar— entre los mismos departamentos que compiten. En una de
+// licencias, que no se puntúa, manda lo que dejó sin contestar. Null si nadie
+// del departamento tenía encuestas de ella.
+window.rezagadoDeClasificacion = (i, clave) => {
+    const licencias = window.esClasificacionDeLicencias(clave);
+    const candidatos = window.departamentosDeSemana(i)
+        .map(d => ({ d, a: (d.porClave || {})[clave] }))
+        .filter(x => x.a && x.a.n > 0)
+        .map(x => ({ nombre: x.d.nombre, promedio: Math.round(x.a.suma / x.a.n),
+                     faltan: x.a.sinContestar, avance: (x.a.n - x.a.sinContestar) / x.a.n }));
+    candidatos.sort((a, b) => (licencias ? a.avance - b.avance : a.promedio - b.promedio)
+        || b.faltan - a.faltan || a.nombre.localeCompare(b.nombre, 'es'));
+    return candidatos[0] || null;
 };
 
 // Las preguntas de la segunda, enfocadas al departamento rezagado: su
