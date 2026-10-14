@@ -5150,8 +5150,8 @@ Las reglas para usarlo:
   las listas agrupadas con **tiempo, actividad, quién atiende y página**, y la
   duración total arriba a la derecha. Un renglón para explicar la agenda, otro
   para el resultado de la planta, uno por clasificación y los de la reflexión
-  —la lectura de los resultados, las evidencias del departamento rezagado si
-  las hay y la reflexión del mayor atraso— y, al final, la minuta. **No se
+  —la lectura de los resultados y una por cada departamento que eligió el corte
+  de la junta pasada (más abajo)— y, al final, la minuta. **No se
   escribe a mano: sale del mismo mazo que se va a enseñar**
   (`diapositivasDeSemana`, que la pone delante con `id: 'agenda'`), así que una
   clasificación que no existía ese periodo no aparece, la que dejó evidencias
@@ -5160,7 +5160,7 @@ Las reglas para usarlo:
   que para eso está la siguiente.
 
   ```js
-  window.MINUTOS_AGENDA                  // { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10, minuta: 3 }
+  window.MINUTOS_AGENDA                  // { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10, reflexion: 6, minuta: 3 }
   window.nombreDeAgenda(nombre)          // «Pérez Reynoso Abel Alejandro» → «Abel Pérez»
   window.responsableDeDepartamento(nombre)   // su JR. Manager, o quien encabeza su cadena
   ```
@@ -5181,8 +5181,11 @@ Las reglas para usarlo:
     porque ésa deja fuera las licencias. Sin ningún departamento que la deba,
     quien la revisa (`revisoresDelGrupo`) y, sin revisores, «Su jefe
     inmediato» en gris.
-  - **Las evidencias y la reflexión del mayor atraso**, el departamento
-    rezagado.
+  - **Cada reflexión, su departamento** con el responsable que se guardó en el
+    corte. Sus evidencias van en el mismo renglón —con su cámara, sus minutos y
+    sus dos páginas—, como las de una clasificación. Sin corte del que salgan
+    (los dos primeros periodos de la presentación), la reflexión del mayor
+    atraso de antes, que atiende el rezagado.
 
   Todo departamento va con su responsable —su JR. Manager y, sin él, la cabeza
   de su cadena con más gente del departamento a cargo directo—. Los minutos son
@@ -5201,7 +5204,7 @@ Las reglas para usarlo:
 
   Lo que la agenda de planta lleva y ésta no son **los invitados con su
   asistencia a la junta anterior y el lugar**: la aplicación no sabe de esa
-  junta. Con muchas clasificaciones los renglones se aprietan hasta 22 px y las
+  junta. Con muchas clasificaciones los renglones se aprietan hasta 20 px y las
   que no caben se juntan en «y N clasificaciones más», con sus minutos sumados.
 
   Dos cosas que hay que mantener: **lo que no se encuentra al cambiar de semana
@@ -5210,28 +5213,76 @@ Las reglas para usarlo:
   como clasificación** en el subtítulo de la hoja (`!d.agenda`).
 
   **Y la última es la minuta** (`window.diapositivaDeMinuta`, con
-  `id: 'minuta'`): **quiénes son los atrasados del periodo, que son los que
-  presentan su reflexión en la próxima junta**. Son los mismos que ya atienden
-  algo en la agenda —el departamento con menor desempeño de la planta y el de
-  mayor atraso en cada clasificación—, **juntados por departamento**: uno que
-  va el último en tres clasificaciones sale una vez, con las tres.
+  `id: 'minuta'`): **quién presenta su reflexión en la próxima junta**. No sale
+  del periodo que se mira, que todavía no ha cerrado, sino del **corte del
+  periodo anterior**, que es lo que se anuncia en la junta y se presenta en la
+  siguiente.
 
   ```js
-  window.atrasadosDeSemana(i)   // [{ nombre, responsable, promedio, planta, temas: [{ nombre, texto, promedio }] }]
-  window.periodoSiguiente(i)    // cuándo se presenta: el siguiente de la lista, o el que empieza donde acaba éste
+  window.corteDeReflexiones(j)      // { estado, seleccion, instante, tomadoEn, semana }, o null
+  window.seleccionDeReflexiones(j)  // [{ nombre, planta, promedio, responsable, temas }], calculada hoy
+  window.presentadoresDeSemana(i)   // el corte de i − 2; null sin ese periodo
+  window.cargarCortesDeReflexion(modo)  window.tomarCortesPendientes()
+  window.instanteDelCorte(s)  window.textoDeEstadoDelCorte(c)  window.periodoSiguiente(i)
+  window.DIAS_PARA_EL_CORTE  window.DIAS_PARA_TOMAR_EL_CORTE  window.MAX_TEMAS_DE_REFLEXION
   ```
 
-  Una fila por departamento con **quién presenta** (su responsable, el de la
-  agenda), **dónde va más atrasado** —sus clasificaciones de la peor a la
-  mejor, con su cifra, o «N sin contestar» en una de licencias— y su
-  **resultado** en una píldora de su color. El de la planta va primero y dice
-  «Mayor atraso de la planta» en rojo; si no es el último en ninguna
-  clasificación, enseña la más baja suya. Los demás, del que más temas debe al
-  que menos y, a igual cuenta, del peor resultado al mejor. Arriba a la derecha,
-  **la próxima junta** con el periodo siguiente; lo que no cabe en un renglón se
-  cuenta («y 2 más») en vez de cortarse, y las filas que no caben se juntan en
-  «y N departamentos más». Como la agenda, **no cuenta como clasificación**
-  (`!d.minuta` en los mismos dos filtros), y su renglón de la agenda va sin
+  **La junta es al empezar la semana —lunes, o martes a más tardar— y mira la
+  presentación del periodo que corre.** El corte de un periodo se toma **al
+  terminar el martes siguiente** (`DIAS_PARA_EL_CORTE`, dos días después de que
+  cierra): para entonces ya pasó la junta y hubo dos días para calificar lo del
+  fin de semana. Lo que elige se presenta en la junta de la semana siguiente.
+  En índices de la presentación:
+
+  - **la minuta del periodo i** dice el corte de i − 1;
+  - **las reflexiones del periodo i** son el corte de i − 2, o sea lo que dijo
+    la minuta de la junta pasada.
+
+  Quien mire en la junta la presentación de un periodo ya cerrado verá las dos
+  cosas corridas uno; por eso la minuta dice siempre de qué periodo es el corte.
+
+  **No presenta todo el que va atrasado: sólo los temas con más atraso**
+  (`MAX_TEMAS_DE_REFLEXION`, 3). El primero es el del departamento con menor
+  desempeño de la planta —el tema que deba, o su clasificación más baja—, y
+  después los rezagados de cada clasificación (`rezagadoDeClasificacion`) de la
+  cifra más baja a la más alta. Sólo entra lo que está por debajo de la meta, y
+  las de licencias no, que no se puntúan. Se agrupan por departamento: uno que
+  va el último en dos de los temas elegidos presenta una vez, con los dos.
+
+  **Y el corte se guarda, que es lo que lo deja fijo**: la presentación se
+  calcula al vuelo con el padrón de hoy, así que sin guardarlo la lista podría
+  cambiar entre la junta en que se anunció y la junta en que se presenta. Va a
+  `cortes_reflexion` (`sql/cortes-reflexion.sql`), una fila por corte y periodo
+  con los departamentos, su responsable y sus temas **con las cifras de ese
+  momento**, y la política sólo deja leer e insertar: no se reescribe. Para
+  rehacer uno se borra su fila desde el editor SQL. Como no hay servidor, **lo
+  toma el primer administrador que abre la presentación** desde el corte y
+  durante `DIAS_PARA_TOMAR_EL_CORTE` (7); pasado eso, uno que nadie tomó ya no
+  se toma —se calcularía con datos de otra semana— y se enseña calculado hoy.
+  Si dos lo toman a la vez, el segundo choca con la llave (23505) y lee el del
+  primero. Lo que **no** se congela es el resto de la presentación.
+
+  La minuta dice el estado en su encabezado (`textoDeEstadoDelCorte`): en verde
+  si está fijo, en naranja si es provisional —el martes todavía no termina— y
+  en gris si se calculó hoy, porque nadie lo tomó o porque falta la tabla. Una
+  fila por departamento con **quién presenta**, **los temas de su reflexión** con
+  su cifra en el corte y su **resultado**; el de la planta va primero y dice
+  «Mayor atraso de la planta» en rojo. Arriba a la derecha, la próxima junta.
+
+  **Y cada reflexión es una diapositiva**, «Reflexión de ‹departamento›»
+  (`diapositivaDeAcciones` con la entrada del mazo), con sus fotos de evidencia
+  del periodo delante si las dejó (`evidenciasDelDepartamento(i, nombre)`).
+  Debajo del título, sus temas con la cifra del corte y la de este periodo
+  —«Auditoria 5 Reglas 0% → 9%»—, que es lo que dice si ya se movió algo; la
+  primera pregunta es por qué quedó así en el corte
+  (`preguntasDelDepartamento(i, nombre, temas)`) y las demás, las de siempre
+  con las cifras de este periodo (`departamentoEnSemana(i, nombre)`). El rótulo
+  «Reflexión · N de M» lo cuentan `partesDeReflexion` y `parteDeReflexion`
+  sobre el mazo.
+
+  Sin `sql/cortes-reflexion.sql` todo funciona igual, calculado al vuelo, y la
+  minuta lo dice. Como la agenda, **la minuta no cuenta como clasificación**
+  (`!d.minuta` en los mismos dos filtros) y su renglón de la agenda va sin
   responsable.
 
   **Detrás va una diapositiva por clasificación**, con la misma forma: su
@@ -5420,31 +5471,34 @@ Las reglas para usarlo:
   cifra, después quien más dejó sin contestar—. No dice quién es el mejor
   departamento, ni cuánta gente no contestó nada, ni lo que espera
   calificación: se quitaron a propósito, que la franja es para entender dónde
-  está el problema de ese departamento. La segunda es **la reflexión del mayor atraso** —así se titula; sin
-  departamentos, «¿Qué vamos a hacer?»— y **se enfoca en ese departamento**:
-  lo dice debajo del título, y sus hasta cinco preguntas y la tabla vacía de
+  está el problema de ese departamento. Detrás van **las reflexiones de los
+  departamentos que eligió el corte de la junta pasada** (ver la minuta, más
+  arriba). Sólo sin ese corte —los dos primeros periodos de la presentación—
+  va la de antes, **la reflexión del mayor atraso** —así se titula; sin
+  departamentos, «¿Qué vamos a hacer?»—, que **se enfoca en el rezagado de este
+  mismo periodo**: sus hasta cinco preguntas y la tabla vacía de
   compromisos (acción, responsable, fecha) son para él —su clasificación más
   baja, su gente sin contestar, lo que le falta, cómo cayó, el equipo más
   atrasado dentro de él, lo que espera calificación y qué copiarle al mejor—.
   Sin departamentos, las preguntas vuelven a ser las de la planta. En el
   PowerPoint los compromisos se escriben encima.
 
-  **Y entre las dos, sus evidencias**: si alguien de ese departamento dejó
+  **Y delante de cada una, sus evidencias**: si alguien de ese departamento dejó
   fotos de evidencia esa semana —de cualquier clasificación—, va una
   diapositiva «Evidencias de ‹departamento›» con la misma rejilla que las de
   una clasificación (`rejillaDeEvidencias`, que comparten) y **las de peor
   resultado primero**: las anuladas, después de menor a mayor puntaje y lo sin
   calificar antes de lo aprobado, una por persona antes de repetir. Sin fotos
-  no hay diapositiva y la reflexión vuelve a ser de dos; el rótulo «Reflexión ·
-  N de M» lo cuenta `partesDeReflexion`. Se reconoce al departamento por el
+  no hay diapositiva; el rótulo «Reflexión · N de M» lo cuenta
+  `partesDeReflexion`. Se reconoce al departamento por el
   `departamento` que ya trae cada foto —el de hoy, con `deptDeEmpleado`, el
   mismo del que sale el rezagado—, así que no hay consulta nueva: viene en
   `cargarEvidenciasDeSemana`, y mantener pulsada una foto abre su evaluación
   como en las demás.
 
   ```js
-  window.evidenciasDelDepartamento(i)   // null mientras no llegan las de la semana
-  window.diapositivaDeEvidenciasDelDepartamento(i, numero, cuantas)
+  window.evidenciasDelDepartamento(i, nombre)   // las de ese departamento, o las del rezagado; null mientras no llegan
+  window.diapositivaDeEvidenciasDelDepartamento(i, numero, cuantas, entrada)
   ```
 
   ```js

@@ -300,13 +300,26 @@ window.diapositivasDeSemana = (i) => {
                 mazo.push({ id: `evidencias:${c.clave}`, clave: c.clave, evidencias: true });
             }
         });
-    // Al final, las dos de reflexión: se leen después de haber visto todo.
-    // Entre las dos, si el departamento rezagado dejó fotos esa semana, las suyas.
+    // Al final, la reflexión: se lee después de haber visto todo. Primero la
+    // lectura de los resultados y después la de cada departamento que el corte
+    // de la junta pasada eligió (`presentadoresDeSemana`), con sus fotos de
+    // evidencia delante si las dejó. Sin ese corte —los primeros periodos de la
+    // presentación— va la de antes: la del rezagado de este mismo periodo.
     mazo.push({ id: 'reflexion:1', clave: '', reflexion: 1 });
-    if ((window.evidenciasDelDepartamento(i) || []).length) {
-        mazo.push({ id: 'reflexion:evidencias', clave: '', reflexion: 'evidencias' });
+    const presentan = window.presentadoresDeSemana(i);
+    if (presentan) {
+        presentan.forEach((p, n) => {
+            if ((window.evidenciasDelDepartamento(i, p.nombre) || []).length) {
+                mazo.push({ id: `reflexion:evidencias:${n}`, clave: '', reflexion: 'evidencias', presentador: n });
+            }
+            mazo.push({ id: `reflexion:presenta:${n}`, clave: '', reflexion: 'presenta', presentador: n });
+        });
+    } else {
+        if ((window.evidenciasDelDepartamento(i) || []).length) {
+            mazo.push({ id: 'reflexion:evidencias', clave: '', reflexion: 'evidencias' });
+        }
+        mazo.push({ id: 'reflexion:2', clave: '', reflexion: 2 });
     }
-    mazo.push({ id: 'reflexion:2', clave: '', reflexion: 2 });
     // Y la minuta: quién presenta su reflexión en la próxima junta.
     mazo.push({ id: 'minuta', clave: '', minuta: true });
     return mazo;
@@ -330,7 +343,7 @@ window.diapositivasDeSemana = (i) => {
 // la reflexión del mayor atraso, el departamento rezagado. Los departamentos van
 // con su responsable (`responsableDeDepartamento`). Los minutos son sugeridos
 // (`MINUTOS_AGENDA`) y se suman en el encabezado.
-window.MINUTOS_AGENDA = { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10, minuta: 3 };
+window.MINUTOS_AGENDA = { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10, reflexion: 6, minuta: 3 };
 
 // La junta dura una hora. Lo fijo —la agenda, la planta y la reflexión— se
 // queda como está, y lo que sobra de la hora se reparte entre las
@@ -366,7 +379,8 @@ window.ajustarMinutosAgenda = (filas, tope) => {
 // «Pérez Reynoso Abel Alejandro» → «Abel Pérez»: aquí los nombres empiezan por
 // los apellidos, y en una agenda se lee el nombre de pila y el primer apellido.
 window.nombreDeAgenda = (nombre) => {
-    const t = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+    // Las partículas («de», «del», «la»…) no son ni nombre ni apellido.
+    const t = String(nombre || '').trim().split(/\s+/).filter(x => x && !/^(de|del|la|las|los|y)$/i.test(x));
     return t.length >= 3 ? `${t[2]} ${t[0]}` : t.join(' ');
 };
 
@@ -447,9 +461,21 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     // La lectura es de la planta y la presenta quien presenta; lo que viene
     // detrás —sus evidencias y «¿Qué vamos a hacer?»— es la reflexión del
     // departamento con mayor atraso, y la atiende él.
+    const presentan = window.presentadoresDeSemana(i) || [];
+    const conSuResponsable = (p) => p.nombre + (p.responsable ? ` · ${window.nombreDeAgenda(p.responsable.nombre)}` : '');
     mazo.filter(d => d.reflexion).forEach(d => {
+        const p = d.presentador != null ? presentan[d.presentador] : null;
         if (d.reflexion === 1) filas.push({ min: M.lectura, actividad: '¿Qué nos dicen los resultados?',
             detalle: 'de dónde sale la cifra y qué clasificaciones frenan', atiende: presenta, pag: pagina(d.id) });
+        // Sus evidencias van en el mismo renglón que su reflexión, como las de
+        // una clasificación: con su cámara, sus minutos y sus dos páginas.
+        else if (p && d.reflexion === 'evidencias') return;
+        else if (p) {
+            const pFotos = pagina(`reflexion:evidencias:${d.presentador}`);
+            filas.push({ min: M.reflexion + (pFotos ? M.evidencias : 0), actividad: `Reflexión · ${p.nombre}`,
+                fotos: !!pFotos, detalle: p.temas.map(t => t.nombre).join(' · '), atiende: conSuResponsable(p),
+                pag: pFotos ? `${pFotos}–${pagina(d.id)}` : pagina(d.id) });
+        }
         else if (d.reflexion === 'evidencias') filas.push({ min: M.evidencias, fotos: true,
             actividad: `Evidencias de ${rezagado ? rezagado.nombre : 'el departamento'}`, atiende: atiendeDepto, pag: pagina(d.id) });
         else filas.push({ min: M.acciones,
@@ -481,11 +507,11 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     cab(col.atiende, 240, 'ATIENDE');
     cab(col.pag - 60, 60, 'PÁG.', 'right');
 
-    // Con muchas clasificaciones los renglones se aprietan; por debajo de 22 px
+    // Con muchas clasificaciones los renglones se aprietan; por debajo de 20 px
     // las que no caben se juntan en una fila «y N más», con sus minutos.
     const y0 = Y + 36, espacio = H - 36 - 10;
     let lista = filas;
-    let alto = Math.max(22, Math.min(38, espacio / filas.length));
+    let alto = Math.max(20, Math.min(38, espacio / filas.length));
     const caben = Math.floor(espacio / alto);
     if (filas.length > caben) {
         const clas = filas.filter(f => f.clasificacion);
@@ -534,42 +560,183 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     return el;
 };
 
-// --- LA MINUTA ---
+// --- EL CORTE DE REFLEXIONES ---
 //
-// La última diapositiva: quiénes son los atrasados de este periodo, que son los
-// que presentan su reflexión en la próxima junta. Son los mismos que ya atienden
-// algo en la agenda —el departamento con menor desempeño de la planta
-// (`departamentoRezagado`) y el de mayor atraso en cada clasificación
-// (`rezagadoDeClasificacion`)—, juntados por departamento: uno que va el último
-// en tres clasificaciones sale una vez, con las tres. No se escribe a mano por lo
-// mismo que la agenda: la minuta de cada periodo existe sin que nadie la llene.
+// Quién presenta su reflexión en una junta **no sale del periodo que se está
+// mirando, que todavía no ha cerrado**: sale del corte del periodo anterior,
+// que ya cerró. La junta es al empezar la semana —lunes, o martes a más
+// tardar— y el corte se toma **al terminar el martes**
+// (`DIAS_PARA_EL_CORTE` después de que cierra el periodo): para entonces ya
+// pasó la junta y hubo dos días para calificar lo que llegó el fin de semana.
+// Lo que se elige ese martes se presenta en la junta de la semana siguiente.
 //
-// `atrasadosDeSemana(i)` → [{ nombre, responsable, promedio, planta, temas: [{ nombre, texto }] }]
-// El de la planta va primero; los demás, del que más temas debe al que menos y,
-// a igual cuenta, del peor resultado al mejor.
-window.atrasadosDeSemana = (i) => {
-    const r = window.resultadoDeSemana(i);
-    const lista = window.departamentosDeSemana(i);
-    const porNombre = {};
-    const de = (nombre) => porNombre[nombre] || (porNombre[nombre] = {
-        nombre, planta: false, temas: [],
-        promedio: (lista.find(d => d.nombre === nombre) || {}).promedio,
-        responsable: window.responsableDeDepartamento(nombre) });
-    const rezagado = window.departamentoRezagado(i);
-    if (rezagado) de(rezagado.nombre).planta = true;
-    r.clasificaciones.slice()
-        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-        .forEach(c => {
-            const a = window.rezagadoDeClasificacion(i, c.clave);
-            if (!a) return;
-            const texto = window.esClasificacionDeLicencias(c.clave)
-                ? `${a.faltan} sin contestar` : `${a.promedio}%`;
-            de(a.nombre).temas.push({ nombre: c.nombre, texto, promedio: a.promedio });
-        });
-    return Object.values(porNombre).sort((a, b) => (b.planta - a.planta)
-        || b.temas.length - a.temas.length
-        || (a.promedio == null ? 101 : a.promedio) - (b.promedio == null ? 101 : b.promedio)
-        || a.nombre.localeCompare(b.nombre, 'es'));
+// En índices de la presentación —que se mira la del periodo que corre—:
+//
+//   la minuta del periodo i      dice el corte del periodo i − 1: quién
+//                                presenta en la próxima junta.
+//   las reflexiones del periodo i son las del corte del periodo i − 2, o sea
+//                                lo que dijo la minuta de la junta pasada.
+//
+// **No se presenta todo**: sólo los temas con más atraso
+// (`MAX_TEMAS_DE_REFLEXION`). El primero es el del departamento con menor
+// desempeño de la planta —su clasificación más baja— y después los de mayor
+// atraso de cada clasificación, de la cifra más baja a la más alta. Sólo entra
+// lo que está por debajo de la meta, y las de licencias no, que no se puntúan.
+// Se agrupan por departamento: uno que va el último en dos de los temas
+// elegidos presenta una vez, con los dos.
+//
+// **Y el corte se guarda, que es lo que lo deja fijo**: la presentación se
+// calcula al vuelo con el padrón de hoy, así que sin guardarlo la lista podría
+// cambiar entre la junta en que se anunció y la junta en que se presenta. Va a
+// la tabla `cortes_reflexion` (`sql/cortes-reflexion.sql`), una fila por
+// periodo que **no se reescribe**: la política sólo deja leer e insertar. Como
+// la aplicación no tiene servidor, lo toma **el primer administrador que abre
+// la presentación** desde el corte y durante `DIAS_PARA_TOMAR_EL_CORTE`;
+// pasado eso un corte que nadie tomó ya no se toma —se calcularía con datos de
+// otra semana— y se enseña calculado al vuelo, diciéndolo.
+window.DIAS_PARA_EL_CORTE = 2;
+window.DIAS_PARA_TOMAR_EL_CORTE = 7;
+window.MAX_TEMAS_DE_REFLEXION = 3;
+window.DIAS_CORTOS_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+
+// El instante del corte de un periodo: su fin más dos días (el miércoles a las
+// 00:00 en una semana, o sea al terminar el martes).
+window.instanteDelCorte = (s) => {
+    const fin = s.fin instanceof Date ? new Date(s.fin) : new Date(s.inicio.getTime() + 7 * 86400000);
+    fin.setDate(fin.getDate() + window.DIAS_PARA_EL_CORTE);
+    return fin;
+};
+// «mar 13 oct»: el día que termina con el corte.
+window.textoDelCorte = (instante) => {
+    const d = new Date(instante.getTime() - 1);
+    return `${window.DIAS_CORTOS_SEMANA[d.getDay()]} ${d.getDate()} ${window.MESES_CORTOS[d.getMonth()]}`;
+};
+window.claveDeCorte = (s) => window.diaLocal(s.inicio);
+// «la semana del 5 al 11 oct 2026», «el mes de septiembre 2026».
+window.textoDelPeriodoEvaluado = (s) => {
+    const nom = window.nombreDelPeriodo();
+    return `${nom.femenino ? 'la' : 'el'} ${nom.uno} ${nom.femenino ? 'del' : 'de'} ${window.corteDePresentacion().largo(s)}`;
+};
+
+// Los cortes guardados del corte abierto (semanal o mensual), por periodo.
+// null si la tabla no está: todo se calcula al vuelo, como antes.
+window.cargarCortesDeReflexion = async (modo) => {
+    try {
+        const { data, error } = await sb.from('cortes_reflexion').select('periodo, datos, tomado_en').eq('modo', modo);
+        if (error) return null;
+        const mapa = {};
+        (data || []).forEach(f => { mapa[f.periodo] = f; });
+        return mapa;
+    } catch (e) { return null; }
+};
+
+// La selección de un periodo, calculada con lo que hay hoy:
+// [{ nombre, planta, promedio, responsable: { id, nombre }, temas: [{ clave, nombre, cifra }] }]
+window.seleccionDeReflexiones = (j) => {
+    const r = window.resultadoDeSemana(j);
+    if (r.seleccionReflexiones) return r.seleccionReflexiones;
+    const meta = window.UMBRAL_CERTIFICACION;
+    const rezagado = window.departamentoRezagado(j);
+    const temas = r.clasificaciones
+        .filter(c => !window.esClasificacionDeLicencias(c.clave) && c.clave !== window.CLASIFICACION_DE_REVISION)
+        .map(c => {
+            const a = window.rezagadoDeClasificacion(j, c.clave);
+            return a ? { clave: c.clave, nombre: c.nombre, depto: a.nombre, cifra: a.promedio, faltan: a.faltan } : null;
+        })
+        .filter(t => t && t.cifra < meta)
+        .sort((a, b) => a.cifra - b.cifra || b.faltan - a.faltan || a.nombre.localeCompare(b.nombre, 'es'));
+    const elegidos = [];
+    // Primero el de menor desempeño de la planta, con su tema más bajo: el que
+    // deba o, si no va el último en ninguno, su clasificación más baja.
+    if (rezagado && rezagado.promedio < meta) {
+        const suyo = temas.find(t => t.depto === rezagado.nombre);
+        const peor = rezagado.clasificaciones[0];
+        if (suyo) elegidos.push(suyo);
+        else if (peor && peor.promedio < meta) elegidos.push({ clave: window.normalizarClasificacion(peor.nombre),
+            nombre: peor.nombre, depto: rezagado.nombre, cifra: peor.promedio });
+    }
+    temas.forEach(t => { if (elegidos.length < window.MAX_TEMAS_DE_REFLEXION && !elegidos.includes(t)) elegidos.push(t); });
+    const lista = window.departamentosDeSemana(j);
+    const porDepto = new Map();
+    elegidos.forEach(t => {
+        if (!porDepto.has(t.depto)) porDepto.set(t.depto, []);
+        porDepto.get(t.depto).push({ clave: t.clave, nombre: t.nombre, cifra: t.cifra });
+    });
+    r.seleccionReflexiones = [...porDepto].map(([nombre, suyos]) => {
+        const d = lista.find(x => x.nombre === nombre);
+        const resp = window.responsableDeDepartamento(nombre);
+        return { nombre, planta: !!rezagado && nombre === rezagado.nombre, promedio: d ? d.promedio : null,
+                 responsable: resp ? { id: String(resp.id), nombre: resp.name } : null, temas: suyos };
+    });
+    return r.seleccionReflexiones;
+};
+
+// El corte de un periodo: { estado, seleccion, instante, tomadoEn, semana }, o
+// null si el periodo no está en la presentación. Los estados:
+//   'fijo'         guardado: es el que vale, se recalcule lo que se recalcule.
+//   'provisional'  el corte todavía no llega: lo de hoy, que puede cambiar.
+//   'sin-corte'    ya pasó y nadie lo guardó: calculado hoy.
+//   'sin-tabla'    falta `sql/cortes-reflexion.sql`: calculado hoy.
+window.corteDeReflexiones = (j) => {
+    const p = window.presentacion;
+    const s = p.semanas[j];
+    if (!s) return null;
+    const instante = window.instanteDelCorte(s);
+    const guardado = p.cortes && p.cortes[window.claveDeCorte(s)];
+    if (guardado && guardado.datos && Array.isArray(guardado.datos.presentan)) {
+        return { estado: 'fijo', seleccion: guardado.datos.presentan, instante,
+                 tomadoEn: new Date(guardado.tomado_en), semana: s };
+    }
+    const estado = new Date() < instante ? 'provisional' : (p.cortes ? 'sin-corte' : 'sin-tabla');
+    return { estado, seleccion: window.seleccionDeReflexiones(j), instante, semana: s };
+};
+
+// Quién presenta en la junta del periodo i: el corte de i − 2. Null si no hay
+// ese periodo en la presentación, y entonces la reflexión es la de antes —la
+// del departamento con menor desempeño de este mismo periodo—.
+window.presentadoresDeSemana = (i) => {
+    const c = window.corteDeReflexiones(i - 2);
+    return c ? c.seleccion : null;
+};
+
+// Lo que dice cada estado, en una línea.
+window.textoDeEstadoDelCorte = (c) => {
+    const dia = window.textoDelCorte(c.instante);
+    if (c.estado === 'fijo') return `Corte fijado al terminar el ${dia}`;
+    if (c.estado === 'provisional') return `Provisional: se fija al terminar el ${dia}`;
+    if (c.estado === 'sin-tabla') return 'Calculado hoy: falta correr sql/cortes-reflexion.sql';
+    return `Nadie tomó el corte del ${dia}: calculado hoy`;
+};
+
+// Toma los cortes que ya llegaron y nadie ha guardado, dentro de su plazo.
+// Devuelve true si guardó alguno, para repintar.
+window.tomarCortesPendientes = async () => {
+    const p = window.presentacion;
+    if (!p || !p.cortes) return false;
+    const ahora = new Date();
+    let hubo = false;
+    for (let j = 0; j < p.semanas.length; j++) {
+        const s = p.semanas[j];
+        const instante = window.instanteDelCorte(s);
+        const limite = new Date(instante.getTime() + window.DIAS_PARA_TOMAR_EL_CORTE * 86400000);
+        const clave = window.claveDeCorte(s);
+        if (ahora < instante || ahora >= limite || p.cortes[clave]) continue;
+        const datos = { version: 1, evaluado: { inicio: s.inicio.toISOString(), fin: (s.fin || s.inicio).toISOString() },
+                        presentan: window.seleccionDeReflexiones(j) };
+        try {
+            const { data, error } = await sb.from('cortes_reflexion')
+                .insert({ modo: p.modo, periodo: clave, datos }).select('periodo, datos, tomado_en');
+            if (error && error.code === '23505') {
+                // Otro administrador lo tomó antes: vale el suyo.
+                const otra = await sb.from('cortes_reflexion').select('periodo, datos, tomado_en')
+                    .eq('modo', p.modo).eq('periodo', clave).maybeSingle();
+                if (otra.data) { p.cortes[clave] = otra.data; hubo = true; }
+            } else if (!error && data && data.length) {
+                p.cortes[clave] = data[0]; hubo = true;
+            }
+        } catch (e) { /* sin red: se queda calculado al vuelo y se intenta la próxima vez */ }
+    }
+    return hubo;
 };
 
 // El periodo siguiente al que se mira, que es cuando se presenta: el que ya
@@ -586,30 +753,40 @@ window.periodoSiguiente = (i) => {
     return { inicio, fin };
 };
 
+// --- LA MINUTA ---
+//
+// La última diapositiva: quién presenta su reflexión en la próxima junta, que
+// es el corte del periodo anterior (`corteDeReflexiones(i − 1)`). Una fila por
+// departamento con quién presenta, de qué temas y su resultado; arriba, cuándo
+// es la próxima junta y en qué estado está el corte.
 window.diapositivaDeMinuta = (i, numero, cuantas) => {
     const C = window.COLORES_IOS;
     const el = [];
     const semana = window.presentacion.semanas[i];
-    const nom = window.nombreDelPeriodo();
     const texto = (x, y, w, h, t, tam, col, extra) =>
         el.push(Object.assign({ tipo: 'texto', x, y, w, h, texto: t, tam, color: col }, extra || {}));
     const recorta = (t, ancho, tam) => window.nombreDeFila(String(t || ''), Math.max(4, Math.floor(ancho / (tam * 0.55))));
-    const atrasados = window.atrasadosDeSemana(i);
+    const corte = window.corteDeReflexiones(i - 1);
     const siguiente = window.periodoSiguiente(i);
 
-    // Encabezado: el periodo, el título y, a la derecha, cuándo se presenta.
     el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
     texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
     texto(48, 58, 520, 44, 'Minuta', 34, C.texto, { peso: 700 });
-    texto(48, 98, 560, 18, `Los atrasados ${nom.del} presentan su reflexión en la próxima junta`, 13.5, C.secundario, { peso: 500 });
-    texto(552, 40, 360, 16, 'PRÓXIMA JUNTA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
+    texto(552, 40, 360, 16, 'PRESENTAN EN LA PRÓXIMA JUNTA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
     texto(552, 60, 360, 30, window.corteDePresentacion().texto(siguiente), 20, C.azul, { alinear: 'right', peso: 700 });
+    if (corte) {
+        texto(48, 98, 600, 18, `Su reflexión sobre ${window.textoDelPeriodoEvaluado(corte.semana)}, que ya cerró`,
+            13.5, C.secundario, { peso: 500 });
+        const tono = corte.estado === 'fijo' ? C.verde : (corte.estado === 'provisional' ? C.naranja : C.secundario);
+        texto(552, 98, 360, 18, window.textoDeEstadoDelCorte(corte), 12, tono, { alinear: 'right', peso: 600 });
+    }
 
     const X = 48, Y = 130, W = 864, H = 336;
     el.push({ tipo: 'rect', x: X, y: Y, w: W, h: H, relleno: C.agrupado, radio: 18 });
-    if (!atrasados.length) {
-        texto(X, Y, W, H, 'Sin resultados por departamento: no hay a quién nombrar.', 15, C.secundario,
-            { alinear: 'center', peso: 500 });
+    const lista = corte ? corte.seleccion : [];
+    if (!lista.length) {
+        texto(X, Y, W, H, corte ? `Nadie presenta: ${window.textoDelPeriodoEvaluado(corte.semana)} no dejó temas por debajo de la meta.`
+            : 'No hay periodo anterior en la presentación.', 15, C.secundario, { alinear: 'center', peso: 500 });
     } else {
         const col = { depto: X + 18, responsable: X + 300, temas: X + 480, resultado: X + W - 18 };
         const anchoDepto = col.responsable - col.depto - 16;
@@ -618,57 +795,27 @@ window.diapositivaDeMinuta = (i, numero, cuantas) => {
         const cab = (x, w, t, alinear) => texto(x, Y + 12, w, 16, t, 10.5, C.secundario, { peso: 600, espaciado: 0.6, alinear });
         cab(col.depto, 240, 'DEPARTAMENTO');
         cab(col.responsable, 170, 'PRESENTA');
-        cab(col.temas, 300, 'DÓNDE VA MÁS ATRASADO');
+        cab(col.temas, 300, 'TEMAS DE SU REFLEXIÓN');
         cab(col.resultado - 80, 80, 'RESULTADO', 'right');
-
-        const y0 = Y + 36, espacio = H - 36 - 10;
-        let lista = atrasados;
-        const alto = Math.max(30, Math.min(52, espacio / atrasados.length));
-        const caben = Math.floor(espacio / alto);
-        if (lista.length > caben) lista = lista.slice(0, caben - 1).concat([{ resto: lista.length - caben + 1 }]);
-        const tam = alto < 40 ? 12.5 : 14;
+        const y0 = Y + 36;
+        const alto = Math.max(40, Math.min(64, (H - 46) / lista.length));
+        const tam = 14;
         lista.forEach((d, k) => {
             const y = y0 + k * alto;
             el.push({ tipo: 'linea', x1: X + 14, y1: y, x2: X + W - 14, y2: y, color: C.separador, grosor: 1 });
-            if (d.resto) {
-                texto(col.depto, y, 400, alto, `y ${d.resto} departamentos más`, tam, C.secundario, { peso: 600 });
-                return;
-            }
             const sub = d.planta ? 'Mayor atraso de la planta'
-                : `Mayor atraso en ${d.temas.length} ${d.temas.length === 1 ? 'clasificación' : 'clasificaciones'}`;
-            const dos = alto >= 40;
-            texto(col.depto, dos ? y + 5 : y, anchoDepto, dos ? alto / 2 : alto, recorta(d.nombre, anchoDepto, tam), tam, C.texto, { peso: 600 });
-            if (dos) texto(col.depto, y + alto / 2 - 1, anchoDepto, alto / 2 - 4, sub, 11, d.planta ? C.rojo : C.secundario,
+                : `Mayor atraso en ${d.temas.length === 1 ? 'una clasificación' : `${d.temas.length} clasificaciones`}`;
+            texto(col.depto, y + 5, anchoDepto, alto / 2, recorta(d.nombre, anchoDepto, tam), tam, C.texto, { peso: 600 });
+            texto(col.depto, y + alto / 2 - 1, anchoDepto, alto / 2 - 4, sub, 11, d.planta ? C.rojo : C.secundario,
                 { peso: d.planta ? 600 : 400 });
-            const quien = d.responsable ? window.nombreDeAgenda(d.responsable.name) : 'Su jefe inmediato';
+            const quien = d.responsable ? window.nombreDeAgenda(d.responsable.nombre) : 'Su jefe inmediato';
             texto(col.responsable, y, anchoResp, alto, recorta(quien, anchoResp, tam - 1), tam - 1,
                 d.responsable ? C.texto : C.terciario, { peso: d.responsable ? 500 : 400 });
-
-            // Sus temas, del más bajo al más alto; sin ninguno —el de la planta
-            // puede no ir el último en nada—, su clasificación más baja.
-            let temas = d.temas.slice().sort((a, b) => a.promedio - b.promedio).map(t => `${t.nombre} ${t.texto}`);
-            if (!temas.length) {
-                const peor = (window.departamentosDeSemana(i).find(x => x.nombre === d.nombre) || {}).clasificaciones || [];
-                temas = peor.length ? [`${peor[0].nombre} ${peor[0].promedio}%`] : ['—'];
-            }
-            const porRenglon = Math.floor(anchoTemas / ((tam - 1.5) * 0.52));
-            let renglones = window.partirEnRenglones(temas.join(' · '), porRenglon, dos ? 2 : 1);
-            const cabe = renglones.join(' ').length >= temas.join(' · ').length;
-            if (!cabe) {
-                // Lo que no cabe se cuenta en vez de cortarse a media palabra.
-                for (let n = temas.length - 1; n >= 1; n--) {
-                    const t = temas.slice(0, n).join(' · ') + ` · y ${temas.length - n} más`;
-                    const r2 = window.partirEnRenglones(t, porRenglon, dos ? 2 : 1);
-                    if (r2.join(' ').length >= t.length) { renglones = r2; break; }
-                }
-            }
-            // El separador se queda al final del renglón, no al principio del siguiente.
-            renglones = renglones.map((t, n) => t.replace(/^· /, ''))
-                .map((t, n, arr) => (arr[n + 1] !== undefined && renglones[n + 1].startsWith('· ')) ? `${t} ·` : t);
-            const hRen = 16;
-            const inicio = y + (alto - renglones.length * hRen) / 2;
-            renglones.forEach((t, n) => texto(col.temas, inicio + n * hRen, anchoTemas, hRen, t, tam - 1.5, C.texto, { peso: 500 }));
-
+            const renglones = window.partirEnRenglones(d.temas.map(t => `${t.nombre} ${t.cifra}%`).join(' · '),
+                Math.floor(anchoTemas / ((tam - 1.5) * 0.52)), 2)
+                .map((t, n, arr) => t.replace(/^· /, '') + (arr[n + 1] && arr[n + 1].startsWith('· ') ? ' ·' : ''));
+            const inicio = y + (alto - renglones.length * 16) / 2;
+            renglones.forEach((t, n) => texto(col.temas, inicio + n * 16, anchoTemas, 16, t, tam - 1.5, C.texto, { peso: 500 }));
             if (d.promedio != null) {
                 const hp = Math.min(24, alto - 8);
                 el.push({ tipo: 'rect', x: col.resultado - 58, y: y + (alto - hp) / 2, w: 58, h: hp,
@@ -680,12 +827,12 @@ window.diapositivaDeMinuta = (i, numero, cuantas) => {
     }
 
     texto(48, 474, 864, 18,
-        'Cada uno trae su reflexión: qué pasó, por qué y qué va a hacer · acción, responsable y fecha.',
+        `Sólo los ${window.MAX_TEMAS_DE_REFLEXION} temas con más atraso · cada uno trae qué pasó, por qué y qué va a hacer: acción, responsable y fecha.`,
         12, C.secundario, { peso: 500 });
     const hoy = new Date();
     if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
     texto(48, 506, 760, 16,
-        `Se arma sola con los atrasados de la agenda · generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
+        `El corte se toma al terminar el martes y no cambia · generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
         `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
         10, C.terciario);
     return el;
@@ -698,8 +845,8 @@ window.laminaDe = (i, d, numero, cuantas) => d.agenda
     ? window.diapositivaDeMinuta(i, numero, cuantas)
     : d.reflexion
     ? (d.reflexion === 1 ? window.diapositivaDeLectura(i, numero, cuantas)
-        : d.reflexion === 'evidencias' ? window.diapositivaDeEvidenciasDelDepartamento(i, numero, cuantas)
-        : window.diapositivaDeAcciones(i, numero, cuantas))
+        : d.reflexion === 'evidencias' ? window.diapositivaDeEvidenciasDelDepartamento(i, numero, cuantas, d)
+        : window.diapositivaDeAcciones(i, numero, cuantas, d))
     : d.evidencias
     ? window.diapositivaDeEvidencias(i, d.clave, numero, cuantas)
     : window.diapositiva(i, d.clave, numero, cuantas);
@@ -2163,7 +2310,8 @@ window.reflexionDeSemana = (i) => {
 // El encabezado y el pie de la reflexión: el mismo de las demás, con el rótulo
 // de reflexión a la derecha. Son dos, o tres si el departamento rezagado dejó
 // evidencias: la de sus fotos va en medio.
-window.partesDeReflexion = (i) => (window.evidenciasDelDepartamento(i) || []).length ? 3 : 2;
+window.partesDeReflexion = (i) => window.diapositivasDeSemana(i).filter(d => d.reflexion).length;
+window.parteDeReflexion = (i, id) => window.diapositivasDeSemana(i).filter(d => d.reflexion).findIndex(d => d.id === id) + 1;
 window.marcoDeReflexion = (el, i, titulo, parte, numero, cuantas) => {
     const C = window.COLORES_IOS;
     const semana = window.presentacion.semanas[i];
@@ -2285,14 +2433,18 @@ window.departamentosDeSemana = (i) => {
 
 // El de menor desempeño, con su lugar, el mejor para compararlo y cómo le fue
 // en el periodo anterior. null sin departamentos.
-window.departamentoRezagado = (i) => {
+window.departamentoRezagado = (i) => window.departamentoEnSemana(i);
+// Lo mismo de cualquier departamento por su nombre; sin nombre, el primero.
+// Null si ese periodo no lo tiene entre los que compiten.
+window.departamentoEnSemana = (i, nombre) => {
     const lista = window.departamentosDeSemana(i);
-    if (!lista.length) return null;
-    const d = lista[0];
+    const d = nombre == null ? lista[0] : lista.find(x => x.nombre === nombre);
+    if (!d) return null;
     const antes = i > 0 ? window.departamentosDeSemana(i - 1).find(x => x.nombre === d.nombre) : null;
     return Object.assign({}, d, {
         de: lista.length,
-        mejor: lista.length > 1 ? lista[lista.length - 1] : null,
+        lugar: lista.indexOf(d) + 1,
+        mejor: lista.length > 1 && lista[lista.length - 1] !== d ? lista[lista.length - 1] : null,
         antes: antes ? antes.promedio : null,
         delta: antes ? d.promedio - antes.promedio : null
     });
@@ -2321,8 +2473,9 @@ window.rezagadoDeClasificacion = (i, clave) => {
 // lo que falta por contestar, cómo cambió, el equipo más atrasado dentro de él,
 // lo que espera calificación y qué copiarle al mejor. Sin departamento, las de
 // la planta (`reflexionDeSemana`).
-window.preguntasDelDepartamento = (i) => {
-    const d = window.departamentoRezagado(i);
+window.preguntasDelDepartamento = (i, nombre, temas) => {
+    const d = nombre ? window.departamentoEnSemana(i, nombre) : window.departamentoRezagado(i);
+    if (!d && nombre) return [`¿Qué va a hacer ${nombre} para llegar a la meta del ${window.UMBRAL_CERTIFICACION}%?`];
     if (!d) return window.reflexionDeSemana(i).preguntas;
     const semana = window.presentacion.semanas[i];
     const nom = window.nombreDelPeriodo();
@@ -2330,6 +2483,11 @@ window.preguntasDelDepartamento = (i) => {
     const P = String(d.nombre);
     const salida = [];
     const q = (t) => { if (salida.length < window.MAX_PREGUNTAS_REFLEXION) salida.push(t); };
+    // Quien presenta por el corte empieza por el tema por el que se le eligió.
+    if (temas && temas.length) {
+        const t = temas[0];
+        q(`¿Por qué ${P} quedó en ${t.cifra}% en «${t.nombre}» en el corte, y qué ha cambiado desde entonces?`);
+    }
     const c = d.clasificaciones[0];
     if (c && c.promedio < meta) {
         q(`¿Qué impide avanzar en «${c.nombre}» dentro de ${P} (${c.promedio}%)?` +
@@ -2541,10 +2699,10 @@ window.diapositivaDeLectura = (i, numero, cuantas) => {
 // lo aprobado—: la reflexión va de entender qué salió mal, y eso es lo que hay
 // que ver. Dentro de eso, una por persona antes de repetir a nadie. Null
 // mientras las evidencias de la semana no han llegado.
-window.evidenciasDelDepartamento = (i) => {
+window.evidenciasDelDepartamento = (i, nombre) => {
     const fotos = window.evidenciasDeSemana(i);
     if (!fotos) return null;
-    const d = window.departamentoRezagado(i);
+    const d = nombre ? { nombre } : window.departamentoRezagado(i);
     if (!d) return [];
     const peso = (f) => f.anulada ? -1 : (f.puntaje === null ? window.UMBRAL_CERTIFICACION - 0.5 : f.puntaje);
     const suyas = [].concat(...Object.values(fotos))
@@ -2553,15 +2711,17 @@ window.evidenciasDelDepartamento = (i) => {
     return suyas;
 };
 
-window.diapositivaDeEvidenciasDelDepartamento = (i, numero, cuantas) => {
+window.diapositivaDeEvidenciasDelDepartamento = (i, numero, cuantas, entrada) => {
     const C = window.COLORES_IOS;
-    const d = window.departamentoRezagado(i);
-    const todas = window.evidenciasDelDepartamento(i) || [];
+    const p = entrada && entrada.presentador != null ? (window.presentadoresDeSemana(i) || [])[entrada.presentador] : null;
+    const d = p ? { nombre: p.nombre } : window.departamentoRezagado(i);
+    const todas = window.evidenciasDelDepartamento(i, p ? p.nombre : undefined) || [];
     const fotos = window.evidenciasParaDiapositiva(todas, window.MAX_EVIDENCIAS_POR_DIAPOSITIVA);
     const personas = new Set(todas.map(f => f.empleado)).size;
     const el = [];
     const texto = window.marcoDeReflexion(el, i,
-        `Evidencias de ${window.partirEnRenglones(d ? d.nombre : '', 24, 1)[0]}`, 2, numero, cuantas);
+        `Evidencias de ${window.partirEnRenglones(d ? d.nombre : '', 24, 1)[0]}`,
+        window.parteDeReflexion(i, entrada ? entrada.id : 'reflexion:evidencias'), numero, cuantas);
     texto(48, 106, 500, 16, 'LAS DE MENOR RESULTADO PRIMERO', 11, C.secundario, { peso: 600, espaciado: 0.6 });
     const sobran = todas.length - fotos.length;
     texto(512, 106, 400, 16,
@@ -2571,19 +2731,39 @@ window.diapositivaDeEvidenciasDelDepartamento = (i, numero, cuantas) => {
     return el;
 };
 
-// La última: la reflexión del mayor atraso —«¿qué vamos a hacer?» con el
-// departamento de menor desempeño—: las preguntas son las suyas y los
-// compromisos, para él. Sin departamentos se llama «¿Qué vamos a hacer?». Debajo
-// del título se dice cuál es, que es lo que da sentido a lo demás.
-window.diapositivaDeAcciones = (i, numero, cuantas) => {
+// La reflexión de un departamento: «¿qué vamos a hacer?» con sus preguntas y
+// sus compromisos. Con el corte (`presentadoresDeSemana`) hay una por cada
+// departamento que eligió el de la junta pasada, y debajo del título dice por
+// qué temas se le eligió —con su cifra en el corte y la de este periodo— y en
+// qué estado está ese corte. Sin corte es la de antes: la del departamento de
+// menor desempeño de este mismo periodo, o «¿Qué vamos a hacer?» sin
+// departamentos.
+window.diapositivaDeAcciones = (i, numero, cuantas, entrada) => {
     const C = window.COLORES_IOS;
-    const d = window.departamentoRezagado(i);
+    const p = entrada && entrada.presentador != null ? (window.presentadoresDeSemana(i) || [])[entrada.presentador] : null;
+    const d = p ? (window.departamentoEnSemana(i, p.nombre) || { nombre: p.nombre }) : window.departamentoRezagado(i);
     const el = [];
-    const texto = window.marcoDeReflexion(el, i,
-        d ? 'Reflexión del mayor atraso' : '¿Qué vamos a hacer?', window.partesDeReflexion(i), numero, cuantas);
+    const titulo = p ? `Reflexión de ${window.partirEnRenglones(p.nombre, 28, 1)[0]}`
+        : (d ? 'Reflexión del mayor atraso' : '¿Qué vamos a hacer?');
+    const texto = window.marcoDeReflexion(el, i, titulo,
+        window.parteDeReflexion(i, entrada ? entrada.id : 'reflexion:2'), numero, cuantas);
     const rotulo = (x, y, w, t) => texto(x, y, w, 16, t.toUpperCase(), 11, C.secundario, { peso: 600, espaciado: 0.6 });
 
-    if (d) {
+    if (p) {
+        // Sus temas: la cifra del corte y la de este periodo, que es lo que
+        // dice si ya se movió algo.
+        const ahora = (t) => {
+            const a = d && d.porClave ? d.porClave[t.clave] : null;
+            return a && a.n ? Math.round(a.suma / a.n) : null;
+        };
+        const temas = p.temas.map(t => { const h = ahora(t); return `${t.nombre} ${t.cifra}%` + (h === null ? '' : ` → ${h}%`); });
+        texto(48, 102, 864, 22, window.partirEnRenglones(temas.join('  ·  '), 104, 1)[0], 15, C.texto, { peso: 600 });
+        const corte = window.corteDeReflexiones(i - 2);
+        const quien = p.responsable ? ` · presenta ${window.nombreDeAgenda(p.responsable.nombre)}` : '';
+        texto(48, 124, 864, 16, window.partirEnRenglones(
+            `Corte ${window.nombreDelPeriodo().femenino ? 'del' : 'de'} ${window.corteDePresentacion().largo(corte.semana)} → ${window.corteDePresentacion().largo(window.presentacion.semanas[i])}${quien}` +
+            (corte.estado === 'fijo' ? '' : ` · ${window.textoDeEstadoDelCorte(corte)}`), 150, 1)[0], 11.5, C.secundario, { peso: 500 });
+    } else if (d) {
         const enfoque = `Enfoque: ${d.nombre}, el departamento con menor desempeño (${d.promedio}%)`;
         el.push({ tipo: 'circulo', cx: 54, cy: 117, r: 4, relleno: window.colorIOS(d.promedio) });
         texto(66, 106, 846, 22, window.partirEnRenglones(enfoque, 104, 1)[0], 15, C.texto, { peso: 600 });
@@ -2596,7 +2776,8 @@ window.diapositivaDeAcciones = (i, numero, cuantas) => {
     const hueco = 8;
     // 50 letras en 360 px: con 56 cabía el texto corriente, pero un nombre de
     // departamento en mayúsculas se salía de la tarjeta.
-    const bloques = window.preguntasDelDepartamento(i).map(t => window.partirEnRenglones(t, 50, 3));
+    const bloques = (p ? window.preguntasDelDepartamento(i, p.nombre, p.temas) : window.preguntasDelDepartamento(i))
+        .map(t => window.partirEnRenglones(t, 50, 3));
     const altoTotal = bloques.reduce((a, b) => a + 22 + b.length * 17, 0) + hueco * (bloques.length - 1);
     const escala = altoTotal > 324 ? 324 / altoTotal : 1;
     bloques.forEach((lineas, n) => {
@@ -2985,7 +3166,7 @@ window.abrirPresentacion = async (modo) => {
     // de una hoja, y la diapositiva espera en blanco.
     sub.innerText = 'Cargando el último año…';
     caja.innerHTML = '<div class="presentacion-cargando"></div>';
-    let datos, material = {};
+    let datos, material = {}, cortes = null;
     try {
         if (window.cargarObjetivosDeClasificaciones) await window.cargarObjetivosDeClasificaciones();
         // De aquí salen los iconos de constancia de cada encuesta; sin ella
@@ -3002,7 +3183,8 @@ window.abrirPresentacion = async (modo) => {
         const ids = (window.filasDeLaTarjeta || []).map(f => f.ev.id);
         const pedirMaterial = window.portadasDeEncuestas
             ? window.portadasDeEncuestas(ids).catch(() => ({})) : Promise.resolve({});
-        [datos, material] = await Promise.all([window.cargarRespuestasDeLaPresentacion(), pedirMaterial]);
+        [datos, material, cortes] = await Promise.all([window.cargarRespuestasDeLaPresentacion(), pedirMaterial,
+            window.cargarCortesDeReflexion(modo)]);
     } catch (e) {
         sub.innerText = 'No se pudieron cargar las respuestas.';
         caja.innerHTML = '';
@@ -3014,8 +3196,14 @@ window.abrirPresentacion = async (modo) => {
     window.presentacion = { modo, semanas, indice: semanas.length - 1, resultados: {}, clave: '',
                             cierresSemanales: window.semanasDeLaPresentacion(datos.cubreDesde, 'weekly'),
                             respuestas: datos.respuestas, cubreDesde: datos.cubreDesde,
-                            material: material || {} };
+                            material: material || {}, cortes };
     window.pintarPresentacion();
+    // El corte que ya llegó y nadie ha guardado se guarda ahora, y se repinta
+    // si se sigue mirando la misma presentación.
+    const abierta = window.presentacion;
+    window.tomarCortesPendientes().then(hubo => {
+        if (hubo && window.presentacion === abierta && hoja.style.display === 'flex') window.pintarPresentacion();
+    });
 };
 
 window.cerrarPresentacion = () => {
