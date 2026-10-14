@@ -307,6 +307,8 @@ window.diapositivasDeSemana = (i) => {
         mazo.push({ id: 'reflexion:evidencias', clave: '', reflexion: 'evidencias' });
     }
     mazo.push({ id: 'reflexion:2', clave: '', reflexion: 2 });
+    // Y la minuta: quién presenta su reflexión en la próxima junta.
+    mazo.push({ id: 'minuta', clave: '', minuta: true });
     return mazo;
 };
 
@@ -328,7 +330,7 @@ window.diapositivasDeSemana = (i) => {
 // la reflexión del mayor atraso, el departamento rezagado. Los departamentos van
 // con su responsable (`responsableDeDepartamento`). Los minutos son sugeridos
 // (`MINUTOS_AGENDA`) y se suman en el encabezado.
-window.MINUTOS_AGENDA = { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10 };
+window.MINUTOS_AGENDA = { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10, minuta: 3 };
 
 // La junta dura una hora. Lo fijo —la agenda, la planta y la reflexión— se
 // queda como está, y lo que sobra de la hora se reparte entre las
@@ -422,7 +424,7 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
         const r = window.responsableDeDepartamento(nombre);
         return nombre + (r ? ` · ${window.nombreDeAgenda(r.name)}` : '');
     };
-    mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion).forEach(d => {
+    mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion && !d.minuta).forEach(d => {
         const c = porClave[d.clave] || { nombre: d.clave, encuestas: [] };
         const atrasado = window.rezagadoDeClasificacion(i, d.clave);
         let atiende = atrasado ? conResponsable(atrasado.nombre) : '';
@@ -454,6 +456,9 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
             actividad: rezagado ? `Reflexión del mayor atraso · ${rezagado.nombre}` : '¿Qué vamos a hacer? · compromisos',
             detalle: '¿qué vamos a hacer? · acción, responsable y fecha', atiende: atiendeDepto, pag: pagina(d.id) });
     });
+    // La minuta, de la junta entera como la agenda: dice quién presenta la próxima.
+    if (pagina('minuta')) filas.push({ min: M.minuta, actividad: 'Minuta', sinResponsable: true,
+        detalle: `quién presenta su reflexión ${nom.femenino ? 'la próxima' : 'el próximo'} ${nom.uno}`, pag: pagina('minuta') });
     const ajustada = window.ajustarMinutosAgenda(filas);
     const total = filas.reduce((a, f) => a + f.min, 0);
 
@@ -529,9 +534,168 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     return el;
 };
 
+// --- LA MINUTA ---
+//
+// La última diapositiva: quiénes son los atrasados de este periodo, que son los
+// que presentan su reflexión en la próxima junta. Son los mismos que ya atienden
+// algo en la agenda —el departamento con menor desempeño de la planta
+// (`departamentoRezagado`) y el de mayor atraso en cada clasificación
+// (`rezagadoDeClasificacion`)—, juntados por departamento: uno que va el último
+// en tres clasificaciones sale una vez, con las tres. No se escribe a mano por lo
+// mismo que la agenda: la minuta de cada periodo existe sin que nadie la llene.
+//
+// `atrasadosDeSemana(i)` → [{ nombre, responsable, promedio, planta, temas: [{ nombre, texto }] }]
+// El de la planta va primero; los demás, del que más temas debe al que menos y,
+// a igual cuenta, del peor resultado al mejor.
+window.atrasadosDeSemana = (i) => {
+    const r = window.resultadoDeSemana(i);
+    const lista = window.departamentosDeSemana(i);
+    const porNombre = {};
+    const de = (nombre) => porNombre[nombre] || (porNombre[nombre] = {
+        nombre, planta: false, temas: [],
+        promedio: (lista.find(d => d.nombre === nombre) || {}).promedio,
+        responsable: window.responsableDeDepartamento(nombre) });
+    const rezagado = window.departamentoRezagado(i);
+    if (rezagado) de(rezagado.nombre).planta = true;
+    r.clasificaciones.slice()
+        .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+        .forEach(c => {
+            const a = window.rezagadoDeClasificacion(i, c.clave);
+            if (!a) return;
+            const texto = window.esClasificacionDeLicencias(c.clave)
+                ? `${a.faltan} sin contestar` : `${a.promedio}%`;
+            de(a.nombre).temas.push({ nombre: c.nombre, texto, promedio: a.promedio });
+        });
+    return Object.values(porNombre).sort((a, b) => (b.planta - a.planta)
+        || b.temas.length - a.temas.length
+        || (a.promedio == null ? 101 : a.promedio) - (b.promedio == null ? 101 : b.promedio)
+        || a.nombre.localeCompare(b.nombre, 'es'));
+};
+
+// El periodo siguiente al que se mira, que es cuando se presenta: el que ya
+// está en la lista si lo hay, y si no —el que se mira es el que corre— el que
+// empieza donde termina éste.
+window.periodoSiguiente = (i) => {
+    const semanas = window.presentacion.semanas;
+    if (semanas[i + 1]) return semanas[i + 1];
+    const s = semanas[i];
+    const inicio = s.fin instanceof Date ? new Date(s.fin) : new Date(s.inicio.getTime() + 7 * 86400000);
+    const fin = window.corteDePresentacion().frecuencia === 'monthly'
+        ? new Date(inicio.getFullYear(), inicio.getMonth() + 1, 1)
+        : new Date(inicio.getTime() + 7 * 86400000);
+    return { inicio, fin };
+};
+
+window.diapositivaDeMinuta = (i, numero, cuantas) => {
+    const C = window.COLORES_IOS;
+    const el = [];
+    const semana = window.presentacion.semanas[i];
+    const nom = window.nombreDelPeriodo();
+    const texto = (x, y, w, h, t, tam, col, extra) =>
+        el.push(Object.assign({ tipo: 'texto', x, y, w, h, texto: t, tam, color: col }, extra || {}));
+    const recorta = (t, ancho, tam) => window.nombreDeFila(String(t || ''), Math.max(4, Math.floor(ancho / (tam * 0.55))));
+    const atrasados = window.atrasadosDeSemana(i);
+    const siguiente = window.periodoSiguiente(i);
+
+    // Encabezado: el periodo, el título y, a la derecha, cuándo se presenta.
+    el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
+    texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
+    texto(48, 58, 520, 44, 'Minuta', 34, C.texto, { peso: 700 });
+    texto(48, 98, 560, 18, `Los atrasados ${nom.del} presentan su reflexión en la próxima junta`, 13.5, C.secundario, { peso: 500 });
+    texto(552, 40, 360, 16, 'PRÓXIMA JUNTA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
+    texto(552, 60, 360, 30, window.corteDePresentacion().texto(siguiente), 20, C.azul, { alinear: 'right', peso: 700 });
+
+    const X = 48, Y = 130, W = 864, H = 336;
+    el.push({ tipo: 'rect', x: X, y: Y, w: W, h: H, relleno: C.agrupado, radio: 18 });
+    if (!atrasados.length) {
+        texto(X, Y, W, H, 'Sin resultados por departamento: no hay a quién nombrar.', 15, C.secundario,
+            { alinear: 'center', peso: 500 });
+    } else {
+        const col = { depto: X + 18, responsable: X + 300, temas: X + 480, resultado: X + W - 18 };
+        const anchoDepto = col.responsable - col.depto - 16;
+        const anchoResp = col.temas - col.responsable - 16;
+        const anchoTemas = col.resultado - 70 - col.temas;
+        const cab = (x, w, t, alinear) => texto(x, Y + 12, w, 16, t, 10.5, C.secundario, { peso: 600, espaciado: 0.6, alinear });
+        cab(col.depto, 240, 'DEPARTAMENTO');
+        cab(col.responsable, 170, 'PRESENTA');
+        cab(col.temas, 300, 'DÓNDE VA MÁS ATRASADO');
+        cab(col.resultado - 80, 80, 'RESULTADO', 'right');
+
+        const y0 = Y + 36, espacio = H - 36 - 10;
+        let lista = atrasados;
+        const alto = Math.max(30, Math.min(52, espacio / atrasados.length));
+        const caben = Math.floor(espacio / alto);
+        if (lista.length > caben) lista = lista.slice(0, caben - 1).concat([{ resto: lista.length - caben + 1 }]);
+        const tam = alto < 40 ? 12.5 : 14;
+        lista.forEach((d, k) => {
+            const y = y0 + k * alto;
+            el.push({ tipo: 'linea', x1: X + 14, y1: y, x2: X + W - 14, y2: y, color: C.separador, grosor: 1 });
+            if (d.resto) {
+                texto(col.depto, y, 400, alto, `y ${d.resto} departamentos más`, tam, C.secundario, { peso: 600 });
+                return;
+            }
+            const sub = d.planta ? 'Mayor atraso de la planta'
+                : `Mayor atraso en ${d.temas.length} ${d.temas.length === 1 ? 'clasificación' : 'clasificaciones'}`;
+            const dos = alto >= 40;
+            texto(col.depto, dos ? y + 5 : y, anchoDepto, dos ? alto / 2 : alto, recorta(d.nombre, anchoDepto, tam), tam, C.texto, { peso: 600 });
+            if (dos) texto(col.depto, y + alto / 2 - 1, anchoDepto, alto / 2 - 4, sub, 11, d.planta ? C.rojo : C.secundario,
+                { peso: d.planta ? 600 : 400 });
+            const quien = d.responsable ? window.nombreDeAgenda(d.responsable.name) : 'Su jefe inmediato';
+            texto(col.responsable, y, anchoResp, alto, recorta(quien, anchoResp, tam - 1), tam - 1,
+                d.responsable ? C.texto : C.terciario, { peso: d.responsable ? 500 : 400 });
+
+            // Sus temas, del más bajo al más alto; sin ninguno —el de la planta
+            // puede no ir el último en nada—, su clasificación más baja.
+            let temas = d.temas.slice().sort((a, b) => a.promedio - b.promedio).map(t => `${t.nombre} ${t.texto}`);
+            if (!temas.length) {
+                const peor = (window.departamentosDeSemana(i).find(x => x.nombre === d.nombre) || {}).clasificaciones || [];
+                temas = peor.length ? [`${peor[0].nombre} ${peor[0].promedio}%`] : ['—'];
+            }
+            const porRenglon = Math.floor(anchoTemas / ((tam - 1.5) * 0.52));
+            let renglones = window.partirEnRenglones(temas.join(' · '), porRenglon, dos ? 2 : 1);
+            const cabe = renglones.join(' ').length >= temas.join(' · ').length;
+            if (!cabe) {
+                // Lo que no cabe se cuenta en vez de cortarse a media palabra.
+                for (let n = temas.length - 1; n >= 1; n--) {
+                    const t = temas.slice(0, n).join(' · ') + ` · y ${temas.length - n} más`;
+                    const r2 = window.partirEnRenglones(t, porRenglon, dos ? 2 : 1);
+                    if (r2.join(' ').length >= t.length) { renglones = r2; break; }
+                }
+            }
+            // El separador se queda al final del renglón, no al principio del siguiente.
+            renglones = renglones.map((t, n) => t.replace(/^· /, ''))
+                .map((t, n, arr) => (arr[n + 1] !== undefined && renglones[n + 1].startsWith('· ')) ? `${t} ·` : t);
+            const hRen = 16;
+            const inicio = y + (alto - renglones.length * hRen) / 2;
+            renglones.forEach((t, n) => texto(col.temas, inicio + n * hRen, anchoTemas, hRen, t, tam - 1.5, C.texto, { peso: 500 }));
+
+            if (d.promedio != null) {
+                const hp = Math.min(24, alto - 8);
+                el.push({ tipo: 'rect', x: col.resultado - 58, y: y + (alto - hp) / 2, w: 58, h: hp,
+                    relleno: window.tinteIOS(window.colorIOS(d.promedio), 0.86), radio: hp / 2 });
+                texto(col.resultado - 58, y, 58, alto, `${d.promedio}%`, tam - 1, window.colorIOS(d.promedio),
+                    { peso: 700, alinear: 'center' });
+            }
+        });
+    }
+
+    texto(48, 474, 864, 18,
+        'Cada uno trae su reflexión: qué pasó, por qué y qué va a hacer · acción, responsable y fecha.',
+        12, C.secundario, { peso: 500 });
+    const hoy = new Date();
+    if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
+    texto(48, 506, 760, 16,
+        `Se arma sola con los atrasados de la agenda · generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
+        `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
+        10, C.terciario);
+    return el;
+};
+
 // La diapositiva que toca a una entrada del mazo.
 window.laminaDe = (i, d, numero, cuantas) => d.agenda
     ? window.diapositivaDeAgenda(i, numero, cuantas)
+    : d.minuta
+    ? window.diapositivaDeMinuta(i, numero, cuantas)
     : d.reflexion
     ? (d.reflexion === 1 ? window.diapositivaDeLectura(i, numero, cuantas)
         : d.reflexion === 'evidencias' ? window.diapositivaDeEvidenciasDelDepartamento(i, numero, cuantas)
@@ -3260,7 +3424,7 @@ window.pintarPresentacion = () => {
         </div>`).join('');
     document.getElementById('semana-presentacion').innerText = window.textoDelPeriodo(semana);
     window.rotularFlechasDePeriodo(['btn-semana-anterior', 'btn-semana-siguiente']);
-    const clasificaciones = mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion).length;
+    const clasificaciones = mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion && !d.minuta).length;
     const conFotos = mazo.filter(d => d.evidencias).length;
     document.getElementById('subtitulo-presentacion').innerText =
         `La planta y ${clasificaciones} ${clasificaciones === 1 ? 'clasificación' : 'clasificaciones'}` +

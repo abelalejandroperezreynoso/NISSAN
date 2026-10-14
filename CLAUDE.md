@@ -5151,7 +5151,7 @@ Las reglas para usarlo:
   duración total arriba a la derecha. Un renglón para explicar la agenda, otro
   para el resultado de la planta, uno por clasificación y los de la reflexión
   —la lectura de los resultados, las evidencias del departamento rezagado si
-  las hay y la reflexión del mayor atraso—. **No se
+  las hay y la reflexión del mayor atraso— y, al final, la minuta. **No se
   escribe a mano: sale del mismo mazo que se va a enseñar**
   (`diapositivasDeSemana`, que la pone delante con `id: 'agenda'`), así que una
   clasificación que no existía ese periodo no aparece, la que dejó evidencias
@@ -5160,15 +5160,16 @@ Las reglas para usarlo:
   que para eso está la siguiente.
 
   ```js
-  window.MINUTOS_AGENDA                  // { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10 }
+  window.MINUTOS_AGENDA                  // { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10, minuta: 3 }
   window.nombreDeAgenda(nombre)          // «Pérez Reynoso Abel Alejandro» → «Abel Pérez»
   window.responsableDeDepartamento(nombre)   // su JR. Manager, o quien encabeza su cadena
   ```
 
   **Quién atiende sale de lo que ya sabe la aplicación**, no se escribe:
 
-  - **La explicación de la agenda y el resultado de la planta, nadie**: son de
-    la junta entera, y la columna se queda en blanco (`sinResponsable`).
+  - **La explicación de la agenda, el resultado de la planta y la minuta,
+    nadie**: son de la junta entera, y la columna se queda en blanco
+    (`sinResponsable`).
   - **La lectura de los resultados**, quien la presenta (la ficha de la sesión).
   - **Cada clasificación, el departamento con mayor atraso en ella**
     (`window.rezagadoDeClasificacion(i, clave)`), con el mismo criterio que el
@@ -5188,7 +5189,7 @@ Las reglas para usarlo:
   sugeridos y lo dice el pie.
 
   **Y la junta dura una hora** (`DURACION_JUNTA`, `ajustarMinutosAgenda`). Lo
-  fijo —la agenda, la planta y la reflexión— se queda como está y lo que sobra
+  fijo —la agenda, la planta, la reflexión y la minuta— se queda como está y lo que sobra
   de la hora se reparte entre las clasificaciones en proporción a lo que
   pedirían —con evidencias, más—, sin bajar ninguna de
   `MIN_MINUTOS_CLASIFICACION` (2). Los minutos que se pierden al redondear van a
@@ -5207,6 +5208,31 @@ Las reglas para usarlo:
   cae en la diapositiva de la planta, no en la agenda** —`pintarPresentacionCompleta`
   busca el `id` vacío antes de quedarse con la primera—, y **la agenda no cuenta
   como clasificación** en el subtítulo de la hoja (`!d.agenda`).
+
+  **Y la última es la minuta** (`window.diapositivaDeMinuta`, con
+  `id: 'minuta'`): **quiénes son los atrasados del periodo, que son los que
+  presentan su reflexión en la próxima junta**. Son los mismos que ya atienden
+  algo en la agenda —el departamento con menor desempeño de la planta y el de
+  mayor atraso en cada clasificación—, **juntados por departamento**: uno que
+  va el último en tres clasificaciones sale una vez, con las tres.
+
+  ```js
+  window.atrasadosDeSemana(i)   // [{ nombre, responsable, promedio, planta, temas: [{ nombre, texto, promedio }] }]
+  window.periodoSiguiente(i)    // cuándo se presenta: el siguiente de la lista, o el que empieza donde acaba éste
+  ```
+
+  Una fila por departamento con **quién presenta** (su responsable, el de la
+  agenda), **dónde va más atrasado** —sus clasificaciones de la peor a la
+  mejor, con su cifra, o «N sin contestar» en una de licencias— y su
+  **resultado** en una píldora de su color. El de la planta va primero y dice
+  «Mayor atraso de la planta» en rojo; si no es el último en ninguna
+  clasificación, enseña la más baja suya. Los demás, del que más temas debe al
+  que menos y, a igual cuenta, del peor resultado al mejor. Arriba a la derecha,
+  **la próxima junta** con el periodo siguiente; lo que no cabe en un renglón se
+  cuenta («y 2 más») en vez de cortarse, y las filas que no caben se juntan en
+  «y N departamentos más». Como la agenda, **no cuenta como clasificación**
+  (`!d.minuta` en los mismos dos filtros), y su renglón de la agenda va sin
+  responsable.
 
   **Detrás va una diapositiva por clasificación**, con la misma forma: su
   cifra, sus respuestas, su tendencia, una fila por cada una de sus encuestas y
