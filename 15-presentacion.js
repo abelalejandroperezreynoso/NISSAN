@@ -289,7 +289,9 @@ window.vistaDe = (r, clave) => {
 window.diapositivasDeSemana = (i) => {
     const r = window.resultadoDeSemana(i);
     const fotos = window.evidenciasDeSemana(i);
-    const mazo = [{ id: '', clave: '' }];
+    // La primera es la agenda: dice qué se va a ver y en qué página, y sale
+    // del propio mazo (`diapositivaDeAgenda`), así que no se escribe a mano.
+    const mazo = [{ id: 'agenda', clave: '', agenda: true }, { id: '', clave: '' }];
     r.clasificaciones.slice()
         .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
         .forEach(c => {
@@ -308,8 +310,105 @@ window.diapositivasDeSemana = (i) => {
     return mazo;
 };
 
+// --- LA AGENDA ---
+//
+// La primera diapositiva de la junta: qué se va a ver y en qué página. No se
+// escribe a mano: sale del mismo mazo que se va a enseñar
+// (`diapositivasDeSemana`), así que si una clasificación no existía ese
+// periodo no aparece, si una dejó evidencias lo dice con su cámara y las
+// páginas son las de verdad. Tres bloques, como la junta: el resultado de la
+// planta, una fila por clasificación y la reflexión, con el departamento en el
+// que se enfoca. Sin cifras: la agenda dice de qué se va a hablar, no cómo
+// salió, que para eso está la diapositiva siguiente.
+window.diapositivaDeAgenda = (i, numero, cuantas) => {
+    const C = window.COLORES_IOS;
+    const el = [];
+    const semana = window.presentacion.semanas[i];
+    const r = window.resultadoDeSemana(i);
+    const mazo = window.diapositivasDeSemana(i);
+    const pagina = (id) => { const k = mazo.findIndex(d => d.id === id); return k < 0 ? null : k + 1; };
+    const texto = (x, y, w, h, t, tam, col, extra) =>
+        el.push(Object.assign({ tipo: 'texto', x, y, w, h, texto: t, tam, color: col }, extra || {}));
+    const nom = window.nombreDelPeriodo();
+
+    el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
+    texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
+    texto(48, 58, 700, 44, 'Agenda', 34, C.texto, { peso: 700 });
+    texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
+
+    // Cada bloque es una tarjeta del gris de las listas agrupadas, con su
+    // número en un círculo azul y su título; debajo, sus renglones con la
+    // página a la derecha.
+    const tarjeta = (x, y, w, h, n, titulo, detalle) => {
+        el.push({ tipo: 'rect', x, y, w, h, relleno: C.agrupado, radio: 18 });
+        el.push({ tipo: 'circulo', cx: x + 30, cy: y + 30, r: 13, relleno: C.azul });
+        texto(x + 17, y + 20, 26, 20, String(n), 14, '#ffffff', { peso: 700, alinear: 'center' });
+        texto(x + 54, y + 17, w - 70, 22, titulo, 18, C.texto, { peso: 700 });
+        if (detalle) texto(x + 54, y + 39, w - 70, 16, detalle, 11.5, C.secundario);
+    };
+    const renglon = (x, y, w, alto, t, pag, conFotos, separador, tam) => {
+        if (separador) el.push({ tipo: 'linea', x1: x, y1: y, x2: x + w, y2: y, color: C.separador, grosor: 1 });
+        const reserva = 54 + (conFotos ? 22 : 0);
+        const max = Math.floor((w - reserva) / ((tam || 13) * 0.55));
+        texto(x, y, w - reserva, alto, window.nombreDeFila(t, max), tam || 13, C.texto, { peso: 500 });
+        if (conFotos) el.push({ tipo: 'icono', glifo: 'photo', x: x + w - 72, y: y + alto / 2 - 8, lado: 16, color: C.secundario });
+        if (pag) texto(x + w - 50, y, 50, alto, `pág. ${pag}`, 11, C.terciario, { peso: 600, alinear: 'right' });
+    };
+
+    // 1. La planta.
+    tarjeta(48, 132, 400, 118, 1, 'Resultado de la planta', `La cifra general, su tendencia y quién destacó ${nom.del}`);
+    renglon(102, 196, 330, 34, 'Resultado general y por clasificación', pagina(''), false, true);
+
+    // 3. La reflexión, enfocada en el departamento con menor desempeño.
+    const rezagado = window.departamentoRezagado(i);
+    const deReflexion = mazo.filter(d => d.reflexion);
+    const altoReflexion = 72 + deReflexion.length * 34 + 14;
+    tarjeta(48, 270, 400, altoReflexion, 3, 'Reflexión',
+        rezagado ? `Enfocada en ${window.partirEnRenglones(rezagado.nombre, 34, 1)[0]}` : 'Lo que nos dicen los resultados');
+    deReflexion.forEach((d, k) => {
+        const t = d.reflexion === 1 ? '¿Qué nos dicen los resultados?'
+            : d.reflexion === 'evidencias' ? `Evidencias de ${rezagado ? rezagado.nombre : 'el departamento'}`
+            : '¿Qué vamos a hacer? · compromisos';
+        renglon(102, 334 + k * 34, 330, 34, t, pagina(d.id), d.reflexion === 'evidencias', true);
+    });
+
+    // 2. Las clasificaciones, en el orden del mazo: una fila cada una, con la
+    // cámara si esa semana dejó evidencias. Con muchas, los renglones se
+    // aprietan; por debajo de 22 px se cuentan las que no caben.
+    const clasif = mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion);
+    const nombres = {};
+    r.clasificaciones.forEach(c => { nombres[c.clave] = c.nombre; });
+    const conFotos = new Set(mazo.filter(d => d.evidencias).map(d => d.clave));
+    const xc = 478, wc = 434, yc = 132, hc = 358;
+    tarjeta(xc, yc, wc, hc, 2, 'Clasificaciones',
+        `${clasif.length} ${clasif.length === 1 ? 'clasificación' : 'clasificaciones'}` +
+        (conFotos.size ? ` · ${conFotos.size} con evidencias` : ''));
+    const espacio = hc - 76 - 12;
+    const altoFila = Math.max(22, Math.min(34, espacio / Math.max(clasif.length, 1)));
+    const caben = Math.floor(espacio / altoFila);
+    const lista = clasif.length > caben ? clasif.slice(0, caben - 1) : clasif;
+    const tam = altoFila < 28 ? 12 : 13;
+    lista.forEach((d, k) => renglon(xc + 54, yc + 64 + k * altoFila, wc - 70, altoFila,
+        nombres[d.clave] || d.clave, pagina(d.id), conFotos.has(d.clave), true, tam));
+    if (lista.length < clasif.length) {
+        texto(xc + 54, yc + 64 + lista.length * altoFila, wc - 70, altoFila,
+            `y ${clasif.length - lista.length} más`, 12, C.secundario);
+    }
+
+    const hoy = new Date();
+    if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
+    texto(48, 506, 760, 16,
+        `Se arma sola con las diapositivas de este periodo · ` +
+        `generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
+        `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
+        10, C.terciario);
+    return el;
+};
+
 // La diapositiva que toca a una entrada del mazo.
-window.laminaDe = (i, d, numero, cuantas) => d.reflexion
+window.laminaDe = (i, d, numero, cuantas) => d.agenda
+    ? window.diapositivaDeAgenda(i, numero, cuantas)
+    : d.reflexion
     ? (d.reflexion === 1 ? window.diapositivaDeLectura(i, numero, cuantas)
         : d.reflexion === 'evidencias' ? window.diapositivaDeEvidenciasDelDepartamento(i, numero, cuantas)
         : window.diapositivaDeAcciones(i, numero, cuantas))
@@ -2690,6 +2789,9 @@ window.pintarPresentacionCompleta = () => {
     // diapositiva; si ni existía, la de la planta.
     let k = mazo.findIndex(d => d.id === p.clave);
     if (k < 0) k = mazo.findIndex(d => d.id === String(p.clave || '').replace(/^evidencias:/, ''));
+    // Lo que no está cae en la de la planta, no en la agenda: es la que se
+    // estaba mirando al cambiar de semana lo que hay que conservar.
+    if (k < 0) k = mazo.findIndex(d => d.id === '');
     k = Math.max(0, k);
     p.clave = mazo[k].id;
     document.getElementById('lamina-presentacion-completa').innerHTML =
@@ -3005,7 +3107,7 @@ window.pintarPresentacion = () => {
         </div>`).join('');
     document.getElementById('semana-presentacion').innerText = window.textoDelPeriodo(semana);
     window.rotularFlechasDePeriodo(['btn-semana-anterior', 'btn-semana-siguiente']);
-    const clasificaciones = mazo.filter(d => d.id && !d.evidencias && !d.reflexion).length;
+    const clasificaciones = mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion).length;
     const conFotos = mazo.filter(d => d.evidencias).length;
     document.getElementById('subtitulo-presentacion').innerText =
         `La planta y ${clasificaciones} ${clasificaciones === 1 ? 'clasificación' : 'clasificaciones'}` +

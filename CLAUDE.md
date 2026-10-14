@@ -5145,6 +5145,23 @@ Las reglas para usarlo:
     periodo que se mira y el cierre de la tendencia son el mismo instante y no
     tienen por qué calcularse dos veces.
 
+  **Y la primera es la agenda de la junta** (`window.diapositivaDeAgenda`):
+  qué se va a ver y en qué página, en tres tarjetas del gris de las listas
+  agrupadas con su número en un círculo azul —el resultado de la planta, una
+  fila por clasificación y la reflexión, que dice en qué departamento se
+  enfoca—. **No se escribe a mano: sale del mismo mazo que se va a enseñar**
+  (`diapositivasDeSemana`, que la pone delante con `id: 'agenda'`), así que una
+  clasificación que no existía ese periodo no aparece, la que dejó evidencias
+  lleva su cámara y las páginas son las de verdad. **Va sin cifras**: dice de
+  qué se va a hablar, no cómo salió, que para eso está la siguiente. Con muchas
+  clasificaciones los renglones se aprietan hasta 22 px y las que no caben se
+  cuentan en «y N más».
+
+  Dos cosas que hay que mantener: **lo que no se encuentra al cambiar de semana
+  cae en la diapositiva de la planta, no en la agenda** —`pintarPresentacionCompleta`
+  busca el `id` vacío antes de quedarse con la primera—, y **la agenda no cuenta
+  como clasificación** en el subtítulo de la hoja (`!d.agenda`).
+
   **Detrás va una diapositiva por clasificación**, con la misma forma: su
   cifra, sus respuestas, su tendencia, una fila por cada una de sus encuestas y
   quién destacó **en ella** —el mejor de «Seguridad» se mide sólo con las
