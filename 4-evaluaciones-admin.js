@@ -2204,8 +2204,8 @@ window.renderizarListaRespuestas = () => {
 // Una fila de la ficha de la respuesta, como las de Ajustes de iOS: el rótulo
 // en gris a la izquierda y el valor a la derecha, recortado con «…» si no cabe.
 // El valor ya viene escapado —o es un campo—.
-window.filaDeDetalle = (rotulo, valorHtml, claseValor = '') => `
-    <div class="detalle-fila">
+window.filaDeDetalle = (rotulo, valorHtml, claseValor = '', globo = '') => `
+    <div class="detalle-fila"${globo ? ` title="${window.sanitizeForHTML(globo)}"` : ''}>
         <span class="detalle-fila-rotulo">${rotulo}</span>
         <span class="detalle-fila-valor ${claseValor}">${valorHtml}</span>
     </div>`;
@@ -2230,7 +2230,7 @@ window.verDetalleRespuesta = async (resp) => {
     // aquí sólo se enciende la hoja.
     modal.style.cssText = 'display:flex; z-index:999999;';
     
-    let saveButton = '', dateInputHtml = '', deleteButton = '', invalidarButton = '', notaRevisorHtml = '';
+    let saveButton = '', dateInputHtml = '', deleteButton = '', invalidarButton = '';
 
     if(puedeCalificar) {
         saveButton = `<button id="btn-save-grades" onclick="guardarCalificacionAdmin()" style="width:100%; background:#22c55e; color:white; padding:15px; border:none; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px -1px rgba(34, 197, 94, 0.3); margin-top:30px; transition: transform 0.1s;">Guardar Revisión</button>`;
@@ -2238,16 +2238,6 @@ window.verDetalleRespuesta = async (resp) => {
         if (esAdminTotal) {
             const diaOriginal = window.diaLocal(new Date(resp.submitted_at));
             dateInputHtml = `<input type="date" id="admin-edit-date" class="detalle-fila-campo" value="${diaOriginal}" data-original="${diaOriginal}" aria-label="Fecha de realización">`;
-        }
-    } else {
-        if (resp.review_status !== 'Revisado' && resp.review_status !== 'Certificada' && !esMiRespuesta) {
-             // Decir quién sí puede ahorra la pregunta: con revisores
-             // nombrados, el supervisor directo ya no es la respuesta.
-             const nombrados = window.revisoresDeLaRespuesta(encuestaDeLaRespuesta, resp.employee_id);
-             const quien = nombrados.length > 0
-                ? 'Esta encuesta la revisa ' + window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))
-                : 'Solo el supervisor directo puede calificar';
-             notaRevisorHtml = `<div class="detalle-nota">${quien}.</div>`;
         }
     }
 
@@ -2276,6 +2266,26 @@ window.verDetalleRespuesta = async (resp) => {
             selloRevisionHtml += window.filaDeDetalle('Calificada',
                 selloRevision.fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }));
         }
+    } else {
+        // Todavía sin revisar: quién la tiene que calificar. Con revisores
+        // nombrados son ellos —o el que la asignó—; sin ellos, el jefe
+        // inmediato de quien contestó. Es la misma regla de `leTocaRevisar`.
+        const nombrados = window.revisoresDeLaRespuesta(encuestaDeLaRespuesta, resp.employee_id);
+        // Varios revisores van por su nombre de pila, que completos no caben en
+        // la fila; los nombres enteros quedan en su globo.
+        let quienRevisa = '', todosLosNombres = '';
+        if (nombrados.length === 1) {
+            quienRevisa = window.nombresDeEmpleados(nombrados);
+        } else if (nombrados.length > 1) {
+            todosLosNombres = window.nombresDeEmpleados(nombrados);
+            quienRevisa = window.nombresCortos(todosLosNombres.split(', '));
+        } else {
+            const jefe = window.jefeInmediatoDe(resp.employee_id);
+            if (jefe) quienRevisa = jefe.name;
+            else if (jefe === null) quienRevisa = 'Sin jefe inmediato';
+        }
+        if (quienRevisa) selloRevisionHtml = window.filaDeDetalle('Revisa', window.sanitizeForHTML(quienRevisa),
+            todosLosNombres ? 'detalle-fila-valor--envuelve' : '', todosLosNombres);
     }
 
     if (esAdminTotal) {
@@ -2423,7 +2433,17 @@ window.verDetalleRespuesta = async (resp) => {
             .find(e => String(e.id) === String(resp.employee_id));
         const deptoQuienContesto = (fichaQuienContesto && fichaQuienContesto.dept)
             || (window.employeeDeptMap || {})[String(resp.employee_id)] || '';
-        const deptoHtml = deptoQuienContesto ? window.sanitizeForHTML(deptoQuienContesto) : '';
+        const puestoQuienContesto = fichaQuienContesto && fichaQuienContesto.puesto ? fichaQuienContesto.puesto : '';
+        const deptoHtml = [puestoQuienContesto, deptoQuienContesto]
+            .filter(Boolean).map(t => window.sanitizeForHTML(t)).join(' · ');
+        // El área que tiene asignada hoy en su ficha, que no es por fuerza la
+        // que se evaluó: ésa es la del día, y va en su propia fila.
+        const areaAsignada = fichaQuienContesto && fichaQuienContesto.area && fichaQuienContesto.area !== 'Sin Área'
+            ? fichaQuienContesto.area : '';
+        const areaAsignadaHtml = fichaQuienContesto
+            ? window.filaDeDetalle('Área', areaAsignada ? window.sanitizeForHTML(areaAsignada) : 'Sin área',
+                areaAsignada ? '' : 'detalle-fila-valor--suave')
+            : '';
 
         modal.innerHTML = `
             <div class="hoja-contenido" style="max-width:900px; background:#f8fafc; overflow:hidden; padding:12px 0 0;">
@@ -2444,11 +2464,11 @@ window.verDetalleRespuesta = async (resp) => {
                 <div class="lista-ios detalle-ficha">
                     ${encuestaDeLaRespuesta && encuestaDeLaRespuesta.title ? window.filaDeDetalle('Encuesta', window.sanitizeForHTML(encuestaDeLaRespuesta.title)) : ''}
                     ${window.filaDeDetalle('Fecha', dateInputHtml || new Date(resp.submitted_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }))}
+                    ${areaAsignadaHtml}
                     ${areaInfoHtml}
                     ${estadoHtml}
                     ${selloRevisionHtml}
                 </div>
-                ${notaRevisorHtml}
                 ${fotoAreaHtml}
                 ${descHtml}
                 <div id="responder-questions-list"></div>

@@ -2408,7 +2408,8 @@ Las reglas para usarlo:
   « planta 1 » tienen que caer en el mismo sitio.
 - **La hoja de detalle de una respuesta dice de quién es y de dónde.** El
   título del encabezado **es el nombre de quien contestó** —hasta dos renglones,
-  que aquí los nombres son largos— y el subtítulo, su departamento. Saber de
+  que aquí los nombres son largos— y el subtítulo, su puesto y su departamento
+  («Tecnico · M160 MOTOR 2»). Saber de
   quién es la respuesta que se está calificando es media cosa; la otra media es
   de dónde, que es lo que sitúa lo que se lee debajo —una auditoría de
   PRODUCCIÓN no se lee igual que una de CALIDAD—. Decía «Detalle de respuesta»
@@ -2426,8 +2427,9 @@ Las reglas para usarlo:
   anulada, morado si está mal revisada). Sin cifra que dar no se dibuja nada.
 
   **Lo demás es una ficha de Ajustes de iOS** (`.detalle-ficha`, con
-  `window.filaDeDetalle(rotulo, valorHtml, clase)`): Encuesta, Fecha, Área
-  evaluada, Estado, Revisó y Calificada, cada una con su rótulo a la izquierda y
+  `window.filaDeDetalle(rotulo, valorHtml, clase, globo)`): Encuesta, Fecha,
+  Área —la que tiene asignada hoy en su ficha—, Área evaluada —la del día, sólo
+  en las encuestas por área—, Estado, Revisó y Calificada, cada una con su rótulo a la izquierda y
   el valor en gris a la derecha, recortado con «…». La fecha era un rótulo suelto
   encima de un `<input type="date">` a todo lo ancho, que en Safari se salía de
   la hoja por su ancho mínimo; el área, una chapa rosa en el subtítulo.
@@ -2440,8 +2442,12 @@ Las reglas para usarlo:
   - **La fecha se guarda sólo si se cambió, y conservando la hora.** Se
     guardaba siempre con `new Date('2026-10-14')`, que se lee en UTC, y cada
     «Guardar Revisión» del administrador corría la respuesta un día atrás.
-  - **Quien no puede calificar lee por qué** debajo de la ficha
-    (`.detalle-nota`), en el gris del pie de una lista de iOS.
+  - **Sin revisar, la fila dice quién la tiene que revisar** («Revisa»): los
+    revisores de `revisoresDeLaRespuesta` y, sin ellos, el jefe inmediato
+    (`jefeInmediatoDe`), que es la regla de `leTocaRevisar`. Varios van por su
+    nombre de pila y la fila se parte en renglones; los nombres enteros, en su
+    globo. Es lo que sustituyó al aviso amarillo de «Esta encuesta la revisa…»
+    que leía quien no podía calificar.
 - **El detalle de una respuesta se descarga en Excel.** El botón de la flecha
   hacia abajo del encabezado, entre la cifra y la cruz, baja un `.xlsx` con una
   fila por pregunta —enunciado, lo contestado, la puntuación («3/5», «0/1»), su
