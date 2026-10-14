@@ -2294,7 +2294,7 @@ window.verDetalleRespuesta = async (resp) => {
                 adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Mal Revisada')" style="width:100%; background:#f3e8ff; color:#7e22ce; padding:15px; border:1px solid #a855f7; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">⚠️ Marcar como Mal Revisada (Requiere corrección)</button>`);
             }
             if (resp.review_status !== 'Falsa') {
-                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Falsa')" style="width:100%; background:#fee2e2; color:#991b1b; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">🚫 Marcar como Falsa (Anular)</button>`);
+                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Falsa')" style="width:100%; background:#fee2e2; color:#991b1b; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">🚫 Anular respuesta</button>`);
             }
 
             invalidarButton = adminOptions.join("");
