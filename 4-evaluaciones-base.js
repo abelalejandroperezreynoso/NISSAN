@@ -1876,7 +1876,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
                     </div>
                     <div class="curso-aviso" id="curso-aviso-${q.id}" hidden>
                         <span class="curso-aviso-titulo">${window.TEXTO_SIN_CURSO}</span>
-                        <span class="curso-aviso-texto">Sin el curso no se puede contestar esta encuesta. Tu jefe lo tiene en sus pendientes, y cuando te lo programe la encuesta te volverá a salir con la fecha y la hora.</span>
+                        <span class="curso-aviso-texto">Sin el curso no se puede contestar esta encuesta. Tu jefe lo tiene en sus pendientes, y cuando te lo programe la encuesta te volverá a salir ese día.</span>
                         <button type="button" class="curso-aviso-salir" onclick="window.salirDeLaEncuesta()">Salir de la encuesta</button>
                     </div>
                 </div>`;
@@ -2111,7 +2111,7 @@ window.avisarJefeDelCurso = async () => {
             poner('No tienes jefe inmediato registrado, así que nadie puede programarte el curso todavía. Elígelo desde «Mis Pendientes».');
         } else {
             const nombre = jefe ? `, ${String(jefe.name || '').trim()},` : '';
-            poner(`Tu jefe inmediato${nombre} ya lo tiene en sus pendientes para programarte el curso. Cuando lo programe, esta encuesta te volverá a salir con la fecha y la hora.`);
+            poner(`Tu jefe inmediato${nombre} ya lo tiene en sus pendientes para programarte el curso. Cuando lo programe, esta encuesta te volverá a salir ese día.`);
         }
     } catch (e) {
         // Sin la tabla —el script no se ha corrido— queda el recado de antes,

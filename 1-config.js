@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-14-12';
+window.VERSION_APP = '2026-10-14-13';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -1203,12 +1203,15 @@ window.estadoDeCursoPrevio = (evaluationId, empleadoId, respuestas, ahora) => {
 
 // \u00ablun 20 oct, 7:00 a.m.\u00bb: el d\u00eda de la semana va porque es lo primero que se
 // busca para saber cu\u00e1ndo toca, y la hora con a.m./p.m. como el resto de la
-// aplicaci\u00f3n.
+// aplicaci\u00f3n. **A medianoche no hay hora que decir**: es como guarda el jefe
+// un curso del que s\u00f3lo dice el d\u00eda, y \u00ab12:00 a.m.\u00bb se leer\u00eda como una hora
+// de verdad. Ah\u00ed va \u00abmi\u00e9 15 oct\u00bb a secas.
 window.textoDeFechaCurso = (fecha) => {
     const d = fecha instanceof Date ? fecha : new Date(fecha);
     if (!d || isNaN(d)) return '';
     const dias = ['dom', 'lun', 'mar', 'mi\u00e9', 'jue', 'vie', 's\u00e1b'];
     const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    if (d.getHours() === 0 && d.getMinutes() === 0) return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}`;
     const hora = d.toLocaleTimeString('es-MX', { hour: 'numeric', minute: '2-digit' });
     return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}, ${hora}`;
 };
@@ -1284,7 +1287,8 @@ window.registrarSinCurso = async (evaluationId, empleadoId) => {
     return data[0];
 };
 
-// El jefe le pone fecha y hora a una o varias personas de la misma encuesta.
+// El jefe le pone fecha a una o varias personas de la misma encuesta: hoy, el
+// d\u00eda a la medianoche local, que es desde cuando la encuesta les vuelve a salir.
 // No hace falta que sean todas: lo normal es repartirlas en grupos de pocos en
 // d\u00edas distintos, y las que no se marquen siguen esperando.
 //

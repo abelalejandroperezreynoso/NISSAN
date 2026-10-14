@@ -7,9 +7,9 @@
 // pantallas.
 //
 //   - **«Programar curso»**, del jefe: la gente de su equipo directo que dijo
-//     que no ha tomado el curso de una encuesta. Se marca a quién y se le pone
-//     fecha y hora, y a esa gente la encuesta le vuelve a salir diciendo cuándo
-//     es el curso. **No hace falta marcarlos a todos**: lo normal es mandarlos
+//     que no ha tomado el curso de una encuesta. Sólo se le pregunta **a quién
+//     ya tiene programado y para qué día** —sin hora y sin instructor—, y ese
+//     día la encuesta le vuelve a salir para contestarla. **No hace falta marcarlos a todos**: lo normal es mandarlos
 //     en grupos de pocos y en días distintos, y los que no se marquen siguen
 //     esperando —la tarjeta del panel se queda mientras quede alguno—.
 //   - **«Elige a tu jefe inmediato»**, de quien no lo tiene o lo tiene dado de
@@ -23,7 +23,7 @@
 // Tres cosas que hay que mantener:
 //
 //   - **La acción principal va en el encabezado**, con su `.ios-boton-icono`:
-//     la hoja de programar tiene un campo de fecha y hora, que abre una rueda, y
+//     la hoja de programar tiene un campo de fecha, que abre una rueda, y
 //     al pie del formulario el botón quedaría en el camino del dedo.
 //   - **El estado va al subtítulo**, nunca con `innerText` sobre el botón, que
 //     borraría su `<svg>`.
@@ -82,22 +82,17 @@ window.montarHojaProgramarCurso = () => {
                 </div>
             </div>
             <div class="hoja-cuerpo-formulario">
-                <div class="hoja-grupo-titulo">Quién lo toma</div>
+                <div class="hoja-grupo-titulo">Quién ya está programado</div>
                 <div id="curso-gente" class="lista-ios"></div>
                 <button type="button" id="curso-marcar-todos" class="curso-marcar-todos"
                         onclick="window.marcarTodosHojaProgramarCurso()"></button>
 
-                <div class="hoja-grupo-titulo">Cuándo</div>
+                <div class="hoja-grupo-titulo">Para qué fecha</div>
                 <div class="hoja-grupo">
-                    <div class="form-group">
-                        <label for="curso-fecha">Fecha y hora del curso</label>
-                        <input id="curso-fecha" type="datetime-local" onchange="window.pintarResumenProgramarCurso()"
-                               style="width:100%; box-sizing:border-box; font-size:16px; padding:10px; border:1px solid #cbd5e1; border-radius:10px; background:white;">
-                    </div>
-                    <div class="form-group">
-                        <label for="curso-instructor">Quién lo imparte <span style="color:#94a3b8; font-weight:400;">(opcional)</span></label>
-                        <input id="curso-instructor" type="text" autocomplete="off" placeholder="Nombre del instructor"
-                               style="width:100%; box-sizing:border-box; font-size:16px; padding:10px; border:1px solid #cbd5e1; border-radius:10px;">
+                    <div class="form-group" style="margin:0;">
+                        <label for="curso-fecha">Fecha del curso</label>
+                        <input id="curso-fecha" type="date" class="curso-fecha-campo"
+                               onchange="window.pintarResumenProgramarCurso()" oninput="window.pintarResumenProgramarCurso()">
                     </div>
                 </div>
 
@@ -126,9 +121,7 @@ window.abrirHojaProgramarCurso = (evaluationId) => {
 
     const overlay = window.montarHojaProgramarCurso();
     const fecha = document.getElementById('curso-fecha');
-    const instructor = document.getElementById('curso-instructor');
     if (fecha) fecha.value = '';
-    if (instructor) instructor.value = '';
     overlay.style.display = 'flex';
     window.pintarHojaProgramarCurso();
 };
@@ -195,6 +188,17 @@ window.pintarHojaProgramarCurso = () => {
     window.pintarResumenProgramarCurso();
 };
 
+// El día elegido, a la medianoche local: desde ese instante la encuesta le
+// vuelve a salir (`estadoDeCursoPrevio` sólo la esconde mientras la fecha está
+// por venir). Con `fechaDeRegistro`, que `new Date('2026-10-15')` se lee en UTC
+// y la zona horaria lo correría un día hacia atrás.
+const fechaDelCampoCurso = () => {
+    const campo = document.getElementById('curso-fecha');
+    if (!campo || !/^\d{4}-\d{2}-\d{2}$/.test(campo.value || '')) return null;
+    const d = window.fechaDeRegistro(campo.value);
+    return d && !isNaN(d) ? d : null;
+};
+
 window.pintarResumenProgramarCurso = () => {
     const grupo = grupoDelCurso();
     const caja = document.getElementById('curso-resumen');
@@ -202,24 +206,25 @@ window.pintarResumenProgramarCurso = () => {
     if (!grupo || !caja) return;
     const estado = window.hojaCurso;
     const cuantos = estado.elegidos.size;
-    const campo = document.getElementById('curso-fecha');
-    const fecha = campo && campo.value ? new Date(campo.value) : null;
-    const hayFecha = fecha && !isNaN(fecha);
+    const fecha = fechaDelCampoCurso();
+    const hayFecha = !!fecha;
 
     const quedan = grupo.esperan.filter(x => !estado.elegidos.has(String(x.emp.id))).length;
     const partes = [];
     if (cuantos === 0) {
-        partes.push('Marca a quién le programas el curso.');
+        partes.push('Marca a quién ya tiene el curso programado.');
     } else {
         const quien = cuantos === 1
             ? window.sanitizeForHTML(String((grupo.esperan.concat(grupo.programados)
                 .find(x => estado.elegidos.has(String(x.emp.id))) || {}).emp?.name || '').trim())
             : `${cuantos} personas`;
-        partes.push(hayFecha
-            ? `Se le${cuantos === 1 ? '' : 's'} programa a <b>${quien}</b> el <b>${window.textoDeFechaCurso(fecha)}</b> y la encuesta le${cuantos === 1 ? '' : 's'} volverá a salir con esa fecha.`
-            : `Se le${cuantos === 1 ? '' : 's'} programa a <b>${quien}</b>. Falta la fecha y la hora.`);
-        if (hayFecha && fecha <= new Date()) {
-            partes.push(`Es una fecha que ya pasó: se da por impartido y la encuesta le${cuantos === 1 ? '' : 's'} sale ya para contestarla.`);
+        const le = cuantos === 1 ? 'le' : 'les';
+        if (!hayFecha) {
+            partes.push(`<b>${quien}</b>: falta la fecha del curso.`);
+        } else if (fecha > new Date()) {
+            partes.push(`<b>${quien}</b> ${cuantos === 1 ? 'tiene' : 'tienen'} el curso el <b>${window.textoDeFechaCurso(fecha)}</b>. Ese día ${le} vuelve a salir la encuesta para contestarla.`);
+        } else {
+            partes.push(`<b>${quien}</b>: ${window.diaLocal(fecha) === window.diaLocal(new Date()) ? 'el curso es hoy' : 'esa fecha ya pasó'}, así que la encuesta ${le} sale ya para contestarla.`);
         }
     }
     if (quedan > 0 && cuantos > 0) {
@@ -237,11 +242,9 @@ window.guardarHojaProgramarCurso = async () => {
     const yo = yoEnCursos();
     if (!grupo || !yo || estado.guardando) return;
 
-    const campo = document.getElementById('curso-fecha');
-    const fecha = campo && campo.value ? new Date(campo.value) : null;
-    if (estado.elegidos.size === 0) { alert('Marca a quién le programas el curso.'); return; }
-    if (!fecha || isNaN(fecha)) { alert('Pon la fecha y la hora del curso.'); return; }
-    const instructor = (document.getElementById('curso-instructor') || {}).value || '';
+    const fecha = fechaDelCampoCurso();
+    if (estado.elegidos.size === 0) { alert('Marca a quién ya tiene el curso programado.'); return; }
+    if (!fecha) { alert('Pon la fecha del curso.'); return; }
 
     const sub = document.getElementById('subtitulo-programar-curso');
     const btn = document.getElementById('btn-programar-curso');
@@ -249,7 +252,7 @@ window.guardarHojaProgramarCurso = async () => {
     if (btn) btn.disabled = true;
     if (sub) sub.innerText = 'Programando…';
     try {
-        await window.programarCursoPrevio(grupo.ev.id, Array.from(estado.elegidos), fecha, instructor, yo.id);
+        await window.programarCursoPrevio(grupo.ev.id, Array.from(estado.elegidos), fecha, '', yo.id);
         window.cerrarHojaProgramarCurso();
         alCambiarCursos();
     } catch (e) {

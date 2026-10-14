@@ -4131,6 +4131,30 @@ textarea:focus {
     border-radius: 9px;
 }
 
+/* El día del curso en «Programar curso». Safari en iOS le da a un campo de
+   fecha un ancho mínimo propio y lo centra, así que con `width:100%` se salía
+   de la tarjeta por la derecha; sin su apariencia nativa encoge al hueco que
+   tiene y se lee alineado como los demás. Sin apariencia y vacío se queda sin
+   alto, de ahí el `min-height`. 16px por el zoom de Safari. */
+.curso-fecha-campo {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-height: 44px;
+    -webkit-appearance: none;
+    appearance: none;
+    font-size: 16px;
+    padding: 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: white;
+    color: #0f172a;
+    text-align: left;
+}
+.curso-fecha-campo::-webkit-date-and-time-value { text-align: left; }
+
 /* =========================================
    SAFE AREA (iPhone con notch / isla dinámica)
    =========================================

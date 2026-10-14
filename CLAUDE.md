@@ -2231,17 +2231,28 @@ Las reglas para usarlo:
      lista sale con el neutro, «Esperando curso · lo programa tu jefe».
   2. **Su jefe** ve en «Mis Pendientes» una tarjeta **«Programar curso: ‹curso›»
      por encuesta**, con la gente de su equipo directo que espera. La hoja
-     `#modal-programar-curso` deja marcar **a unos cuantos** y ponerles fecha,
-     hora y —opcional— quién lo imparte: lo normal es mandarlos en grupos de
-     pocos y en días distintos, así que los que no se marquen siguen esperando
-     y la tarjeta se queda mientras quede alguno. Una fecha pasada vale: es un
-     curso que ya se dio.
+     `#modal-programar-curso` **sólo le pregunta a quién ya tiene programado y
+     para qué día**: se marca a unos cuantos —lo normal es mandarlos en grupos
+     de pocos y en días distintos, así que los que no se marquen siguen
+     esperando y la tarjeta se queda mientras quede alguno— y se pone la fecha.
+     **Sin hora y sin instructor**: los pedía y nadie los llenaba, y lo único
+     que hace falta saber es qué día vuelve la encuesta. Se guarda **a la
+     medianoche local de ese día** (`fechaDeRegistro`), así que desde que
+     empieza ese día la encuesta le sale. Hoy o una fecha pasada valen: es un
+     curso que ya se dio y la encuesta sale ya.
+
+     El campo es un `type="date"` con su clase `.curso-fecha-campo`, **sin la
+     apariencia nativa**: Safari en iOS le da al de fecha un ancho mínimo propio
+     y con `width:100%` se salía de la tarjeta por la derecha. Sin apariencia y
+     vacío se queda sin alto, de ahí su `min-height`.
   3. **Con fecha por venir**, la encuesta le vuelve a salir en «Mis Pendientes»
-     con «Curso: jue 15 oct, 7:00 a.m.» y quién lo imparte, **sin contar** en el
-     círculo ni en el badge —todavía no hay nada que pueda hacer—.
-  4. **Pasada la hora** es un pendiente como cualquier otro. Al abrirla, la
+     con «Curso: mar 20 oct», **sin contar** en el círculo ni en el badge
+     —todavía no hay nada que pueda hacer—. `textoDeFechaCurso` **no dice la
+     hora cuando es medianoche**, que «12:00 a.m.» se leería como una hora de
+     verdad; las que se programaron antes con hora la siguen diciendo.
+  4. **Llegado el día** es un pendiente como cualquier otro. Al abrirla, la
      tarjeta del curso dice «Tu jefe te lo programó: …» y al decir que sí ya
-     vienen escritos el instructor y la fecha. Al enviarla, la fila pasa a
+     viene escrita la fecha. Al enviarla, la fila pasa a
      `tomado` (`marcarCursoTomado`).
   5. **Si vuelve a decir que no**, la fila regresa a «esperando» con el curso
      que no tomó en `fecha_fallida`, y la tarjeta del jefe lo dice: «Ana no lo
@@ -2295,7 +2306,7 @@ Las reglas para usarlo:
   - **La hoja de programar va encima de la de pendientes** (z-index 2000 sobre
     1900), como la de vacaciones: es lo que hay que resolver del pendiente que
     se acaba de tocar. Su acción principal va en el encabezado, que la hoja
-    lleva un campo de fecha y hora con rueda.
+    lleva un campo de fecha con rueda.
 
   La tabla es `cursos_previos` (`sql/curso-previo-programado.sql`, que se corre
   a mano) y está en `RASTROS_DEL_EMPLEADO`: lo suyo se borra con su ficha y lo
