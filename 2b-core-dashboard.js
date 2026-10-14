@@ -3858,6 +3858,54 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
     actualizarBadgeEquipo();
 };
 
+// --- LOS REGISTROS QUE A CADA QUIEN LE FALTAN POR FIRMAR ---
+//
+// Una sola llamada a `incidentes_sin_firmar` (sql/incidentes-sin-firmar.sql)
+// por cada veinte personas, que devuelve sólo lo que falta —casi siempre
+// nada— en vez de todo lo firmado. La regla de quién firma sigue siendo la de
+// `leTocaFirmar`: las bajas y los puestos exentos no se le preguntan a la base,
+// y la fecha de alta va calculada aquí, con `fechaDeAltaEmpleado`, que es la
+// medianoche local que compara el resto de la aplicación.
+//
+// Devuelve un Map { idEmpleado: [tipo, …] } con todos los preguntados —vacío
+// quien lo tiene todo firmado—, o **null** si algo falla: sin la función, sin
+// red, o con un tramo que llegó al tope de filas de PostgREST (mil), que
+// cortaría la lista en silencio. Con null se cuenta como antes.
+window.TOPE_FILAS_POSTGREST = 1000;
+window.incidentesSinFirmar = async (ids) => {
+    // Quien no está en la plantilla de memoria se pregunta igual, desde el
+    // principio de los tiempos: es lo que hacía la cuenta de antes con una
+    // ficha que no encontraba, y callarlo aquí le borraría sus pendientes.
+    const fichaDe = (id) => (window.todosLosEmpleadosData || []).find(e => String(e.id) === id);
+    const firmantes = (ids || []).map(id => String(id).trim()).filter(id => {
+        const emp = fichaDe(id);
+        return window.empleadoActivo(emp) && !window.esPuestoExentoDeFirmar(emp ? emp.puesto : '');
+    });
+    const resultado = new Map(firmantes.map(id => [id, []]));
+    if (firmantes.length === 0) return resultado;
+
+    // Los tramos van a la vez: cada vuelta es casi toda red, y en serie la
+    // lista de toda la plantilla tardaba lo que tardan veintitrés.
+    const tramos = [];
+    for (let i = 0; i < firmantes.length; i += 20) tramos.push(firmantes.slice(i, i + 20));
+    try {
+        const respuestas = await Promise.all(tramos.map(tramo => sb.rpc('incidentes_sin_firmar', {
+            p_empleados: tramo,
+            p_desdes: tramo.map(id => window.diaLocal(window.fechaDeAltaEmpleado(fichaDe(id))))
+        })));
+        for (const { data, error } of respuestas) {
+            if (error || !Array.isArray(data) || data.length >= window.TOPE_FILAS_POSTGREST) return null;
+            data.forEach(f => {
+                const lista = resultado.get(String(f.employee_id));
+                if (lista) lista.push(f.tipo);
+            });
+        }
+        return resultado;
+    } catch (e) {
+        return null;
+    }
+};
+
 // Lo que va de camino, por persona: { idEmpleado: promesa }.
 window.pendientesEnCurso = {};
 
@@ -3894,8 +3942,16 @@ const calcularPendientesAhora = async (idsFaltantes) => {
             
         const activeEvals = activeEvalsDb ? activeEvalsDb : [];
 
-        const { data: incidentes } = await sb.from('incidents')
-            .select('id, tipo, date');
+        // Los registros sin firmar de todos de una vez, ya contados en la base
+        // (`incidentes_sin_firmar`): antes se traía, persona por persona, la
+        // lista entera de lo que había firmado —unos trescientos ids cada una—
+        // para restarla aquí, y en el panel de un jefe eso era la mitad de lo
+        // que bajaba. `null` en cualquier problema, y entonces se hace como antes.
+        const sinFirmar = await window.incidentesSinFirmar(idsFaltantes);
+        let incidentes = null;
+        if (!sinFirmar) {
+            ({ data: incidentes } = await sb.from('incidents').select('id, tipo, date'));
+        }
 
         await Promise.all(idsFaltantes.map(async (empId) => {
             const empStrId = String(empId).trim();
@@ -4004,7 +4060,11 @@ const calcularPendientesAhora = async (idsFaltantes) => {
             let countInc = 0;
             let countDif = 0;
 
-            if (!window.esPuestoExentoDeFirmar(puestoEmpleado) && incidentes && incidentes.length > 0) {
+            if (sinFirmar && sinFirmar.has(empStrId)) {
+                sinFirmar.get(empStrId).forEach(tipo => {
+                    if (tipo === 'Difusión') countDif++; else countInc++;
+                });
+            } else if (!sinFirmar && !window.esPuestoExentoDeFirmar(puestoEmpleado) && incidentes && incidentes.length > 0) {
                 const { data: firmas } = await sb.from('incident_signatures')
                     .select('incident_id')
                     .eq('employee_id', empId);

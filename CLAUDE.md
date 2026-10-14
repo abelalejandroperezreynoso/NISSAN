@@ -5783,9 +5783,34 @@ Las reglas para usarlo:
 
   **Sólo se comparte lo que va de camino, no el resultado**: quien llama
   después de que termine vuelve a consultar, que es lo que necesitan las
-  pantallas que rehacen la plantilla tras escribir. Medido sobre la base real,
-  el panel de ese jefe pasó de 515 a 273 KB por carga (con «Mis Pendientes», de
-  889 a 354), y el de un operador de 104 a 80.
+  pantallas que rehacen la plantilla tras escribir.
+
+  **Y las firmas que faltan las cuenta la base.** Aun calculando a cada persona
+  una sola vez, el badge se traía de cada una la lista entera de lo que había
+  firmado —unos trescientos ids— para restarla en el navegador. Hoy pregunta
+  sólo por lo que falta, a la función `incidentes_sin_firmar`
+  (`sql/incidentes-sin-firmar.sql`, también en `supabase/migrations/`), de
+  veinte personas en veinte y con los tramos a la vez:
+
+  ```js
+  await window.incidentesSinFirmar(ids)   // Map { idEmpleado: [tipo, …] }, o null
+  ```
+
+  - **La regla de quién firma sigue aquí** (`leTocaFirmar`): las bajas y los
+    puestos exentos no se le preguntan a la base, y la fecha de alta la manda el
+    cliente (`fechaDeAltaEmpleado` pasada por `diaLocal`), que es la medianoche
+    local con la que compara el resto de la aplicación. Quien no está en la
+    plantilla de memoria se pregunta igual, desde el principio, que es lo que
+    hacía la cuenta de antes.
+  - **`null` es «cuéntalo como antes»**: sin la función, sin red o con un tramo
+    que llegó a las mil filas de PostgREST —que cortaría la lista en silencio—.
+  - **Los `materialized` de la función hacen falta**: con un `not exists` el
+    plan tardaba 3 s para un equipo de once; así, 20 ms.
+
+  Se comparó persona por persona contra la cuenta de antes —71, las 33 que hoy
+  tienen algo sin firmar entre ellas— y no discrepó ninguna. Medido sobre la
+  base real, el panel de ese jefe pasó de 515 a **181 KB** por carga, y el de un
+  operador de 104 a 80.
 
 - **La tarjeta de un pendiente se parte en filas en el teléfono.** El
   `.card-header` reparte el ancho en tres columnas —el icono, el texto y el
