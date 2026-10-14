@@ -312,16 +312,48 @@ window.diapositivasDeSemana = (i) => {
 
 // --- LA AGENDA ---
 //
-// La primera diapositiva de la junta: qué se va a ver y en qué página. No se
-// escribe a mano: sale del mismo mazo que se va a enseñar
-// (`diapositivasDeSemana`), así que si una clasificación no existía ese
-// periodo no aparece, si una dejó evidencias lo dice con su cámara y las
-// páginas son las de verdad. Tres bloques, como la junta: el resultado de la
-// planta, una fila por clasificación y la reflexión, con el departamento en el
-// que se enfoca. Sin cifras: la agenda dice de qué se va a hablar, no cómo
+// La primera diapositiva de la junta: una tabla con cuánto dura cada punto, qué
+// se ve, quién lo atiende y en qué página está, que es el formato de agenda que
+// ya se usa en planta. No se escribe a mano: sale del mismo mazo que se va a
+// enseñar (`diapositivasDeSemana`), así que si una clasificación no existía ese
+// periodo no aparece, si una dejó evidencias lo dice con su cámara y las páginas
+// son las de verdad. Sin cifras: la agenda dice de qué se va a hablar, no cómo
 // salió, que para eso está la diapositiva siguiente.
+//
+// Quién atiende cada punto sale de lo que ya dice la aplicación: la planta y la
+// propia agenda, quien la presenta (la sesión); una clasificación, quien la
+// revisa (`revisoresDelGrupo`); la reflexión, el departamento rezagado y su
+// responsable (`responsableDeDepartamento`). Los minutos son sugeridos
+// (`MINUTOS_AGENDA`) y se suman en el encabezado.
+window.MINUTOS_AGENDA = { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10 };
+
+// «Pérez Reynoso Abel Alejandro» → «Abel Pérez»: aquí los nombres empiezan por
+// los apellidos, y en una agenda se lee el nombre de pila y el primer apellido.
+window.nombreDeAgenda = (nombre) => {
+    const t = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+    return t.length >= 3 ? `${t[2]} ${t[0]}` : t.join(' ');
+};
+
+// Quién responde por un departamento: su JR. Manager si lo tiene; si no, quien
+// encabeza su cadena dentro de él —su jefe no es del departamento— con más gente
+// del departamento a su cargo directo. Null si no se puede decir.
+window.responsableDeDepartamento = (nombre) => {
+    const deptDe = window.deptDeEmpleado || (e => String(e.department || e.dept || '').trim() || 'Sin Departamento');
+    const gente = (window.todosLosEmpleadosData || []).filter(e => window.empleadoActivo(e) && deptDe(e) === nombre);
+    if (!gente.length) return null;
+    const jr = gente.find(e => /^JR\.?\s*MANAGER$/i.test(String(e.puesto || e.Puesto || '').trim()));
+    if (jr) return jr;
+    const ids = new Set(gente.map(e => String(e.id)));
+    const aCargo = {};
+    gente.forEach(e => { const s = String(e.supId || '').trim(); if (ids.has(s)) aCargo[s] = (aCargo[s] || 0) + 1; });
+    const cabezas = gente.filter(e => aCargo[String(e.id)] && !ids.has(String(e.supId || '').trim()))
+        .sort((a, b) => aCargo[String(b.id)] - aCargo[String(a.id)]);
+    return cabezas[0] || null;
+};
+
 window.diapositivaDeAgenda = (i, numero, cuantas) => {
     const C = window.COLORES_IOS;
+    const M = window.MINUTOS_AGENDA;
     const el = [];
     const semana = window.presentacion.semanas[i];
     const r = window.resultadoDeSemana(i);
@@ -330,75 +362,118 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     const texto = (x, y, w, h, t, tam, col, extra) =>
         el.push(Object.assign({ tipo: 'texto', x, y, w, h, texto: t, tam, color: col }, extra || {}));
     const nom = window.nombreDelPeriodo();
+    const recorta = (t, ancho, tam) => window.nombreDeFila(String(t || ''), Math.max(4, Math.floor(ancho / (tam * 0.55))));
 
-    el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
-    texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
-    texto(48, 58, 700, 44, 'Agenda', 34, C.texto, { peso: 700 });
-    texto(612, 40, 300, 16, 'Panel de Mantenimiento', 12, C.terciario, { alinear: 'right', peso: 500 });
+    // Quien presenta: la ficha de la sesión, o el nombre que trae.
+    let sesion = {};
+    try { sesion = JSON.parse(localStorage.getItem('usuarioLogueado') || '{}') || {}; } catch (e) { sesion = {}; }
+    const yo = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(sesion.id));
+    const presenta = window.nombreDeAgenda((yo && yo.name) || sesion.name || '');
 
-    // Cada bloque es una tarjeta del gris de las listas agrupadas, con su
-    // número en un círculo azul y su título; debajo, sus renglones con la
-    // página a la derecha.
-    const tarjeta = (x, y, w, h, n, titulo, detalle) => {
-        el.push({ tipo: 'rect', x, y, w, h, relleno: C.agrupado, radio: 18 });
-        el.push({ tipo: 'circulo', cx: x + 30, cy: y + 30, r: 13, relleno: C.azul });
-        texto(x + 17, y + 20, 26, 20, String(n), 14, '#ffffff', { peso: 700, alinear: 'center' });
-        texto(x + 54, y + 17, w - 70, 22, titulo, 18, C.texto, { peso: 700 });
-        if (detalle) texto(x + 54, y + 39, w - 70, 16, detalle, 11.5, C.secundario);
-    };
-    const renglon = (x, y, w, alto, t, pag, conFotos, separador, tam) => {
-        if (separador) el.push({ tipo: 'linea', x1: x, y1: y, x2: x + w, y2: y, color: C.separador, grosor: 1 });
-        const reserva = 54 + (conFotos ? 22 : 0);
-        const max = Math.floor((w - reserva) / ((tam || 13) * 0.55));
-        texto(x, y, w - reserva, alto, window.nombreDeFila(t, max), tam || 13, C.texto, { peso: 500 });
-        if (conFotos) el.push({ tipo: 'icono', glifo: 'photo', x: x + w - 72, y: y + alto / 2 - 8, lado: 16, color: C.secundario });
-        if (pag) texto(x + w - 50, y, 50, alto, `pág. ${pag}`, 11, C.terciario, { peso: 600, alinear: 'right' });
-    };
+    // Los renglones, en el orden del mazo.
+    const filas = [];
+    filas.push({ min: M.agenda, actividad: 'Explicación de la agenda', atiende: presenta, pag: pagina('agenda') });
+    filas.push({ min: M.planta, actividad: 'Resultado de la planta',
+        detalle: `cifra general, tendencia y quién destacó ${nom.del}`, atiende: presenta, pag: pagina('') });
 
-    // 1. La planta.
-    tarjeta(48, 132, 400, 118, 1, 'Resultado de la planta', `La cifra general, su tendencia y quién destacó ${nom.del}`);
-    renglon(102, 196, 330, 34, 'Resultado general y por clasificación', pagina(''), false, true);
-
-    // 3. La reflexión, enfocada en el departamento con menor desempeño.
-    const rezagado = window.departamentoRezagado(i);
-    const deReflexion = mazo.filter(d => d.reflexion);
-    const altoReflexion = 72 + deReflexion.length * 34 + 14;
-    tarjeta(48, 270, 400, altoReflexion, 3, 'Reflexión',
-        rezagado ? `Enfocada en ${window.partirEnRenglones(rezagado.nombre, 34, 1)[0]}` : 'Lo que nos dicen los resultados');
-    deReflexion.forEach((d, k) => {
-        const t = d.reflexion === 1 ? '¿Qué nos dicen los resultados?'
-            : d.reflexion === 'evidencias' ? `Evidencias de ${rezagado ? rezagado.nombre : 'el departamento'}`
-            : '¿Qué vamos a hacer? · compromisos';
-        renglon(102, 334 + k * 34, 330, 34, t, pagina(d.id), d.reflexion === 'evidencias', true);
+    const porClave = {};
+    r.clasificaciones.forEach(c => { porClave[c.clave] = c; });
+    const conFotos = new Set(mazo.filter(d => d.evidencias).map(d => d.clave));
+    const evDe = (id) => ((window.filasDeLaTarjeta || []).find(f => String(f.ev.id) === String(id)) || {}).ev || null;
+    mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion).forEach(d => {
+        const c = porClave[d.clave] || { nombre: d.clave, encuestas: [] };
+        const grupo = { filas: (c.encuestas || []).map(e => evDe(e.id)).filter(Boolean).map(ev => ({ ev })) };
+        const revisores = grupo.filas.length ? window.revisoresDelGrupo(grupo) : [];
+        const nombres = revisores.slice(0, 2).map(x => window.nombreDeAgenda(x.emp ? x.emp.name : `ID ${x.id}`));
+        const fotos = conFotos.has(d.clave);
+        const pIni = pagina(d.id), pFin = fotos ? pagina(`evidencias:${d.clave}`) : null;
+        filas.push({
+            min: M.clasificacion + (fotos ? M.evidencias : 0), actividad: c.nombre, fotos,
+            atiende: nombres.length ? nombres.join(', ') + (revisores.length > 2 ? ` y ${revisores.length - 2} más` : '') : '',
+            pag: pFin ? `${pIni}–${pFin}` : pIni, clasificacion: true
+        });
     });
 
-    // 2. Las clasificaciones, en el orden del mazo: una fila cada una, con la
-    // cámara si esa semana dejó evidencias. Con muchas, los renglones se
-    // aprietan; por debajo de 22 px se cuentan las que no caben.
-    const clasif = mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion);
-    const nombres = {};
-    r.clasificaciones.forEach(c => { nombres[c.clave] = c.nombre; });
-    const conFotos = new Set(mazo.filter(d => d.evidencias).map(d => d.clave));
-    const xc = 478, wc = 434, yc = 132, hc = 358;
-    tarjeta(xc, yc, wc, hc, 2, 'Clasificaciones',
-        `${clasif.length} ${clasif.length === 1 ? 'clasificación' : 'clasificaciones'}` +
-        (conFotos.size ? ` · ${conFotos.size} con evidencias` : ''));
-    const espacio = hc - 76 - 12;
-    const altoFila = Math.max(22, Math.min(34, espacio / Math.max(clasif.length, 1)));
-    const caben = Math.floor(espacio / altoFila);
-    const lista = clasif.length > caben ? clasif.slice(0, caben - 1) : clasif;
-    const tam = altoFila < 28 ? 12 : 13;
-    lista.forEach((d, k) => renglon(xc + 54, yc + 64 + k * altoFila, wc - 70, altoFila,
-        nombres[d.clave] || d.clave, pagina(d.id), conFotos.has(d.clave), true, tam));
-    if (lista.length < clasif.length) {
-        texto(xc + 54, yc + 64 + lista.length * altoFila, wc - 70, altoFila,
-            `y ${clasif.length - lista.length} más`, 12, C.secundario);
+    const rezagado = window.departamentoRezagado(i);
+    const responsable = rezagado ? window.responsableDeDepartamento(rezagado.nombre) : null;
+    const atiendeDepto = rezagado
+        ? rezagado.nombre + (responsable ? ` · ${window.nombreDeAgenda(responsable.name)}` : '') : presenta;
+    mazo.filter(d => d.reflexion).forEach(d => {
+        if (d.reflexion === 1) filas.push({ min: M.lectura, actividad: 'Reflexión · ¿qué nos dicen los resultados?',
+            detalle: rezagado ? `enfocada en ${rezagado.nombre}` : '', atiende: atiendeDepto, pag: pagina(d.id) });
+        else if (d.reflexion === 'evidencias') filas.push({ min: M.evidencias, fotos: true,
+            actividad: `Evidencias de ${rezagado ? rezagado.nombre : 'el departamento'}`, atiende: atiendeDepto, pag: pagina(d.id) });
+        else filas.push({ min: M.acciones, actividad: '¿Qué vamos a hacer? · compromisos',
+            detalle: 'acción, responsable y fecha', atiende: atiendeDepto, pag: pagina(d.id) });
+    });
+    const total = filas.reduce((a, f) => a + f.min, 0);
+
+    // Encabezado: el periodo, el título y, a la derecha, la duración.
+    el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
+    texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
+    texto(48, 58, 520, 44, 'Agenda', 34, C.texto, { peso: 700 });
+    texto(612, 40, 300, 16, 'DURACIÓN APROXIMADA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
+    texto(612, 60, 300, 36, `${total} min`, 30, C.azul, { alinear: 'right', peso: 700 });
+
+    // La tabla, sobre el gris de las listas agrupadas.
+    const X = 48, Y = 120, W = 864, H = 372;
+    const col = { tiempo: X + 18, actividad: X + 96, atiende: X + 520, pag: X + W - 18 };
+    const anchoActividad = col.atiende - col.actividad - 16;
+    const anchoAtiende = col.pag - 52 - col.atiende;
+    el.push({ tipo: 'rect', x: X, y: Y, w: W, h: H, relleno: C.agrupado, radio: 18 });
+    const cab = (x, w, t, alinear) => texto(x, Y + 12, w, 16, t, 10.5, C.secundario, { peso: 600, espaciado: 0.6, alinear });
+    cab(col.tiempo, 70, 'TIEMPO');
+    cab(col.actividad, 300, 'ACTIVIDAD');
+    cab(col.atiende, 240, 'ATIENDE');
+    cab(col.pag - 60, 60, 'PÁG.', 'right');
+
+    // Con muchas clasificaciones los renglones se aprietan; por debajo de 22 px
+    // las que no caben se juntan en una fila «y N más», con sus minutos.
+    const y0 = Y + 36, espacio = H - 36 - 10;
+    let lista = filas;
+    let alto = Math.max(22, Math.min(38, espacio / filas.length));
+    const caben = Math.floor(espacio / alto);
+    if (filas.length > caben) {
+        const clas = filas.filter(f => f.clasificacion);
+        const sobran = filas.length - caben + 1;
+        const fuera = new Set(clas.slice(clas.length - sobran));
+        const ultima = filas.indexOf(clas[clas.length - sobran]);
+        lista = filas.filter(f => !fuera.has(f));
+        lista.splice(ultima, 0, { min: [...fuera].reduce((a, f) => a + f.min, 0),
+            actividad: `y ${fuera.size} clasificaciones más`, atiende: '', gris: true });
     }
+    const tam = alto < 28 ? 12 : 13.5;
+    lista.forEach((f, k) => {
+        const y = y0 + k * alto;
+        el.push({ tipo: 'linea', x1: X + 14, y1: y, x2: X + W - 14, y2: y, color: C.separador, grosor: 1 });
+        const hp = Math.min(22, alto - 6);
+        el.push({ tipo: 'rect', x: col.tiempo, y: y + (alto - hp) / 2, w: 58, h: hp,
+            relleno: window.tinteIOS(f.gris ? C.terciario : C.azul, 0.86), radio: hp / 2 });
+        texto(col.tiempo, y, 58, alto, `${f.min} min`, tam - 1.5, f.gris ? C.secundario : C.azul, { peso: 700, alinear: 'center' });
+
+        const reserva = f.fotos ? 24 : 0;
+        const largo = recorta(f.actividad, anchoActividad - reserva, tam);
+        if (f.detalle && alto >= 30) {
+            texto(col.actividad, y + 3, anchoActividad - reserva, alto / 2 + 2, largo, tam, f.gris ? C.secundario : C.texto, { peso: 600 });
+            texto(col.actividad, y + alto / 2 - 1, anchoActividad, alto / 2 - 2, recorta(f.detalle, anchoActividad, 11), 11, C.secundario);
+        } else {
+            texto(col.actividad, y, anchoActividad - reserva, alto, largo, tam, f.gris ? C.secundario : C.texto, { peso: 600 });
+        }
+        // La cámara va en su propia columna, al final de la actividad, para que
+        // las de todas las filas queden a plomo.
+        if (f.fotos) el.push({ tipo: 'icono', glifo: 'photo', x: col.atiende - 36, y: y + alto / 2 - 8,
+            lado: 16, color: C.secundario });
+
+        if (!f.gris) texto(col.atiende, y, anchoAtiende, alto,
+            f.atiende ? recorta(f.atiende, anchoAtiende, tam - 1) : 'Su jefe inmediato', tam - 1,
+            f.atiende ? C.texto : C.terciario, { peso: f.atiende ? 500 : 400 });
+        if (f.pag) texto(col.pag - 60, y, 60, alto, String(f.pag), tam - 1, C.terciario, { peso: 600, alinear: 'right' });
+    });
 
     const hoy = new Date();
     if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
     texto(48, 506, 760, 16,
-        `Se arma sola con las diapositivas de este periodo · ` +
+        `Tiempos sugeridos · se arma sola con las diapositivas de este periodo · ` +
         `generada el ${hoy.getDate()} ${window.MESES_CORTOS[hoy.getMonth()]} ${hoy.getFullYear()}, ` +
         `${String(hoy.getHours()).padStart(2, '0')}:${String(hoy.getMinutes()).padStart(2, '0')}`,
         10, C.terciario);

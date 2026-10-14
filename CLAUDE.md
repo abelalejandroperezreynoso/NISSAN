@@ -5145,17 +5145,37 @@ Las reglas para usarlo:
     periodo que se mira y el cierre de la tendencia son el mismo instante y no
     tienen por qué calcularse dos veces.
 
-  **Y la primera es la agenda de la junta** (`window.diapositivaDeAgenda`):
-  qué se va a ver y en qué página, en tres tarjetas del gris de las listas
-  agrupadas con su número en un círculo azul —el resultado de la planta, una
-  fila por clasificación y la reflexión, que dice en qué departamento se
-  enfoca—. **No se escribe a mano: sale del mismo mazo que se va a enseñar**
+  **Y la primera es la agenda de la junta** (`window.diapositivaDeAgenda`),
+  con la forma de la agenda que ya se usa en planta: una tabla sobre el gris de
+  las listas agrupadas con **tiempo, actividad, quién atiende y página**, y la
+  duración total arriba a la derecha. Un renglón para explicar la agenda, otro
+  para el resultado de la planta, uno por clasificación y los de la reflexión
+  —lectura, evidencias del departamento si las hay y compromisos—. **No se
+  escribe a mano: sale del mismo mazo que se va a enseñar**
   (`diapositivasDeSemana`, que la pone delante con `id: 'agenda'`), así que una
   clasificación que no existía ese periodo no aparece, la que dejó evidencias
-  lleva su cámara y las páginas son las de verdad. **Va sin cifras**: dice de
-  qué se va a hablar, no cómo salió, que para eso está la siguiente. Con muchas
-  clasificaciones los renglones se aprietan hasta 22 px y las que no caben se
-  cuentan en «y N más».
+  lleva su cámara —y sus minutos y su segunda página, «5–6»— y las páginas son
+  las de verdad. **Va sin cifras**: dice de qué se va a hablar, no cómo salió,
+  que para eso está la siguiente.
+
+  ```js
+  window.MINUTOS_AGENDA                  // { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10 }
+  window.nombreDeAgenda(nombre)          // «Pérez Reynoso Abel Alejandro» → «Abel Pérez»
+  window.responsableDeDepartamento(nombre)   // su JR. Manager, o quien encabeza su cadena
+  ```
+
+  **Quién atiende sale de lo que ya sabe la aplicación**, no se escribe: la
+  agenda y la planta, quien la presenta (la ficha de la sesión); una
+  clasificación, quien la revisa (`revisoresDelGrupo`, hasta dos nombres y
+  «y N más»; sin revisores nombrados, «Su jefe inmediato» en gris, que es quien
+  califica entonces); la reflexión, el departamento rezagado y su responsable
+  —su JR. Manager y, sin él, la cabeza de su cadena con más gente del
+  departamento a cargo directo—. Los minutos son sugeridos y lo dice el pie.
+
+  Lo que la agenda de planta lleva y ésta no son **los invitados con su
+  asistencia a la junta anterior y el lugar**: la aplicación no sabe de esa
+  junta. Con muchas clasificaciones los renglones se aprietan hasta 22 px y las
+  que no caben se juntan en «y N clasificaciones más», con sus minutos sumados.
 
   Dos cosas que hay que mantener: **lo que no se encuentra al cambiar de semana
   cae en la diapositiva de la planta, no en la agenda** —`pintarPresentacionCompleta`
