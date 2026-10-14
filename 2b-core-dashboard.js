@@ -725,6 +725,7 @@ window.estadoDeAsignada = (v) => {
         case 'nunca':        return Object.assign({ texto: 'Sin contestar' }, rojo);
         case 'vencida':      return Object.assign({ texto: 'Vencida' }, rojo);
         case 'mal_revisada': return Object.assign({ texto: 'Mal revisada' }, rojo);
+        case 'anulada':      return Object.assign({ texto: 'Anulada' }, rojo);
         case 'reintento':    return Object.assign({ texto: 'Repetir' }, v.vencida ? rojo : ambar);
         case 'por_vencer': {
             const d = v.diasFaltantes;

@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-14-11';
+window.VERSION_APP = '2026-10-14-12';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3440,7 +3440,11 @@ window.respuestaQueYaCuenta = (ev, respuestas, fecha) => {
 
     // Las de antes de un relanzamiento no cuentan, como en todo lo demás: esa
     // vuelta nombra otro evento.
-    const suyas = window.respuestasTrasRelanzar(ev, respuestas || []);
+    // Y una anulada tampoco: anular es decir que esa respuesta no vale, y se
+    // le vuelve a pedir (`esEvaluacionPendiente`). Contándola aquí, el
+    // pendiente saldría y la encuesta se negaría a abrirse.
+    const suyas = window.respuestasTrasRelanzar(ev, respuestas || [])
+        .filter(r => r.review_status !== 'Falsa');
     if (suyas.length === 0) return null;
 
     const periodo = window.periodoDeEncuesta ? window.periodoDeEncuesta(ev, fecha) : null;

@@ -3027,6 +3027,26 @@ Las reglas para usarlo:
     escribir, y **cuenta las filas del `.select()`**, que aquí escribe quien no
     es administrador.
 
+  **Y anular le devuelve el pendiente a quien la contestó.** Una anulada
+  contaba como cualquier respuesta entregada: cerraba el pendiente —para
+  siempre en una de «única vez»— y en una de «una sola respuesta» además
+  cerraba la puerta, así que esa persona no tenía nada que hacer y nadie le
+  pedía reponerla. Hoy `esEvaluacionPendiente` la trata como a «Mal Revisada»:
+  si la última respuesta está anulada, el pendiente vuelve con `tipoAviso:
+  'anulada'`, que la tarjeta dice como **«Anulada · vuelve a contestarla»** y la
+  lista de encuestas como «Anulada», en rojo. Tres cosas que hay que mantener:
+
+  - **Sólo la del periodo que corre.** Una anulada de un periodo ya cerrado
+    deja que decida el periodo —el de ahora también hay que contestarlo— y la
+    racha se cuenta como siempre.
+  - **`respuestaQueYaCuenta` no la cuenta**, o el pendiente saldría y
+    `responderDirecto` se negaría a abrir la encuesta. Por eso la consulta de
+    ese freno se trae `review_status`.
+  - **Toda consulta de respuestas que decida un pendiente trae
+    `review_status`**, también la de «Encuesta Atrasada» del equipo, que no lo
+    traía: sin la columna, la anulada se lee como contestada y el jefe no se
+    entera de que hay que reponerla.
+
   **El modo restringido se queda**, y sigue siendo la puerta del botón «Editar a
   quién va dirigida» de la pantalla de la encuesta: es el atajo que lleva
   derecho a la sección que se viene a corregir, sin la hoja entera delante. Lo

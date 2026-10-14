@@ -438,6 +438,17 @@ const obtenerTiempoTranscurrido = (fechaStr) => {
 
         if (resps[0].review_status === 'Mal Revisada') return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'mal_revisada', ultimaFecha: ultima, periodosOmitidos: 0, frecuencia: frecuencia };
 
+        // **Anulada: no vale, así que se vuelve a pedir.** Quien la revisa la
+        // anula porque la foto no es del área o se contestó a ciegas, y eso
+        // no puede cerrar el pendiente como si se hubiera contestado bien.
+        // Va por encima del periodo, como «mal revisada», pero sólo la del
+        // periodo que corre: una anulada de un periodo ya cerrado deja que
+        // decida el periodo —este también hay que contestarlo— y la racha se
+        // cuenta como siempre.
+        if (resps[0].review_status === 'Falsa' && (!periodo || new Date(ultima) >= periodo.inicio)) {
+            return { mostrar: true, diasFaltantes: 0, vencida: true, tipoAviso: 'anulada', ultimaFecha: ultima, periodosOmitidos: 0, frecuencia: frecuencia };
+        }
+
         // No llegó al mínimo y la encuesta da plazo para reponerla. Va por
         // encima del periodo, igual que «mal revisada»: la contestó, pero no
         // cuenta.
@@ -1035,8 +1046,10 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     const selfEvals = activeEvalsDb ? activeEvalsDb.filter(ev => (ev.mode || 'self') === 'self' && ev.is_obligatory !== false && String(ev.is_obligatory) !== 'false') : [];
 
                     if (selfEvals.length > 0) {
+                        // `review_status` hace falta: una anulada vuelve a ser
+                        // pendiente, y sin la columna se leería como contestada.
                         const { data: teamResponses } = await sb.from('evaluation_responses')
-                            .select(await window.camposConApoyo('evaluation_id, employee_id, submitted_at'))
+                            .select(await window.camposConApoyo('evaluation_id, employee_id, submitted_at, review_status'))
                             .in('employee_id', teamIds);
 
                         const myFullTeam = window.todosLosEmpleadosData.filter(e => teamIds.includes(String(e.id)));
@@ -1203,6 +1216,10 @@ const activeEvals = activeEvalsDb ? activeEvalsDb : [];
                     // nada: al caer en el `else` de abajo diría «Vence en 0
                     // días».
                     badgeTiempoHtml = '';
+                } else if (item.vencimiento.tipoAviso === 'anulada') {
+                    // La contestó y se la anularon: no está vencida ni sin
+                    // contestar, está por reponer, y eso es lo que se dice.
+                    badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">Anulada · vuelve a contestarla</span>`;
                 } else if (item.vencimiento.vencida) {
                     const etiquetaVencida = item.vencimiento.tipoAviso === 'nunca' ? 'Nunca contestada' : 'Vencida';
                     badgeTiempoHtml = `<span style="background:#fee2e2; color:#b91c1c; font-size:0.75rem; font-weight:700; padding:3px 8px; border-radius:12px; display:inline-flex; align-items:center; gap:4px; margin-left:6px; border: 1px solid #fecaca;">${etiquetaVencida}</span>`;

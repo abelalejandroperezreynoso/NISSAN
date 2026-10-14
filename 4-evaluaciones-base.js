@@ -1372,7 +1372,7 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
             // Las suyas o las de apoyo, según lo que se va a contestar: una
             // respuesta cubriendo a otro no cierra la propia, ni al revés.
             const { data: miasTodas } = await sb.from('evaluation_responses')
-                .select(await window.camposConApoyo('id, submitted_at'))
+                .select(await window.camposConApoyo('id, submitted_at, review_status'))
                 .eq('evaluation_id', evalId)
                 .eq('employee_id', quienContesta);
             const mias = esApoyo
