@@ -2269,7 +2269,7 @@ window.verDetalleRespuesta = async (resp) => {
     }
 
     if (esAdminTotal) {
-            deleteButton = `<button onclick="borrarRespuestaIndividual('${resp.id}')" style="width:100%; background:white; color:#ef4444; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">🗑️ Eliminar esta respuesta</button>`;
+            deleteButton = `<button onclick="borrarRespuestaIndividual('${resp.id}')" style="width:100%; background:white; color:#ef4444; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">Eliminar esta respuesta</button>`;
 
             // El puntaje actual, o null si no hay nada calificado: una
             // encuesta hecha sólo de las que dejan constancia no sacó cero,
@@ -2280,21 +2280,21 @@ window.verDetalleRespuesta = async (resp) => {
 
             // Si está alterada, permitir restaurar
             if (resp.review_status === 'Falsa' || resp.review_status === 'Certificada' || resp.review_status === 'Mal Revisada') {
-                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Revisado')" style="width:100%; background:#dcfce7; color:#166534; padding:15px; border:1px solid #22c55e; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">✅ Restaurar a Validada</button>`);
+                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Revisado')" style="width:100%; background:#dcfce7; color:#166534; padding:15px; border:1px solid #22c55e; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">Restaurar a Validada</button>`);
             }
             
             // Certificar solo si tiene >= 80 —o si no hay puntaje que
             // exigirle— y no está certificada
             if ((scoreActual === null || scoreActual >= 80) && resp.review_status !== 'Certificada') {
-                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Certificada')" style="width:100%; background:#eff6ff; color:#1d4ed8; padding:15px; border:1px solid #3b82f6; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">⭐ Certificar Respuesta (Auditoría)</button>`);
+                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Certificada')" style="width:100%; background:#eff6ff; color:#1d4ed8; padding:15px; border:1px solid #3b82f6; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">Certificar Respuesta (Auditoría)</button>`);
             }
             
             // Botones de rechazo
             if (resp.review_status !== 'Mal Revisada') {
-                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Mal Revisada')" style="width:100%; background:#f3e8ff; color:#7e22ce; padding:15px; border:1px solid #a855f7; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">⚠️ Marcar como Mal Revisada (Requiere corrección)</button>`);
+                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Mal Revisada')" style="width:100%; background:#f3e8ff; color:#7e22ce; padding:15px; border:1px solid #a855f7; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">Marcar como Mal Revisada (Requiere corrección)</button>`);
             }
             if (resp.review_status !== 'Falsa') {
-                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Falsa')" style="width:100%; background:#fee2e2; color:#991b1b; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">🚫 Anular respuesta</button>`);
+                adminOptions.push(`<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Falsa')" style="width:100%; background:#fee2e2; color:#991b1b; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">Anular respuesta</button>`);
             }
 
             invalidarButton = adminOptions.join("");
@@ -2302,8 +2302,8 @@ window.verDetalleRespuesta = async (resp) => {
             // Quien revisa la encuesta puede anular una respuesta y deshacer
             // su propia anulación; el resto de los estados es del administrador.
             invalidarButton = resp.review_status === 'Falsa'
-                ? `<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Revisado')" style="width:100%; background:#dcfce7; color:#166534; padding:15px; border:1px solid #22c55e; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">✅ Quitar la anulación</button>`
-                : `<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Falsa')" style="width:100%; background:#fee2e2; color:#991b1b; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">🚫 Anular respuesta</button>`;
+                ? `<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Revisado')" style="width:100%; background:#dcfce7; color:#166534; padding:15px; border:1px solid #22c55e; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">Quitar la anulación</button>`
+                : `<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Falsa')" style="width:100%; background:#fee2e2; color:#991b1b; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">Anular respuesta</button>`;
         }
 
     let descHtml = '';
@@ -2433,7 +2433,7 @@ window.verDetalleRespuesta = async (resp) => {
                     <button onclick="cancelarRespuesta('history')" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                 </div>
             </div>
-            <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
+            <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
                 <div style="margin-bottom:20px;">
                     ${dateInputHtml}
                     ${selloRevisionHtml}
@@ -2662,11 +2662,11 @@ window.verDetalleRespuesta = async (resp) => {
                 
                 contentHtml = `
                 <div style="display:flex; flex-wrap:wrap; gap: 20px;">
-                    <div style="flex: 1; min-width:250px;">
+                    <div style="flex: 1 1 250px; min-width: 0;">
                         <div style="font-size:0.85rem; color:#64748b; margin-bottom:8px; font-weight:600;">Respuestas del Usuario (Editable y Calificable):</div>
                         ${inputsHtml}
                     </div>
-                    <div style="width: 250px; flex-shrink:0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:15px;">
+                    <div style="flex: 1 1 250px; min-width: 0; box-sizing: border-box; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:15px;">
                         <div style="font-size:0.85rem; color:#64748b; margin-bottom:8px; font-weight:600;">Modelo (${totalEsperado}):</div>
                         ${correctModelHtml}
                     </div>
@@ -2675,12 +2675,12 @@ window.verDetalleRespuesta = async (resp) => {
             } else if (['text', 'multiple', 'checklist'].includes(q.question_type)) {
                 let editableInput = '';
                 if (q.question_type === 'text') {
-                    editableInput = `<textarea class="admin-edit-answer" data-qid="${q.id}" data-type="${q.question_type}" ${readOnlyAttr} oninput="this.style.height=''; this.style.height=this.scrollHeight+'px'" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; font-size:0.95rem; background:${bgEditable}; resize:none; overflow-y:hidden; min-height:80px;">${rawRespuesta||''}</textarea>`;
+                    editableInput = `<textarea class="admin-edit-answer" data-qid="${q.id}" data-type="${q.question_type}" ${readOnlyAttr} oninput="this.style.height=''; this.style.height=this.scrollHeight+'px'" style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-family:inherit; font-size:0.95rem; background:${bgEditable}; resize:none; overflow-y:hidden; min-height:80px;">${rawRespuesta||''}</textarea>`;
                 } else if (q.question_type === 'multiple') {
                     let options = q.options || []; if(typeof options === 'string') try{options=JSON.parse(options)}catch(e){}
                     let optsHtml = `<option value="">(Sin selección)</option>`;
                     options.forEach(o => { optsHtml += `<option value="${o}" ${rawRespuesta===o?'selected':''}>${o}</option>`; });
-                    editableInput = `<select class="admin-edit-answer" data-qid="${q.id}" data-type="multiple" ${readOnlyAttr} style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem; background:${bgEditable};">${optsHtml}</select>`;
+                    editableInput = `<select class="admin-edit-answer" data-qid="${q.id}" data-type="multiple" ${readOnlyAttr} style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem; background:${bgEditable};">${optsHtml}</select>`;
                 } else if (q.question_type === 'checklist') {
                     let options = q.options || []; if(typeof options === 'string') try{options=JSON.parse(options)}catch(e){}
                     let checksHtml = ""; const currentArr = Array.isArray(rawRespuesta) ? rawRespuesta : [];
@@ -2715,11 +2715,11 @@ window.verDetalleRespuesta = async (resp) => {
 
                 contentHtml = `
                 <div style="display:flex; gap: 20px; flex-wrap:wrap;">
-                    <div style="flex: 1; min-width: 250px;">
+                    <div style="flex: 1 1 250px; min-width: 0;">
                         <div style="font-size:0.85rem; color:#64748b; margin-bottom:8px; font-weight:600;">Respuesta del Usuario:</div>
                         ${editableInput}
                     </div>
-                    <div style="width: 250px; flex-shrink:0; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:15px; display:flex; flex-direction:column; justify-content:space-between;">
+                    <div style="flex: 1 1 250px; min-width: 0; box-sizing: border-box; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:15px; display:flex; flex-direction:column; justify-content:space-between;">
                         <div>
                             <div style="font-size:0.85rem; color:#64748b; margin-bottom:6px; font-weight:600;">${modeloTitulo}</div>
                             <div style="background:#eff6ff; padding:8px 12px; border-radius:6px; font-size:0.9rem; color:#1e3a8a; border-left:3px solid #3b82f6; line-height:1.6;">${correctText}</div>

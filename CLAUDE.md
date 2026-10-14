@@ -6339,6 +6339,14 @@ Las reglas para usarlo:
   estadísticas de encuestas en un iPhone 12 mini, que con 375 px es el más
   estrecho que se usa en campo.
 
+  Lo mismo con un `width: 250px` fijo dentro de una tarjeta: el recuadro de la
+  respuesta modelo y la calificación de la hoja de detalle medía 250 más su
+  relleno y su borde, se salía de la tarjeta y, como `#simple-form-container`
+  se desplaza en vertical —y con eso también en horizontal—, el dedo arrastraba
+  las preguntas de lado al bajar por ellas. Hoy esas dos columnas van con
+  `flex: 1 1 250px; min-width: 0; box-sizing: border-box` y el contenedor lleva
+  `overflow-x: hidden`, que es la red por si otra cosa se vuelve a salir.
+
   Un `width` con `!important` tampoco basta cuando el elemento trae
   `min-width`: el mínimo manda siempre, venga de donde venga, así que la regla
   de `estilos.css` gana la pelea del alto y pierde la del ancho y el elemento
