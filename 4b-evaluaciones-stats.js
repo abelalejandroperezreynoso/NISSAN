@@ -277,9 +277,146 @@ window.avisoDeVersion = (referencia) => {
 };
 
 // --- 1. PUNTO DE ENTRADA (SOLO DESCARGA DAfv<TOS) ---
-window.cargarStatsEncuestasGlobales = async () => {
+// --- LO QUE SE DESCARGA PARA LAS ESTADÍSTICAS, Y CUÁNTO DURA ---
+//
+// La hoja se traía cada vez que se abría **todas las respuestas de la
+// historia** —siete páginas, casi un mega por el cable en modo administrador—
+// aunque se acabara de cerrar. Hoy se quedan en memoria (`descargaDeStats`)
+// mientras dure la pantalla, y abrirla otra vez no cuesta nada.
+//
+// La contrapartida es que **no se entera sola de lo que escriben otros**: lo
+// que califique alguien desde otro teléfono sale al pulsar el botón de volver a
+// descargar del encabezado o al recargar, y el subtítulo dice de cuándo es lo
+// que se ve. Lo que se escribe **desde este** sí la tira, porque va con
+// `invalidarCacheDashboard`. Y se guarda junto al modo en que se descargó: en
+// modo administrador entran las encuestas apagadas, así que cambiar de modo
+// vuelve a descargar.
+//
+// No se reusan las respuestas de la tarjeta del panel, que era lo primero que
+// se miró: allí sólo van las encuestas activas, desde el periodo más viejo de
+// su gráfica y sin `id` ni `employee_area`, y aquí hace falta la historia
+// entera de todas.
+window.descargaDeStats = null;          // { modoAdmin, datos, en }
+window.descargaDeStatsEnCurso = null;   // { modoAdmin, promesa }
+
+window.descargarDatosDeStats = async () => {
+    const p1 = window.todosLosEmpleadosData && window.todosLosEmpleadosData.length > 0
+        ? Promise.resolve(null)
+        : window.cargarDatosEmpleados();
+        
+    // Las encuestas inactivas salen de las estadísticas de todo el mundo
+    // salvo del administrador, que es el único que las sigue viendo.
+    let consultaEvals = sb.from('evaluations').select('*');
+    if (!window.modoAdminActivo) consultaEvals = consultaEvals.eq('active', true);
+    const p2 = consultaEvals;
+    
+    // Paginación automática (Batch Fetching)
+    // Con `relevo_de`: la respuesta que contestó un relevo cuenta para él y
+    // por separado de la suya propia.
+    const camposRespuestas = await window.camposConApoyo('id, employee_id, evaluation_id, grades_json, review_status, submitted_at, employee_area');
+    const fetchTodasLasRespuestas = async () => {
+        let todasLasRespuestas = [];
+        let rangoInicio = 0;
+        const limitePorPagina = 1000;
+        let hayMasDatos = true;
+
+        while (hayMasDatos) {
+            const { data, error } = await sb.from('evaluation_responses')
+                .select(camposRespuestas)
+                .order('submitted_at', { ascending: false })
+                .range(rangoInicio, rangoInicio + limitePorPagina - 1);
+
+            if (error) throw error;
+            todasLasRespuestas = todasLasRespuestas.concat(data);
+
+            if (data.length < limitePorPagina) hayMasDatos = false;
+            else rangoInicio += limitePorPagina;
+        }
+        return todasLasRespuestas;
+    };
+
+    // El cuestionario de hoy. Las respuestas guardan la calificación bajo
+    // el id de la pregunta, así que sin esta lista no hay forma de saber
+    // cuáles de esas preguntas siguen existiendo.
+    // `question_type` hace falta para dejar fuera de la huella del
+    // cuestionario las preguntas que no se califican —evidencia, firma y
+    // asistencia—: nunca aparecen en `grades_json`, así que contándolas la
+    // huella vigente no casaría jamás y toda respuesta se leería como «de
+    // otra versión». Una columna que no se pide llega `undefined`, y eso
+    // se lee como que sí se califica, que es lo de antes.
+    const p3 = sb.from('evaluation_questions').select('id, evaluation_id, question_text, question_type, order_index').order('order_index');
+
+    // Aquí iba una quinta consulta con la última foto de cada área, que
+    // encabezaba su tarjeta en la comparativa. Se fue con la foto del área:
+    // ya no se toma ninguna —lo que se necesite fotografiar se pide con una
+    // pregunta de evidencia—, así que ese encabezado se habría quedado
+    // clavado en la última foto de antes del cambio, con su fecha encima,
+    // enseñándose durante años como si fuera el estado de hoy. Las que ya
+    // se subieron se siguen viendo al abrir su respuesta.
+    // Qué encuestas puntúan, que es lo que separa «nadie la ha calificado» de
+    // «aquí no hay nada que calificar»: sin esto, una hecha sólo de las que
+    // dejan constancia entraba en el divisor de «Calificación» y le cobraba
+    // un cero a quien no la hubiera contestado. Va en la misma tanda; sin
+    // ella todo se comporta como antes, que es que toda encuesta puntúa.
+    const p4 = window.cargarEncuestasQuePuntuan();
+
+    const [_, resEvals, rawResponses, resPreguntas] = await Promise.all([p1, p2, fetchTodasLasRespuestas(), p3, p4]);
+
+    if (resEvals.error) throw new Error("Error evaluaciones: " + resEvals.error.message);
+
+    const evalsList = resEvals.data || [];
+
+    const catSet = new Set();
+    evalsList.forEach(e => catSet.add(e.category || 'General'));
+    const categories = Array.from(catSet).sort();
+
+    // Si la consulta falla, el mapa queda vacío y la pantalla se comporta
+    // como antes: los ejes salen de las respuestas y no del cuestionario.
+    const preguntasPorEncuesta = {};
+    (resPreguntas && resPreguntas.data ? resPreguntas.data : []).forEach(q => {
+        const clave = String(q.evaluation_id);
+        if (!preguntasPorEncuesta[clave]) preguntasPorEncuesta[clave] = [];
+        preguntasPorEncuesta[clave].push({ id: String(q.id), texto: q.question_text || '', tipo: q.question_type || '' });
+    });
+
+
+    const datos = {
+        evalsList,
+        rawResponses,
+        categories,
+        preguntasPorEncuesta
+    };
+    return datos;
+};
+
+window.pintarSelloDescargaStats = () => {
+    const el = document.getElementById('stats-descargado');
+    if (!el) return;
+    const d = window.descargaDeStats;
+    const hace = d && window.antiguedadDeLaMedida ? window.antiguedadDeLaMedida(d.en) : '';
+    el.textContent = hace ? ` · datos de ${hace}` : '';
+};
+
+// El botón del encabezado: gira mientras descarga y no se deja pulsar dos veces.
+window.recargarStats = async () => {
+    const btn = document.getElementById('btn-recargar-stats');
+    if (btn) { btn.disabled = true; btn.classList.add('esta-actualizando'); }
+    try {
+        await window.cargarStatsEncuestasGlobales(true);
+    } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('esta-actualizando'); }
+    }
+};
+
+window.cargarStatsEncuestasGlobales = async (forzar) => {
     const container = document.getElementById('contenedor-modal-stats-encuestas');
-    container.innerHTML = '<div style="text-align:center; padding:50px; color:#64748b;"><div class="spinner"></div><br>Analizando datos históricos por lotes...</div>';
+    // Lo descargado se reusa mientras dure la pantalla (ver `descargaDeStats`),
+    // y sólo entonces se ahorra el spinner: sin nada guardado, o forzando, se
+    // dice que se está descargando.
+    const modoAdmin = !!window.modoAdminActivo;
+    const guardada = window.descargaDeStats;
+    const reusar = !forzar && guardada && guardada.modoAdmin === modoAdmin;
+    if (!reusar) container.innerHTML = '<div style="text-align:center; padding:50px; color:#64748b;"><div class="spinner"></div><br>Analizando datos históricos por lotes...</div>';
 
     try {
         // A quién le toca cada encuesta lo decide `leTocaEstaEncuesta` en los
@@ -291,91 +428,29 @@ window.cargarStatsEncuestasGlobales = async () => {
         // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
         if (window.cargarVacaciones) await window.cargarVacaciones();
 
-        const p1 = window.todosLosEmpleadosData && window.todosLosEmpleadosData.length > 0
-            ? Promise.resolve(null)
-            : window.cargarDatosEmpleados();
-            
-        // Las encuestas inactivas salen de las estadísticas de todo el mundo
-        // salvo del administrador, que es el único que las sigue viendo.
-        let consultaEvals = sb.from('evaluations').select('*');
-        if (!window.modoAdminActivo) consultaEvals = consultaEvals.eq('active', true);
-        const p2 = consultaEvals;
-        
-        // Paginación automática (Batch Fetching)
-        // Con `relevo_de`: la respuesta que contestó un relevo cuenta para él y
-        // por separado de la suya propia.
-        const camposRespuestas = await window.camposConApoyo('id, employee_id, evaluation_id, grades_json, review_status, submitted_at, employee_area');
-        const fetchTodasLasRespuestas = async () => {
-            let todasLasRespuestas = [];
-            let rangoInicio = 0;
-            const limitePorPagina = 1000;
-            let hayMasDatos = true;
-
-            while (hayMasDatos) {
-                const { data, error } = await sb.from('evaluation_responses')
-                    .select(camposRespuestas)
-                    .order('submitted_at', { ascending: false })
-                    .range(rangoInicio, rangoInicio + limitePorPagina - 1);
-
-                if (error) throw error;
-                todasLasRespuestas = todasLasRespuestas.concat(data);
-
-                if (data.length < limitePorPagina) hayMasDatos = false;
-                else rangoInicio += limitePorPagina;
+        // Lo de arriba son cachés de la sesión, que se piden igual: cuestan nada
+        // si ya están. Lo caro es lo de aquí abajo —todas las respuestas de la
+        // historia, ~1 MB por el cable en modo administrador— y eso sí se
+        // guarda, o cada vez que se abre la hoja se vuelve a bajar entero.
+        if (reusar) {
+            await Promise.all([window.cargarEncuestasQuePuntuan(),
+                (window.todosLosEmpleadosData || []).length ? null : window.cargarDatosEmpleados()]);
+            window.encuestasRawData = guardada.datos;
+        } else {
+            if (!window.descargaDeStatsEnCurso || window.descargaDeStatsEnCurso.modoAdmin !== modoAdmin) {
+                const promesa = window.descargarDatosDeStats();
+                window.descargaDeStatsEnCurso = { modoAdmin, promesa };
+                promesa.finally(() => {
+                    if (window.descargaDeStatsEnCurso && window.descargaDeStatsEnCurso.promesa === promesa) {
+                        window.descargaDeStatsEnCurso = null;
+                    }
+                });
             }
-            return todasLasRespuestas;
-        };
-
-        // El cuestionario de hoy. Las respuestas guardan la calificación bajo
-        // el id de la pregunta, así que sin esta lista no hay forma de saber
-        // cuáles de esas preguntas siguen existiendo.
-        // `question_type` hace falta para dejar fuera de la huella del
-        // cuestionario las preguntas que no se califican —evidencia, firma y
-        // asistencia—: nunca aparecen en `grades_json`, así que contándolas la
-        // huella vigente no casaría jamás y toda respuesta se leería como «de
-        // otra versión». Una columna que no se pide llega `undefined`, y eso
-        // se lee como que sí se califica, que es lo de antes.
-        const p3 = sb.from('evaluation_questions').select('id, evaluation_id, question_text, question_type, order_index').order('order_index');
-
-        // Aquí iba una quinta consulta con la última foto de cada área, que
-        // encabezaba su tarjeta en la comparativa. Se fue con la foto del área:
-        // ya no se toma ninguna —lo que se necesite fotografiar se pide con una
-        // pregunta de evidencia—, así que ese encabezado se habría quedado
-        // clavado en la última foto de antes del cambio, con su fecha encima,
-        // enseñándose durante años como si fuera el estado de hoy. Las que ya
-        // se subieron se siguen viendo al abrir su respuesta.
-        // Qué encuestas puntúan, que es lo que separa «nadie la ha calificado» de
-        // «aquí no hay nada que calificar»: sin esto, una hecha sólo de las que
-        // dejan constancia entraba en el divisor de «Calificación» y le cobraba
-        // un cero a quien no la hubiera contestado. Va en la misma tanda; sin
-        // ella todo se comporta como antes, que es que toda encuesta puntúa.
-        const p4 = window.cargarEncuestasQuePuntuan();
-
-        const [_, resEvals, rawResponses, resPreguntas] = await Promise.all([p1, p2, fetchTodasLasRespuestas(), p3, p4]);
-
-        if (resEvals.error) throw new Error("Error evaluaciones: " + resEvals.error.message);
-
-        const evalsList = resEvals.data || [];
-
-        const catSet = new Set();
-        evalsList.forEach(e => catSet.add(e.category || 'General'));
-        const categories = Array.from(catSet).sort();
-
-        // Si la consulta falla, el mapa queda vacío y la pantalla se comporta
-        // como antes: los ejes salen de las respuestas y no del cuestionario.
-        const preguntasPorEncuesta = {};
-        (resPreguntas && resPreguntas.data ? resPreguntas.data : []).forEach(q => {
-            const clave = String(q.evaluation_id);
-            if (!preguntasPorEncuesta[clave]) preguntasPorEncuesta[clave] = [];
-            preguntasPorEncuesta[clave].push({ id: String(q.id), texto: q.question_text || '', tipo: q.question_type || '' });
-        });
-
-        window.encuestasRawData = {
-            evalsList,
-            rawResponses,
-            categories,
-            preguntasPorEncuesta
-        };
+            const datos = await window.descargaDeStatsEnCurso.promesa;
+            window.descargaDeStats = { modoAdmin, datos, en: new Date() };
+            window.encuestasRawData = datos;
+        }
+        window.pintarSelloDescargaStats();
 
         window.renderizarPanelEstadisticas('GLOBAL');
 

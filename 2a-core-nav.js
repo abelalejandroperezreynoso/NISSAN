@@ -20,6 +20,9 @@ window.invalidarCacheDashboard = () => {
     // respuesta recién calificada mueve el promedio de su periodo.
     window.promesaRespuestasQueReviso = null;
     window.respuestasQueReviso = null;
+    // Y lo descargado para las estadísticas: lo que se acaba de escribir desde
+    // aquí tiene que verse al volver a abrirlas.
+    window.descargaDeStats = null;
 };
 
 // Variables Globales

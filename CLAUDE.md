@@ -5812,6 +5812,38 @@ Las reglas para usarlo:
   base real, el panel de ese jefe pasó de 515 a **181 KB** por carga, y el de un
   operador de 104 a 80.
 
+- **Las estadísticas se descargan una vez por pantalla.** La hoja se traía
+  cada vez que se abría **todas las respuestas de la historia** —siete páginas,
+  casi un mega por el cable en modo administrador— aunque se acabara de cerrar.
+  Hoy lo descargado se queda en memoria y abrirla otra vez no consulta nada.
+
+  ```js
+  window.descargaDeStats          // { modoAdmin, datos, en }, o null
+  window.descargarDatosDeStats()  // las tres consultas caras; devuelve los datos
+  window.recargarStats()          // el botón del encabezado
+  window.pintarSelloDescargaStats()
+  ```
+
+  Cuatro cosas que hay que mantener:
+
+  - **No se entera sola de lo que escriben otros.** Lo que califique alguien
+    desde otro teléfono sale al pulsar el botón de volver a descargar —el de la
+    flecha en círculo, a la izquierda de la cruz, que gira mientras baja— o al
+    recargar, y el subtítulo dice de cuándo es lo que se ve («datos de hace 7
+    min», con el `antiguedadDeLaMedida` de «Consumo»; recién bajado no dice
+    nada). Lo que se escribe **desde este** sí la tira:
+    `invalidarCacheDashboard` la pone en null.
+  - **Se guarda con el modo en que se bajó**: en modo administrador entran las
+    encuestas apagadas, así que cambiar de modo vuelve a descargar.
+  - **Las cachés de la sesión se siguen pidiendo** —las decisiones de «¿te
+    aplica?», las vacaciones, qué encuestas puntúan, la plantilla—, que si ya
+    están no cuestan nada; lo que se salta son las respuestas, las encuestas y
+    las preguntas.
+  - **No reusa las respuestas de la tarjeta del panel**, que fue lo primero que
+    se miró: allí van sólo las encuestas activas, desde el periodo más viejo de
+    su gráfica y sin `id` ni `employee_area`, y aquí hace falta la historia
+    entera de todas.
+
 - **La tarjeta de un pendiente se parte en filas en el teléfono.** El
   `.card-header` reparte el ancho en tres columnas —el icono, el texto y el
   botón—, y en un iPhone 12 mini la tarjeta mide 329px: descontando los 60 del
