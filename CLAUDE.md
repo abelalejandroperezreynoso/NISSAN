@@ -2406,27 +2406,42 @@ Las reglas para usarlo:
   `window.claveDeArea()`: la respuesta guarda el nombre que tenía el empleado
   ese día y la pantalla agrupa por el de su ficha, así que «Planta 1» y
   « planta 1 » tienen que caer en el mismo sitio.
-- **La hoja de detalle de una respuesta dice de quién es y de dónde.** En el
-  subtítulo del encabezado, detrás del nombre y separado por «·»: «Empleado:
-  **Olivares Valdez Ernesto** · PRODUCCION». Saber de quién es la respuesta que
-  se está calificando es media cosa; la otra media es de dónde, que es lo que
-  sitúa lo que se lee debajo —una auditoría de PRODUCCIÓN no se lee igual que
-  una de CALIDAD—.
+- **La hoja de detalle de una respuesta dice de quién es y de dónde.** El
+  título del encabezado **es el nombre de quien contestó** —hasta dos renglones,
+  que aquí los nombres son largos— y el subtítulo, su departamento. Saber de
+  quién es la respuesta que se está calificando es media cosa; la otra media es
+  de dónde, que es lo que sitúa lo que se lee debajo —una auditoría de
+  PRODUCCIÓN no se lee igual que una de CALIDAD—. Decía «Detalle de respuesta»
+  con «Empleado: …» debajo, y en un teléfono eran cinco renglones de encabezado
+  con la cápsula «Calificando…» al lado.
 
   **Es el departamento de hoy, no el de aquel día.** La respuesta no lo guarda
   —lo único histórico que guarda es `employee_area`, el área del día—, así que
   sale de la ficha: quien cambió de departamento desde que contestó se lee con
-  el nuevo. Es lo mismo que hacen las demás pantallas que deciden sobre alguien,
-  y por lo mismo.
+  el nuevo. Se resuelve como el nombre —primero `todosLosEmpleadosData`,
+  después `window.employeeDeptMap`—, así que **no consulta nada**.
 
-  Se resuelve como el nombre que lleva al lado —primero `todosLosEmpleadosData`,
-  después `window.employeeDeptMap`—, así que **no consulta nada**; y si la
-  plantilla no está cargada no se dibuja y el encabezado se queda como estaba,
-  que ahí el nombre tampoco saldría. Va **fuera del `<b>`**: el nombre es lo que
-  se busca y el departamento lo que lo sitúa. Medido a 375px con el peor caso
-  —nombre largo, «MANTENIMIENTO INDUSTRIAL», la cifra del resultado y el
-  desplegable de área del administrador—, el encabezado no desborda ni echa la
-  cruz fuera de la hoja.
+  **A la derecha del título va sólo la cifra**, como en la pantalla de una
+  encuesta (`.hoja-resultado`, del color de `getColorScore`; gris si está
+  anulada, morado si está mal revisada). Sin cifra que dar no se dibuja nada.
+
+  **Lo demás es una ficha de Ajustes de iOS** (`.detalle-ficha`, con
+  `window.filaDeDetalle(rotulo, valorHtml, clase)`): Encuesta, Fecha, Área
+  evaluada, Estado, Revisó y Calificada, cada una con su rótulo a la izquierda y
+  el valor en gris a la derecha, recortado con «…». La fecha era un rótulo suelto
+  encima de un `<input type="date">` a todo lo ancho, que en Safari se salía de
+  la hoja por su ancho mínimo; el área, una chapa rosa en el subtítulo.
+
+  - **El estado es una fila**, y es lo que dice «Por calificar» o «Sin nada que
+    calificar» donde antes lo decía la cápsula del encabezado.
+  - **La fecha y el área del administrador son campos dentro de su fila**
+    (`.detalle-fila-campo`): la cápsula gris de iOS, del ancho de lo que dice y
+    a 16px por el zoom de Safari. Quien califica sin ser administrador las lee.
+  - **La fecha se guarda sólo si se cambió, y conservando la hora.** Se
+    guardaba siempre con `new Date('2026-10-14')`, que se lee en UTC, y cada
+    «Guardar Revisión» del administrador corría la respuesta un día atrás.
+  - **Quien no puede calificar lee por qué** debajo de la ficha
+    (`.detalle-nota`), en el gris del pie de una lista de iOS.
 - **El detalle de una respuesta se descarga en Excel.** El botón de la flecha
   hacia abajo del encabezado, entre la cifra y la cruz, baja un `.xlsx` con una
   fila por pregunta —enunciado, lo contestado, la puntuación («3/5», «0/1»), su
@@ -2731,12 +2746,10 @@ Las reglas para usarlo:
     quien dio el veredicto y vale aunque esa persona ya no esté.
 
   **Se enseña en dos sitios y de dos maneras.** En la hoja de detalle de la
-  respuesta va **debajo de la fecha** (`.sello-revision`), que es donde están
-  juntos los dos datos de cuándo pasó cada cosa —cuándo se contestó y cuándo se
-  calificó—; no en el encabezado, que ya lleva de quién es la respuesta, su
-  departamento y la cifra, y medido a 375px un nombre más ahí echa la cruz fuera
-  de la hoja. Ahí salen los tres estados, con el nombre recortado con «…» antes
-  que partir el renglón. En el **renglón de la lista de respuestas** va detrás
+  respuesta son **dos filas de su ficha**, debajo de la fecha: «Revisó» y
+  «Calificada» —la fecha aparte, que detrás de un nombre largo se perdía en el
+  «…»—. Ahí salen los tres estados; los que no son una firma, en un gris más
+  claro. En el **renglón de la lista de respuestas** va detrás
   del estado y **sólo la firmada**: en una lista, «Se calificó sola» y «Sin
   registro» no ayudan a encontrar nada y se llevarían el renglón entero. Por el
   nombre de pila, que ahí no sobra ancho.

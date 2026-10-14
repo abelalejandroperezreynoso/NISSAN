@@ -6140,44 +6140,90 @@ html.fondo-anclado body {
     padding: 12px;
 }
 
-/* Quién revisó una respuesta, en la hoja de su detalle. Va debajo de la fecha
-   —el otro dato de cuándo pasó cada cosa— y no en el encabezado, que ya lleva
-   de quién es la respuesta, de qué departamento y su cifra: medido a 375px, un
-   nombre más ahí echa la cruz fuera de la hoja.
+/* La ficha de una respuesta, en la hoja de su detalle: una lista agrupada de
+   iOS con la encuesta, la fecha, el área, el estado y quién la revisó. Era un
+   rótulo suelto encima de un campo de fecha a todo lo ancho —que en Safari se
+   salía de la hoja por su ancho mínimo— y una chapa verde debajo; como filas
+   de Ajustes cabe todo en lo que antes ocupaba la fecha sola.
 
-   Los tres estados se distinguen por el texto y no sólo por el color: una
-   revisión firmada dice el nombre, y las otras dos dicen con todas las letras
-   lo que pasó. El nombre se recorta con «…» antes que partir el renglón. */
-.sello-revision {
+   El valor se lleva el sitio que sobra y se recorta con «…»: el nombre de una
+   encuesta o de un revisor parte la fila en dos si no. */
+.detalle-ficha { margin-bottom: 20px; }
+
+.detalle-fila {
     display: flex;
-    align-items: baseline;
-    gap: 6px;
-    margin-top: 10px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    font-size: 0.85rem;
-    color: #475569;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 8px 14px;
+    box-sizing: border-box;
+    border-bottom: 1px solid #f1f5f9;
 }
 
-.sello-revision--firmada {
-    background: #f0fdf4;
-    border-color: #bbf7d0;
-    color: #166534;
+.detalle-fila:last-child { border-bottom: none; }
+
+.detalle-fila-rotulo {
+    flex-shrink: 0;
+    font-size: 0.95rem;
+    color: #1c1c1e;
 }
 
-.sello-revision-texto {
+.detalle-fila-valor {
+    flex: 1 1 auto;
     min-width: 0;
+    text-align: right;
+    font-size: 0.95rem;
+    color: #8e8e93;   /* el gris secundario de iOS */
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
-.sello-revision-fecha {
-    flex-shrink: 0;
-    color: #64748b;
+.detalle-fila-valor--suave { color: #aeaeb2; }
+.detalle-fila-valor--azul { color: #007aff; font-weight: 600; }
+.detalle-fila-valor--morado { color: #af52de; font-weight: 600; }
+.detalle-fila-valor--naranja { color: #ff9500; font-weight: 600; }
+
+/* El campo que va dentro de una fila —la fecha y el área del administrador—
+   es la cápsula gris de iOS, del ancho de lo que dice. 16px por la trampa del
+   zoom de Safari, y sin ancho propio: un `<input type="date">` de Safari trae
+   un mínimo que lo sacaba de la hoja. */
+.detalle-fila-campo {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 8px;
+    background: #f2f2f7;
+    color: #1c1c1e;
+    font-family: inherit;
+    font-size: 16px;
+    text-align: right;
+}
+
+/* Quien no puede calificar lee por qué, en el gris del pie de una lista de
+   iOS, debajo de la ficha. */
+.detalle-nota {
+    margin: -12px 14px 20px;
     font-size: 0.8rem;
+    color: #8e8e93;
+}
+
+/* El nombre de quien contestó es el título de la hoja: llega a dos renglones
+   —aquí los nombres son largos y recortarlo a uno dejaba «Moreno De la T…»— y
+   de ahí se recorta. El departamento, a uno. */
+.detalle-titulo {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+}
+
+.detalle-subtitulo {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* «¿Te aplica esta encuesta?». Sale en dos sitios —la pantalla de la encuesta y

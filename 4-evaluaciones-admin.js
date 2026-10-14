@@ -2201,6 +2201,15 @@ window.renderizarListaRespuestas = () => {
     }
 };
 
+// Una fila de la ficha de la respuesta, como las de Ajustes de iOS: el rótulo
+// en gris a la izquierda y el valor a la derecha, recortado con «…» si no cabe.
+// El valor ya viene escapado —o es un campo—.
+window.filaDeDetalle = (rotulo, valorHtml, claseValor = '') => `
+    <div class="detalle-fila">
+        <span class="detalle-fila-rotulo">${rotulo}</span>
+        <span class="detalle-fila-valor ${claseValor}">${valorHtml}</span>
+    </div>`;
+
 window.verDetalleRespuesta = async (resp) => {
     window.gradingResponseId = resp.id;
     window.respuestaEnDetalle = resp;
@@ -2221,15 +2230,16 @@ window.verDetalleRespuesta = async (resp) => {
     // aquí sólo se enciende la hoja.
     modal.style.cssText = 'display:flex; z-index:999999;';
     
-    let saveButton = '', dateInputHtml = '', deleteButton = '', invalidarButton = '';
+    let saveButton = '', dateInputHtml = '', deleteButton = '', invalidarButton = '', notaRevisorHtml = '';
 
     if(puedeCalificar) {
         saveButton = `<button id="btn-save-grades" onclick="guardarCalificacionAdmin()" style="width:100%; background:#22c55e; color:white; padding:15px; border:none; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px -1px rgba(34, 197, 94, 0.3); margin-top:30px; transition: transform 0.1s;">Guardar Revisión</button>`;
-        const d = new Date(resp.submitted_at); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-        const dateDisabledAttr = esAdminTotal ? '' : 'disabled';
-        dateInputHtml = `<div style="margin-top:10px;"><label style="font-size:0.85rem; color:#64748b; display:block; margin-bottom:4px;">Fecha de Realización:</label><input type="date" id="admin-edit-date" value="${d.toISOString().slice(0,10)}" ${dateDisabledAttr} style="padding:8px; border:1px solid #cbd5e1; border-radius:6px; width:100%; box-sizing:border-box;"></div>`;
+        // Sólo el administrador corrige la fecha; quien califica la lee.
+        if (esAdminTotal) {
+            const diaOriginal = window.diaLocal(new Date(resp.submitted_at));
+            dateInputHtml = `<input type="date" id="admin-edit-date" class="detalle-fila-campo" value="${diaOriginal}" data-original="${diaOriginal}" aria-label="Fecha de realización">`;
+        }
     } else {
-        dateInputHtml = `<div style="margin-top:5px; color:#64748b; font-size:0.9rem;">Fecha: ${new Date(resp.submitted_at).toLocaleDateString()}</div>`;
         if (resp.review_status !== 'Revisado' && resp.review_status !== 'Certificada' && !esMiRespuesta) {
              // Decir quién sí puede ahorra la pregunta: con revisores
              // nombrados, el supervisor directo ya no es la respuesta.
@@ -2237,7 +2247,7 @@ window.verDetalleRespuesta = async (resp) => {
              const quien = nombrados.length > 0
                 ? 'Esta encuesta la revisa ' + window.sanitizeForHTML(window.nombresDeEmpleados(nombrados))
                 : 'Solo el supervisor directo puede calificar';
-             dateInputHtml += `<div style="margin-top:10px; padding:10px; background:#fef3c7; color:#b45309; border-radius:6px; font-size:0.85rem;">Nota: ${quien}.</div>`;
+             notaRevisorHtml = `<div class="detalle-nota">${quien}.</div>`;
         }
     }
 
@@ -2256,16 +2266,16 @@ window.verDetalleRespuesta = async (resp) => {
     if (selloRevision.estado !== 'sin-revisar') {
         const firmada = selloRevision.estado === 'firmada';
         const dicho = firmada
-            ? `Revisó <b>${window.sanitizeForHTML(selloRevision.nombre)}</b>`
+            ? window.sanitizeForHTML(selloRevision.nombre)
             : window.sanitizeForHTML(window.textoDeRevision(resp));
-        const cuando = (firmada && selloRevision.fecha)
-            ? `<span class="sello-revision-fecha">${selloRevision.fecha.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>`
-            : '';
-        selloRevisionHtml = `
-            <div class="sello-revision${firmada ? ' sello-revision--firmada' : ''}">
-                <span class="sello-revision-texto">${dicho}</span>
-                ${cuando}
-            </div>`;
+        // La fecha va en su propia fila: detrás de un nombre largo se perdía
+        // en el «…».
+        selloRevisionHtml = window.filaDeDetalle('Revisó', dicho,
+            firmada ? '' : 'detalle-fila-valor--suave');
+        if (firmada && selloRevision.fecha) {
+            selloRevisionHtml += window.filaDeDetalle('Calificada',
+                selloRevision.fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }));
+        }
     }
 
     if (esAdminTotal) {
@@ -2345,41 +2355,40 @@ window.verDetalleRespuesta = async (resp) => {
                     optionsHtml += `<option value="${recordedArea}" selected>${recordedArea} (No activa)</option>`;
                 }
 
-                // El administrador ahora elige de una lista desplegable
-                areaInfoHtml = `<span style="background:#fdf4ff; color:#be185d; padding:2px 8px; border-radius:6px; font-size:0.8rem; border:1px solid #fbcfe8; margin-left:8px; font-weight:bold; display:inline-flex; align-items:center;">
-                    📍 Área Evaluada: 
-                    <select id="admin-edit-area" style="margin-left:5px; padding:2px 5px; border-radius:4px; border:1px solid #fbcfe8; outline:none; font-family:inherit; font-size:0.8rem; color:#be185d; background:white; cursor:pointer;">
-                        ${optionsHtml}
-                    </select>
-                </span>`;
+                // El administrador la elige de la lista, en la misma fila.
+                areaInfoHtml = window.filaDeDetalle('Área evaluada',
+                    `<select id="admin-edit-area" class="detalle-fila-campo" aria-label="Área evaluada">${optionsHtml}</select>`);
             } else if (recordedArea) {
-                // Vista de solo lectura para el empleado o supervisor
-                areaInfoHtml = `<span style="background:#fdf4ff; color:#be185d; padding:2px 8px; border-radius:6px; font-size:0.8rem; border:1px solid #fbcfe8; margin-left:8px; font-weight:bold;">📍 Área Evaluada: ${recordedArea}</span>`;
+                areaInfoHtml = window.filaDeDetalle('Área evaluada', window.sanitizeForHTML(recordedArea));
             }
         }
 
-        // --- NUEVO: CÁLCULO Y GLOBO DE CALIFICACIÓN ---
+        // La cifra va arriba, como en la pantalla de una encuesta: un número
+        // de color y nada más. Sin cifra que dar —por calificar, o una
+        // encuesta que sólo deja constancia— no se dibuja: lo dice la fila
+        // «Estado» de la ficha, que es donde cabe con todas sus letras.
         let badgeCalificacionHtml = '';
         const hayQuePuntuar = window.tieneCalificaciones(resp);
-        if (!hayQuePuntuar && (resp.review_status === 'Revisado' || resp.review_status === 'Certificada')) {
-            // Una encuesta hecha sólo de las que dejan constancia —pasar lista,
-            // firmar, subir la foto— se guarda revisada y sin nada que puntuar.
-            // Ahí un 0% mentiría, así que se dice lo que pasa.
-            badgeCalificacionHtml = `<span style="background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1; padding:4px 12px; border-radius:12px; font-size:0.85rem; font-weight:bold; white-space:nowrap;">Sin calificar</span>`;
-        } else if (resp.review_status === 'Revisado' || resp.review_status === 'Certificada' || resp.review_status === 'Falsa' || resp.review_status === 'Mal Revisada') {
-            // Obtenemos el score actual
+        const yaCalificada = ['Revisado', 'Certificada', 'Falsa', 'Mal Revisada'].includes(resp.review_status);
+        if (yaCalificada && hayQuePuntuar) {
             const scoreActual = window.calcularScoreRespuesta(resp);
-            // Coloreamos según desempeño
-            let bgBadge = scoreActual >= 80 ? '#22c55e' : (scoreActual >= 60 ? '#f59e0b' : '#ef4444');
-            
-            if (resp.review_status === 'Falsa') bgBadge = '#64748b'; // Gris si fue anulada
-            if (resp.review_status === 'Mal Revisada') bgBadge = '#a855f7'; // Morado si fue mal revisada
-            
-            badgeCalificacionHtml = `<span style="background:${bgBadge}; color:white; padding:4px 12px; border-radius:12px; font-size:1rem; font-weight:bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); letter-spacing:-0.5px; white-space:nowrap;">${scoreActual}%</span>`;
-        } else {
-            // Mostrar pendiente si se está calificando
-            badgeCalificacionHtml = `<span style="background:#f1f5f9; color:#64748b; border: 1px solid #cbd5e1; padding:4px 12px; border-radius:12px; font-size:0.85rem; font-weight:bold; white-space:nowrap;">Calificando...</span>`;
+            let colorCifra = window.getColorScore ? window.getColorScore(scoreActual) : '#1c1c1e';
+            if (resp.review_status === 'Falsa') colorCifra = '#8e8e93';
+            if (resp.review_status === 'Mal Revisada') colorCifra = '#af52de';
+            badgeCalificacionHtml = `<span class="hoja-resultado" style="color:${colorCifra};" title="Resultado de la respuesta" aria-label="Resultado: ${scoreActual}%">${scoreActual}%</span>`;
         }
+
+        const ESTADO_DE_RESPUESTA = {
+            'Revisado': ['Revisada', ''],
+            'Certificada': ['Certificada', 'detalle-fila-valor--azul'],
+            'Falsa': ['Anulada', 'detalle-fila-valor--suave'],
+            'Mal Revisada': ['Mal revisada', 'detalle-fila-valor--morado'],
+        };
+        const [textoEstado, claseEstado] = ESTADO_DE_RESPUESTA[resp.review_status]
+            || ['Por calificar', 'detalle-fila-valor--naranja'];
+        const estadoHtml = window.filaDeDetalle('Estado',
+            (yaCalificada && !hayQuePuntuar && resp.review_status !== 'Falsa') ? 'Sin nada que calificar' : textoEstado,
+            claseEstado);
 
         // La foto del área, en las respuestas que la traen. Va arriba del todo:
         // es el contexto con el que se leen las respuestas de abajo. Ya no se
@@ -2414,16 +2423,14 @@ window.verDetalleRespuesta = async (resp) => {
             .find(e => String(e.id) === String(resp.employee_id));
         const deptoQuienContesto = (fichaQuienContesto && fichaQuienContesto.dept)
             || (window.employeeDeptMap || {})[String(resp.employee_id)] || '';
-        const deptoHtml = deptoQuienContesto
-            ? ` &middot; ${window.sanitizeForHTML(deptoQuienContesto)}`
-            : '';
+        const deptoHtml = deptoQuienContesto ? window.sanitizeForHTML(deptoQuienContesto) : '';
 
         modal.innerHTML = `
             <div class="hoja-contenido" style="max-width:900px; background:#f8fafc; overflow:hidden; padding:12px 0 0;">
             <div class="hoja-encabezado-lista">
                 <div style="min-width:0;">
-                    <h2 class="hoja-titulo">Detalle de respuesta</h2>
-                    <div class="hoja-subtitulo">Empleado: <b>${window.employeeNameMap[resp.employee_id] || resp.employee_id}</b>${deptoHtml} ${areaInfoHtml}</div>
+                    <h2 class="hoja-titulo detalle-titulo">${window.sanitizeForHTML(String(window.employeeNameMap[resp.employee_id] || resp.employee_id))}</h2>
+                    <div class="hoja-subtitulo detalle-subtitulo">${deptoHtml}</div>
                 </div>
                 <div class="hoja-acciones">
                     ${badgeCalificacionHtml}
@@ -2434,10 +2441,14 @@ window.verDetalleRespuesta = async (resp) => {
                 </div>
             </div>
             <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
-                <div style="margin-bottom:20px;">
-                    ${dateInputHtml}
+                <div class="lista-ios detalle-ficha">
+                    ${encuestaDeLaRespuesta && encuestaDeLaRespuesta.title ? window.filaDeDetalle('Encuesta', window.sanitizeForHTML(encuestaDeLaRespuesta.title)) : ''}
+                    ${window.filaDeDetalle('Fecha', dateInputHtml || new Date(resp.submitted_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }))}
+                    ${areaInfoHtml}
+                    ${estadoHtml}
                     ${selloRevisionHtml}
                 </div>
+                ${notaRevisorHtml}
                 ${fotoAreaHtml}
                 ${descHtml}
                 <div id="responder-questions-list"></div>
@@ -3197,7 +3208,14 @@ window.guardarCalificacionAdmin = async () => {
                     });
 
                     const dateInput = document.getElementById('admin-edit-date');
-                    if(dateInput && dateInput.value) { updates.submitted_at = new Date(dateInput.value).toISOString(); }
+                    // Sólo si se cambió, y conservando la hora: `new Date('2026-10-14')`
+                    // se lee en UTC y cada guardado corría la fecha un día atrás.
+                    if (dateInput && dateInput.value && dateInput.value !== dateInput.dataset.original) {
+                        const [a, m, d] = dateInput.value.split('-').map(Number);
+                        const nueva = new Date(window.respuestaEnDetalle && window.respuestaEnDetalle.submitted_at || Date.now());
+                        nueva.setFullYear(a, m - 1, d);
+                        updates.submitted_at = nueva.toISOString();
+                    }
                     
                     // NUEVO: Capturar el área editada si existe
                     const areaInput = document.getElementById('admin-edit-area');
