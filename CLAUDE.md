@@ -3058,6 +3058,15 @@ Las reglas para usarlo:
     traía: sin la columna, la anulada se lee como contestada y el jefe no se
     entera de que hay que reponerla.
 
+  **Y anular desde «Mis Pendientes» rehace esa lista.** `cambiarEstadoRespuesta`
+  sólo repintaba la lista de respuestas de la encuesta, así que quien abría un
+  «Revisión: …» y lo anulaba volvía a una hoja de pendientes que seguía
+  enseñando esa tarjeta —ya no esperaba calificación de nadie— hasta cerrarla y
+  volver a abrirla. Hoy hace lo mismo que «Guardar Revisión»: si la hoja de
+  pendientes está abierta (`mostrandoPendientes` o `mostrandoPendientesEquipo`)
+  la vuelve a cargar, y recalcula el badge de quien mira con
+  `calcularPendientesBatch`.
+
   **El modo restringido se queda**, y sigue siendo la puerta del botón «Editar a
   quién va dirigida» de la pantalla de la encuesta: es el atajo que lleva
   derecho a la sección que se viene a corregir, sin la hoja entera delante. Lo

@@ -3370,7 +3370,9 @@ window.cambiarEstadoRespuesta = async (id, nuevoEstado) => {
             }
         }
         
-        alert(`La respuesta ha sido marcada como ${nuevoEstado}.`);
+        // «Falsa» es el valor de la base; en pantalla se dice «anulada».
+        alert(nuevoEstado === 'Falsa' ? 'La respuesta quedó anulada.'
+            : `La respuesta ha sido marcada como ${nuevoEstado}.`);
         
         window.evalCache = null; 
         if(window.invalidarCacheDashboard) window.invalidarCacheDashboard();
@@ -3382,6 +3384,18 @@ window.cambiarEstadoRespuesta = async (id, nuevoEstado) => {
         // Si el cambio salió de una ficha abierta desde el expediente por
         // empleado, hay que repintar esa pantalla y no la lista de la evaluación.
         if (window.expedienteActual && window.renderizarExpedienteEmpleado) window.renderizarExpedienteEmpleado();
+
+        // Y si se abrió desde «Mis Pendientes», la lista de detrás habla de
+        // antes del cambio: una respuesta anulada ya no espera calificación de
+        // nadie, así que su tarjeta de «Revisión: …» tiene que irse. Es lo
+        // mismo que hace «Guardar Revisión», y el badge de la foto con ella.
+        const quienMira = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+        if (quienMira && window.calcularPendientesBatch) window.calcularPendientesBatch([quienMira.id]);
+        if (window.mostrandoPendientes === true || window.mostrandoPendientesEquipo === true) {
+            window.targetUserForEval = null;
+            const modoActual = window.mostrandoPendientesEquipo ? 'EQUIPO' : 'PROPIOS';
+            if (window.cargarVistaPendientes) window.cargarVistaPendientes(modoActual);
+        }
 
     } catch (e) {
         alert("Ocurrió un error al cambiar el estado: " + e.message);
