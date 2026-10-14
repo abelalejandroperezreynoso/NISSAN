@@ -5167,8 +5167,9 @@ Las reglas para usarlo:
 
   **Quién atiende sale de lo que ya sabe la aplicación**, no se escribe:
 
-  - **La agenda, la planta y la lectura de los resultados**, quien la presenta
-    (la ficha de la sesión): son de la planta entera.
+  - **La explicación de la agenda y el resultado de la planta, nadie**: son de
+    la junta entera, y la columna se queda en blanco (`sinResponsable`).
+  - **La lectura de los resultados**, quien la presenta (la ficha de la sesión).
   - **Cada clasificación, el departamento con mayor atraso en ella**
     (`window.rezagadoDeClasificacion(i, clave)`), con el mismo criterio que el
     rezagado de la planta —su resultado en esa clasificación con lo no

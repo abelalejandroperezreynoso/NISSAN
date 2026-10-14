@@ -320,8 +320,9 @@ window.diapositivasDeSemana = (i) => {
 // son las de verdad. Sin cifras: la agenda dice de qué se va a hablar, no cómo
 // salió, que para eso está la diapositiva siguiente.
 //
-// Quién atiende cada punto sale de lo que ya dice la aplicación: la planta y la
-// propia agenda y la lectura de los resultados, quien la presenta (la sesión);
+// Quién atiende cada punto sale de lo que ya dice la aplicación: la agenda y la
+// planta no llevan a nadie, que son de la junta entera; la lectura de los
+// resultados, quien la presenta (la sesión);
 // una clasificación, el departamento con mayor atraso en ella
 // (`rezagadoDeClasificacion`) y, sin ninguno, quien la revisa; las evidencias y
 // la reflexión del mayor atraso, el departamento rezagado. Los departamentos van
@@ -405,9 +406,11 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
 
     // Los renglones, en el orden del mazo.
     const filas = [];
-    filas.push({ min: M.agenda, actividad: 'Explicación de la agenda', atiende: presenta, pag: pagina('agenda') });
-    filas.push({ min: M.planta, actividad: 'Resultado de la planta',
-        detalle: `cifra general, tendencia y quién destacó ${nom.del}`, atiende: presenta, pag: pagina('') });
+    // La explicación de la agenda y el resultado de la planta no llevan
+    // responsable: son de la junta entera, no de nadie en particular.
+    filas.push({ min: M.agenda, actividad: 'Explicación de la agenda', sinResponsable: true, pag: pagina('agenda') });
+    filas.push({ min: M.planta, actividad: 'Resultado de la planta', sinResponsable: true,
+        detalle: `cifra general, tendencia y quién destacó ${nom.del}`, pag: pagina('') });
 
     const porClave = {};
     r.clasificaciones.forEach(c => { porClave[c.clave] = c; });
@@ -510,7 +513,7 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
         if (f.fotos) el.push({ tipo: 'icono', glifo: 'photo', x: col.atiende - 36, y: y + alto / 2 - 8,
             lado: 16, color: C.secundario });
 
-        if (!f.gris) texto(col.atiende, y, anchoAtiende, alto,
+        if (!f.gris && !f.sinResponsable) texto(col.atiende, y, anchoAtiende, alto,
             f.atiende ? recorta(f.atiende, anchoAtiende, tam - 1) : 'Su jefe inmediato', tam - 1,
             f.atiende ? C.texto : C.terciario, { peso: f.atiende ? 500 : 400 });
         if (f.pag) texto(col.pag - 60, y, 60, alto, String(f.pag), tam - 1, C.terciario, { peso: 600, alinear: 'right' });
