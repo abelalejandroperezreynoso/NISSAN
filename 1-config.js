@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-14-6';
+window.VERSION_APP = '2026-10-14-7';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3253,6 +3253,17 @@ window.puedeEditarDestinatarios = (ev, empleadoId) =>
 // la comparte.
 window.puedeEditarEncuesta = (ev, empleadoId) =>
     !!window.modoAdminActivo || window.puedeEditarDestinatarios(ev, empleadoId);
+
+// **Anular una respuesta** —y deshacer esa anulación— también es de quien
+// revisa la encuesta: es quien la tiene delante al calificarla y quien ve que
+// una foto no es del área o que la contestaron a ciegas. Lo demás de los
+// estados (certificar, «Mal Revisada», restaurar una certificada) y borrar la
+// respuesta siguen siendo del administrador. Nadie anula la suya.
+window.puedeAnularRespuesta = (ev, resp, empleadoId) => {
+    if (window.modoAdminActivo) return true;
+    if (!ev || !resp || String(resp.employee_id) === String(empleadoId)) return false;
+    return window.puedeEditarDestinatarios(ev, empleadoId);
+};
 
 // Y puede además **crear encuestas nuevas en la clasificación que revisa**, que
 // es la otra mitad de lo mismo: quien imparte «Seguridad» es quien sabe qué

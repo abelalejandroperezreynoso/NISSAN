@@ -2298,6 +2298,12 @@ window.verDetalleRespuesta = async (resp) => {
             }
 
             invalidarButton = adminOptions.join("");
+        } else if (window.puedeAnularRespuesta(encuestaDeLaRespuesta, resp, user.id)) {
+            // Quien revisa la encuesta puede anular una respuesta y deshacer
+            // su propia anulación; el resto de los estados es del administrador.
+            invalidarButton = resp.review_status === 'Falsa'
+                ? `<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Revisado')" style="width:100%; background:#dcfce7; color:#166534; padding:15px; border:1px solid #22c55e; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">✅ Quitar la anulación</button>`
+                : `<button onclick="cambiarEstadoRespuesta('${resp.id}', 'Falsa')" style="width:100%; background:#fee2e2; color:#991b1b; padding:15px; border:1px solid #ef4444; border-radius:12px; font-size:1.1rem; font-weight:bold; cursor:pointer; margin-top:15px;">🚫 Anular respuesta</button>`;
         }
 
     let descHtml = '';
@@ -3286,14 +3292,36 @@ window.cambiarEstadoRespuesta = async (id, nuevoEstado) => {
         msg = `¿Cambiar el estado de esta evaluación a ${nuevoEstado}?`;
     }
         
+    // El botón no es el guardia: sin el modo administrador sólo se anula o se
+    // deshace una anulación, y sólo quien revisa la encuesta de esa respuesta.
+    if (!window.modoAdminActivo) {
+        const resp = window.respuestaEnDetalle;
+        const user = JSON.parse(localStorage.getItem("usuarioLogueado") || 'null');
+        const ev = resp && String(resp.id) === String(id)
+            ? await window.encuestaDeLaRespuesta(resp.evaluation_id) : null;
+        const cambioPermitido = nuevoEstado === 'Falsa'
+            || (nuevoEstado === 'Revisado' && resp && resp.review_status === 'Falsa');
+        if (!cambioPermitido || !user || !window.puedeAnularRespuesta(ev, resp, user.id)) {
+            alert('Sólo quien revisa esta encuesta puede anular sus respuestas.');
+            return;
+        }
+    }
+
     if(!confirm(msg)) return;
-    
+
     try {
-        const { error } = await sb.from('evaluation_responses')
+        // Contar las filas: aquí escribe también quien no es administrador, y
+        // una política de RLS que lo rechace no da error, sólo afecta a cero.
+        const { data: filas, error } = await sb.from('evaluation_responses')
             .update({ review_status: nuevoEstado })
-            .eq('id', id);
-            
+            .eq('id', id)
+            .select('id');
+
         if(error) throw error;
+        if (!filas || filas.length === 0) throw new Error('la base no dejó cambiar esta respuesta (sin permiso).');
+        if (window.respuestaEnDetalle && String(window.respuestaEnDetalle.id) === String(id)) {
+            window.respuestaEnDetalle.review_status = nuevoEstado;
+        }
         
         // 🚀 NUEVO: Actualizar la memoria local para vista instantánea
         if (window.respuestasCacheActual) {

@@ -2988,6 +2988,26 @@ Las reglas para usarlo:
   negaría la hoja a quien sí puede abrirla. Copiar no pasa por ahí —eso es crear,
   y lo decide `clasificacionFijaParaCrear`—.
 
+  **Y quien revisa una encuesta puede anular sus respuestas.** En la hoja de
+  detalle de una respuesta, «Anular respuesta» —y «Quitar la anulación» sobre
+  una ya anulada— le sale también a quien revisa esa encuesta, no sólo al
+  administrador: es quien la tiene delante al calificarla y quien ve que la foto
+  no es del área o que se contestó a ciegas.
+
+  ```js
+  window.puedeAnularRespuesta(ev, resp, empleadoId)   // en 1-config.js
+  ```
+
+  Tres cosas que hay que mantener:
+
+  - **Sólo esas dos.** Certificar, «Mal Revisada», restaurar una certificada y
+    eliminar la respuesta siguen siendo del administrador.
+  - **Nadie anula la suya**, igual que nadie califica la suya.
+  - **El botón no es el guardia**: `cambiarEstadoRespuesta`, sin el modo
+    administrador, vuelve a comprobar la encuesta y el cambio pedido antes de
+    escribir, y **cuenta las filas del `.select()`**, que aquí escribe quien no
+    es administrador.
+
   **El modo restringido se queda**, y sigue siendo la puerta del botón «Editar a
   quién va dirigida» de la pantalla de la encuesta: es el atajo que lleva
   derecho a la sección que se viene a corregir, sin la hoja entera delante. Lo
