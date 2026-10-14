@@ -1463,8 +1463,12 @@ window.materialEnDiapositiva = (el, filas, x, y, w, alto, rotulo) => {
     portadas.slice(0, elegida.caben).forEach((o, k) => {
         const px = x + (k % elegida.cols) * (elegida.ancho + HUECO);
         const py = y + 22 + Math.floor(k / elegida.cols) * (hp + PIE + HUECO);
+        // La miniatura, que es lo que cabe en ese hueco; la página entera queda
+        // de respaldo por si el documento es de antes de que las hubiera.
+        const pro = (u) => window.procesarUrlImagen ? window.procesarUrlImagen(u) : u;
         el.push({ tipo: 'foto', x: px, y: py, w: elegida.ancho, h: hp, radio: 8,
-                  url: window.procesarUrlImagen ? window.procesarUrlImagen(o.m.url) : o.m.url, fondo: C.agrupado });
+                  url: pro(o.m.miniatura || o.m.url), respaldo: o.m.miniatura ? pro(o.m.url) : '',
+                  fondo: C.agrupado });
         const letras = Math.floor((elegida.ancho - 4) / (10.5 * 0.56));
         const paginas = o.m.cuantas > 1 && elegida.ancho >= 120 ? ` · ${o.m.cuantas} pág.` : '';
         el.push({ tipo: 'texto', x: px + 2, y: py + hp + 3, w: elegida.ancho - 4, h: 14,
@@ -2248,7 +2252,8 @@ window.svgDeDiapositiva = (elementos) => {
             return `<clipPath id="${id}"><rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx="${e.radio || 0}"/></clipPath>
                 <rect x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}" rx="${e.radio || 0}" fill="${e.fondo}"/>
                 ${e.url ? `<image href="${esc(e.url)}" x="${e.x}" y="${e.y}" width="${e.w}" height="${e.h}"
-                      preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>` : ''}`;
+                      preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"${e.respaldo
+                      ? ` data-respaldo="${esc(e.respaldo)}" onerror="window.miniaturaRota(this)"` : ''}/>` : ''}`;
         }
         if (e.tipo === 'texto') {
             const ancla = e.alinear === 'right' ? 'end' : (e.alinear === 'center' ? 'middle' : 'start');
@@ -2448,7 +2453,8 @@ window.fotosParaPptx = (elementos) => Promise.all(elementos
     .map(async e => {
         if (e.tipo === 'icono') { e.datos = await window.iconoParaPptx(e); return; }
         e.datos = e.tipo === 'foto'
-            ? await window.fotoRecortadaParaPptx(e.url, e.w, e.h, e.radio)
+            ? (await window.fotoRecortadaParaPptx(e.url, e.w, e.h, e.radio)
+               || (e.respaldo ? await window.fotoRecortadaParaPptx(e.respaldo, e.w, e.h, e.radio) : null))
             : await window.fotoRedondaParaPptx(e.url, 240);
     }));
 

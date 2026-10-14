@@ -1205,8 +1205,8 @@ window.bloqueDeMaterial = (evalId, puedeSubir, opciones = {}) => {
                    ${pie}
                </a>`
             : `<button type="button" class="material-enlace" onclick="window.abrirDocumentoMaterial('${window.sanitizeForHTML(doc.clave)}')">
-                   <img class="material-portada" src="${window.sanitizeForHTML(doc.paginas[0].url)}" alt="" loading="lazy"
-                        onerror="window.portadaRota(this)">
+                   <img class="material-portada" ${window.atributosDePortada(doc.paginas[0].url)} alt="" loading="lazy"
+                        onerror="window.miniaturaRota(this) || window.portadaRota(this)">
                    ${pie}
                </button>`;
 
@@ -1278,8 +1278,8 @@ window.bloqueDeMaterialParaAgregar = (evalId, pendiente) => {
             ? `<a class="material-enlace" href="${window.sanitizeForHTML(doc.paginas[0].url)}" target="_blank" rel="noopener">
                    <span class="material-icono" aria-hidden="true">${window.iconoDeMaterial(doc.nombre)}</span>${pie}</a>`
             : `<button type="button" class="material-enlace" onclick="window.abrirDocumentoMaterial('${window.sanitizeForHTML(doc.clave)}')">
-                   <img class="material-portada" src="${window.sanitizeForHTML(doc.paginas[0].url)}" alt="" loading="lazy"
-                        onerror="window.portadaRota(this)">${pie}</button>`;
+                   <img class="material-portada" ${window.atributosDePortada(doc.paginas[0].url)} alt="" loading="lazy"
+                        onerror="window.miniaturaRota(this) || window.portadaRota(this)">${pie}</button>`;
         return `<div class="material-fila${doc.esArchivo ? ' sin-portada' : ''}">${cuerpo}</div>`;
     }).join('');
 
@@ -1329,8 +1329,8 @@ window.pintarPortadaDeLaHoja = () => {
     portada.innerHTML = `
         <button type="button" class="hoja-portada-imagen" onclick="window.abrirPortadaMaterial()"
                 title="Ver el material" aria-label="Ver el material de esta encuesta">
-            <img src="${window.sanitizeForHTML(docs[0].paginas[0].url)}" alt=""
-                 onerror="window.portadaDeLaHojaRota()">
+            <img ${window.atributosDePortada(docs[0].paginas[0].url)} alt=""
+                 onerror="window.miniaturaRota(this) || window.portadaDeLaHojaRota()">
         </button>`;
 
     // Va **antes** del encabezado y no dentro del cuerpo: es lo que la deja
@@ -1599,6 +1599,11 @@ window.guardarMaterialPendiente = async () => {
             });
         }
 
+        // La miniatura de la portada, que es lo que bajan los pendientes y la
+        // cabecera de la hoja (ver `subirMiniaturaMaterial`). Antes que las
+        // fichas, como las páginas, y sin poder tumbar el guardado.
+        await window.subirMiniaturaMaterial(p.paginas[0].blob, carpeta);
+
         // Contar las filas del `.select()`: aquí escribe alguien que no es
         // administrador y una política de RLS que lo rechace no da error, sólo
         // afecta a cero filas.
@@ -1651,8 +1656,13 @@ window.quitarMaterial = async (clave) => {
         return;
     }
 
+    // Con sus páginas se va su miniatura, que no tiene fila propia: sin esto
+    // se quedaría en el bucket hasta que «Consumo» la retirara como huérfana.
+    const archivos = doc.paginas.map(m => m.archivo);
+    const carpetaDelDoc = window.documentoDeRuta(archivos[0]);
+    if (carpetaDelDoc) archivos.push(window.rutaDeMiniatura(carpetaDelDoc));
     const { error: errArchivo } = await sb.storage
-        .from(window.BUCKET_MATERIALES).remove(doc.paginas.map(m => m.archivo));
+        .from(window.BUCKET_MATERIALES).remove(archivos);
     if (errArchivo) {
         console.error(errArchivo);
         alert(`Se quitó «${doc.nombre}» de la encuesta, pero sus archivos siguen en el bucket '${window.BUCKET_MATERIALES}': se retiran desde «Consumo», que los reconoce como huérfanos.`);

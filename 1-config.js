@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-14-1';
+window.VERSION_APP = '2026-10-14-2';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -2453,7 +2453,8 @@ window.portadasDeEncuestas = async (ids) => {
                 .forEach(m => todas.push(m.url));
         });
         if (todas.length > 0) {
-            portadas[clave] = { url: todas[0], cuantas: todas.length, paginas: todas };
+            portadas[clave] = { url: todas[0], miniatura: window.urlDeMiniatura(todas[0]),
+                                cuantas: todas.length, paginas: todas };
         }
     });
     return portadas;
@@ -2483,6 +2484,85 @@ window.subirPaginaMaterial = async (blob, ruta) => {
 
     const { data } = sb.storage.from(window.BUCKET_MATERIALES).getPublicUrl(ruta);
     return { archivo: ruta, url: (data && data.publicUrl) ? data.publicUrl : '' };
+};
+
+// --- LA MINIATURA DE UN DOCUMENTO ---
+//
+// La portada se enseña en sitios pequeños —la tarjeta de un pendiente, la
+// cabecera de la hoja, el hueco de una diapositiva— y era la página entera, de
+// 1400 px: la del incidente de octubre pesaba 338 KB y la bajaron los 148 que lo
+// firmaron, más cada vez que alguien abría sus pendientes. Ahora cada documento
+// lleva además una miniatura de 720 px (`MAX_LADO_MINIATURA`, a lo ancho de una
+// hoja en un iPhone con su doble densidad) que se sube junto a sus páginas, y
+// las páginas enteras se quedan para el visor, que es donde se leen.
+//
+// **No tiene fila**: vive en la carpeta del documento con un nombre fijo y sin
+// extensión (`<carpeta>/miniatura`), así que quien tiene la url de una página
+// sabe la suya sin preguntar nada. Lo que eso exige se cumple en dos sitios:
+// quitar un documento la borra con sus páginas (`quitarMaterial`) y «Consumo»
+// la da por reclamada mientras su carpeta tenga filas.
+//
+// **Lo subido antes no la tiene, y ni hace falta.** Toda `<img>` que la use
+// lleva la página entera en `data-respaldo`, y `miniaturaRota` cambia a ella
+// si la miniatura no carga: lo peor que pasa es lo de antes.
+window.NOMBRE_MINIATURA = 'miniatura';
+window.MAX_LADO_MINIATURA = 720;
+window.MAX_BYTES_MINIATURA = 80 * 1024;
+
+window.rutaDeMiniatura = (carpeta) => `${carpeta}/${window.NOMBRE_MINIATURA}`;
+
+// La de la página que se le pase, o '' si es un archivo suelto —sin carpeta no
+// hay documento convertido ni miniatura—.
+window.urlDeMiniatura = (urlPagina) => {
+    const url = String(urlPagina || '');
+    const marca = `/${window.BUCKET_MATERIALES}/`;
+    const i = url.indexOf(marca);
+    if (i < 0) return '';
+    const ruta = url.slice(i + marca.length).split('?')[0];
+    const carpeta = window.documentoDeRuta(decodeURIComponent(ruta));
+    if (!carpeta) return '';
+    return url.slice(0, i + marca.length) + ruta.split('/').slice(0, -1).join('/') + '/' + window.NOMBRE_MINIATURA;
+};
+
+// Una `<img>` de portada: la miniatura, y la página entera de respaldo. Sin
+// miniatura posible —un archivo suelto— va la página a secas.
+window.atributosDePortada = (urlPagina) => {
+    const mini = window.urlDeMiniatura(urlPagina);
+    const segura = (u) => window.sanitizeForHTML
+        ? window.sanitizeForHTML(String(u)) : String(u).replace(/"/g, '&quot;');
+    return mini
+        ? `src="${segura(mini)}" data-respaldo="${segura(urlPagina)}"`
+        : `src="${segura(urlPagina)}"`;
+};
+
+// Si la miniatura no carga se prueba la página entera, una vez. Devuelve true
+// cuando cambió de fuente: quien la llame desde su `onerror` no tiene que hacer
+// nada más, porque la imagen vuelve a intentarlo sola.
+window.miniaturaRota = (img) => {
+    const respaldo = img && img.dataset ? img.dataset.respaldo : '';
+    if (!respaldo) return false;
+    delete img.dataset.respaldo;
+    // Una `<image>` de SVG —la diapositiva de la presentación— no tiene `src`.
+    if (img instanceof SVGElement) img.setAttribute('href', respaldo);
+    else img.src = respaldo;
+    return true;
+};
+
+// Se hace de la primera página ya comprimida, y **un fallo no detiene nada**:
+// el documento se guarda igual y sus portadas caen a la página entera.
+window.subirMiniaturaMaterial = async (primeraPagina, carpeta) => {
+    try {
+        const blob = await window.optimizarImagen(primeraPagina,
+            { maxLado: window.MAX_LADO_MINIATURA, maxBytes: window.MAX_BYTES_MINIATURA });
+        const { error } = await sb.storage.from(window.BUCKET_MATERIALES)
+            .upload(window.rutaDeMiniatura(carpeta), blob,
+                    { contentType: blob.type || 'image/webp', upsert: false });
+        if (error && !/already exists|duplicate|409/i.test(String(error.message || '') + ' ' + String(error.statusCode || ''))) {
+            console.warn('No se pudo subir la miniatura del material:', error);
+        }
+    } catch (e) {
+        console.warn('No se pudo hacer la miniatura del material:', e);
+    }
 };
 
 // La foto de área de una respuesta ya guardada, o '' si no trae ninguna —que

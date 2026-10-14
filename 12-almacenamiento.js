@@ -356,7 +356,15 @@ window.tomarMedidaDeConsumo = async () => {
     await revisarBucket(window.BUCKET_MATERIALES, async () => {
         const { data, error } = await sb.from('materiales_encuesta').select('archivo');
         if (error || !Array.isArray(data)) return null;
-        return new Set(data.map(f => String(f.archivo)));
+        // La miniatura de un documento no tiene fila: la reclama su carpeta
+        // mientras le quede alguna página.
+        const usados = new Set();
+        data.forEach(f => {
+            usados.add(String(f.archivo));
+            const carpeta = window.documentoDeRuta(f.archivo);
+            if (carpeta) usados.add(window.rutaDeMiniatura(carpeta));
+        });
+        return usados;
     });
 
     await revisarBucket(window.BUCKET_FOTOS_EVAL, window.fotosUsadasEnRespuestas);

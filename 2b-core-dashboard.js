@@ -3460,7 +3460,21 @@ window.abrirEncuestaDesdeInicio = async (evalId, titulo) => {
 // El nombre con el que la tarjeta de revisión la llamaba desde el principio.
 window.abrirEncuestaQueReviso = window.abrirEncuestaDesdeInicio;
 
-window.cargarDatosEmpleados = async () => {
+// Dos llamadas que se pisan comparten la misma consulta: al cargar el panel
+// la piden a la vez `mostrarDashboard` y `cargarEncuestasAsignadas`, las dos
+// con la plantilla todavía vacía, y cada una se traía la tabla entera
+// —24 KB por el cable en cada carga, para todo el mundo—. Sólo se comparte lo
+// que va de camino: quien llame después de que termine vuelve a consultar, que
+// es lo que necesitan las pantallas que la rehacen tras escribir.
+window.cargaDeEmpleadosEnCurso = null;
+window.cargarDatosEmpleados = () => {
+    if (window.cargaDeEmpleadosEnCurso) return window.cargaDeEmpleadosEnCurso;
+    window.cargaDeEmpleadosEnCurso = cargarDatosEmpleadosAhora()
+        .finally(() => { window.cargaDeEmpleadosEnCurso = null; });
+    return window.cargaDeEmpleadosEnCurso;
+};
+
+const cargarDatosEmpleadosAhora = async () => {
     // 1. Agregamos is_active al select (quitamos el filtro .not)
     //
     // Va por `consultarEmpleados` y no por un `select` a pelo desde que también
@@ -3810,6 +3824,44 @@ window.calcularPendientesBatch = async (idsEmpleados) => {
         return;
     }
 
+    // Lo que ya se está calculando no se vuelve a calcular: se espera. Al
+    // cargar el panel esto se pide desde cuatro sitios casi a la vez —la foto
+    // del encabezado, el panel, el equipo y los avatares de los
+    // subordinados—, con la caché todavía vacía, y cada llamada repetía todas
+    // sus consultas: el panel de un jefe con diez personas lanzaba 31 veces la
+    // de sus firmas, y era medio mega por carga. Cada persona se calcula una
+    // sola vez y quien llegue tarde se engancha a esa promesa.
+    const yaEnCurso = [];
+    const nuevos = [];
+    idsFaltantes.forEach(id => {
+        const enCurso = window.pendientesEnCurso[String(id)];
+        if (enCurso) yaEnCurso.push(enCurso); else nuevos.push(id);
+    });
+
+    let propia = null;
+    if (nuevos.length > 0) {
+        propia = calcularPendientesAhora(nuevos);
+        nuevos.forEach(id => { window.pendientesEnCurso[String(id)] = propia; });
+        propia.finally(() => nuevos.forEach(id => {
+            if (window.pendientesEnCurso[String(id)] === propia) delete window.pendientesEnCurso[String(id)];
+        }));
+    }
+    await Promise.all([...new Set(yaEnCurso), propia].filter(Boolean));
+
+    // El cálculo de otro pintó los badges que había entonces; los que esta
+    // llamada dibujó mientras tanto —la foto del encabezado, por ejemplo— se
+    // pintan aquí con lo que dejó en la caché.
+    idsEmpleados.forEach(empId => {
+        const stats = window.CACHE_DASHBOARD.pendientes[empId];
+        if (stats) actualizarBadgeUI(empId, stats);
+    });
+    actualizarBadgeEquipo();
+};
+
+// Lo que va de camino, por persona: { idEmpleado: promesa }.
+window.pendientesEnCurso = {};
+
+const calcularPendientesAhora = async (idsFaltantes) => {
     try {
         // `requires_min_score` va con `retry_days`: sin ella el badge daba por
         // hecho que toda encuesta exige el 80% y contaba como pendiente hasta

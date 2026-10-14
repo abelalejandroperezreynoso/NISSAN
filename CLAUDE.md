@@ -5728,6 +5728,65 @@ Las reglas para usarlo:
   debajo puede haber cualquier cosa. Las clases están en `estilos.css`
   (`.pendiente-portada`, `.pendiente-portada-paginas`).
 
+- **La portada de un documento es su miniatura; la página entera es para el
+  visor.** La portada se enseña en sitios pequeños —la tarjeta de un pendiente,
+  la cabecera de la hoja de una encuesta, las tarjetas del recuadro de material
+  y el hueco de una diapositiva de la presentación— y era la página entera, de
+  1400 px: la del incidente de octubre pesaba **338 KB** y la bajaron los 148
+  que lo firmaron, cada vez que abrían sus pendientes. Medido en el panel de un
+  jefe, era más de la mitad de lo que bajaba al abrir «Mis Pendientes». Hoy cada
+  documento lleva además una miniatura de **720 px por su lado largo y 80 KB de
+  tope** (`MAX_LADO_MINIATURA`, `MAX_BYTES_MINIATURA`), que esa misma portada
+  deja en 45 KB.
+
+  ```js
+  window.rutaDeMiniatura(carpeta)      // '<carpeta>/miniatura'
+  window.urlDeMiniatura(urlPagina)     // la de su documento, o '' si es un archivo suelto
+  window.atributosDePortada(urlPagina) // src="miniatura" data-respaldo="página entera"
+  window.miniaturaRota(img)            // cambia a la página entera, una vez; true si lo hizo
+  window.subirMiniaturaMaterial(primeraPagina, carpeta)
+  ```
+
+  Cinco cosas que hay que mantener:
+
+  - **No tiene fila.** Vive en la carpeta del documento con un nombre fijo y
+    **sin extensión** —el formato lo dice su `contentType`, que puede ser WebP o
+    JPEG según el navegador que la hizo—, así que quien tiene la url de una
+    página sabe la suya sin preguntar nada: `portadasDeEncuestas` la devuelve en
+    `miniatura` sin consulta de más.
+  - **Toda `<img>` de portada lleva la página entera de respaldo**, con
+    `onerror="window.miniaturaRota(this) || …"` delante de lo que ya hacía al
+    romperse. Lo subido desde un teléfono con el JavaScript viejo no la tiene, y
+    ahí lo peor que pasa es lo de antes. En la diapositiva es una `<image>` de
+    SVG, que no tiene `src` y por eso `miniaturaRota` le cambia el `href`; el
+    PowerPoint prueba la miniatura y después la página.
+  - **Se sube con las páginas y antes de las fichas**, y **un fallo no detiene
+    nada**: el documento se guarda igual y sus portadas caen a la página entera.
+  - **Quitar un documento la borra con sus páginas** (`quitarMaterial`), y
+    **«Consumo» la da por reclamada** mientras a su carpeta le quede alguna fila:
+    sin eso la retiraría como huérfana a las 24 horas.
+  - **El visor sigue abriendo las páginas enteras**, que es donde se leen.
+
+  Las de los trece documentos que ya había se generaron una vez a mano, el 14 de
+  octubre de 2026, con este mismo código.
+
+- **Lo que ya va de camino no se vuelve a pedir.** Al cargar el panel,
+  `calcularPendientesBatch` se pide desde cuatro sitios casi a la vez —la foto
+  del encabezado, el panel, el equipo y los avatares de los subordinados— con la
+  caché todavía vacía, y cada llamada repetía todas sus consultas: el panel de
+  un jefe con diez personas lanzaba **31 veces** la de sus firmas. Hoy cada
+  persona se calcula una sola vez (`window.pendientesEnCurso`, una promesa por
+  id) y quien llega tarde se engancha a ella; al terminar se pintan los badges
+  de quien esperaba, que pudo dibujar los suyos mientras tanto. Lo mismo con
+  `cargarDatosEmpleados` (`window.cargaDeEmpleadosEnCurso`), que se pedía dos
+  veces por carga para todo el mundo.
+
+  **Sólo se comparte lo que va de camino, no el resultado**: quien llama
+  después de que termine vuelve a consultar, que es lo que necesitan las
+  pantallas que rehacen la plantilla tras escribir. Medido sobre la base real,
+  el panel de ese jefe pasó de 515 a 273 KB por carga (con «Mis Pendientes», de
+  889 a 354), y el de un operador de 104 a 80.
+
 - **La tarjeta de un pendiente se parte en filas en el teléfono.** El
   `.card-header` reparte el ancho en tres columnas —el icono, el texto y el
   botón—, y en un iPhone 12 mini la tarjeta mide 329px: descontando los 60 del

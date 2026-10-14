@@ -1783,8 +1783,8 @@ window.portadaDePendienteHtml = (evaluationId) => {
                             onclick="event.stopPropagation(); window.abrirVisorImagenes && window.abrirVisorImagenes(window.paginasDePortadaDePendiente('${evaluationId}'))"
                             title="Ver el material de esta encuesta"
                             aria-label="Ver el material de esta encuesta">
-                        <img src="${window.sanitizeForHTML(p.url)}" alt=""
-                             onerror="window.portadaDePendienteRota(this)">
+                        <img ${window.atributosDePortada(p.url)} alt=""
+                             onerror="window.miniaturaRota(this) || window.portadaDePendienteRota(this)">
                         ${p.cuantas > 1 ? `<span class="pendiente-portada-paginas">${p.cuantas} páginas</span>` : ''}
                     </button>`;
 };
