@@ -5826,13 +5826,25 @@ Las reglas para usarlo:
     desempeño» del departamento rezagado, en la reflexión, cuenta a los
     empatados (`peorEmpatados`): ahí ya se está hablando de un departamento. El
     mejor sigue nombrándose: el alfabeto ahí no acusa a nadie.
-  - **Quien espera el curso previo no cuenta en las personas**
-    (`esperaElCursoEn`): dijo «Todavía no» antes del instante que se mira y su
-    jefe no se lo había programado, o se lo programó para después. Contestarla
-    no estaba en su mano, así que esa encuesta no le suma ni le resta —y si era
-    la única que tenía, no entra—. La cifra de la planta y la de la
-    clasificación no cambian: el padrón sigue contándolo, que es la regla del
-    curso previo. `abrirPresentacion` rehace la caché (`cargarCursosPrevios(true)`).
+  - **Quien no tenía el curso previo no cuenta en las personas**
+    (`seLePodiaPedir`). En una encuesta que exige curso, a quien no la contestó
+    sólo se le pide si consta que el curso ya se le había dado: su jefe se lo
+    programó para una fecha que ya pasó. Quien dijo «Todavía no», y también
+    quien no ha dicho nada, se queda fuera: contestarla no estaba en su mano, así
+    que esa encuesta no le suma ni le resta —y si era la única que tenía, no
+    entra—. Al principio sólo salía quien había dicho «Todavía no», y el corte
+    del 5 al 11 de octubre mandó a reflexionar al equipo de Ernesto Olivares por
+    Capacitación —«10 de 10 sin contestar», con la planta en 2%—: era el DOJO de
+    mantenimiento, que todavía no se había impartido, y nadie del equipo había
+    abierto la encuesta para decirlo. Lo que se deja fuera es lo que no se puede
+    distinguir: quien ya tenía el curso y no ha abierto la encuesta tampoco
+    cuenta. Como todo sale de aquí, alcanza a los equipos, a los departamentos, a
+    los temas de la reflexión y a quién atiende cada clasificación en la agenda.
+    La cifra de la planta y la de la clasificación no cambian: el padrón sigue
+    contándolo, que es la regla del curso previo. `abrirPresentacion` rehace la
+    caché (`cargarCursosPrevios(true)`), que trae también qué encuestas piden
+    curso (`ENCUESTAS_CON_CURSO`); sin ella todas se pueden pedir. Los cortes
+    tomados con esta regla son la `version: 4`.
   - **Y dice en cuánto resuelve un pendiente** («Resuelve en 1.8 días»): el
     promedio, sobre **todo lo que contestó en las últimas cuatro semanas**
     (`SEMANAS_DEL_DESEMPATE`), de lo que tardó desde que cada encuesta le

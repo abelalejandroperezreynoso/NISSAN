@@ -754,7 +754,7 @@ window.tomarCortesPendientes = async () => {
         const limite = new Date(instante.getTime() + window.DIAS_PARA_TOMAR_EL_CORTE * 86400000);
         const clave = window.claveDeCorte(s);
         if (ahora < instante || ahora >= limite || p.cortes[clave]) continue;
-        const datos = { version: 3, evaluado: { inicio: s.inicio.toISOString(), fin: (s.fin || s.inicio).toISOString() },
+        const datos = { version: 4, evaluado: { inicio: s.inicio.toISOString(), fin: (s.fin || s.inicio).toISOString() },
                         presentan: window.seleccionDeReflexiones(j) };
         try {
             const { data, error } = await sb.from('cortes_reflexion')
@@ -1358,16 +1358,20 @@ window.destacadosDeSemana = (i, clave) => {
 // todo al día no le suma nada; tener respuestas esperándolo sí le resta. Entra
 // como una clasificación más de su promedio —la parte de lo que le tocaba
 // calificar que sí calificó— y sólo cuando hay atraso.
-// ¿Esperaba esa persona el curso previo de esa encuesta en ese instante? Dijo
-// «Todavía no» antes de él (`actualizado_en`) y su jefe no se lo había
-// programado, o se lo programó para después: contestarla no dependía de ella.
-// Sin la caché de cursos, nadie espera, que es lo de antes.
-window.esperaElCursoEn = (ev, empleadoId, referencia) => {
-    if (!window.estadoDeCursoPrevio || !window.CURSOS_PREVIOS) return false;
-    const estado = window.estadoDeCursoPrevio(ev.id, empleadoId, [], referencia);
-    if (!estado) return false;
-    const desde = new Date(estado.fila.actualizado_en);
-    return isNaN(desde) || desde <= referencia;
+// ¿Se le podía pedir esa encuesta en ese instante? En una que exige curso
+// previo, sólo si consta que el curso ya se le había impartido: su jefe se lo
+// programó para una fecha que ya pasó. Quien no lo ha dicho —ni sí ni no— no
+// tiene la encuesta en su mano tanto como quien dijo «Todavía no»: lo normal es
+// que el curso no se haya dado, y eso no depende de esa persona ni de su equipo.
+// Se pregunta sólo de quien no la contestó; quien la contestó, la tenía.
+// Sin saber qué encuestas piden curso, todas se pueden pedir, que es lo de antes.
+window.seLePodiaPedir = (ev, empleadoId, referencia) => {
+    const conCurso = window.ENCUESTAS_CON_CURSO;
+    if (!conCurso || !conCurso[String(ev.id)]) return true;
+    const fila = window.filaDeCursoPrevio ? window.filaDeCursoPrevio(ev.id, empleadoId) : null;
+    if (!fila || fila.estado !== 'programado' || !fila.fecha_programada) return false;
+    const fecha = new Date(fila.fecha_programada);
+    return !isNaN(fecha) && fecha <= referencia;
 };
 
 window.desempenoDePersonasEn = (referencia, clave) => {
@@ -1384,10 +1388,10 @@ window.desempenoDePersonasEn = (referencia, clave) => {
             padron.forEach(emp => {
                 const id = String(emp.id);
                 const r = ultimas[id];
-                // Quien espera el curso previo no tiene esta encuesta en su
-                // mano: el pendiente es de su jefe, así que aquí no le cuenta
-                // ni a favor ni en contra.
-                if (!r && window.esperaElCursoEn(f.ev, id, referencia)) return;
+                // Quien no tenía el curso previo no tenía esta encuesta en su
+                // mano, así que aquí no le cuenta ni a favor ni en contra: ni a
+                // él, ni a su equipo, ni a su departamento.
+                if (!r && !window.seLePodiaPedir(f.ev, id, referencia)) return;
                 const p = porPersona[id] || (porPersona[id] = nueva(emp));
                 p.asignadas++;
                 if (!r) { p.filas.push({ ev: f.ev, puntaje: 0, sinContestar: true }); return; }
