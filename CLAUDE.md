@@ -5271,10 +5271,37 @@ Las reglas para usarlo:
 
   La minuta dice el estado en su encabezado (`textoDeEstadoDelCorte`): en verde
   si está fijo, en naranja si es provisional —el martes todavía no termina— y
-  en gris si se calculó hoy, porque nadie lo tomó o porque falta la tabla. Una
-  fila por departamento con **quién presenta**, **los temas de su reflexión** con
-  su cifra en el corte y su **resultado**; el de la planta va primero y dice
-  «Mayor atraso de la planta» en rojo. Arriba a la derecha, la próxima junta.
+  en gris si se calculó hoy, porque nadie lo tomó o porque falta la tabla. Arriba
+  a la derecha, la próxima junta.
+
+  **Cada fila dice por qué presenta ese departamento**, que con sólo los temas y
+  su cifra no se entendía:
+
+  - **Debajo del departamento, el motivo**: «Menor desempeño de la planta», en
+    rojo y el primero, o «Último lugar en Capacitación y Auditoria 5 Reglas».
+    El pie de la diapositiva dice la regla entera.
+  - **Quién presenta y su puesto**, en gris debajo del nombre.
+  - **Cada tema en dos renglones**: su nombre con la cifra del departamento en
+    el corte, y debajo contra qué se lee —«Planta 78% · último de 8 · 5/5 sin
+    contestar»—: la cifra de la planta en esa clasificación, el lugar contado
+    desde el mejor (`lugaresEnClasificacion`, el mismo orden de
+    `rezagadoDeClasificacion`) y cuántas de sus encuestas dejó sin contestar.
+  - **El resultado, con su lugar en la planta** debajo de la píldora.
+
+  ```js
+  window.lugaresEnClasificacion(i, clave)   // los departamentos, del peor al mejor
+  window.contextoDeTema(j, depto, clave)    // { planta, lugar, de, faltan, asignadas }
+  window.lugarEnLaPlanta(j, depto)          // { lugar, de }, contado desde el mejor
+  window.puestoDeEmpleadoPorId(id)
+  ```
+
+  **Todo eso se guarda en el corte** (`version: 2`, en `seleccionDeReflexiones`),
+  con el puesto dentro de `responsable`. **El corte del 5 al 11 de octubre es de
+  la primera versión** y no lo trae: de ése se toman hoy la cifra de la planta y
+  el puesto, pero no el lugar ni lo sin contestar, que recalculados con lo
+  calificado después lo contradecían —un tema elegido por ir el último salía en
+  «lugar 3 de 7»—. Ahí dice «último lugar», que es por lo que se eligió todo tema
+  fuera del departamento de menor desempeño.
 
   **Y cada reflexión es una diapositiva**, «Reflexión de ‹departamento›»
   (`diapositivaDeAcciones` con la entrada del mazo), con sus fotos de evidencia

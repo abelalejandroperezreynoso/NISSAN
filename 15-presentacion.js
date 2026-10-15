@@ -631,7 +631,8 @@ window.cargarCortesDeReflexion = async (modo) => {
 };
 
 // La selección de un periodo, calculada con lo que hay hoy:
-// [{ nombre, planta, promedio, responsable: { id, nombre }, temas: [{ clave, nombre, cifra }] }]
+// [{ nombre, planta, promedio, lugar, de, responsable: { id, nombre, puesto },
+//    temas: [{ clave, nombre, cifra, planta, lugar, de, faltan, asignadas }] }]
 window.seleccionDeReflexiones = (j) => {
     const r = window.resultadoDeSemana(j);
     if (r.seleccionReflexiones) return r.seleccionReflexiones;
@@ -660,13 +661,16 @@ window.seleccionDeReflexiones = (j) => {
     const porDepto = new Map();
     elegidos.forEach(t => {
         if (!porDepto.has(t.depto)) porDepto.set(t.depto, []);
-        porDepto.get(t.depto).push({ clave: t.clave, nombre: t.nombre, cifra: t.cifra });
+        porDepto.get(t.depto).push(Object.assign({ clave: t.clave, nombre: t.nombre, cifra: t.cifra },
+            window.contextoDeTema(j, t.depto, t.clave)));
     });
     r.seleccionReflexiones = [...porDepto].map(([nombre, suyos]) => {
         const d = lista.find(x => x.nombre === nombre);
         const resp = window.responsableDeDepartamento(nombre);
-        return { nombre, planta: !!rezagado && nombre === rezagado.nombre, promedio: d ? d.promedio : null,
-                 responsable: resp ? { id: String(resp.id), nombre: resp.name } : null, temas: suyos };
+        return Object.assign({ nombre, planta: !!rezagado && nombre === rezagado.nombre, promedio: d ? d.promedio : null,
+                 responsable: resp ? { id: String(resp.id), nombre: resp.name,
+                                       puesto: String(resp.puesto || resp.Puesto || '').trim() } : null,
+                 temas: suyos }, window.lugarEnLaPlanta(j, nombre) || {});
     });
     return r.seleccionReflexiones;
 };
@@ -726,7 +730,7 @@ window.tomarCortesPendientes = async () => {
         const limite = new Date(instante.getTime() + window.DIAS_PARA_TOMAR_EL_CORTE * 86400000);
         const clave = window.claveDeCorte(s);
         if (ahora < instante || ahora >= limite || p.cortes[clave]) continue;
-        const datos = { version: 1, evaluado: { inicio: s.inicio.toISOString(), fin: (s.fin || s.inicio).toISOString() },
+        const datos = { version: 2, evaluado: { inicio: s.inicio.toISOString(), fin: (s.fin || s.inicio).toISOString() },
                         presentan: window.seleccionDeReflexiones(j) };
         try {
             const { data, error } = await sb.from('cortes_reflexion')
@@ -786,54 +790,101 @@ window.diapositivaDeMinuta = (i, numero, cuantas) => {
         texto(552, 98, 360, 18, window.textoDeEstadoDelCorte(corte), 12, tono, { alinear: 'right', peso: 600 });
     }
 
-    const X = 48, Y = 130, W = 864, H = 336;
+    const X = 48, Y = 130, W = 864, H = 324;
     el.push({ tipo: 'rect', x: X, y: Y, w: W, h: H, relleno: C.agrupado, radio: 18 });
     const lista = corte ? corte.seleccion : [];
+    const meta = window.UMBRAL_CERTIFICACION;
     if (!lista.length) {
         texto(X, Y, W, H, corte ? `Nadie presenta: ${window.textoDelPeriodoEvaluado(corte.semana)} no dejó temas por debajo de la meta.`
             : 'No hay periodo anterior en la presentación.', 15, C.secundario, { alinear: 'center', peso: 500 });
     } else {
-        const col = { depto: X + 18, responsable: X + 300, temas: X + 480, resultado: X + W - 18 };
+        const col = { depto: X + 18, responsable: X + 258, temas: X + 432, resultado: X + W - 18 };
         const anchoDepto = col.responsable - col.depto - 16;
         const anchoResp = col.temas - col.responsable - 16;
-        const anchoTemas = col.resultado - 70 - col.temas;
+        const anchoTemas = col.resultado - 96 - col.temas;
         const cab = (x, w, t, alinear) => texto(x, Y + 12, w, 16, t, 10.5, C.secundario, { peso: 600, espaciado: 0.6, alinear });
-        cab(col.depto, 240, 'DEPARTAMENTO');
-        cab(col.responsable, 170, 'PRESENTA');
-        cab(col.temas, 300, 'TEMAS DE SU REFLEXIÓN');
-        cab(col.resultado - 80, 80, 'RESULTADO', 'right');
-        const y0 = Y + 36;
-        const alto = Math.max(40, Math.min(64, (H - 46) / lista.length));
-        const tam = 14;
-        lista.forEach((d, k) => {
-            const y = y0 + k * alto;
+        cab(col.depto, 220, 'DEPARTAMENTO Y POR QUÉ');
+        cab(col.responsable, 160, 'PRESENTA');
+        cab(col.temas, anchoTemas, 'TEMAS DE SU REFLEXIÓN');
+        cab(col.resultado - 90, 90, 'RESULTADO', 'right');
+        // Lo guardado en el corte manda. Un corte de la primera versión no trae el
+        // contexto, y recalcularlo hoy puede contradecirlo —desde entonces se
+        // calificó más—: de hoy se toman sólo la cifra de la planta y el puesto,
+        // y el lugar sólo donde no puede discrepar. Fuera del departamento de
+        // menor desempeño, un tema se eligió por ir el último en él.
+        const filas = lista.map(d => {
+            const temas = d.temas.map(t => {
+                if (t.lugar !== undefined) return t;
+                const hoy = window.contextoDeTema(i, d.nombre, t.clave);
+                const ultimo = !d.planta || (hoy.lugar && hoy.lugar === hoy.de);
+                return Object.assign({ planta: hoy.planta, ultimo }, t);
+            });
+            const ultimos = temas.filter(t => t.ultimo || (t.lugar && t.lugar === t.de));
+            const porque = d.planta ? 'Menor desempeño de la planta'
+                : ultimos.length ? `Último lugar en ${ultimos.map(t => t.nombre).join(' y ')}`
+                : `Debajo de la meta en ${temas.map(t => t.nombre).join(' y ')}`;
+            const renglonesPorque = window.partirEnRenglones(porque, Math.floor(anchoDepto / (11 * 0.52)), 2);
+            const hoy = window.lugarEnLaPlanta(i, d.nombre);
+            const lugar = d.lugar ? { lugar: d.lugar, de: d.de }
+                : (hoy && d.planta ? { lugar: hoy.de, de: hoy.de } : hoy);
+            const puesto = d.responsable ? (d.responsable.puesto || window.puestoDeEmpleadoPorId(d.responsable.id)) : '';
+            const alto = Math.max(54, temas.length * 34 + 12, 22 + renglonesPorque.length * 14 + 12);
+            return { d, temas, renglonesPorque, lugar, puesto, alto };
+        });
+        const total = filas.reduce((a, f) => a + f.alto, 0);
+        const sobra = Math.max(0, Math.min(24, (H - 46 - total) / filas.length));
+        let y = Y + 36;
+        filas.forEach(({ d, temas, renglonesPorque, lugar, puesto, alto }) => {
+            alto += sobra;
             el.push({ tipo: 'linea', x1: X + 14, y1: y, x2: X + W - 14, y2: y, color: C.separador, grosor: 1 });
-            const sub = d.planta ? 'Mayor atraso de la planta'
-                : `Mayor atraso en ${d.temas.length === 1 ? 'una clasificación' : `${d.temas.length} clasificaciones`}`;
-            texto(col.depto, y + 5, anchoDepto, alto / 2, recorta(d.nombre, anchoDepto, tam), tam, C.texto, { peso: 600 });
-            texto(col.depto, y + alto / 2 - 1, anchoDepto, alto / 2 - 4, sub, 11, d.planta ? C.rojo : C.secundario,
-                { peso: d.planta ? 600 : 400 });
+            // El departamento y por qué presenta.
+            const altoDepto = 20 + renglonesPorque.length * 14;
+            const yd = y + (alto - altoDepto) / 2;
+            texto(col.depto, yd, anchoDepto, 20, recorta(d.nombre, anchoDepto, 14), 14, C.texto, { peso: 600 });
+            renglonesPorque.forEach((t, n) => texto(col.depto, yd + 21 + n * 14, anchoDepto, 14, t, 11,
+                d.planta ? C.rojo : C.secundario, { peso: d.planta ? 600 : 500 }));
+            // Quién presenta y su puesto.
             const quien = d.responsable ? window.nombreDeAgenda(d.responsable.nombre) : 'Su jefe inmediato';
-            texto(col.responsable, y, anchoResp, alto, recorta(quien, anchoResp, tam - 1), tam - 1,
+            const yr = y + (alto - (puesto ? 34 : 18)) / 2;
+            texto(col.responsable, yr, anchoResp, 18, recorta(quien, anchoResp, 13), 13,
                 d.responsable ? C.texto : C.terciario, { peso: d.responsable ? 500 : 400 });
-            const renglones = window.partirEnRenglones(d.temas.map(t => `${t.nombre} ${t.cifra}%`).join(' · '),
-                Math.floor(anchoTemas / ((tam - 1.5) * 0.52)), 2)
-                .map((t, n, arr) => t.replace(/^· /, '') + (arr[n + 1] && arr[n + 1].startsWith('· ') ? ' ·' : ''));
-            const inicio = y + (alto - renglones.length * 16) / 2;
-            renglones.forEach((t, n) => texto(col.temas, inicio + n * 16, anchoTemas, 16, t, tam - 1.5, C.texto, { peso: 500 }));
+            if (puesto) texto(col.responsable, yr + 19, anchoResp, 14, recorta(puesto, anchoResp, 11), 11, C.secundario);
+            // Cada tema: su cifra en el corte y, debajo, contra qué se lee.
+            const yt0 = y + (alto - temas.length * 34) / 2;
+            temas.forEach((t, n) => {
+                const yt = yt0 + n * 34;
+                texto(col.temas, yt, anchoTemas - 50, 17, recorta(t.nombre, anchoTemas - 50, 13), 13, C.texto, { peso: 600 });
+                texto(col.temas + anchoTemas - 50, yt, 50, 17, `${t.cifra}%`, 13, window.colorIOS(t.cifra),
+                    { peso: 700, alinear: 'right' });
+                const partes = [];
+                if (t.planta != null) partes.push(`Planta ${t.planta}%`);
+                if (t.lugar) partes.push(t.lugar === t.de ? `último de ${t.de}` : `lugar ${t.lugar} de ${t.de}`);
+                else if (t.ultimo) partes.push('último lugar');
+                if (t.faltan) partes.push(`${t.faltan}/${t.asignadas} sin contestar`);
+                else if (t.planta == null) partes.push(`meta ${meta}%`);
+                texto(col.temas, yt + 17, anchoTemas, 14, recorta(partes.join(' · '), anchoTemas, 11), 11, C.secundario);
+            });
+            // Su resultado en la planta y su lugar.
             if (d.promedio != null) {
-                const hp = Math.min(24, alto - 8);
-                el.push({ tipo: 'rect', x: col.resultado - 58, y: y + (alto - hp) / 2, w: 58, h: hp,
+                const hp = 24;
+                const yp = y + (alto - (lugar ? 40 : hp)) / 2;
+                el.push({ tipo: 'rect', x: col.resultado - 58, y: yp, w: 58, h: hp,
                     relleno: window.tinteIOS(window.colorIOS(d.promedio), 0.86), radio: hp / 2 });
-                texto(col.resultado - 58, y, 58, alto, `${d.promedio}%`, tam - 1, window.colorIOS(d.promedio),
+                texto(col.resultado - 58, yp, 58, hp, `${d.promedio}%`, 13, window.colorIOS(d.promedio),
                     { peso: 700, alinear: 'center' });
+                if (lugar) texto(col.resultado - 90, yp + hp + 2, 90, 14, `lugar ${lugar.lugar} de ${lugar.de}`, 10.5,
+                    C.secundario, { alinear: 'right' });
             }
+            y += alto;
         });
     }
 
-    texto(48, 474, 864, 18,
+    texto(48, 462, 864, 16,
+        `Presentan el departamento con menor desempeño de la planta y el último lugar de cada clasificación debajo de la meta (${meta}%).`,
+        11.5, C.secundario, { peso: 500 });
+    texto(48, 479, 864, 16,
         `Sólo los ${window.MAX_TEMAS_DE_REFLEXION} temas con más atraso · cada uno trae qué pasó, por qué y qué va a hacer: acción, responsable y fecha.`,
-        12, C.secundario, { peso: 500 });
+        11.5, C.secundario, { peso: 500 });
     const hoy = new Date();
     if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });
     texto(48, 506, 760, 16,
@@ -2461,16 +2512,45 @@ window.departamentoEnSemana = (i, nombre) => {
 // dejó sin contestar— entre los mismos departamentos que compiten. En una de
 // licencias, que no se puntúa, manda lo que dejó sin contestar. Null si nadie
 // del departamento tenía encuestas de ella.
-window.rezagadoDeClasificacion = (i, clave) => {
+window.rezagadoDeClasificacion = (i, clave) => window.lugaresEnClasificacion(i, clave)[0] || null;
+
+// Los departamentos en una clasificación, del peor al mejor, con ese mismo
+// criterio. De aquí sale también en qué lugar quedó cada uno.
+window.lugaresEnClasificacion = (i, clave) => {
     const licencias = window.esClasificacionDeLicencias(clave);
     const candidatos = window.departamentosDeSemana(i)
         .map(d => ({ d, a: (d.porClave || {})[clave] }))
         .filter(x => x.a && x.a.n > 0)
-        .map(x => ({ nombre: x.d.nombre, promedio: Math.round(x.a.suma / x.a.n),
+        .map(x => ({ nombre: x.d.nombre, promedio: Math.round(x.a.suma / x.a.n), asignadas: x.a.n,
                      faltan: x.a.sinContestar, avance: (x.a.n - x.a.sinContestar) / x.a.n }));
     candidatos.sort((a, b) => (licencias ? a.avance - b.avance : a.promedio - b.promedio)
         || b.faltan - a.faltan || a.nombre.localeCompare(b.nombre, 'es'));
-    return candidatos[0] || null;
+    return candidatos;
+};
+
+// Lo que explica un tema de la minuta: cuánto sacó la planta en esa
+// clasificación, en qué lugar quedó el departamento —contado desde el mejor, así
+// que el último es «de»— y cuánto dejó sin contestar.
+window.contextoDeTema = (j, depto, clave) => {
+    const lugares = window.lugaresEnClasificacion(j, clave);
+    const k = lugares.findIndex(x => x.nombre === depto);
+    const c = (window.resultadoDeSemana(j).clasificaciones || []).find(x => x.clave === clave);
+    return { planta: c ? c.promedio : null, de: lugares.length,
+             lugar: k < 0 ? null : lugares.length - k,
+             faltan: k < 0 ? null : lugares[k].faltan, asignadas: k < 0 ? null : lugares[k].asignadas };
+};
+
+// El lugar de un departamento en la planta, contado desde el mejor.
+window.lugarEnLaPlanta = (j, depto) => {
+    const lista = window.departamentosDeSemana(j);
+    const k = lista.findIndex(x => x.nombre === depto);
+    return k < 0 ? null : { lugar: lista.length - k, de: lista.length };
+};
+
+// El puesto de una persona de la plantilla, o ''.
+window.puestoDeEmpleadoPorId = (id) => {
+    const e = (window.todosLosEmpleadosData || []).find(x => String(x.id) === String(id));
+    return e ? String(e.puesto || e.Puesto || '').trim() : '';
 };
 
 // Las preguntas de la segunda, enfocadas al departamento rezagado: su
