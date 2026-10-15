@@ -562,19 +562,19 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
 
 // --- EL CORTE DE REFLEXIONES ---
 //
-// Quién presenta su reflexión en una junta **no sale del periodo que se está
-// mirando, que todavía no ha cerrado**: sale del corte del periodo anterior,
-// que ya cerró. La junta es al empezar la semana —lunes, o martes a más
-// tardar— y el corte se toma **al terminar el martes**
-// (`DIAS_PARA_EL_CORTE` después de que cierra el periodo): para entonces ya
-// pasó la junta y hubo dos días para calificar lo que llegó el fin de semana.
-// Lo que se elige ese martes se presenta en la junta de la semana siguiente.
+// La junta es al empezar la semana —lunes, o martes a más tardar— y **revisa
+// la última semana cerrada**, que es donde se abre la presentación. El corte de
+// esa semana se toma **al terminar el martes** (`DIAS_PARA_EL_CORTE` después
+// de que cierra el periodo): para entonces ya pasó la junta y hubo dos días
+// para calificar lo que llegó el fin de semana. Lo que se elige ese martes se
+// presenta en la junta de la semana siguiente.
 //
-// En índices de la presentación —que se mira la del periodo que corre—:
+// En índices de la presentación:
 //
-//   la minuta del periodo i      dice el corte del periodo i − 1: quién
-//                                presenta en la próxima junta.
-//   las reflexiones del periodo i son las del corte del periodo i − 2, o sea
+//   la minuta del periodo i      dice el corte del periodo i: quién presenta
+//                                en la próxima junta. Durante la junta es
+//                                provisional; al terminar el martes, fijo.
+//   las reflexiones del periodo i son las del corte del periodo i − 1, o sea
 //                                lo que dijo la minuta de la junta pasada.
 //
 // **No se presenta todo**: sólo los temas con más atraso
@@ -691,11 +691,16 @@ window.corteDeReflexiones = (j) => {
     return { estado, seleccion: window.seleccionDeReflexiones(j), instante, semana: s };
 };
 
-// Quién presenta en la junta del periodo i: el corte de i − 2. Null si no hay
+// Quién presenta en la junta del periodo i: el corte de i − 1. Null si no hay
 // ese periodo en la presentación, y entonces la reflexión es la de antes —la
 // del departamento con menor desempeño de este mismo periodo—.
+// Dónde se abre la presentación: la última semana cerrada, que es la que
+// revisa la junta. La que corre queda a un toque, con la flecha.
+window.ultimoPeriodoCerrado = (semanas) =>
+    semanas.length > 1 && semanas[semanas.length - 1].actual ? semanas.length - 2 : semanas.length - 1;
+
 window.presentadoresDeSemana = (i) => {
-    const c = window.corteDeReflexiones(i - 2);
+    const c = window.corteDeReflexiones(i - 1);
     return c ? c.seleccion : null;
 };
 
@@ -756,7 +761,7 @@ window.periodoSiguiente = (i) => {
 // --- LA MINUTA ---
 //
 // La última diapositiva: quién presenta su reflexión en la próxima junta, que
-// es el corte del periodo anterior (`corteDeReflexiones(i − 1)`). Una fila por
+// es el corte de este mismo periodo (`corteDeReflexiones(i)`). Una fila por
 // departamento con quién presenta, de qué temas y su resultado; arriba, cuándo
 // es la próxima junta y en qué estado está el corte.
 window.diapositivaDeMinuta = (i, numero, cuantas) => {
@@ -766,7 +771,7 @@ window.diapositivaDeMinuta = (i, numero, cuantas) => {
     const texto = (x, y, w, h, t, tam, col, extra) =>
         el.push(Object.assign({ tipo: 'texto', x, y, w, h, texto: t, tam, color: col }, extra || {}));
     const recorta = (t, ancho, tam) => window.nombreDeFila(String(t || ''), Math.max(4, Math.floor(ancho / (tam * 0.55))));
-    const corte = window.corteDeReflexiones(i - 1);
+    const corte = window.corteDeReflexiones(i);
     const siguiente = window.periodoSiguiente(i);
 
     el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
@@ -775,7 +780,7 @@ window.diapositivaDeMinuta = (i, numero, cuantas) => {
     texto(552, 40, 360, 16, 'PRESENTAN EN LA PRÓXIMA JUNTA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
     texto(552, 60, 360, 30, window.corteDePresentacion().texto(siguiente), 20, C.azul, { alinear: 'right', peso: 700 });
     if (corte) {
-        texto(48, 98, 600, 18, `Su reflexión sobre ${window.textoDelPeriodoEvaluado(corte.semana)}, que ya cerró`,
+        texto(48, 98, 600, 18, `Su reflexión sobre ${window.textoDelPeriodoEvaluado(corte.semana)}${corte.semana.actual ? ', que todavía no cierra' : ', que ya cerró'}`,
             13.5, C.secundario, { peso: 500 });
         const tono = corte.estado === 'fijo' ? C.verde : (corte.estado === 'provisional' ? C.naranja : C.secundario);
         texto(552, 98, 360, 18, window.textoDeEstadoDelCorte(corte), 12, tono, { alinear: 'right', peso: 600 });
@@ -2758,7 +2763,7 @@ window.diapositivaDeAcciones = (i, numero, cuantas, entrada) => {
         };
         const temas = p.temas.map(t => { const h = ahora(t); return `${t.nombre} ${t.cifra}%` + (h === null ? '' : ` → ${h}%`); });
         texto(48, 102, 864, 22, window.partirEnRenglones(temas.join('  ·  '), 104, 1)[0], 15, C.texto, { peso: 600 });
-        const corte = window.corteDeReflexiones(i - 2);
+        const corte = window.corteDeReflexiones(i - 1);
         const quien = p.responsable ? ` · presenta ${window.nombreDeAgenda(p.responsable.nombre)}` : '';
         texto(48, 124, 864, 16, window.partirEnRenglones(
             `Corte ${window.nombreDelPeriodo().femenino ? 'del' : 'de'} ${window.corteDePresentacion().largo(corte.semana)} → ${window.corteDePresentacion().largo(window.presentacion.semanas[i])}${quien}` +
@@ -3193,7 +3198,7 @@ window.abrirPresentacion = async (modo) => {
     if (hoja.style.display !== 'flex') return;
     const semanas = window.semanasDeLaPresentacion(datos.cubreDesde, corte.frecuencia);
     if (semanas.length === 0) { sub.innerText = 'Todavía no hay periodos que enseñar.'; caja.innerHTML = ''; return; }
-    window.presentacion = { modo, semanas, indice: semanas.length - 1, resultados: {}, clave: '',
+    window.presentacion = { modo, semanas, indice: window.ultimoPeriodoCerrado(semanas), resultados: {}, clave: '',
                             cierresSemanales: window.semanasDeLaPresentacion(datos.cubreDesde, 'weekly'),
                             respuestas: datos.respuestas, cubreDesde: datos.cubreDesde,
                             material: material || {}, cortes };

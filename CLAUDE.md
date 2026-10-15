@@ -5184,7 +5184,7 @@ Las reglas para usarlo:
   - **Cada reflexión, su departamento** con el responsable que se guardó en el
     corte. Sus evidencias van en el mismo renglón —con su cámara, sus minutos y
     sus dos páginas—, como las de una clasificación. Sin corte del que salgan
-    (los dos primeros periodos de la presentación), la reflexión del mayor
+    (el primer periodo de la presentación), la reflexión del mayor
     atraso de antes, que atiende el rezagado.
 
   Todo departamento va con su responsable —su JR. Manager y, sin él, la cabeza
@@ -5221,25 +5221,31 @@ Las reglas para usarlo:
   ```js
   window.corteDeReflexiones(j)      // { estado, seleccion, instante, tomadoEn, semana }, o null
   window.seleccionDeReflexiones(j)  // [{ nombre, planta, promedio, responsable, temas }], calculada hoy
-  window.presentadoresDeSemana(i)   // el corte de i − 2; null sin ese periodo
+  window.presentadoresDeSemana(i)   // el corte de i − 1; null sin ese periodo
+  window.ultimoPeriodoCerrado(semanas)   // dónde se abre: la última semana cerrada
   window.cargarCortesDeReflexion(modo)  window.tomarCortesPendientes()
   window.instanteDelCorte(s)  window.textoDeEstadoDelCorte(c)  window.periodoSiguiente(i)
   window.DIAS_PARA_EL_CORTE  window.DIAS_PARA_TOMAR_EL_CORTE  window.MAX_TEMAS_DE_REFLEXION
   ```
 
-  **La junta es al empezar la semana —lunes, o martes a más tardar— y mira la
-  presentación del periodo que corre.** El corte de un periodo se toma **al
-  terminar el martes siguiente** (`DIAS_PARA_EL_CORTE`, dos días después de que
-  cierra): para entonces ya pasó la junta y hubo dos días para calificar lo del
-  fin de semana. Lo que elige se presenta en la junta de la semana siguiente.
-  En índices de la presentación:
+  **La junta es al empezar la semana —lunes, o martes a más tardar— y revisa
+  la última semana cerrada**, que es donde se abre la presentación
+  (`window.ultimoPeriodoCerrado(semanas)`): el lunes 19 abre en «Semana del 12
+  al 18 oct», y la que corre queda a un toque con la flecha. Se abría en la que
+  corre, y quien preparaba la junta tenía que adivinar cuál elegir. El corte de
+  un periodo se toma **al terminar el martes siguiente** (`DIAS_PARA_EL_CORTE`,
+  dos días después de que cierra): para entonces ya pasó la junta y hubo dos
+  días para calificar lo del fin de semana. Lo que elige se presenta en la junta
+  de la semana siguiente. En índices de la presentación:
 
-  - **la minuta del periodo i** dice el corte de i − 1;
-  - **las reflexiones del periodo i** son el corte de i − 2, o sea lo que dijo
+  - **la minuta del periodo i** dice el corte de i: los atrasados de la semana
+    que se está revisando. Durante la junta sale **provisional**, en naranja, y
+    queda fija al terminar el martes;
+  - **las reflexiones del periodo i** son el corte de i − 1, o sea lo que dijo
     la minuta de la junta pasada.
 
-  Quien mire en la junta la presentación de un periodo ya cerrado verá las dos
-  cosas corridas uno; por eso la minuta dice siempre de qué periodo es el corte.
+  Mirada la semana que corre, la minuta dice «que todavía no cierra» en vez de
+  «que ya cerró»: es un adelanto, no lo que se va a anunciar.
 
   **No presenta todo el que va atrasado: sólo los temas con más atraso**
   (`MAX_TEMAS_DE_REFLEXION`, 3). El primero es el del departamento con menor
@@ -5474,7 +5480,7 @@ Las reglas para usarlo:
   calificación: se quitaron a propósito, que la franja es para entender dónde
   está el problema de ese departamento. Detrás van **las reflexiones de los
   departamentos que eligió el corte de la junta pasada** (ver la minuta, más
-  arriba). Sólo sin ese corte —los dos primeros periodos de la presentación—
+  arriba). Sólo sin ese corte —el primer periodo de la presentación—
   va la de antes, **la reflexión del mayor atraso** —así se titula; sin
   departamentos, «¿Qué vamos a hacer?»—, que **se enfoca en el rezagado de este
   mismo periodo**: sus hasta cinco preguntas y la tabla vacía de
