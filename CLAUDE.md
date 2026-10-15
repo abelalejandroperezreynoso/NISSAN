@@ -5828,19 +5828,28 @@ Las reglas para usarlo:
     mejor sigue nombrándose: el alfabeto ahí no acusa a nadie.
   - **Quien no tenía el curso previo no cuenta en las personas**
     (`seLePodiaPedir`). En una encuesta que exige curso, a quien no la contestó
-    sólo se le pide si consta que el curso ya se le había dado: su jefe se lo
-    programó para una fecha que ya pasó. Quien dijo «Todavía no», y también
-    quien no ha dicho nada, se queda fuera: contestarla no estaba en su mano, así
-    que esa encuesta no le suma ni le resta —y si era la única que tenía, no
-    entra—. Al principio sólo salía quien había dicho «Todavía no», y el corte
-    del 5 al 11 de octubre mandó a reflexionar al equipo de Ernesto Olivares por
-    Capacitación —«10 de 10 sin contestar», con la planta en 2%—: era el DOJO de
-    mantenimiento, que todavía no se había impartido, y nadie del equipo había
-    abierto la encuesta para decirlo. Lo que se deja fuera es lo que no se puede
-    distinguir: quien ya tenía el curso y no ha abierto la encuesta tampoco
-    cuenta. Como todo sale de aquí, alcanza a los equipos, a los departamentos, a
-    los temas de la reflexión y a quién atiende cada clasificación en la agenda.
-    La cifra de la planta y la de la clasificación no cambian: el padrón sigue
+    se le pide según lo que dijo del curso: si su jefe se lo programó para una
+    fecha que ya pasó, sí; si dijo «Todavía no» o se lo programaron para
+    después, no —el pendiente es de su jefe—; y si **no ha dicho nada**, no
+    durante **un mes** (`MESES_PARA_DECIR_SI_TOMO_EL_CURSO`) y sí después, que
+    tuvo tiempo de decirlo. Fuera, esa encuesta no le suma ni le resta —y si era
+    la única que tenía, no entra—.
+
+    El mes cuenta desde que se desplegó la encuesta (`inicioDeEncuesta`), pero
+    **nunca desde antes del 13 de octubre de 2026** (`INICIO_CURSO_PREVIO`), que
+    es cuando la aplicación empezó a dejar decir «Todavía no»: antes no había cómo
+    contestarlo. Lo calcula `plazoParaDecirSiTomoElCurso(ev)`.
+
+    De dónde salió: el corte del 5 al 11 de octubre mandó a reflexionar al equipo
+    de Ernesto Olivares por Capacitación —«10 de 10 sin contestar», con la planta
+    en 2%—, y era el DOJO de mantenimiento, que todavía no se había impartido.
+    Nadie del equipo había abierto la encuesta, así que contar sólo a quien dijo
+    «Todavía no» no lo sacaba; dejar fuera para siempre a quien calla, en cambio,
+    dejaba escapar a un equipo que nunca la abriera. El mes es el término medio.
+
+    Como todo sale de aquí, alcanza a los equipos, a los departamentos, a los
+    temas de la reflexión y a quién atiende cada clasificación en la agenda. La
+    cifra de la planta y la de la clasificación no cambian: el padrón sigue
     contándolo, que es la regla del curso previo. `abrirPresentacion` rehace la
     caché (`cargarCursosPrevios(true)`), que trae también qué encuestas piden
     curso (`ENCUESTAS_CON_CURSO`); sin ella todas se pueden pedir. Los cortes

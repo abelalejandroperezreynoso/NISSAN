@@ -1359,19 +1359,38 @@ window.destacadosDeSemana = (i, clave) => {
 // como una clasificación más de su promedio —la parte de lo que le tocaba
 // calificar que sí calificó— y sólo cuando hay atraso.
 // ¿Se le podía pedir esa encuesta en ese instante? En una que exige curso
-// previo, sólo si consta que el curso ya se le había impartido: su jefe se lo
-// programó para una fecha que ya pasó. Quien no lo ha dicho —ni sí ni no— no
-// tiene la encuesta en su mano tanto como quien dijo «Todavía no»: lo normal es
-// que el curso no se haya dado, y eso no depende de esa persona ni de su equipo.
+// previo depende de lo que esa persona dijo del curso:
+//
+//   - Su jefe se lo programó para una fecha que ya pasó: sí, ya lo tuvo.
+//   - Dijo «Todavía no», o se lo programaron para después: no, el pendiente
+//     es de su jefe.
+//   - No ha dicho nada: durante un mes no, que lo normal es que el curso
+//     todavía no se haya dado; pasado ese mes sí, que tuvo tiempo de decirlo.
+//
+// El mes cuenta desde que se desplegó la encuesta (`inicioDeEncuesta`), pero
+// nunca desde antes de `INICIO_CURSO_PREVIO`, que es cuando la aplicación
+// empezó a dejar decir «Todavía no»: antes no había cómo contestarlo.
 // Se pregunta sólo de quien no la contestó; quien la contestó, la tenía.
 // Sin saber qué encuestas piden curso, todas se pueden pedir, que es lo de antes.
+window.MESES_PARA_DECIR_SI_TOMO_EL_CURSO = 1;
+window.INICIO_CURSO_PREVIO = new Date(2026, 9, 13);
+window.plazoParaDecirSiTomoElCurso = (ev) => {
+    const desde = window.inicioDeEncuesta ? window.inicioDeEncuesta(ev) : null;
+    const base = desde && !isNaN(desde) && desde > window.INICIO_CURSO_PREVIO
+        ? new Date(desde) : new Date(window.INICIO_CURSO_PREVIO);
+    base.setMonth(base.getMonth() + window.MESES_PARA_DECIR_SI_TOMO_EL_CURSO);
+    return base;
+};
 window.seLePodiaPedir = (ev, empleadoId, referencia) => {
     const conCurso = window.ENCUESTAS_CON_CURSO;
     if (!conCurso || !conCurso[String(ev.id)]) return true;
     const fila = window.filaDeCursoPrevio ? window.filaDeCursoPrevio(ev.id, empleadoId) : null;
-    if (!fila || fila.estado !== 'programado' || !fila.fecha_programada) return false;
-    const fecha = new Date(fila.fecha_programada);
-    return !isNaN(fecha) && fecha <= referencia;
+    if (fila && fila.estado === 'esperando') return false;
+    if (fila && fila.estado === 'programado') {
+        const fecha = fila.fecha_programada ? new Date(fila.fecha_programada) : null;
+        return !!fecha && !isNaN(fecha) && fecha <= referencia;
+    }
+    return referencia >= window.plazoParaDecirSiTomoElCurso(ev);
 };
 
 window.desempenoDePersonasEn = (referencia, clave) => {
