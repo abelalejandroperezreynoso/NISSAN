@@ -5274,7 +5274,43 @@ Las reglas para usarlo:
   en gris si se calculó hoy, porque nadie lo tomó o porque falta la tabla. Arriba
   a la derecha, la próxima junta.
 
-  **Cada departamento se dice en frases, no en columnas**, porque quien presenta
+  **Y lo que se elige son equipos, no departamentos** (desde la versión 3 del
+  corte). Un equipo es la gente a cargo directo de un mismo jefe inmediato
+  (`supId`), y **presenta ese jefe**: «el departamento» no es nadie en concreto,
+  y su responsable acababa explicando el atraso de un grupo que no lleva él. La
+  regla es la misma de antes, sólo que entre equipos: el equipo con el resultado
+  general más bajo de la planta (`grupoEnSemana(i)`) y el más bajo de cada
+  clasificación debajo de la meta (`lugaresEnClasificacion(i, clave, 'grupo')`).
+  Compiten los de `MIN_PERSONAS_GRUPO` (3) personas o más, si hay alguno, y quien
+  no tiene jefe —o lo tiene de baja— no forma equipo, como en el objetivo de «una
+  persona por grupo».
+
+  ```js
+  window.unidadesDeSemana(i, tipo)        // 'departamento' | 'grupo': del peor al mejor, con memoria
+  window.gruposDeSemana(i)  window.grupoEnSemana(i, idJefe)  window.unidadEnSemana(i, tipo, llave)
+  window.esPresentadorDeGrupo(p)  window.nombreDeUnidad(p)  window.tituloDeUnidad(p)
+  window.deUnidad(t)  window.aUnidad(t)   // «del equipo de…», «al equipo de…»
+  window.unidadDelPresentador(i, p)  window.evidenciasDelPresentador(i, p)
+  window.preguntasDeUnidad(i, unidad, temas, P, nombrar)
+  ```
+
+  **Departamentos y equipos se cuentan con el mismo código**
+  (`unidadesDeSemana`): la misma media de su gente, la misma cuenta por
+  clasificación y el mismo orden. Cada unidad lleva su `llave` —el nombre en un
+  departamento, el id del jefe en un equipo, que dos jefes pueden llamarse
+  igual— y por ella la buscan `contextoDeTema`, `lugarEnLaPlanta` y
+  `lugaresEnClasificacion`, que aceptan el tipo como último argumento y sin él
+  siguen siendo de departamentos. **La agenda sigue por departamento** en las
+  clasificaciones —quién atiende cada tema— y la reflexión de los periodos sin
+  corte también: sólo lo que elige el corte bajó a equipos.
+
+  **Los cortes de antes eran departamentos y se siguen leyendo**: cada entrada de
+  un equipo lleva `tipo: 'grupo'`, y la minuta, la reflexión, sus evidencias y la
+  agenda preguntan `esPresentadorDeGrupo` para decir «el equipo de Abel Pérez» o
+  el nombre del departamento. Las evidencias de un equipo son las fotos de la
+  gente cuyo jefe es quien presenta; las de un departamento, las de su gente.
+
+  **Cada departamento —o equipo— se dice en frases, no en columnas**, porque quien presenta
   tiene que entender a la primera por qué lo eligieron. Una tabla con «Último
   lugar en Juntas» y una píldora de 63% dejaba tres dudas sin contestar —¿es el
   más bajo de la planta o de su departamento?, ¿es mi resultado o el de mi
@@ -5295,6 +5331,12 @@ Las reglas para usarlo:
     encuestas sin contestar». El lugar en el tema se dice sólo en el
     departamento de menor desempeño —ahí el tema es su clasificación más baja y
     no por fuerza la última—; en los demás ya lo dijo «Por qué».
+
+  Con equipos dice lo mismo con sus palabras: «Todas las cifras son del equipo
+  completo —la gente a cargo directo de quien presenta…—, no las suyas», el
+  nombre es «Equipo de Victor Cruz», «Presenta» dice de cuántas personas es jefe y
+  de qué departamento son —«jefe inmediato de las 6 personas del equipo · M140
+  FUNDICIÓN»— y los lugares se cuentan entre equipos.
 
   Al pie, la regla entera: el más bajo de toda la planta y el más bajo de cada
   clasificación debajo de la meta, como mucho tres temas. El alto de cada bloque
