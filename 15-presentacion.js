@@ -798,15 +798,18 @@ window.diapositivaDeMinuta = (i, numero, cuantas) => {
         texto(X, Y, W, H, corte ? `Nadie presenta: ${window.textoDelPeriodoEvaluado(corte.semana)} no dejó temas por debajo de la meta.`
             : 'No hay periodo anterior en la presentación.', 15, C.secundario, { alinear: 'center', peso: 500 });
     } else {
-        const col = { depto: X + 18, responsable: X + 258, temas: X + 432, resultado: X + W - 18 };
-        const anchoDepto = col.responsable - col.depto - 16;
-        const anchoResp = col.temas - col.responsable - 16;
-        const anchoTemas = col.resultado - 96 - col.temas;
-        const cab = (x, w, t, alinear) => texto(x, Y + 12, w, 16, t, 10.5, C.secundario, { peso: 600, espaciado: 0.6, alinear });
-        cab(col.depto, 220, 'DEPARTAMENTO Y POR QUÉ');
-        cab(col.responsable, 160, 'PRESENTA');
-        cab(col.temas, anchoTemas, 'TEMAS DE SU REFLEXIÓN');
-        cab(col.resultado - 90, 90, 'RESULTADO', 'right');
+        // Cada departamento se dice en frases y no en columnas: quien presenta
+        // tiene que entender de un vistazo que la cifra es la de su departamento
+        // —no la suya— y si se le eligió por ir el más bajo de toda la planta o
+        // el más bajo en una clasificación.
+        texto(X + 18, Y + 12, W - 36, 16,
+            'Todas las cifras son del departamento completo —toda su gente, con lo no contestado en cero—, no de la persona que presenta.',
+            11.5, C.secundario, { peso: 500 });
+        const colEtiqueta = X + 18, colValor = X + 118;
+        const anchoValor = X + W - 18 - colValor;
+        const TAM = 12.5, RENGLON = 16;
+        const maxCar = Math.floor(anchoValor / (TAM * 0.52));
+        const textoDeLugar = (l, de) => l === de ? `el más bajo de los ${de} departamentos` : `lugar ${l} de ${de} departamentos`;
         // Lo guardado en el corte manda. Un corte de la primera versión no trae el
         // contexto, y recalcularlo hoy puede contradecirlo —desde entonces se
         // calificó más—: de hoy se toman sólo la cifra de la planta y el puesto,
@@ -819,71 +822,89 @@ window.diapositivaDeMinuta = (i, numero, cuantas) => {
                 const ultimo = !d.planta || (hoy.lugar && hoy.lugar === hoy.de);
                 return Object.assign({ planta: hoy.planta, ultimo }, t);
             });
-            const ultimos = temas.filter(t => t.ultimo || (t.lugar && t.lugar === t.de));
-            const porque = d.planta ? 'Menor desempeño de la planta'
-                : ultimos.length ? `Último lugar en ${ultimos.map(t => t.nombre).join(' y ')}`
-                : `Debajo de la meta en ${temas.map(t => t.nombre).join(' y ')}`;
-            const renglonesPorque = window.partirEnRenglones(porque, Math.floor(anchoDepto / (11 * 0.52)), 2);
+            const esUltimo = t => t.ultimo || (t.lugar && t.lugar === t.de);
+            const ultimos = temas.filter(esUltimo);
             const hoy = window.lugarEnLaPlanta(i, d.nombre);
             const lugar = d.lugar ? { lugar: d.lugar, de: d.de }
                 : (hoy && d.planta ? { lugar: hoy.de, de: hoy.de } : hoy);
+            const nombres = l => l.map(t => t.nombre).join(' y en ');
+            const deCuantos = (ultimos.find(t => t.de) || {}).de || (lugar && lugar.de);
+            const porque = d.planta
+                ? `Tuvo el resultado general más bajo de toda la planta${lugar ? ` (el último de los ${lugar.de} departamentos)` : ''}.`
+                : ultimos.length
+                ? `Fue el departamento más bajo de la planta en ${nombres(ultimos)}${deCuantos ? `, de ${deCuantos} departamentos` : ''}.`
+                : `Quedó debajo de la meta (${meta}%) en ${nombres(temas)}.`;
+            // Cada tema: qué sacó el departamento contra qué sacó la planta, y su lugar.
+            const frases = temas.map(t => {
+                const partes = [`el departamento sacó ${t.cifra}%`];
+                if (t.planta != null) partes[0] += ` y la planta ${t.planta}%`;
+                else partes[0] += ` (meta ${meta}%)`;
+                // Fuera del departamento de menor desempeño, ir el más bajo en el
+                // tema ya lo dice «Por qué»: aquí sería decirlo dos veces.
+                if (!d.planta && esUltimo(t)) { /* dicho arriba */ }
+                else if (t.lugar) partes.push(textoDeLugar(t.lugar, t.de) + (d.planta && !esUltimo(t) ? ', su clasificación más baja' : ''));
+                else if (t.ultimo) partes.push('el más bajo de los departamentos');
+                else if (d.planta) partes.push('su clasificación más baja');
+                if (t.faltan) partes.push(`${t.faltan} de ${t.asignadas} encuestas sin contestar`);
+                return window.partirEnRenglones(`${t.nombre}: ${partes.join(' · ')}.`, maxCar, 2);
+            });
+            const renglonesPorque = window.partirEnRenglones(porque, maxCar, 2);
             const puesto = d.responsable ? (d.responsable.puesto || window.puestoDeEmpleadoPorId(d.responsable.id)) : '';
-            const alto = Math.max(54, temas.length * 34 + 12, 22 + renglonesPorque.length * 14 + 12);
-            return { d, temas, renglonesPorque, lugar, puesto, alto };
+            const alto = 26 + RENGLON + 4 + renglonesPorque.length * RENGLON + 4 +
+                frases.reduce((a, f) => a + f.length * RENGLON + 2, 0) + 8;
+            return { d, frases, renglonesPorque, lugar, puesto, alto };
         });
         const total = filas.reduce((a, f) => a + f.alto, 0);
-        const sobra = Math.max(0, Math.min(24, (H - 46 - total) / filas.length));
-        let y = Y + 36;
-        filas.forEach(({ d, temas, renglonesPorque, lugar, puesto, alto }) => {
+        // Lo que sobra se reparte; lo que falta se le quita al aire de cada bloque.
+        const sobra = Math.max(-14, Math.min(20, (H - 38 - total) / filas.length));
+        let y = Y + 34;
+        filas.forEach(({ d, frases, renglonesPorque, lugar, puesto, alto }) => {
             alto += sobra;
             el.push({ tipo: 'linea', x1: X + 14, y1: y, x2: X + W - 14, y2: y, color: C.separador, grosor: 1 });
-            // El departamento y por qué presenta.
-            const altoDepto = 20 + renglonesPorque.length * 14;
-            const yd = y + (alto - altoDepto) / 2;
-            texto(col.depto, yd, anchoDepto, 20, recorta(d.nombre, anchoDepto, 14), 14, C.texto, { peso: 600 });
-            renglonesPorque.forEach((t, n) => texto(col.depto, yd + 21 + n * 14, anchoDepto, 14, t, 11,
-                d.planta ? C.rojo : C.secundario, { peso: d.planta ? 600 : 500 }));
-            // Quién presenta y su puesto.
-            const quien = d.responsable ? window.nombreDeAgenda(d.responsable.nombre) : 'Su jefe inmediato';
-            const yr = y + (alto - (puesto ? 34 : 18)) / 2;
-            texto(col.responsable, yr, anchoResp, 18, recorta(quien, anchoResp, 13), 13,
-                d.responsable ? C.texto : C.terciario, { peso: d.responsable ? 500 : 400 });
-            if (puesto) texto(col.responsable, yr + 19, anchoResp, 14, recorta(puesto, anchoResp, 11), 11, C.secundario);
-            // Cada tema: su cifra en el corte y, debajo, contra qué se lee.
-            const yt0 = y + (alto - temas.length * 34) / 2;
-            temas.forEach((t, n) => {
-                const yt = yt0 + n * 34;
-                texto(col.temas, yt, anchoTemas - 50, 17, recorta(t.nombre, anchoTemas - 50, 13), 13, C.texto, { peso: 600 });
-                texto(col.temas + anchoTemas - 50, yt, 50, 17, `${t.cifra}%`, 13, window.colorIOS(t.cifra),
-                    { peso: 700, alinear: 'right' });
-                const partes = [];
-                if (t.planta != null) partes.push(`Planta ${t.planta}%`);
-                if (t.lugar) partes.push(t.lugar === t.de ? `último de ${t.de}` : `lugar ${t.lugar} de ${t.de}`);
-                else if (t.ultimo) partes.push('último lugar');
-                if (t.faltan) partes.push(`${t.faltan}/${t.asignadas} sin contestar`);
-                else if (t.planta == null) partes.push(`meta ${meta}%`);
-                texto(col.temas, yt + 17, anchoTemas, 14, recorta(partes.join(' · '), anchoTemas, 11), 11, C.secundario);
-            });
-            // Su resultado en la planta y su lugar.
+            let yy = y + 8 + sobra / 2;
+            // El departamento y, a la derecha, su resultado general.
+            const anchoNombre = 360;
+            texto(colEtiqueta, yy, anchoNombre, 22, recorta(d.nombre, anchoNombre, 15), 15, C.texto, { peso: 700 });
             if (d.promedio != null) {
-                const hp = 24;
-                const yp = y + (alto - (lugar ? 40 : hp)) / 2;
-                el.push({ tipo: 'rect', x: col.resultado - 58, y: yp, w: 58, h: hp,
+                const hp = 22, wp = 54, xp = X + W - 18 - wp;
+                el.push({ tipo: 'rect', x: xp, y: yy, w: wp, h: hp,
                     relleno: window.tinteIOS(window.colorIOS(d.promedio), 0.86), radio: hp / 2 });
-                texto(col.resultado - 58, yp, 58, hp, `${d.promedio}%`, 13, window.colorIOS(d.promedio),
-                    { peso: 700, alinear: 'center' });
-                if (lugar) texto(col.resultado - 90, yp + hp + 2, 90, 14, `lugar ${lugar.lugar} de ${lugar.de}`, 10.5,
-                    C.secundario, { alinear: 'right' });
+                texto(xp, yy, wp, hp, `${d.promedio}%`, 12.5, window.colorIOS(d.promedio), { peso: 700, alinear: 'center' });
+                texto(xp - 368, yy, 360, hp,
+                    `Resultado general del departamento${lugar ? ` · lugar ${lugar.lugar} de ${lugar.de}` : ''}`,
+                    11.5, C.secundario, { alinear: 'right', peso: 500 });
             }
+            yy += 26;
+            const etiqueta = (t, y0) => texto(colEtiqueta, y0, colValor - colEtiqueta - 8, RENGLON, t, 10, C.secundario,
+                { peso: 600, espaciado: 0.6 });
+            // Quién presenta.
+            etiqueta('PRESENTA', yy);
+            const quien = d.responsable
+                ? `${window.nombreDeAgenda(d.responsable.nombre)}${puesto ? ` (${puesto})` : ''}, responsable del departamento`
+                : 'Su jefe inmediato';
+            texto(colValor, yy, anchoValor, RENGLON, recorta(quien, anchoValor, TAM), TAM,
+                d.responsable ? C.texto : C.terciario, { peso: 500 });
+            yy += RENGLON + 4;
+            // Por qué lo presenta.
+            etiqueta('POR QUÉ', yy);
+            renglonesPorque.forEach((t, n) => texto(colValor, yy + n * RENGLON, anchoValor, RENGLON, t, TAM,
+                d.planta ? C.rojo : C.texto, { peso: 600 }));
+            yy += renglonesPorque.length * RENGLON + 4;
+            // Sobre qué reflexiona.
+            etiqueta(frases.length > 1 ? 'SUS TEMAS' : 'SU TEMA', yy);
+            frases.forEach(renglones => {
+                renglones.forEach((t, n) => texto(colValor, yy + n * RENGLON, anchoValor, RENGLON, t, TAM, C.secundario, { peso: 500 }));
+                yy += renglones.length * RENGLON + 2;
+            });
             y += alto;
         });
     }
 
     texto(48, 462, 864, 16,
-        `Presentan el departamento con menor desempeño de la planta y el último lugar de cada clasificación debajo de la meta (${meta}%).`,
+        `Se eligen el departamento más bajo de toda la planta y el más bajo de cada clasificación debajo de la meta (${meta}%); como mucho ${window.MAX_TEMAS_DE_REFLEXION} temas.`,
         11.5, C.secundario, { peso: 500 });
     texto(48, 479, 864, 16,
-        `Sólo los ${window.MAX_TEMAS_DE_REFLEXION} temas con más atraso · cada uno trae qué pasó, por qué y qué va a hacer: acción, responsable y fecha.`,
+        'Presenta el responsable del departamento: qué pasó, por qué y qué va a hacer —acción, responsable y fecha—.',
         11.5, C.secundario, { peso: 500 });
     const hoy = new Date();
     if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });

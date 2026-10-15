@@ -5274,19 +5274,32 @@ Las reglas para usarlo:
   en gris si se calculó hoy, porque nadie lo tomó o porque falta la tabla. Arriba
   a la derecha, la próxima junta.
 
-  **Cada fila dice por qué presenta ese departamento**, que con sólo los temas y
-  su cifra no se entendía:
+  **Cada departamento se dice en frases, no en columnas**, porque quien presenta
+  tiene que entender a la primera por qué lo eligieron. Una tabla con «Último
+  lugar en Juntas» y una píldora de 63% dejaba tres dudas sin contestar —¿es el
+  más bajo de la planta o de su departamento?, ¿es mi resultado o el de mi
+  gente?—, y la peor estaba en M100 ELECTRONICA: «lugar 1 de 8» en la píldora y
+  aun así presentando. Hoy cada bloque dice:
 
-  - **Debajo del departamento, el motivo**: «Menor desempeño de la planta», en
-    rojo y el primero, o «Último lugar en Capacitación y Auditoria 5 Reglas».
-    El pie de la diapositiva dice la regla entera.
-  - **Quién presenta y su puesto**, en gris debajo del nombre.
-  - **Cada tema en dos renglones**: su nombre con la cifra del departamento en
-    el corte, y debajo contra qué se lee —«Planta 78% · último de 8 · 5/5 sin
-    contestar»—: la cifra de la planta en esa clasificación, el lugar contado
-    desde el mejor (`lugaresEnClasificacion`, el mismo orden de
-    `rezagadoDeClasificacion`) y cuántas de sus encuestas dejó sin contestar.
-  - **El resultado, con su lugar en la planta** debajo de la píldora.
+  - **Arriba de todo, una sola vez**: «Todas las cifras son del departamento
+    completo —toda su gente, con lo no contestado en cero—, no de la persona que
+    presenta».
+  - **El nombre y, a la derecha, «Resultado general del departamento · lugar N
+    de M»** con su píldora: el general, para que no se confunda con el del tema.
+  - **Presenta**: «Jose Sanchez (Supervisor General), responsable del
+    departamento».
+  - **Por qué**, en una frase entera: «Tuvo el resultado general más bajo de toda
+    la planta (el último de los 8 departamentos)», en rojo, o «Fue el
+    departamento más bajo de la planta en Juntas, de 8 departamentos».
+  - **Su tema**: «Juntas: el departamento sacó 0% y la planta 64% · 3 de 3
+    encuestas sin contestar». El lugar en el tema se dice sólo en el
+    departamento de menor desempeño —ahí el tema es su clasificación más baja y
+    no por fuerza la última—; en los demás ya lo dijo «Por qué».
+
+  Al pie, la regla entera: el más bajo de toda la planta y el más bajo de cada
+  clasificación debajo de la meta, como mucho tres temas. El alto de cada bloque
+  se calcula con sus renglones (`partirEnRenglones`) y lo que sobra o falta se
+  reparte en el aire de cada uno.
 
   ```js
   window.lugaresEnClasificacion(i, clave)   // los departamentos, del peor al mejor
@@ -5300,8 +5313,8 @@ Las reglas para usarlo:
   la primera versión** y no lo trae: de ése se toman hoy la cifra de la planta y
   el puesto, pero no el lugar ni lo sin contestar, que recalculados con lo
   calificado después lo contradecían —un tema elegido por ir el último salía en
-  «lugar 3 de 7»—. Ahí dice «último lugar», que es por lo que se eligió todo tema
-  fuera del departamento de menor desempeño.
+  «lugar 3 de 7»—. Ahí se da por el más bajo, que es por lo que se eligió todo
+  tema fuera del departamento de menor desempeño.
 
   **Y cada reflexión es una diapositiva**, «Reflexión de ‹departamento›»
   (`diapositivaDeAcciones` con la entrada del mazo), con sus fotos de evidencia
