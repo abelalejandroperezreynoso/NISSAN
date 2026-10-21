@@ -703,7 +703,13 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
             <div class="hoja-plegable-cuerpo">
                 ${(revisoresHtml || destinatariosBtnHtml)
                     ? `<div style="margin-top:12px;">${revisoresHtml}${destinatariosBtnHtml}</div>` : ''}
-                <input type="text" id="buscador-historial" placeholder="Buscar usuario..." oninput="window.renderizarListaRespuestas()" style="width:100%; box-sizing:border-box; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:16px; outline:none; background:#f8fafc; margin:12px 0;">
+                <div style="display:flex; align-items:center; gap:8px; margin:12px 0;">
+                    <input type="text" id="buscador-historial" placeholder="Buscar usuario..." oninput="window.renderizarListaRespuestas()" style="flex:1; min-width:0; box-sizing:border-box; padding:8px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:16px; outline:none; background:#f8fafc;">
+                    ${window.modoAdminActivo ? `
+                    <button id="btn-json-respuestas" onclick="window.descargarRespuestasJson()" class="ios-boton-icono" title="Descargar todas las respuestas (JSON)" aria-label="Descargar todas las respuestas en JSON" style="flex-shrink:0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+                    </button>` : ''}
+                </div>
                 <div id="lista-respuestas-historial">Cargando...</div>
             </div>
         </details>
@@ -2999,6 +3005,119 @@ window.descargarRespuestaExcel = async () => {
         alert('No se pudo generar el Excel. Revisa la conexión e inténtalo de nuevo.');
     } finally {
         if (btn) btn.disabled = false;
+    }
+};
+
+// Todas las respuestas de la encuesta abierta, en un `.json`: el botón de
+// descarga junto al buscador de «Respuestas», sólo en modo administrador.
+//
+// Se vuelven a pedir en vez de leer `respuestasCacheActual`, que sale de un
+// `select('*')` sin acotar y PostgREST lo corta en mil: aquí se pagina hasta el
+// final. Tampoco mira el buscador —se pidió «toda esa información»—.
+//
+// Cada respuesta lleva la fila tal cual (`answers_json` y `grades_json`
+// incluidos, que son lo que no se puede reconstruir después) y, al lado, lo
+// mismo en legible: quién es, su puntaje, quién la revisó y una entrada por
+// pregunta con el enunciado, lo contestado, la puntuación y el comentario
+// —las mismas funciones que el Excel de una respuesta, así no discrepan—.
+window.descargarRespuestasJson = async () => {
+    const evalId = window.evalIdRespondiendo;
+    if (!evalId || !window.modoAdminActivo) return;
+    const btn = document.getElementById('btn-json-respuestas');
+    if (btn) { btn.disabled = true; window.ponerIndicadorDeActividad(btn, true); }
+    try {
+        const ev = await window.encuestaDeLaRespuesta(evalId);
+
+        let preguntas = window.preguntasCacheActual;
+        if (!preguntas || !preguntas.length || String(preguntas[0].evaluation_id) !== String(evalId)) {
+            const { data, error } = await sb.from('evaluation_questions').select('*')
+                .eq('evaluation_id', evalId).order('order_index');
+            if (error) throw error;
+            preguntas = data || [];
+        }
+
+        const filas = [];
+        for (let desde = 0; ; desde += 1000) {
+            const { data, error } = await sb.from('evaluation_responses').select('*')
+                .eq('evaluation_id', evalId)
+                .order('submitted_at', { ascending: false })
+                .order('id', { ascending: false })
+                .range(desde, desde + 999);
+            if (error) throw error;
+            filas.push(...(data || []));
+            if (!data || data.length < 1000) break;
+        }
+
+        const plantilla = window.todosLosEmpleadosData || [];
+        const empleadoDe = (id) => {
+            const ficha = plantilla.find(e => String(e.id) === String(id));
+            return {
+                id: String(id),
+                nombre: (ficha && ficha.name) || (window.employeeNameMap || {})[id] || null,
+                puesto: ficha ? (window.puestoDeEmpleado ? window.puestoDeEmpleado(ficha) : (ficha.puesto || null)) : null,
+                departamento: (ficha && ficha.dept) || (window.employeeDeptMap || {})[String(id)] || null,
+                activo: ficha ? window.empleadoActivo(ficha) : null
+            };
+        };
+
+        const respuestas = filas.map(resp => {
+            const contestado = resp.answers_json || {};
+            const notas = resp.grades_json || {};
+            const enviada = new Date(resp.submitted_at);
+            const sello = window.selloDeRevision(resp);
+            return {
+                ...resp,
+                empleado: empleadoDe(resp.employee_id),
+                puntaje: window.puntajeDeRespuesta(resp),
+                revisor: sello.estado === 'firmada' ? { id: sello.id, nombre: sello.nombre } : null,
+                revision: sello.estado,
+                preguntas: preguntas
+                    // El mismo filtro de la hoja: una pregunta agregada después
+                    // de contestar y sin respuesta no era parte de lo contestado.
+                    .filter(q => !(q.created_at && new Date(q.created_at).getTime() > enviada.getTime() + 60000 && !contestado[q.id]))
+                    .map(q => {
+                        const p = window.puntuacionDePregunta(q, notas[q.id], contestado[q.id]);
+                        return {
+                            id: q.id,
+                            tipo: q.question_type || 'text',
+                            pregunta: window.enunciadoDePregunta(q),
+                            respuesta: window.respuestaEnTexto(q, contestado[q.id]),
+                            puntuacion: p.puntos || null,
+                            porcentaje: p.pct,
+                            estado: p.estado || null,
+                            comentario: window.motivoDePregunta(resp, q.id) || null
+                        };
+                    })
+            };
+        });
+
+        const ahora = new Date();
+        const documento = {
+            exportado_en: ahora.toISOString(),
+            encuesta: ev || { id: evalId, title: window.evalTituloRespondiendo || null },
+            total_respuestas: respuestas.length,
+            preguntas,
+            respuestas
+        };
+
+        // Sin acentos en el nombre del archivo, por lo mismo que el Excel.
+        const limpio = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^\x20-\x7e]+/g, '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+        const archivo = [limpio((ev && ev.title) || window.evalTituloRespondiendo) || 'Encuesta',
+            'respuestas', window.diaLocal(ahora)].join(' - ') + '.json';
+        const url = URL.createObjectURL(new Blob([JSON.stringify(documento, null, 2)], { type: 'application/json' }));
+        const enlace = document.createElement('a');
+        enlace.href = url;
+        enlace.download = archivo;
+        document.body.appendChild(enlace);
+        enlace.click();
+        enlace.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) {
+        console.error(e);
+        alert('No se pudieron descargar las respuestas. Revisa la conexión e inténtalo de nuevo.');
+    } finally {
+        if (btn) { window.ponerIndicadorDeActividad(btn, false); btn.disabled = false; }
     }
 };
 
