@@ -342,6 +342,8 @@ window.diapositivasDeSemana = (i) => {
 // equipo elegido por el corte, o el responsable del departamento rezagado
 // (`responsableDeDepartamento`). Los minutos son sugeridos (`MINUTOS_AGENDA`) y
 // se suman en el encabezado.
+// Dónde es la junta: la agenda de planta lo dice en una celda que baja entera.
+window.LUGAR_JUNTA = 'Sala Be One';
 window.MINUTOS_AGENDA = { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10, reflexion: 6, minuta: 3 };
 
 // La junta dura una hora. Lo fijo —la agenda, la planta y la reflexión— se
@@ -430,10 +432,6 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     const porClave = {};
     r.clasificaciones.forEach(c => { porClave[c.clave] = c; });
     const conFotos = new Set(mazo.filter(d => d.evidencias).map(d => d.clave));
-    const conResponsable = (nombre) => {
-        const r = window.responsableDeDepartamento(nombre);
-        return nombre + (r ? ` · ${window.nombreDeAgenda(r.name)}` : '');
-    };
     // Las clasificaciones las lleva quien guía la junta: no se le pone a nadie.
     mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion && !d.minuta).forEach(d => {
         const c = porClave[d.clave] || { nombre: d.clave };
@@ -446,15 +444,15 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     });
 
     const rezagado = window.departamentoRezagado(i);
-    const atiendeDepto = rezagado ? conResponsable(rezagado.nombre) : '';
+    const responsableRezagado = rezagado ? window.responsableDeDepartamento(rezagado.nombre) : null;
+    const atiendeDepto = rezagado ? (responsableRezagado ? window.nombreDeAgenda(responsableRezagado.name) : rezagado.nombre) : '';
     // La lectura es de la planta y la lleva quien guía; lo que viene detrás
     // —las reflexiones— lo presenta cada equipo o departamento elegido.
     const presentan = window.presentadoresDeSemana(i) || [];
-    // Un equipo lo atiende su jefe, con su departamento al lado; un
-    // departamento de un corte viejo, su nombre con su responsable.
-    const conSuResponsable = (p) => window.esPresentadorDeGrupo(p)
-        ? (p.responsable ? window.nombreDeAgenda(p.responsable.nombre) : '') + (p.departamento ? ` · ${p.departamento}` : '')
-        : p.nombre + (p.responsable ? ` · ${window.nombreDeAgenda(p.responsable.nombre)}` : '');
+    // Lo atiende una persona: el jefe del equipo, o el responsable del
+    // departamento de un corte viejo; sin él, el nombre del departamento.
+    const conSuResponsable = (p) => p.responsable ? window.nombreDeAgenda(p.responsable.nombre) : (p.nombre || '');
+    let minutosDeEvidencias = 0;
     mazo.filter(d => d.reflexion).forEach(d => {
         const p = d.presentador != null ? presentan[d.presentador] : null;
         if (d.reflexion === 1) filas.push({ min: M.lectura, actividad: '¿Qué nos dicen los resultados?',
@@ -464,87 +462,86 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
         else if (p && d.reflexion === 'evidencias') return;
         else if (p) {
             const pFotos = pagina(`reflexion:evidencias:${d.presentador}`);
-            filas.push({ min: M.reflexion + (pFotos ? M.evidencias : 0), actividad: `Reflexión · ${window.tituloDeUnidad(p)}`,
+            filas.push({ min: M.reflexion + (pFotos ? M.evidencias : 0),
+                actividad: `Reflexión · ${window.tituloDeUnidad(p)}: ${p.temas.map(t => t.nombre).join(' y ')}`,
                 fotos: !!pFotos, detalle: p.temas.map(t => t.nombre).join(' · '), atiende: conSuResponsable(p),
                 pag: pFotos ? `${pFotos}–${pagina(d.id)}` : pagina(d.id) });
         }
-        else if (d.reflexion === 'evidencias') filas.push({ min: M.evidencias, fotos: true,
-            actividad: `Evidencias de ${rezagado ? rezagado.nombre : 'el departamento'}`,
-            atiende: atiendeDepto, sinResponsable: !atiendeDepto, pag: pagina(d.id) });
-        else filas.push({ min: M.acciones,
+        // Sin corte, las evidencias del rezagado van en el renglón de su reflexión.
+        else if (d.reflexion === 'evidencias') minutosDeEvidencias += M.evidencias;
+        else filas.push({ min: M.acciones + minutosDeEvidencias,
             actividad: rezagado ? `Reflexión del mayor atraso · ${rezagado.nombre}` : '¿Qué vamos a hacer? · compromisos',
             detalle: '¿qué vamos a hacer? · acción, responsable y fecha',
             atiende: atiendeDepto, sinResponsable: !atiendeDepto, pag: pagina(d.id) });
     });
     // La minuta, de la junta entera como la agenda: dice quién presenta la próxima.
-    if (pagina('minuta')) filas.push({ min: M.minuta, actividad: 'Minuta', sinResponsable: true,
+    if (pagina('minuta')) filas.push({ min: M.minuta, actividad: 'Minuta', sinResponsable: true, minuta: true,
         detalle: `quién presenta su reflexión ${nom.femenino ? 'la próxima' : 'el próximo'} ${nom.uno}`, pag: pagina('minuta') });
     const ajustada = window.ajustarMinutosAgenda(filas);
     const total = filas.reduce((a, f) => a + f.min, 0);
 
-    // Encabezado: el periodo, el título y, a la derecha, la duración.
+    // Lo que lleva quien guía —la planta, cada clasificación y la lectura— va
+    // en un solo renglón con sus minutos sumados: la agenda dice los puntos de
+    // la junta, no las diapositivas. Quedan tres fijos —la explicación, los
+    // resultados y la minuta— y en medio los agendados, que son las
+    // reflexiones que dejó el corte de la junta pasada.
+    const guia = filas.filter(f => f.sinResponsable);
+    const puntos = [];
+    puntos.push({ min: guia[0].min, actividad: 'Explicación de la agenda', atiende: presenta });
+    const resultados = guia.filter(f => f !== guia[0] && !f.minuta);
+    if (resultados.length) puntos.push({ min: resultados.reduce((a, f) => a + f.min, 0),
+        actividad: 'Resultados de la planta y por clasificación', atiende: presenta });
+    filas.filter(f => !f.sinResponsable).forEach(f => puntos.push(f));
+    const minuta = guia.find(f => f.minuta);
+    if (minuta) puntos.push({ min: minuta.min, actividad: `Minuta: quién presenta ${nom.femenino ? 'la próxima' : 'el próximo'} ${nom.uno}`,
+        atiende: presenta });
+
+    // Con el formato de la agenda de planta: encabezado azul marino, celdas
+    // con borde, todo en mayúsculas y el lugar en una celda que baja entera.
+    const MARINO = '#1B3A5C', BORDE = '#1d1d1f';
+    const may = (t) => String(t || '').toLocaleUpperCase('es');
     el.push({ tipo: 'rect', x: 0, y: 0, w: 960, h: 540, relleno: '#ffffff' });
-    texto(48, 38, 600, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
-    texto(48, 58, 520, 44, 'Agenda', 34, C.texto, { peso: 700 });
-    texto(612, 40, 300, 16, 'DURACIÓN APROXIMADA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
-    texto(612, 60, 300, 36, `${total} min`, 30, C.azul, { alinear: 'right', peso: 700 });
+    texto(48, 28, 560, 18, window.textoDelPeriodo(semana), 14, C.secundario, { peso: 500 });
+    texto(612, 22, 300, 16, 'DURACIÓN APROXIMADA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
+    texto(612, 38, 300, 26, `${total} min`, 22, MARINO, { alinear: 'right', peso: 700 });
 
-    // La tabla, sobre el gris de las listas agrupadas.
-    const X = 48, Y = 120, W = 864, H = 372;
-    const col = { tiempo: X + 18, actividad: X + 96, atiende: X + 520, pag: X + W - 18 };
-    const anchoActividad = col.atiende - col.actividad - 16;
-    const anchoAtiende = col.pag - 52 - col.atiende;
-    el.push({ tipo: 'rect', x: X, y: Y, w: W, h: H, relleno: C.agrupado, radio: 18 });
-    const cab = (x, w, t, alinear) => texto(x, Y + 12, w, 16, t, 10.5, C.secundario, { peso: 600, espaciado: 0.6, alinear });
-    cab(col.tiempo, 70, 'TIEMPO');
-    cab(col.actividad, 300, 'ACTIVIDAD');
-    cab(col.atiende, 240, 'PRESENTA');
-    cab(col.pag - 60, 60, 'PÁG.', 'right');
+    const X = 48, W = 864, Y = 76, HC = 56;
+    const anchos = [76, 418, 226, 144];
+    const xs = anchos.reduce((a, w) => (a.push(a[a.length - 1] + w), a), [X]);
+    const alto = Math.max(34, Math.min(64, (492 - Y - HC) / puntos.length));
+    const H = HC + alto * puntos.length;
+    const linea = (x1, y1, x2, y2) => el.push({ tipo: 'linea', x1, y1, x2, y2, color: BORDE, grosor: 1.2 });
 
-    // Con muchas clasificaciones los renglones se aprietan; por debajo de 20 px
-    // las que no caben se juntan en una fila «y N más», con sus minutos.
-    const y0 = Y + 36, espacio = H - 36 - 10;
-    let lista = filas;
-    let alto = Math.max(20, Math.min(38, espacio / filas.length));
-    const caben = Math.floor(espacio / alto);
-    if (filas.length > caben) {
-        const clas = filas.filter(f => f.clasificacion);
-        const sobran = filas.length - caben + 1;
-        const fuera = new Set(clas.slice(clas.length - sobran));
-        const ultima = filas.indexOf(clas[clas.length - sobran]);
-        lista = filas.filter(f => !fuera.has(f));
-        lista.splice(ultima, 0, { min: [...fuera].reduce((a, f) => a + f.min, 0),
-            actividad: `y ${fuera.size} clasificaciones más`, atiende: '', gris: true });
-    }
-    const tam = alto < 28 ? 12 : 13.5;
-    lista.forEach((f, k) => {
-        const y = y0 + k * alto;
-        el.push({ tipo: 'linea', x1: X + 14, y1: y, x2: X + W - 14, y2: y, color: C.separador, grosor: 1 });
-        const hp = Math.min(22, alto - 6);
-        el.push({ tipo: 'rect', x: col.tiempo, y: y + (alto - hp) / 2, w: 58, h: hp,
-            relleno: window.tinteIOS(f.gris ? C.terciario : C.azul, 0.86), radio: hp / 2 });
-        texto(col.tiempo, y, 58, alto, `${f.min} min`, tam - 1.5, f.gris ? C.secundario : C.azul, { peso: 700, alinear: 'center' });
+    el.push({ tipo: 'rect', x: X, y: Y, w: W, h: HC, relleno: MARINO });
+    const blanco = '#ffffff';
+    texto(xs[0], Y + 12, anchos[0], 16, 'TIEMPO', 12.5, blanco, { peso: 700, alinear: 'center' });
+    texto(xs[0], Y + 29, anchos[0], 14, '(MIN)', 10, blanco, { peso: 600, alinear: 'center' });
+    texto(xs[1], Y, anchos[1], HC, 'AGENDA', 30, blanco, { peso: 800, alinear: 'center', espaciado: 1 });
+    texto(xs[2], Y + 11, anchos[2], 16, 'ATIENDE 1 REPRESENTANTE', 12, blanco, { peso: 700, alinear: 'center' });
+    texto(xs[2], Y + 28, anchos[2], 16, 'POR TEMA', 12, blanco, { peso: 700, alinear: 'center' });
+    texto(xs[3], Y, anchos[3], HC, 'LUGAR', 13, blanco, { peso: 700, alinear: 'center' });
 
-        const reserva = f.fotos ? 24 : 0;
-        const largo = recorta(f.actividad, anchoActividad - reserva, tam);
-        if (f.detalle && alto >= 30) {
-            texto(col.actividad, y + 3, anchoActividad - reserva, alto / 2 + 2, largo, tam, f.gris ? C.secundario : C.texto, { peso: 600 });
-            texto(col.actividad, y + alto / 2 - 1, anchoActividad, alto / 2 - 2, recorta(f.detalle, anchoActividad, 11), 11, C.secundario);
-        } else {
-            texto(col.actividad, y, anchoActividad - reserva, alto, largo, tam, f.gris ? C.secundario : C.texto, { peso: 600 });
-        }
-        // La cámara va en su propia columna, al final de la actividad, para que
-        // las de todas las filas queden a plomo.
-        if (f.fotos) el.push({ tipo: 'icono', glifo: 'photo', x: col.atiende - 36, y: y + alto / 2 - 8,
-            lado: 16, color: C.secundario });
-
-        // Lo que no tiene presentador propio lo presenta quien guía la junta.
-        const quien = f.sinResponsable ? presenta : f.atiende;
-        if (!f.gris && (quien || !f.sinResponsable)) texto(col.atiende, y, anchoAtiende, alto,
-            quien ? recorta(quien, anchoAtiende, tam - 1) : 'Su jefe inmediato', tam - 1,
-            quien ? C.texto : C.terciario, { peso: quien ? 500 : 400 });
-        if (f.pag) texto(col.pag - 60, y, 60, alto, String(f.pag), tam - 1, C.terciario, { peso: 600, alinear: 'right' });
+    const tam = alto < 44 ? 11 : 12;
+    const maxCar = Math.floor((anchos[1] - 24) / (tam * 0.6));
+    puntos.forEach((f, k) => {
+        const y = Y + HC + k * alto;
+        if (k) linea(X, y, xs[3], y);
+        texto(xs[0], y, anchos[0], alto, String(f.min), 16, C.texto, { peso: 700, alinear: 'center' });
+        const renglones = window.partirEnRenglones(may(f.actividad), maxCar, alto >= 44 ? 2 : 1);
+        const hr = tam + 4, y1 = y + (alto - hr * renglones.length) / 2;
+        renglones.forEach((t, j) => texto(xs[1] + 12, y1 + j * hr, anchos[1] - 24, hr, t, tam, C.texto));
+        const quien = f.atiende || 'Su jefe inmediato';
+        texto(xs[2] + 12, y, anchos[2] - 24, alto, recorta(may(quien), anchos[2] - 24, tam), tam, f.atiende ? C.texto : C.secundario);
     });
+    // El lugar, en una sola celda de arriba abajo, como en la agenda de planta.
+    window.partirEnRenglones(may(window.LUGAR_JUNTA), 12, 3).forEach((t, j, todos) =>
+        texto(xs[3], Y + HC + (alto * puntos.length - todos.length * 18) / 2 + j * 18, anchos[3], 18, t, 13, C.texto,
+            { peso: 700, alinear: 'center' }));
+
+    // La rejilla, encima de todo: el contorno, las columnas y el pie del encabezado.
+    linea(X, Y, X + W, Y); linea(X, Y + H, X + W, Y + H);
+    linea(X, Y + HC, X + W, Y + HC);
+    xs.forEach(x => linea(x, Y, x, Y + H));
 
     const hoy = new Date();
     if (numero) texto(812, 506, 100, 16, `${numero} / ${cuantas}`, 10, C.terciario, { alinear: 'right', peso: 600 });

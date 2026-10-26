@@ -5146,46 +5146,49 @@ Las reglas para usarlo:
     tienen por qué calcularse dos veces.
 
   **Y la primera es la agenda de la junta** (`window.diapositivaDeAgenda`),
-  con la forma de la agenda que ya se usa en planta: una tabla sobre el gris de
-  las listas agrupadas con **tiempo, actividad, quién presenta y página**, y la
-  duración total arriba a la derecha. Un renglón para explicar la agenda, otro
-  para el resultado de la planta, uno por clasificación y los de la reflexión
-  —la lectura de los resultados y una por cada departamento que eligió el corte
-  de la junta pasada (más abajo)— y, al final, la minuta. **No se
-  escribe a mano: sale del mismo mazo que se va a enseñar**
-  (`diapositivasDeSemana`, que la pone delante con `id: 'agenda'`), así que una
-  clasificación que no existía ese periodo no aparece, la que dejó evidencias
-  lleva su cámara —y sus minutos y su segunda página, «5–6»— y las páginas son
-  las de verdad. **Va sin cifras**: dice de qué se va a hablar, no cómo salió,
-  que para eso está la siguiente.
+  **con el formato de la agenda que ya se usa en planta**: una tabla con borde,
+  encabezado azul marino (`TIEMPO (MIN)`, `AGENDA`, `ATIENDE 1 REPRESENTANTE
+  POR TEMA`, `LUGAR`), el texto en mayúsculas y el lugar en una sola celda que
+  baja entera (`window.LUGAR_JUNTA`, «Sala Be One», escrito a mano: la
+  aplicación no sabe dónde es la junta). Arriba, el periodo y la duración. Va
+  sin página ni cámara: la agenda dice los puntos de la junta, no sus
+  diapositivas. **No se escribe a mano: sale del mismo mazo que se va a
+  enseñar** (`diapositivasDeSemana`, que la pone delante con `id: 'agenda'`).
+
+  **Son tres puntos fijos más los agendados**, no un renglón por
+  clasificación:
+
+  - **Explicación de la agenda**, que lleva quien guía.
+  - **Resultados de la planta y por clasificación**, que lleva quien guía: la
+    diapositiva de la planta, cada clasificación con sus evidencias y «¿Qué nos
+    dicen los resultados?», con sus minutos sumados.
+  - **Los agendados**: una reflexión por equipo o departamento que eligió el
+    corte de la junta pasada —«Reflexión · Equipo de Lozano Jose: Juntas y
+    Capacitación»—, que atiende su jefe (el `responsable` del corte, sólo el
+    nombre). Sin corte (el primer periodo de la presentación), la reflexión del
+    mayor atraso, con sus evidencias en el mismo renglón, que atiende el
+    responsable del rezagado.
+  - **La minuta**, que lleva quien guía.
+
+  **Quien guía es quien abrió la presentación** (la ficha de
+  `usuarioLogueado`), así que otro administrador que la abra o la descargue sale
+  él. Los minutos se calculan por diapositiva como siempre —con el ajuste a la
+  hora de aquí abajo— y **después** se juntan en los renglones, así que el
+  ajuste no cambió. Por dentro sigue armando un renglón por diapositiva
+  (`filas`, con `sinResponsable` en los de quien guía y `minuta` en el último) y
+  los colapsa en `puntos`.
 
   ```js
   window.MINUTOS_AGENDA                  // { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10, reflexion: 6, minuta: 3 }
+  window.LUGAR_JUNTA                     // 'Sala Be One'
   window.nombreDeAgenda(nombre)          // «Pérez Reynoso Abel Alejandro» → «Abel Pérez»
   window.responsableDeDepartamento(nombre)   // su JR. Manager, o quien encabeza su cadena
   ```
 
-  **La junta la guía una sola persona, y es quien presenta los temas.** La
-  columna se llamaba «Atiende» y le ponía a cada clasificación el departamento
-  con mayor atraso en ella y su responsable; no hacía falta: los temas los lleva
-  quien guía la junta, que es **quien abrió la presentación** (la ficha de
-  `usuarioLogueado`), así que otro administrador que la abra o la descargue sale
-  él. Hoy la columna se llama **«Presenta»**:
-
-  - **Quien guía, en la explicación de la agenda, el resultado de la planta,
-    cada clasificación, la lectura de los resultados y la minuta**
-    (`sinResponsable`, que pinta ahí a `presenta`). Se probó un tiempo ponerlo
-    una sola vez en el encabezado con esos renglones en blanco, y se prefirió
-    verlo en la lista.
-  - **Cada reflexión, su equipo o departamento** con el responsable que se
-    guardó en el corte. Sus evidencias van en el mismo renglón —con su cámara,
-    sus minutos y sus dos páginas—, como las de una clasificación. Sin corte del
-    que salgan (el primer periodo de la presentación), la reflexión del mayor
-    atraso de antes, que presenta el responsable del rezagado.
-
-  Con eso se fue `rezagadoDeClasificacion`, que sólo servía para esa columna; el
-  orden de los departamentos dentro de una clasificación sigue en
-  `lugaresEnClasificacion`. Todo departamento va con su responsable —su JR.
+  Hubo antes un renglón por clasificación con el departamento más atrasado en
+  ella como responsable (`rezagadoDeClasificacion`, que se fue), y después con
+  quien guía en cada uno; los temas los lleva quien guía y la lista se hacía
+  larga para decir lo mismo. Todo departamento va con su responsable —su JR.
   Manager y, sin él, la cabeza de su cadena con más gente del departamento a
   cargo directo—. Los minutos son sugeridos y lo dice el pie.
 
@@ -5201,9 +5204,9 @@ Las reglas para usarlo:
   preferible a darle un minuto a cada una.
 
   Lo que la agenda de planta lleva y ésta no son **los invitados con su
-  asistencia a la junta anterior y el lugar**: la aplicación no sabe de esa
-  junta. Con muchas clasificaciones los renglones se aprietan hasta 20 px y las
-  que no caben se juntan en «y N clasificaciones más», con sus minutos sumados.
+  asistencia a la junta anterior**: la aplicación no sabe de esa junta. Los
+  renglones miden entre 34 y 64 px según cuántos haya, y el texto de la
+  actividad se parte en dos renglones si cabe.
 
   Dos cosas que hay que mantener: **lo que no se encuentra al cambiar de semana
   cae en la diapositiva de la planta, no en la agenda** —`pintarPresentacionCompleta`
