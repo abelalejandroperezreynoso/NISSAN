@@ -335,10 +335,10 @@ window.diapositivasDeSemana = (i) => {
 // son las de verdad. Sin cifras: la agenda dice de qué se va a hablar, no cómo
 // salió, que para eso está la diapositiva siguiente.
 //
-// La junta la guía una sola persona —quien la presenta, la de la sesión—, y se
-// dice una vez en el encabezado: la agenda, la planta, las clasificaciones, la
-// lectura de los resultados y la minuta las lleva ella y no llevan a nadie en
-// la columna «Presenta». Ahí sólo va quien presenta su reflexión: el jefe del
+// La junta la guía una sola persona —quien la presenta, la de la sesión—: la
+// agenda, la planta, las clasificaciones, la lectura de los resultados y la
+// minuta las presenta ella (`sinResponsable`), y su nombre va en la columna
+// «Presenta» de esos renglones. Las reflexiones las presenta otro: el jefe del
 // equipo elegido por el corte, o el responsable del departamento rezagado
 // (`responsableDeDepartamento`). Los minutos son sugeridos (`MINUTOS_AGENDA`) y
 // se suman en el encabezado.
@@ -488,12 +488,6 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     texto(48, 58, 520, 44, 'Agenda', 34, C.texto, { peso: 700 });
     texto(612, 40, 300, 16, 'DURACIÓN APROXIMADA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
     texto(612, 60, 300, 36, `${total} min`, 30, C.azul, { alinear: 'right', peso: 700 });
-    // Quien guía la junta lleva todo lo que no tiene presentador: se dice una
-    // sola vez aquí, y no renglón por renglón.
-    if (presenta) {
-        texto(380, 40, 360, 16, 'GUÍA LA JUNTA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
-        texto(380, 64, 360, 30, recorta(presenta, 360, 22), 22, C.texto, { alinear: 'right', peso: 600 });
-    }
 
     // La tabla, sobre el gris de las listas agrupadas.
     const X = 48, Y = 120, W = 864, H = 372;
@@ -544,9 +538,11 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
         if (f.fotos) el.push({ tipo: 'icono', glifo: 'photo', x: col.atiende - 36, y: y + alto / 2 - 8,
             lado: 16, color: C.secundario });
 
-        if (!f.gris && !f.sinResponsable) texto(col.atiende, y, anchoAtiende, alto,
-            f.atiende ? recorta(f.atiende, anchoAtiende, tam - 1) : 'Su jefe inmediato', tam - 1,
-            f.atiende ? C.texto : C.terciario, { peso: f.atiende ? 500 : 400 });
+        // Lo que no tiene presentador propio lo presenta quien guía la junta.
+        const quien = f.sinResponsable ? presenta : f.atiende;
+        if (!f.gris && (quien || !f.sinResponsable)) texto(col.atiende, y, anchoAtiende, alto,
+            quien ? recorta(quien, anchoAtiende, tam - 1) : 'Su jefe inmediato', tam - 1,
+            quien ? C.texto : C.terciario, { peso: quien ? 500 : 400 });
         if (f.pag) texto(col.pag - 60, y, 60, alto, String(f.pag), tam - 1, C.terciario, { peso: 600, alinear: 'right' });
     });
 

@@ -5165,23 +5165,23 @@ Las reglas para usarlo:
   window.responsableDeDepartamento(nombre)   // su JR. Manager, o quien encabeza su cadena
   ```
 
-  **La junta la guía una sola persona, y no se repite en cada renglón.** La
+  **La junta la guía una sola persona, y es quien presenta los temas.** La
   columna se llamaba «Atiende» y le ponía a cada clasificación el departamento
   con mayor atraso en ella y su responsable; no hacía falta: los temas los lleva
-  quien guía la junta, que es quien la presenta (la ficha de la sesión). Hoy:
+  quien guía la junta, que es **quien abrió la presentación** (la ficha de
+  `usuarioLogueado`), así que otro administrador que la abra o la descargue sale
+  él. Hoy la columna se llama **«Presenta»**:
 
-  - **Quien guía va una vez en el encabezado**, «Guía la junta», a la izquierda
-    de la duración.
-  - **La columna se llama «Presenta»** y sólo lleva a quien presenta algo
-    distinto de quien guía: **cada reflexión, su equipo o departamento** con el
-    responsable que se guardó en el corte. Sus evidencias van en el mismo
-    renglón —con su cámara, sus minutos y sus dos páginas—, como las de una
-    clasificación. Sin corte del que salgan (el primer periodo de la
-    presentación), la reflexión del mayor atraso de antes, que presenta el
-    responsable del rezagado.
-  - **Todo lo demás va en blanco** (`sinResponsable`): la explicación de la
-    agenda, el resultado de la planta, cada clasificación, la lectura de los
-    resultados y la minuta.
+  - **Quien guía, en la explicación de la agenda, el resultado de la planta,
+    cada clasificación, la lectura de los resultados y la minuta**
+    (`sinResponsable`, que pinta ahí a `presenta`). Se probó un tiempo ponerlo
+    una sola vez en el encabezado con esos renglones en blanco, y se prefirió
+    verlo en la lista.
+  - **Cada reflexión, su equipo o departamento** con el responsable que se
+    guardó en el corte. Sus evidencias van en el mismo renglón —con su cámara,
+    sus minutos y sus dos páginas—, como las de una clasificación. Sin corte del
+    que salgan (el primer periodo de la presentación), la reflexión del mayor
+    atraso de antes, que presenta el responsable del rezagado.
 
   Con eso se fue `rezagadoDeClasificacion`, que sólo servía para esa columna; el
   orden de los departamentos dentro de una clasificación sigue en
