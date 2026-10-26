@@ -335,14 +335,13 @@ window.diapositivasDeSemana = (i) => {
 // son las de verdad. Sin cifras: la agenda dice de qué se va a hablar, no cómo
 // salió, que para eso está la diapositiva siguiente.
 //
-// Quién atiende cada punto sale de lo que ya dice la aplicación: la agenda y la
-// planta no llevan a nadie, que son de la junta entera; la lectura de los
-// resultados, quien la presenta (la sesión);
-// una clasificación, el departamento con mayor atraso en ella
-// (`rezagadoDeClasificacion`) y, sin ninguno, quien la revisa; las evidencias y
-// la reflexión del mayor atraso, el departamento rezagado. Los departamentos van
-// con su responsable (`responsableDeDepartamento`). Los minutos son sugeridos
-// (`MINUTOS_AGENDA`) y se suman en el encabezado.
+// La junta la guía una sola persona —quien la presenta, la de la sesión—, y se
+// dice una vez en el encabezado: la agenda, la planta, las clasificaciones, la
+// lectura de los resultados y la minuta las lleva ella y no llevan a nadie en
+// la columna «Presenta». Ahí sólo va quien presenta su reflexión: el jefe del
+// equipo elegido por el corte, o el responsable del departamento rezagado
+// (`responsableDeDepartamento`). Los minutos son sugeridos (`MINUTOS_AGENDA`) y
+// se suman en el encabezado.
 window.MINUTOS_AGENDA = { agenda: 2, planta: 5, clasificacion: 5, evidencias: 3, lectura: 5, acciones: 10, reflexion: 6, minuta: 3 };
 
 // La junta dura una hora. Lo fijo —la agenda, la planta y la reflexión— se
@@ -431,36 +430,25 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     const porClave = {};
     r.clasificaciones.forEach(c => { porClave[c.clave] = c; });
     const conFotos = new Set(mazo.filter(d => d.evidencias).map(d => d.clave));
-    const evDe = (id) => ((window.filasDeLaTarjeta || []).find(f => String(f.ev.id) === String(id)) || {}).ev || null;
-    // Cada tema lo atiende el departamento con mayor atraso en él, con su
-    // responsable; sin departamento que lo deba, quien la revisa.
     const conResponsable = (nombre) => {
         const r = window.responsableDeDepartamento(nombre);
         return nombre + (r ? ` · ${window.nombreDeAgenda(r.name)}` : '');
     };
+    // Las clasificaciones las lleva quien guía la junta: no se le pone a nadie.
     mazo.filter(d => d.id && !d.agenda && !d.evidencias && !d.reflexion && !d.minuta).forEach(d => {
-        const c = porClave[d.clave] || { nombre: d.clave, encuestas: [] };
-        const atrasado = window.rezagadoDeClasificacion(i, d.clave);
-        let atiende = atrasado ? conResponsable(atrasado.nombre) : '';
-        if (!atiende) {
-            const grupo = { filas: (c.encuestas || []).map(e => evDe(e.id)).filter(Boolean).map(ev => ({ ev })) };
-            const revisores = grupo.filas.length ? window.revisoresDelGrupo(grupo) : [];
-            const nombres = revisores.slice(0, 2).map(x => window.nombreDeAgenda(x.emp ? x.emp.name : `ID ${x.id}`));
-            atiende = nombres.length ? nombres.join(', ') + (revisores.length > 2 ? ` y ${revisores.length - 2} más` : '') : '';
-        }
+        const c = porClave[d.clave] || { nombre: d.clave };
         const fotos = conFotos.has(d.clave);
         const pIni = pagina(d.id), pFin = fotos ? pagina(`evidencias:${d.clave}`) : null;
         filas.push({
-            min: M.clasificacion + (fotos ? M.evidencias : 0), actividad: c.nombre, fotos, atiende,
+            min: M.clasificacion + (fotos ? M.evidencias : 0), actividad: c.nombre, fotos, sinResponsable: true,
             pag: pFin ? `${pIni}–${pFin}` : pIni, clasificacion: true
         });
     });
 
     const rezagado = window.departamentoRezagado(i);
-    const atiendeDepto = rezagado ? conResponsable(rezagado.nombre) : presenta;
-    // La lectura es de la planta y la presenta quien presenta; lo que viene
-    // detrás —sus evidencias y «¿Qué vamos a hacer?»— es la reflexión del
-    // departamento con mayor atraso, y la atiende él.
+    const atiendeDepto = rezagado ? conResponsable(rezagado.nombre) : '';
+    // La lectura es de la planta y la lleva quien guía; lo que viene detrás
+    // —las reflexiones— lo presenta cada equipo o departamento elegido.
     const presentan = window.presentadoresDeSemana(i) || [];
     // Un equipo lo atiende su jefe, con su departamento al lado; un
     // departamento de un corte viejo, su nombre con su responsable.
@@ -470,7 +458,7 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     mazo.filter(d => d.reflexion).forEach(d => {
         const p = d.presentador != null ? presentan[d.presentador] : null;
         if (d.reflexion === 1) filas.push({ min: M.lectura, actividad: '¿Qué nos dicen los resultados?',
-            detalle: 'de dónde sale la cifra y qué clasificaciones frenan', atiende: presenta, pag: pagina(d.id) });
+            detalle: 'de dónde sale la cifra y qué clasificaciones frenan', sinResponsable: true, pag: pagina(d.id) });
         // Sus evidencias van en el mismo renglón que su reflexión, como las de
         // una clasificación: con su cámara, sus minutos y sus dos páginas.
         else if (p && d.reflexion === 'evidencias') return;
@@ -481,10 +469,12 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
                 pag: pFotos ? `${pFotos}–${pagina(d.id)}` : pagina(d.id) });
         }
         else if (d.reflexion === 'evidencias') filas.push({ min: M.evidencias, fotos: true,
-            actividad: `Evidencias de ${rezagado ? rezagado.nombre : 'el departamento'}`, atiende: atiendeDepto, pag: pagina(d.id) });
+            actividad: `Evidencias de ${rezagado ? rezagado.nombre : 'el departamento'}`,
+            atiende: atiendeDepto, sinResponsable: !atiendeDepto, pag: pagina(d.id) });
         else filas.push({ min: M.acciones,
             actividad: rezagado ? `Reflexión del mayor atraso · ${rezagado.nombre}` : '¿Qué vamos a hacer? · compromisos',
-            detalle: '¿qué vamos a hacer? · acción, responsable y fecha', atiende: atiendeDepto, pag: pagina(d.id) });
+            detalle: '¿qué vamos a hacer? · acción, responsable y fecha',
+            atiende: atiendeDepto, sinResponsable: !atiendeDepto, pag: pagina(d.id) });
     });
     // La minuta, de la junta entera como la agenda: dice quién presenta la próxima.
     if (pagina('minuta')) filas.push({ min: M.minuta, actividad: 'Minuta', sinResponsable: true,
@@ -498,6 +488,12 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     texto(48, 58, 520, 44, 'Agenda', 34, C.texto, { peso: 700 });
     texto(612, 40, 300, 16, 'DURACIÓN APROXIMADA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
     texto(612, 60, 300, 36, `${total} min`, 30, C.azul, { alinear: 'right', peso: 700 });
+    // Quien guía la junta lleva todo lo que no tiene presentador: se dice una
+    // sola vez aquí, y no renglón por renglón.
+    if (presenta) {
+        texto(380, 40, 360, 16, 'GUÍA LA JUNTA', 11, C.secundario, { alinear: 'right', peso: 600, espaciado: 0.6 });
+        texto(380, 64, 360, 30, recorta(presenta, 360, 22), 22, C.texto, { alinear: 'right', peso: 600 });
+    }
 
     // La tabla, sobre el gris de las listas agrupadas.
     const X = 48, Y = 120, W = 864, H = 372;
@@ -508,7 +504,7 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     const cab = (x, w, t, alinear) => texto(x, Y + 12, w, 16, t, 10.5, C.secundario, { peso: 600, espaciado: 0.6, alinear });
     cab(col.tiempo, 70, 'TIEMPO');
     cab(col.actividad, 300, 'ACTIVIDAD');
-    cab(col.atiende, 240, 'ATIENDE');
+    cab(col.atiende, 240, 'PRESENTA');
     cab(col.pag - 60, 60, 'PÁG.', 'right');
 
     // Con muchas clasificaciones los renglones se aprietan; por debajo de 20 px
@@ -2533,8 +2529,8 @@ window.unidadesDeSemana = (i, tipo) => {
             if (f.ev.category === window.CLASIFICACION_DE_REVISION) return;
             const k = window.normalizarClasificacion(f.ev.category || '');
             // Cuánto debe el departamento en cada clasificación, también en las
-            // de licencias: es de donde la agenda saca quién atiende cada tema
-            // (`rezagadoDeClasificacion`).
+            // de licencias: de ahí salen los lugares en cada clasificación
+            // (`lugaresEnClasificacion`).
             const a = d.porClave[k] || (d.porClave[k] = { suma: 0, n: 0, sinContestar: 0 });
             a.suma += f.puntaje;
             a.n++;
@@ -2613,16 +2609,11 @@ window.unidadEnSemana = (i, tipo, llave) => {
     });
 };
 
-// El departamento con mayor atraso en una clasificación, que es quien atiende
-// su tema en la agenda: el mismo criterio que el rezagado de la planta —su
-// resultado en ella, con lo no contestado en cero, y a igual cifra el que más
-// dejó sin contestar— entre los mismos departamentos que compiten. En una de
-// licencias, que no se puntúa, manda lo que dejó sin contestar. Null si nadie
-// del departamento tenía encuestas de ella.
-window.rezagadoDeClasificacion = (i, clave) => window.lugaresEnClasificacion(i, clave)[0] || null;
-
-// Los departamentos en una clasificación, del peor al mejor, con ese mismo
-// criterio. De aquí sale también en qué lugar quedó cada uno.
+// Los departamentos en una clasificación, del peor al mejor, con el mismo
+// criterio que el rezagado de la planta —su resultado en ella, con lo no
+// contestado en cero, y a igual cifra el que más dejó sin contestar—. En una de
+// licencias, que no se puntúa, manda lo que dejó sin contestar. De aquí sale
+// también en qué lugar quedó cada uno.
 window.lugaresEnClasificacion = (i, clave, tipo) => {
     const licencias = window.esClasificacionDeLicencias(clave);
     const candidatos = window.unidadesDeSemana(i, tipo || 'departamento')

@@ -5147,7 +5147,7 @@ Las reglas para usarlo:
 
   **Y la primera es la agenda de la junta** (`window.diapositivaDeAgenda`),
   con la forma de la agenda que ya se usa en planta: una tabla sobre el gris de
-  las listas agrupadas con **tiempo, actividad, quién atiende y página**, y la
+  las listas agrupadas con **tiempo, actividad, quién presenta y página**, y la
   duración total arriba a la derecha. Un renglón para explicar la agenda, otro
   para el resultado de la planta, uno por clasificación y los de la reflexión
   —la lectura de los resultados y una por cada departamento que eligió el corte
@@ -5165,31 +5165,29 @@ Las reglas para usarlo:
   window.responsableDeDepartamento(nombre)   // su JR. Manager, o quien encabeza su cadena
   ```
 
-  **Quién atiende sale de lo que ya sabe la aplicación**, no se escribe:
+  **La junta la guía una sola persona, y no se repite en cada renglón.** La
+  columna se llamaba «Atiende» y le ponía a cada clasificación el departamento
+  con mayor atraso en ella y su responsable; no hacía falta: los temas los lleva
+  quien guía la junta, que es quien la presenta (la ficha de la sesión). Hoy:
 
-  - **La explicación de la agenda, el resultado de la planta y la minuta,
-    nadie**: son de la junta entera, y la columna se queda en blanco
-    (`sinResponsable`).
-  - **La lectura de los resultados**, quien la presenta (la ficha de la sesión).
-  - **Cada clasificación, el departamento con mayor atraso en ella**
-    (`window.rezagadoDeClasificacion(i, clave)`), con el mismo criterio que el
-    rezagado de la planta —su resultado en esa clasificación con lo no
-    contestado en cero, y a igual cifra el que más dejó sin contestar— y entre
-    los mismos departamentos que compiten (`MIN_PERSONAS_DEPARTAMENTO`). En una
-    de licencias, que no se puntúa, manda lo que dejó sin contestar. Sale de
-    `porClave`, que `departamentosDeSemana` lleva aparte de `porClasificacion`
-    porque ésa deja fuera las licencias. Sin ningún departamento que la deba,
-    quien la revisa (`revisoresDelGrupo`) y, sin revisores, «Su jefe
-    inmediato» en gris.
-  - **Cada reflexión, su departamento** con el responsable que se guardó en el
-    corte. Sus evidencias van en el mismo renglón —con su cámara, sus minutos y
-    sus dos páginas—, como las de una clasificación. Sin corte del que salgan
-    (el primer periodo de la presentación), la reflexión del mayor
-    atraso de antes, que atiende el rezagado.
+  - **Quien guía va una vez en el encabezado**, «Guía la junta», a la izquierda
+    de la duración.
+  - **La columna se llama «Presenta»** y sólo lleva a quien presenta algo
+    distinto de quien guía: **cada reflexión, su equipo o departamento** con el
+    responsable que se guardó en el corte. Sus evidencias van en el mismo
+    renglón —con su cámara, sus minutos y sus dos páginas—, como las de una
+    clasificación. Sin corte del que salgan (el primer periodo de la
+    presentación), la reflexión del mayor atraso de antes, que presenta el
+    responsable del rezagado.
+  - **Todo lo demás va en blanco** (`sinResponsable`): la explicación de la
+    agenda, el resultado de la planta, cada clasificación, la lectura de los
+    resultados y la minuta.
 
-  Todo departamento va con su responsable —su JR. Manager y, sin él, la cabeza
-  de su cadena con más gente del departamento a cargo directo—. Los minutos son
-  sugeridos y lo dice el pie.
+  Con eso se fue `rezagadoDeClasificacion`, que sólo servía para esa columna; el
+  orden de los departamentos dentro de una clasificación sigue en
+  `lugaresEnClasificacion`. Todo departamento va con su responsable —su JR.
+  Manager y, sin él, la cabeza de su cadena con más gente del departamento a
+  cargo directo—. Los minutos son sugeridos y lo dice el pie.
 
   **Y la junta dura una hora** (`DURACION_JUNTA`, `ajustarMinutosAgenda`). Lo
   fijo —la agenda, la planta, la reflexión y la minuta— se queda como está y lo que sobra
@@ -5250,7 +5248,7 @@ Las reglas para usarlo:
   **No presenta todo el que va atrasado: sólo los temas con más atraso**
   (`MAX_TEMAS_DE_REFLEXION`, 3). El primero es el del departamento con menor
   desempeño de la planta —el tema que deba, o su clasificación más baja—, y
-  después los rezagados de cada clasificación (`rezagadoDeClasificacion`) de la
+  después los rezagados de cada clasificación (`lugaresEnClasificacion`) de la
   cifra más baja a la más alta. Sólo entra lo que está por debajo de la meta, y
   las de licencias no, que no se puntúan. Se agrupan por departamento: uno que
   va el último en dos de los temas elegidos presenta una vez, con los dos.
@@ -5300,9 +5298,8 @@ Las reglas para usarlo:
   departamento, el id del jefe en un equipo, que dos jefes pueden llamarse
   igual— y por ella la buscan `contextoDeTema`, `lugarEnLaPlanta` y
   `lugaresEnClasificacion`, que aceptan el tipo como último argumento y sin él
-  siguen siendo de departamentos. **La agenda sigue por departamento** en las
-  clasificaciones —quién atiende cada tema— y la reflexión de los periodos sin
-  corte también: sólo lo que elige el corte bajó a equipos.
+  siguen siendo de departamentos. **La reflexión de los periodos sin corte sigue
+  por departamento**: sólo lo que elige el corte bajó a equipos.
 
   **Los cortes de antes eran departamentos y se siguen leyendo**: cada entrada de
   un equipo lleva `tipo: 'grupo'`, y la minuta, la reflexión, sus evidencias y la
@@ -5848,7 +5845,7 @@ Las reglas para usarlo:
     dejaba escapar a un equipo que nunca la abriera. El mes es el término medio.
 
     Como todo sale de aquí, alcanza a los equipos, a los departamentos, a los
-    temas de la reflexión y a quién atiende cada clasificación en la agenda. La
+    temas de la reflexión. La
     cifra de la planta y la de la clasificación no cambian: el padrón sigue
     contándolo, que es la regla del curso previo. `abrirPresentacion` rehace la
     caché (`cargarCursosPrevios(true)`), que trae también qué encuestas piden
