@@ -1407,6 +1407,15 @@ Las reglas para usarlo:
   añade a esa lista**, en la mitad que le toque, o su historial sobrevivirá al
   borrado sin dueño que lo reclame.
 
+  **Y si no tiene columna `id`, lo dice en `llave`.** Cada borrado y cada
+  desligado encadena `.select(...)` para contar las filas, y pedirle a PostgREST
+  una columna que no existe no devuelve cero filas: revienta con un 42703 y la
+  escritura entera se deshace. `cursos_previos` y `evaluaciones_aplica` tienen
+  llave compuesta (encuesta + empleado) y entraron a la lista sin decirlo, así
+  que al eliminar a alguien su historial ahí se quedaba siempre, y el resumen
+  final lo daba por pendiente de limpiar desde el editor SQL. Llevan hoy
+  `llave: 'evaluation_id'`, y la usan el conteo previo y las dos escrituras.
+
   **El orden lo manda lo que no tiene vuelta atrás: primero la ficha, después
   el historial.** Si la base rechaza el borrado —una política de RLS sin
   DELETE, y van por operación, así que una tabla puede dejar actualizar y no

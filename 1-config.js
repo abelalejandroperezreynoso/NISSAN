@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-27-2';
+window.VERSION_APP = '2026-10-27-3';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -4086,6 +4086,11 @@ window.normalizarIdsLineas = (valor) => {
 //
 // Toda tabla nueva que guarde a una persona por su número se añade a esta
 // lista, o su historial sobrevivirá al borrado sin dueño que lo reclame.
+//
+// Las escrituras piden de vuelta una columna para contar las filas, y es `id`
+// salvo que la tabla diga otra en `llave`: las de llave compuesta
+// (encuesta + empleado) no tienen `id`, y pedírselo no devuelve cero filas sino
+// un error que deshace el borrado entero.
 window.RASTROS_DEL_EMPLEADO = [
     { tabla: 'refacciones',           suyas: ['solicitante_id'], menciones: ['atendido_por_id', 'asignado_por_id'], que: 'solicitudes de refacciones' },
     { tabla: 'incident_signatures',   suyas: ['employee_id'],                                que: 'firmas de incidentes' },
@@ -4096,10 +4101,10 @@ window.RASTROS_DEL_EMPLEADO = [
     // Lo que contestó a «¿te aplica esta encuesta?». Es suyo y de nadie más, así
     // que la fila entera se va con la ficha; si no, un alta futura con ese mismo
     // número heredaría un «no me aplica» que nunca dijo.
-    { tabla: 'evaluaciones_aplica',   suyas: ['employee_id'],                                que: 'respuestas de «¿te aplica?»' },
+    { tabla: 'evaluaciones_aplica',   suyas: ['employee_id'], llave: 'evaluation_id',        que: 'respuestas de «¿te aplica?»' },
     // El curso que dijo no haber tomado es suyo; el que programó como jefe de
     // otro sólo se le desliga, que sigue siendo el curso de ese otro.
-    { tabla: 'cursos_previos',        suyas: ['employee_id'], menciones: ['programado_por'], que: 'cursos previos por programar' },
+    { tabla: 'cursos_previos',        suyas: ['employee_id'], menciones: ['programado_por'], llave: 'evaluation_id', que: 'cursos previos por programar' },
     // Sus vacaciones son suyas; las de otro en las que era el relevo sólo se
     // desligan, que siguen siendo las vacaciones de ese otro.
     { tabla: 'vacaciones',            suyas: ['employee_id'], menciones: ['relevo_id'],      que: 'vacaciones' },
@@ -4148,10 +4153,10 @@ window.filtroDeRastro = (columnas, ids) => {
 // sólo el número. Una tabla que no exista todavía —o una columna que le falte—
 // no puede tumbar el aviso: devuelve null y el resumen dice que no se pudo
 // comprobar, que es distinto de decir que no hay nada.
-window.contarRastroEmpleado = async (tabla, columnas, ids) => {
+window.contarRastroEmpleado = async (tabla, columnas, ids, llave) => {
     try {
         const { count, error } = await sb.from(tabla)
-            .select('id', { count: 'exact', head: true })
+            .select(llave || 'id', { count: 'exact', head: true })
             .or(window.filtroDeRastro(columnas, ids));
         if (error) throw error;
         return typeof count === 'number' ? count : null;
@@ -4171,7 +4176,7 @@ window.resumenHistorialEmpleado = async (emp) => {
         if (r.menciones) tareas.push({ rastro: r, tipo: 'menciones', ids, columnas: r.menciones });
     });
     const cuentas = await Promise.all(tareas.map(t =>
-        window.contarRastroEmpleado(t.rastro.tabla, t.columnas, t.ids)));
+        window.contarRastroEmpleado(t.rastro.tabla, t.columnas, t.ids, t.rastro.llave)));
     return tareas.map((t, i) => ({ ...t, cuantos: cuentas[i] }));
 };
 
@@ -4256,9 +4261,10 @@ window.eliminarEmpleadoConHistorial = async (emp, avisar) => {
     // no dejar borrar.
     const barrer = async (t) => {
         const filtro = window.filtroDeRastro(t.columnas, t.ids);
+        const llave = t.rastro.llave || 'id';
         if (t.tipo === 'suyas') {
             const { data, error } = await sb.from(t.rastro.tabla)
-                .delete().or(filtro).select('id');
+                .delete().or(filtro).select(llave);
             if (error) throw error;
             if ((data || []).length) borrado.push(t.rastro.que + ': ' + (data || []).length);
             return (data || []).length;
@@ -4269,7 +4275,7 @@ window.eliminarEmpleadoConHistorial = async (emp, avisar) => {
         for (const col of t.columnas) {
             const parche = {}; parche[col] = null;
             const { data, error } = await sb.from(t.rastro.tabla)
-                .update(parche).in(col, t.ids).select('id');
+                .update(parche).in(col, t.ids).select(llave);
             if (error) throw error;
             tocadas += (data || []).length;
         }
