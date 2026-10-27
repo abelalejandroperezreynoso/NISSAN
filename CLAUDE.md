@@ -5826,7 +5826,15 @@ Las reglas para usarlo:
     alguno); a igual avance, el de peor resultado y después el que más dejó sin
     contestar. Dice su avance en grande, cuántos contestaron, su resultado y su
     lugar, y al pie por qué no hay una persona («Nadie se distingue: 433
-    personas en 0%»). Se probó antes a contar el grupo repartido por
+    personas en 0%»). **Si los empatados son pocos, se dicen sus nombres**
+    —«Empatan 2 personas en 0%:» y debajo «Ana Martínez y Juan Ruiz», con
+    `nombreDeAgenda`—: con dos o tres, saber quiénes son es justo lo que se
+    viene a buscar. Van todos o ninguno, y sólo si caben en dos renglones por
+    nombres enteros; con más no se nombra a nadie, que elegir a unos cuantos de
+    cuatrocientos volvería a ser acusarlos por el alfabeto. Llegan en el cuarto
+    argumento de `departamentoDeMenorAvance` (`quienes`), y pueden ser de otro
+    departamento que el de la tarjeta: son los empatados de la planta, no los
+    suyos. Se probó antes a contar el grupo repartido por
     departamento, y era una lista de cifras que no señalaba nada. El «Peor
     desempeño» del departamento rezagado, en la reflexión, cuenta a los
     empatados (`peorEmpatados`): ahí ya se está hablando de un departamento. El
