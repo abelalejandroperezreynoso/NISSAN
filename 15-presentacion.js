@@ -420,6 +420,8 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     try { sesion = JSON.parse(localStorage.getItem('usuarioLogueado') || '{}') || {}; } catch (e) { sesion = {}; }
     const yo = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(sesion.id));
     const presenta = window.nombreDeAgenda((yo && yo.name) || sesion.name || '');
+    const deptoDe = (e) => !e ? '' : (window.deptDeEmpleado ? window.deptDeEmpleado(e) : String(e.department || e.dept || '').trim());
+    const deptoGuia = yo ? deptoDe(yo) : '';
 
     // Los renglones, en el orden del mazo.
     const filas = [];
@@ -452,6 +454,8 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     // Lo atiende una persona: el jefe del equipo, o el responsable del
     // departamento de un corte viejo; sin él, el nombre del departamento.
     const conSuResponsable = (p) => p.responsable ? window.nombreDeAgenda(p.responsable.nombre) : (p.nombre || '');
+    // Y su departamento: el del equipo, o el propio departamento del corte viejo.
+    const deptoDelPresentador = (p) => window.esPresentadorDeGrupo(p) ? (p.departamento || '') : (p.responsable ? p.nombre || '' : '');
     let minutosDeEvidencias = 0;
     mazo.filter(d => d.reflexion).forEach(d => {
         const p = d.presentador != null ? presentan[d.presentador] : null;
@@ -464,7 +468,7 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
             const pFotos = pagina(`reflexion:evidencias:${d.presentador}`);
             filas.push({ min: M.reflexion + (pFotos ? M.evidencias : 0),
                 actividad: `Reflexión · ${window.tituloDeUnidad(p)}: ${p.temas.map(t => t.nombre).join(' y ')}`,
-                fotos: !!pFotos, detalle: p.temas.map(t => t.nombre).join(' · '), atiende: conSuResponsable(p),
+                fotos: !!pFotos, detalle: p.temas.map(t => t.nombre).join(' · '), atiende: conSuResponsable(p), depto: deptoDelPresentador(p),
                 pag: pFotos ? `${pFotos}–${pagina(d.id)}` : pagina(d.id) });
         }
         // Sin corte, las evidencias del rezagado van en el renglón de su reflexión.
@@ -472,7 +476,8 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
         else filas.push({ min: M.acciones + minutosDeEvidencias,
             actividad: rezagado ? `Reflexión del mayor atraso · ${rezagado.nombre}` : '¿Qué vamos a hacer? · compromisos',
             detalle: '¿qué vamos a hacer? · acción, responsable y fecha',
-            atiende: atiendeDepto, sinResponsable: !atiendeDepto, pag: pagina(d.id) });
+            atiende: atiendeDepto, depto: responsableRezagado ? rezagado.nombre : '',
+            sinResponsable: !atiendeDepto, pag: pagina(d.id) });
     });
     // La minuta, de la junta entera como la agenda: dice quién presenta la próxima.
     if (pagina('minuta')) filas.push({ min: M.minuta, actividad: 'Minuta', sinResponsable: true, minuta: true,
@@ -487,14 +492,14 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
     // reflexiones que dejó el corte de la junta pasada.
     const guia = filas.filter(f => f.sinResponsable);
     const puntos = [];
-    puntos.push({ min: guia[0].min, actividad: 'Explicación de la agenda', atiende: presenta });
+    puntos.push({ min: guia[0].min, actividad: 'Explicación de la agenda', atiende: presenta, depto: deptoGuia });
     const resultados = guia.filter(f => f !== guia[0] && !f.minuta);
     if (resultados.length) puntos.push({ min: resultados.reduce((a, f) => a + f.min, 0),
-        actividad: 'Resultados de la planta y por clasificación', atiende: presenta });
+        actividad: 'Resultados de la planta y por clasificación', atiende: presenta, depto: deptoGuia });
     filas.filter(f => !f.sinResponsable).forEach(f => puntos.push(f));
     const minuta = guia.find(f => f.minuta);
     if (minuta) puntos.push({ min: minuta.min, actividad: `Minuta: quién presenta ${nom.femenino ? 'la próxima' : 'el próximo'} ${nom.uno}`,
-        atiende: presenta });
+        atiende: presenta, depto: deptoGuia });
 
     // Con el formato de la agenda de planta: encabezado azul marino, celdas
     // con borde, todo en mayúsculas y el lugar en una celda que baja entera.
@@ -530,8 +535,16 @@ window.diapositivaDeAgenda = (i, numero, cuantas) => {
         const renglones = window.partirEnRenglones(may(f.actividad), maxCar, alto >= 44 ? 2 : 1);
         const hr = tam + 4, y1 = y + (alto - hr * renglones.length) / 2;
         renglones.forEach((t, j) => texto(xs[1] + 12, y1 + j * hr, anchos[1] - 24, hr, t, tam, C.texto));
+        // El nombre y, debajo y en gris, su departamento.
         const quien = f.atiende || 'Su jefe inmediato';
-        texto(xs[2] + 12, y, anchos[2] - 24, alto, recorta(may(quien), anchos[2] - 24, tam), tam, f.atiende ? C.texto : C.secundario);
+        const anchoA = anchos[2] - 24;
+        if (f.atiende && f.depto && alto >= 40) {
+            texto(xs[2] + 12, y + alto / 2 - tam - 1, anchoA, tam + 2, recorta(may(quien), anchoA, tam), tam, C.texto);
+            texto(xs[2] + 12, y + alto / 2 + 2, anchoA, tam, recorta(may(f.depto), anchoA, tam - 1.5), tam - 1.5, C.secundario);
+        } else {
+            texto(xs[2] + 12, y, anchoA, alto, recorta(may(quien + (f.atiende && f.depto ? ` · ${f.depto}` : '')), anchoA, tam),
+                tam, f.atiende ? C.texto : C.secundario);
+        }
     });
     // El lugar, en una sola celda de arriba abajo, como en la agenda de planta.
     window.partirEnRenglones(may(window.LUGAR_JUNTA), 12, 3).forEach((t, j, todos) =>

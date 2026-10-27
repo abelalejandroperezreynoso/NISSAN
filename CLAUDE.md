@@ -5170,6 +5170,11 @@ Las reglas para usarlo:
     responsable del rezagado.
   - **La minuta**, que lleva quien guía.
 
+  **Cada quien va con su departamento**, debajo y en gris: el de quien guía
+  sale de su ficha, el de un equipo del corte (`departamento`) y el de un
+  departamento de un corte viejo es él mismo. Con renglones de menos de 40 px
+  van en una sola línea, «NOMBRE · DEPARTAMENTO».
+
   **Quien guía es quien abrió la presentación** (la ficha de
   `usuarioLogueado`), así que otro administrador que la abra o la descargue sale
   él. Los minutos se calculan por diapositiva como siempre —con el ajuste a la
