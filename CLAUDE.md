@@ -5876,6 +5876,29 @@ Las reglas para usarlo:
     caché (`cargarCursosPrevios(true)`), que trae también qué encuestas piden
     curso (`ENCUESTAS_CON_CURSO`); sin ella todas se pueden pedir. Los cortes
     tomados con esta regla son la `version: 4`.
+  - **Ni lo que le llegó hace poco, por entrar o por cambiar de puesto**
+    (`yaSeLePodiaPedir`, el cuarto argumento de `seLePodiaPedir`). El padrón es
+    el de hoy, así que a quien se cambiaba de puesto la presentación le cobraba
+    la encuesta del puesto nuevo también en los periodos de atrás —«N meses
+    seguidos en 0%» por algo que nunca tuvo— y en el que corre desde el primer
+    día. Desde cuándo le toca lo dice `window.desdeCuandoLeToca(ev, emp)`, en
+    `1-config.js`: el alta y, si la encuesta le llegó con el cambio, el cambio.
+    Si eso es posterior al inicio del periodo de la encuesta —o es de «única
+    vez», que no tiene inicio—, no se le pide hasta
+    `MESES_DE_GRACIA_POR_ASIGNACION` (1) después o hasta que cierre el periodo,
+    lo que llegue antes: una mensual que le llega el día 20 se le pide desde el
+    mes siguiente, como a todos.
+
+    El cambio lo apunta **un disparador** en `employees.cambio_de_asignacion`
+    (`sql/cambio-de-asignacion.sql`, también en `supabase/migrations/`): `{ fecha,
+    puesto, departamento }` con lo que tenía **antes**, y sólo el último. Va en la
+    base y no en la aplicación porque el puesto se cambia desde dos pantallas y
+    desde el panel de Supabase. Con lo de antes se pregunta si la encuesta ya le
+    tocaba (`esCandidataDeEncuesta`): si sí, el cambio no le cambió nada y manda
+    el alta, o un ascenso le borraría el atraso de verdad. Renombrar un puesto
+    desde «Gestionar información» también dispara el apunte. La columna llega en
+    la plantilla de memoria como `cambioAsignacion` y está en
+    `COLUMNAS_OPCIONALES_EMPLEADO`; sin ella, el alta a secas.
   - **Y dice en cuánto resuelve un pendiente** («Resuelve en 1.8 días»): el
     promedio, sobre **todo lo que contestó en las últimas cuatro semanas**
     (`SEMANAS_DEL_DESEMPATE`), de lo que tardó desde que cada encuesta le

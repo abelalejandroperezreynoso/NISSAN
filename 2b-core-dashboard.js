@@ -3529,7 +3529,7 @@ const cargarDatosEmpleadosAhora = async () => {
     // fila sin ese campo, revienta la consulta entera —y con ella la caché de la
     // que cuelga medio panel—. El ayudante la reintenta sin ella.
     const { data, error } = await window.consultarEmpleados(
-        'employee_id, name, department, area_id, puesto, supervisor_id, created_at, avatar_url, areas(nombre), is_active, encargos');
+        'employee_id, name, department, area_id, puesto, supervisor_id, created_at, avatar_url, areas(nombre), is_active, encargos, cambio_de_asignacion');
 
     if(error || !data) return;
     
@@ -3555,6 +3555,9 @@ const cargarDatosEmpleadosAhora = async () => {
             // Sin la columna en la base llegan vacíos y todo el mundo cae en
             // «Sin encargos», que es lo que de verdad hay.
             encargos: window.normalizarEncargos(d.encargos),
+            // El último cambio de puesto o departamento, para saber desde cuándo
+            // le toca cada encuesta (`desdeCuandoLeToca`).
+            cambioAsignacion: d.cambio_de_asignacion || null,
             avatar: d.avatar_url,
             isActive: d.is_active !== false // <-- NUEVO: Guardamos el estado para usarlo visualmente
         });

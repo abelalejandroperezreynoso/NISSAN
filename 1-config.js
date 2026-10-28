@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-10-27-3';
+window.VERSION_APP = '2026-10-28-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -251,6 +251,27 @@ window.esCandidataDeEncuesta = (ev, empleado, tieneEquipo) => {
     if (!acota(ev.target_departments, deptoDelEmpleado, 'SIN DEPARTAMENTO')) return false;
 
     return true;
+};
+
+// Desde cuándo le toca a esta persona una encuesta: su alta y, si la encuesta
+// le llegó con un cambio de puesto o de departamento, ese cambio. Lo apunta un
+// disparador en `employees.cambio_de_asignacion` (`sql/cambio-de-asignacion.sql`)
+// con lo que tenía antes, y con eso se pregunta si la encuesta ya le tocaba: si
+// sí, el cambio no le cambió nada y manda el alta. Sólo se guarda el último
+// cambio. Sin la columna, el alta a secas, que es lo de antes.
+window.desdeCuandoLeToca = (ev, emp) => {
+    if (!emp) return null;
+    const alta = window.fechaDeAltaEmpleado(emp);
+    const cambio = emp.cambioAsignacion;
+    const fecha = cambio && cambio.fecha ? new Date(cambio.fecha) : null;
+    if (!fecha || isNaN(fecha) || fecha <= alta) return alta;
+    // El equipo no cambia con el puesto, así que no es lo que se pregunta. Sin
+    // departamento va «General», que es como lo deja la plantilla de memoria.
+    const antes = Object.assign({}, emp, {
+        puesto: String(cambio.puesto || '').trim(),
+        dept: String(cambio.departamento || '').trim() || 'General'
+    });
+    return window.esCandidataDeEncuesta(ev, antes, true) ? alta : fecha;
 };
 
 // ==========================================
@@ -4032,7 +4053,7 @@ window.tienePermisoRefacciones = async (encargosDelUsuario) => {
 // mano. Pedirle a PostgREST una columna que no existe no devuelve la fila sin
 // ese campo: revienta la consulta entera. Se reintenta sin la columna de la que
 // se queja, así la pantalla sigue en pie mientras el script no se haya corrido.
-window.COLUMNAS_OPCIONALES_EMPLEADO = ['encargos', 'lineas_ids'];
+window.COLUMNAS_OPCIONALES_EMPLEADO = ['encargos', 'lineas_ids', 'cambio_de_asignacion'];
 
 window.consultarEmpleados = async (columnas, ordenarPor) => {
     let cols = columnas.split(',').map(c => c.trim()).filter(c => c !== '');

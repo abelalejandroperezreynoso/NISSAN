@@ -1383,7 +1383,32 @@ window.plazoParaDecirSiTomoElCurso = (ev) => {
     base.setMonth(base.getMonth() + window.MESES_PARA_DECIR_SI_TOMO_EL_CURSO);
     return base;
 };
-window.seLePodiaPedir = (ev, empleadoId, referencia) => {
+//
+// **Y una encuesta que le llegó hace poco tampoco se le pide todavía.** A quien
+// entra o cambia de puesto le caen de golpe las encuestas de su puesto nuevo, y
+// el padrón es el de hoy: sin esto se le cobraban también los periodos de atrás
+// —«N meses seguidos en 0%» por una encuesta que nunca tuvo— y la del periodo en
+// curso desde el primer día. Desde cuándo le toca lo dice `desdeCuandoLeToca`
+// (el alta, o el cambio si la encuesta le llegó con él). Si eso es posterior al
+// inicio del periodo de la encuesta —o la encuesta es de «única vez», que no
+// tiene inicio—, no se le pide hasta un mes después o hasta que cierre el
+// periodo, lo que llegue antes: una mensual que le llega el día 20 se le pide
+// desde el mes siguiente, como a todos, y una de «única vez», al mes.
+window.MESES_DE_GRACIA_POR_ASIGNACION = 1;
+window.yaSeLePodiaPedir = (ev, emp, referencia) => {
+    const desde = window.desdeCuandoLeToca ? window.desdeCuandoLeToca(ev, emp) : null;
+    if (!desde || isNaN(desde)) return true;
+    const periodo = window.periodoDeEncuesta(ev, referencia);
+    const inicio = periodo && periodo.inicio && periodo.inicio.getTime() > 0 ? periodo.inicio : null;
+    if (inicio && desde <= inicio) return true;
+    const limite = new Date(desde);
+    limite.setMonth(limite.getMonth() + window.MESES_DE_GRACIA_POR_ASIGNACION);
+    // El periodo cierra antes de que pase el mes: ése entero se le perdona.
+    if (periodo && periodo.fin && periodo.fin < limite) return false;
+    return referencia >= limite;
+};
+window.seLePodiaPedir = (ev, empleadoId, referencia, emp) => {
+    if (emp && !window.yaSeLePodiaPedir(ev, emp, referencia)) return false;
     const conCurso = window.ENCUESTAS_CON_CURSO;
     if (!conCurso || !conCurso[String(ev.id)]) return true;
     const fila = window.filaDeCursoPrevio ? window.filaDeCursoPrevio(ev.id, empleadoId) : null;
@@ -1412,7 +1437,8 @@ window.desempenoDePersonasEn = (referencia, clave) => {
                 // Quien no tenía el curso previo no tenía esta encuesta en su
                 // mano, así que aquí no le cuenta ni a favor ni en contra: ni a
                 // él, ni a su equipo, ni a su departamento.
-                if (!r && !window.seLePodiaPedir(f.ev, id, referencia)) return;
+                // Ni quien la recibió hace poco, por entrar o cambiar de puesto.
+                if (!r && !window.seLePodiaPedir(f.ev, id, referencia, emp)) return;
                 const p = porPersona[id] || (porPersona[id] = nueva(emp));
                 p.asignadas++;
                 if (!r) { p.filas.push({ ev: f.ev, puntaje: 0, sinContestar: true }); return; }
