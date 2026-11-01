@@ -8511,11 +8511,13 @@ Las reglas para usarlo:
   que no es se parece demasiado a lo que esa nota vino a evitar.
 
 - **El asistente habla con Claude desde el navegador, con la clave del
-  administrador.** Es el botón de la chispa del encabezado, a la izquierda del
-  «+», y como él sólo se ve con el modo administrador encendido
-  (`pintarBotonAdmin` enseña y esconde los dos, y al apagar el modo cierra la
-  hoja). Vive en `18-asistente.js`, en la hoja `#modal-asistente`, montada la
-  primera vez que se abre.
+  administrador.** Se entra por **«✨ Asistente»**, el primer botón del panel de
+  administración (grupo «Consultar»), así que sólo lo alcanza quien tiene el
+  modo encendido; `abrirAsistente` además lo comprueba con `checkAdmin`, cierra
+  el panel antes de abrirse, y `pintarBotonAdmin` cierra la hoja al apagar el
+  modo. Estuvo un tiempo como botón suelto en el encabezado, junto al «+», y se
+  llevó al panel para no sumar otro icono ahí. Vive en `18-asistente.js`, en la
+  hoja `#modal-asistente`, montada la primera vez que se abre.
 
   ```js
   window.abrirAsistente()  window.cerrarAsistente()

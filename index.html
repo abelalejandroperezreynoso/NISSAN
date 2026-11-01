@@ -20,7 +20,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-11-01-11">
+    <link rel="stylesheet" href="estilos.css?v=2026-11-01-12">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -99,19 +99,6 @@
             <!-- Los botones del encabezado. Ninguno lleva texto, así que lo
                  que hace cada uno lo cuentan su `title` y su `aria-label`. -->
             <div class="encabezado-acciones">
-
-                <!-- El asistente: una conversación con Claude que lee los datos
-                     de la aplicación. Como el «+», sólo con el modo encendido, y
-                     lo enseña y lo esconde window.pintarBotonAdmin. -->
-                <button id="btn-asistente-encabezado" class="ios-boton-icono ios-boton-encabezado"
-                        onclick="window.abrirAsistente()" hidden
-                        title="Asistente" aria-label="Asistente">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>
-                        <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>
-                    </svg>
-                </button>
 
                 <!-- La entrada al panel de administración. Sólo se ve con el
                      modo encendido, y de eso se encarga window.pintarBotonAdmin. -->
@@ -882,6 +869,16 @@
                  la lista, y no desde el margen del overlay: así la lista puede
                  desplazarse hasta el final. -->
             <div id="contenedor-modal-admin" style="flex:1; overflow-y: auto; padding: 15px 15px calc(15px + env(safe-area-inset-bottom)); background: #f8fafc;">
+                <!-- El asistente: una conversación con Claude que lee los datos
+                     de la aplicación y no puede cambiar nada. Va el primero
+                     porque es para consultar, y consultar es lo más frecuente. -->
+                <div class="admin-hoja-grupo">
+                    <div class="hoja-grupo-titulo">Consultar</div>
+                    <div class="admin-hoja-lista">
+                        <button class="admin-btn" onclick="window.abrirAsistente()" style="border-color: #d97757; color: #c2410c;"><span aria-hidden="true">✨</span><span data-texto>Asistente</span></button>
+                    </div>
+                </div>
+
                 <div class="admin-hoja-grupo">
                     <div class="hoja-grupo-titulo">Crear</div>
                     <div class="admin-hoja-lista">
@@ -1154,27 +1151,27 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-11-01-11"></script>
-    <script src="2a-core-nav.js?v=2026-11-01-11"></script>
-    <script src="2b-core-dashboard.js?v=2026-11-01-11"></script>
-    <script src="3-incidentes.js?v=2026-11-01-11"></script>
-    <script src="4-evaluaciones-base.js?v=2026-11-01-11"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-11-01-11"></script>
-    <script src="17-hoja-excel.js?v=2026-11-01-11"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-11-01-11"></script>
-    <script src="5-objetivos.js?v=2026-11-01-11"></script>
-    <script src="6-calendario.js?v=2026-11-01-11"></script>
-    <script src="7-pendientes.js?v=2026-11-01-11"></script>
-    <script src="8-hallazgos.js?v=2026-11-01-11"></script>
-    <script src="9-estadisticas.js?v=2026-11-01-11"></script>
+    <script src="1-config.js?v=2026-11-01-12"></script>
+    <script src="2a-core-nav.js?v=2026-11-01-12"></script>
+    <script src="2b-core-dashboard.js?v=2026-11-01-12"></script>
+    <script src="3-incidentes.js?v=2026-11-01-12"></script>
+    <script src="4-evaluaciones-base.js?v=2026-11-01-12"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-11-01-12"></script>
+    <script src="17-hoja-excel.js?v=2026-11-01-12"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-11-01-12"></script>
+    <script src="5-objetivos.js?v=2026-11-01-12"></script>
+    <script src="6-calendario.js?v=2026-11-01-12"></script>
+    <script src="7-pendientes.js?v=2026-11-01-12"></script>
+    <script src="8-hallazgos.js?v=2026-11-01-12"></script>
+    <script src="9-estadisticas.js?v=2026-11-01-12"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-11-01-11"></script>
-    <script src="13-gestion.js?v=2026-11-01-11"></script>
-    <script src="14-vacaciones.js?v=2026-11-01-11"></script>
-    <script src="15-presentacion.js?v=2026-11-01-11"></script>
-    <script src="16-cursos.js?v=2026-11-01-11"></script>
-    <script src="18-asistente.js?v=2026-11-01-11"></script>
-    <script src="10-refacciones.js?v=2026-11-01-11"></script> 
+    <script src="12-almacenamiento.js?v=2026-11-01-12"></script>
+    <script src="13-gestion.js?v=2026-11-01-12"></script>
+    <script src="14-vacaciones.js?v=2026-11-01-12"></script>
+    <script src="15-presentacion.js?v=2026-11-01-12"></script>
+    <script src="16-cursos.js?v=2026-11-01-12"></script>
+    <script src="18-asistente.js?v=2026-11-01-12"></script>
+    <script src="10-refacciones.js?v=2026-11-01-12"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {
