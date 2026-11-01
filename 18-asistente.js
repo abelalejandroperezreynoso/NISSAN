@@ -1088,26 +1088,32 @@ window.montarHojaAsistente = () => {
     window.engancharBotonEnviarAsistente();
 };
 
-// El botón de enviar no le quita el foco al campo, y en el teléfono envía al
-// levantar el dedo. Sin esto, tocarlo sólo cerraba el teclado: el campo perdía
-// el foco, el teclado bajaba, la pantalla —que se ajusta al área visible— bajaba
-// con él, y cuando iOS entregaba el click el botón ya no estaba bajo el dedo.
-// - `mousedown` con `preventDefault` es lo que impide que el foco salte al
-//   botón (en un escritorio, y en el teléfono si llegara a sintetizarse).
-// - `touchend` con `preventDefault` cancela el click que vendría después —o se
-//   enviaría dos veces— y envía él mismo, sólo si el dedo se levantó dentro del
-//   botón: arrastrar fuera es arrepentirse, como en cualquier botón de iOS.
+// En el teléfono el botón de enviar envía EN CUANTO EL DEDO LO TOCA
+// (`touchstart`), no al levantarlo. Cualquier cosa que espere al final del
+// toque llega tarde: al tocar, iOS empieza a cerrar el teclado, la pantalla
+// —que se ajusta al área visible— baja con él y el botón se mueve de sitio, así
+// que ni el click ni un `touchend` que mire si el dedo sigue encima del botón
+// llegan a enviar. Pasó con los dos: el teclado se cerraba y el mensaje no salía.
+// - `preventDefault` en el `touchstart` cancela el click de después (o se
+//   enviaría dos veces) y no deja que el toque le quite el foco al campo.
+// - Enviado ya, se suelta el foco a propósito: el teclado baja y deja ver la
+//   respuesta, y ahí la pantalla puede moverse lo que quiera.
+// - `mousedown` con `preventDefault` es lo mismo para un escritorio, donde el
+//   envío lo sigue haciendo el click del formulario.
 window.engancharBotonEnviarAsistente = () => {
     const btn = document.getElementById('btn-enviar-asistente');
     if (!btn || btn.__enganchado) return;
     btn.__enganchado = true;
     btn.addEventListener('mousedown', (e) => e.preventDefault());
-    btn.addEventListener('touchend', (e) => {
-        const t = e.changedTouches && e.changedTouches[0];
-        const r = btn.getBoundingClientRect();
-        const dentro = !t || (t.clientX >= r.left - 8 && t.clientX <= r.right + 8 && t.clientY >= r.top - 8 && t.clientY <= r.bottom + 8);
+    btn.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if (dentro) window.enviarDesdeRedactor();
+        const entrada = document.getElementById('asistente-entrada');
+        const ocupado = window.asistente.ocupado;
+        const habiaTexto = !!(entrada && entrada.value.trim());
+        window.enviarDesdeRedactor();
+        // Sólo se cierra el teclado si de verdad se mandó algo: con el campo
+        // vacío el toque no hace nada y no hay por qué quitarle el teclado.
+        if (!ocupado && habiaTexto && entrada) entrada.blur();
     }, { passive: false });
 };
 

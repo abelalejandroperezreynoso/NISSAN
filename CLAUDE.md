@@ -8540,15 +8540,18 @@ Las reglas para usarlo:
   capa lleva `con-teclado`, que le quita al redactor el hueco del indicador de
   inicio, que entonces queda debajo del teclado.
 
-  **Y el botón de enviar no le quita el foco al campo**
-  (`window.engancharBotonEnviarAsistente`): `mousedown` con `preventDefault`,
-  y en el teléfono envía en el `touchend` —también con `preventDefault`, que
-  cancela el click de después y evita enviar dos veces— si el dedo se levantó
-  dentro del botón. Con un botón normal, tocarlo **sólo cerraba el teclado**:
-  el campo perdía el foco, el teclado bajaba, la pantalla bajaba con él por el
-  ajuste de aquí arriba y el click llegaba cuando el botón ya no estaba bajo el
-  dedo. Las dos cosas van juntas: ajustar la pantalla al viewport visual es lo
-  que mueve el botón, y no soltar el foco es lo que evita que se mueva.
+  **Y en el teléfono el botón de enviar envía en cuanto el dedo lo toca**
+  (`window.engancharBotonEnviarAsistente`, en el `touchstart`), no al
+  levantarlo. Con un botón normal, tocarlo **sólo cerraba el teclado**: el
+  teclado empieza a bajar, la pantalla baja con él por el ajuste de aquí arriba
+  y el click llega cuando el botón ya no está bajo el dedo. Un `touchend` que
+  mirara si el dedo seguía encima tampoco bastó —en el iPhone se seguía
+  cerrando el teclado sin enviar—: todo lo que espera al final del toque llega
+  tarde. El `preventDefault` del `touchstart` cancela el click de después (o se
+  enviaría dos veces), y ya enviado **se suelta el foco a propósito**: el
+  teclado baja y deja ver la respuesta, y ahí la pantalla ya puede moverse. Con
+  el campo vacío el toque no hace nada y el teclado se queda. En un escritorio,
+  `mousedown` con `preventDefault` y el envío lo hace el click del formulario.
 
   **El encabezado copia el de la aplicación de Claude**: botones redondos
   blancos que flotan (`.asistente-flotante`) —la flecha de cerrar a la
