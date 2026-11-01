@@ -8524,11 +8524,21 @@ Las reglas para usarlo:
   conversación que se lee larga. La capa conserva la clase `hoja-overlay` —de
   ella cuelgan `--alto-teclado`, el anclaje del documento y la exclusión del
   relleno de los `modal-`— con el modificador `asistente-overlay`, que le quita
-  el margen y el desenfoque y le pone el teclado como relleno de abajo; el
+  el margen y el desenfoque; el
   interior es `.asistente-pantalla` y **no** `.hoja-contenido`, así que no lleva
   tirador ni esquinas ni el gesto de deslizar para cerrar: se cierra con la
   flecha. En pantalla ancha la conversación y el redactor se quedan en una
   columna centrada de 760px.
+
+  **Y el teclado no se resta: la capa se pone encima del viewport visual.**
+  `window.ajustarAsistenteAlTeclado()` le escribe a `#modal-asistente` el `top`
+  y el `height` de `visualViewport` en cada `resize`, `scroll`, `focusin` y
+  `focusout`, y `soltarAsistenteDelTeclado()` los quita al cerrar. No usa
+  `--alto-teclado`, que sale de `innerHeight − visualViewport.height` y supone
+  que `innerHeight` no cambia con el teclado: en el iPhone donde se probó salió
+  en cero y el redactor se quedaba detrás del teclado. Con el campo enfocado la
+  capa lleva `con-teclado`, que le quita al redactor el hueco del indicador de
+  inicio, que entonces queda debajo del teclado.
 
   **El encabezado copia el de la aplicación de Claude**: botones redondos
   blancos que flotan (`.asistente-flotante`) —la flecha de cerrar a la

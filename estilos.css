@@ -7305,8 +7305,11 @@ html.fondo-anclado body {
    pidió —se veía gris sobre un encabezado blanco—. Con el mismo gris debajo
    no hay costura, y los botones blancos flotando encima son además el aspecto
    de la aplicación de Claude. */
+/* Sin `--alto-teclado` en el relleno: la capa la ajusta al viewport visual
+   `ajustarAsistenteAlTeclado`, que le escribe `top` y `height`, y sumarle
+   además el teclado lo apartaría dos veces. */
 .hoja-overlay.asistente-overlay {
-    padding: 0 0 var(--alto-teclado, 0px);
+    padding: 0;
     align-items: stretch;
     background: #f0f2f5;
     backdrop-filter: none;
@@ -7451,6 +7454,7 @@ html.fondo-anclado body {
 .asistente-pantalla .asistente-sugerencia { border-color: transparent; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06); }
 .asistente-pantalla .asistente-clave { background: white; }
 .asistente-pantalla .asistente-tabla th, .asistente-pantalla .asistente-tabla td { border-bottom-color: #d8dce3; }
+.asistente-overlay.con-teclado .asistente-redactor { margin-bottom: 8px; }
 .asistente-pantalla .asistente-redactor {
     width: calc(100% - 24px);
     max-width: 736px;

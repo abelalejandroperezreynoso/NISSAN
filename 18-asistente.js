@@ -1057,6 +1057,7 @@ window.abrirAsistente = () => {
     if (window.cerrarPanelAdmin) window.cerrarPanelAdmin();
     window.montarHojaAsistente();
     document.getElementById('modal-asistente').style.display = 'flex';
+    window.ajustarAsistenteAlTeclado();
     window.asistente.pantalla = 'chat';
     // Sin clave aquí, lo primero que se ve es «Comprobando», no lo que dijo la
     // base la última vez: mientras tanto se trae la de Supabase.
@@ -1073,9 +1074,54 @@ window.abrirAsistente = () => {
     window.cargarSdkAnthropic().catch(() => {});
 };
 
+// --- EL TECLADO ---
+// La pantalla se ajusta al área que de verdad se ve —`visualViewport`— en vez
+// de restarle a la ventana lo que mide el teclado. Esa resta (la de
+// `--alto-teclado`, que comparten las hojas) supone que `innerHeight` no cambia
+// con el teclado, y en el iPhone donde se probó salió en cero: el redactor se
+// quedaba detrás del teclado. Poniendo la capa encima del viewport visual
+// —su altura y su desplazamiento, tal cual— el redactor queda justo encima del
+// teclado se mida como se mida, y el encabezado no se va por arriba si iOS
+// desplaza la vista para enseñar el campo.
+window.ajustarAsistenteAlTeclado = () => {
+    const capa = document.getElementById('modal-asistente');
+    if (!capa || capa.style.display === 'none') return;
+    const vv = window.visualViewport;
+    const entrada = document.getElementById('asistente-entrada');
+    const escribiendo = !!entrada && document.activeElement === entrada;
+    // Con el teclado arriba, el indicador de inicio queda debajo de él: su
+    // hueco sobra entre el redactor y el teclado.
+    capa.classList.toggle('con-teclado', escribiendo);
+    if (!vv) return;
+    capa.style.top = Math.max(0, vv.offsetTop) + 'px';
+    capa.style.height = vv.height + 'px';
+};
+
+window.soltarAsistenteDelTeclado = () => {
+    const capa = document.getElementById('modal-asistente');
+    if (!capa) return;
+    capa.style.top = '';
+    capa.style.height = '';
+    capa.classList.remove('con-teclado');
+};
+
+(() => {
+    const ajustar = () => window.ajustarAsistenteAlTeclado();
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', ajustar);
+        window.visualViewport.addEventListener('scroll', ajustar);
+    }
+    // El teclado sube y baja animado, y iOS da las medidas definitivas un
+    // instante después del foco: se mide al momento y otra vez al acabar.
+    const enFoco = () => { ajustar(); setTimeout(ajustar, 120); setTimeout(ajustar, 400); };
+    document.addEventListener('focusin', enFoco);
+    document.addEventListener('focusout', enFoco);
+})();
+
 window.cerrarAsistente = () => {
     const hoja = document.getElementById('modal-asistente');
     if (hoja) hoja.style.display = 'none';
+    window.soltarAsistenteDelTeclado();
     window.cerrarMenuAsistente();
 };
 
