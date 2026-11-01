@@ -16,7 +16,10 @@
 // clave `anon`, así que pasan por las políticas de RLS como cualquier pantalla y
 // no pueden escribir nada aunque el modelo lo pidiera.
 
-window.MODELO_ASISTENTE = 'claude-opus-5-5';
+// Haiku 5.5 y sólo él: no hay respaldo del servidor para este modelo —con
+// `fallbacks: "default"` una negativa se queda en negativa, y una lista de
+// modelos devuelve un 400—, así que no se manda y ninguna pregunta acaba en otro.
+window.MODELO_ASISTENTE = 'claude-haiku-5-5';
 // El SDK oficial en su módulo ES, del CDN y sin `?v=`, como todo lo de fuera.
 window.LIBRERIA_ANTHROPIC = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.135.0/+esm';
 window.LLAVE_CLAVE_ASISTENTE = 'claveAnthropicAsistente';
@@ -30,8 +33,7 @@ window.asistente = {
     ocupado: false,
     flujo: null,        // el stream en curso, para poder detenerlo
     detenido: false,
-    pantalla: 'chat',   // 'chat' o 'clave', la del botón de la llave
-    sinFallbacks: false // si la cuenta rechazara el parámetro, se deja de mandar
+    pantalla: 'chat'    // 'chat' o 'clave', la del botón de la llave
 };
 
 // --- LA CLAVE ---
@@ -556,6 +558,9 @@ window.preguntarAlAsistente = async (texto) => {
         const cliente = new Anthropic({ apiKey: clave, dangerouslyAllowBrowser: true, maxRetries: 2 });
 
         for (let vuelta = 0; vuelta < window.MAX_VUELTAS_ASISTENTE; vuelta++) {
+            // Sin `temperature` ni prefill: Haiku 5.5 devuelve un 400 con
+            // cualquiera de los dos. El esfuerzo va explícito aunque `medium`
+            // sea el suyo por defecto.
             const parametros = {
                 model: window.MODELO_ASISTENTE,
                 max_tokens: 64000,
@@ -565,28 +570,20 @@ window.preguntarAlAsistente = async (texto) => {
                 tools: window.HERRAMIENTAS_ASISTENTE,
                 messages: a.mensajes
             };
-            if (!a.sinFallbacks) {
-                parametros.betas = ['server-side-fallback-2026-07-01'];
-                parametros.fallbacks = 'default';
-            }
 
             const bloqueTexto = turno.nuevoTexto();
             let respuesta;
             try {
-                a.flujo = cliente.beta.messages.stream(parametros);
+                a.flujo = cliente.messages.stream(parametros);
                 a.flujo.on('text', (_delta, acumulado) => bloqueTexto.escribir(acumulado));
                 respuesta = await a.flujo.finalMessage();
-            } catch (err) {
-                // Si la cuenta no admite el respaldo del servidor, se repite sin él una vez.
-                if (!a.sinFallbacks && err instanceof Anthropic.BadRequestError && /fallback/i.test(err.message || '')) {
-                    a.sinFallbacks = true;
-                    bloqueTexto.quitar();
-                    vuelta--;
-                    continue;
-                }
-                throw err;
             } finally {
                 a.flujo = null;
+            }
+
+            // Contesta Haiku y nadie más; si la API dijera otro modelo, que se vea.
+            if (respuesta.model && respuesta.model !== window.MODELO_ASISTENTE) {
+                console.warn('El asistente respondió con otro modelo:', respuesta.model);
             }
 
             // Lo que llega se guarda tal cual, bloques de pensamiento incluidos:
@@ -595,7 +592,10 @@ window.preguntarAlAsistente = async (texto) => {
             bloqueTexto.escribir(respuesta.content.filter(b => b.type === 'text').map(b => b.text).join('\n\n'));
 
             if (respuesta.stop_reason === 'pause_turn') continue;
-            if (respuesta.stop_reason === 'refusal') { turno.nota('Claude no quiso responder a esto.'); break; }
+            if (respuesta.stop_reason === 'refusal') {
+                turno.nota('Claude no quiso responder a esto. Prueba a preguntarlo de otra manera.');
+                break;
+            }
             if (respuesta.stop_reason === 'max_tokens') { turno.nota('La respuesta se cortó por largo.'); break; }
             if (respuesta.stop_reason !== 'tool_use') break;
 

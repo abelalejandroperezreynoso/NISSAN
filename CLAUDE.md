@@ -8527,7 +8527,7 @@ Las reglas para usarlo:
   window.MODELO_ASISTENTE  window.LIBRERIA_ANTHROPIC
   ```
 
-  Cinco cosas que hay que mantener:
+  Siete cosas que hay que mantener:
 
   - **La clave se guarda en Supabase y basta con ser administrador para
     usarla**, desde cualquier aparato (`sql/clave-asistente.sql`, también en
@@ -8575,8 +8575,15 @@ Las reglas para usarlo:
     historial de antes de ella, que un `tool_use` sin su resultado rompería la
     siguiente.
   - **El SDK es el oficial, como módulo ES del CDN** (`import()` dinámico,
-    versión fija y sin `?v=`), con `dangerouslyAllowBrowser`. Va con
-    `fallbacks: "default"`; si la cuenta lo rechazara, se repite sin él.
+    versión fija y sin `?v=`), con `dangerouslyAllowBrowser`.
+  - **El modelo es Claude Haiku 5.5 y sólo él** (`MODELO_ASISTENTE`,
+    `claude-haiku-5-5`). Va por `client.messages.stream` —sin `betas`— con
+    pensamiento adaptativo y `effort: 'medium'` explícito, que es su valor por
+    defecto. **No lleva `fallbacks`**: Haiku 5.5 no tiene respaldo en el
+    servidor —con `"default"` una negativa se queda en negativa y una lista de
+    modelos devuelve un 400—, así que una pregunta que rechace se dice como tal
+    y no acaba contestada por otro modelo. Tampoco admite `temperature`,
+    `top_p`, `top_k` ni un prefill del asistente: los cuatro son un 400.
 
 - **Un selector por atributo `style` se rompe en cuanto se toca ese estilo.**
   `setGrade` buscaba la tarjeta de la pregunta con
