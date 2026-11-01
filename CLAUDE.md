@@ -42,6 +42,7 @@ Los mensajes de commit van en español.
 | `15-presentacion.js` | La presentación semanal y la mensual —una sola, con dos cortes—: la diapositiva del resultado de la planta, en la hoja y en `.pptx` |
 | `16-cursos.js` | Las hojas de «Programar curso» (el jefe, para quien no ha tomado el curso de una encuesta) y «Elige a tu jefe inmediato»; las reglas viven en `1-config.js` |
 | `17-hoja-excel.js` | Convierte un libro de Excel en páginas de material: dibuja sus celdas, fotos y figuras en un lienzo |
+| `18-asistente.js` | El asistente del administrador: una conversación con Claude que lee los datos de la aplicación con herramientas de sólo lectura |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -8508,6 +8509,47 @@ Las reglas para usarlo:
   `window.SCRIPT_DE_FUNCION`, porque `consumo_por_dia` es de
   `sql/consumo-datos.sql` y las otras cuatro del de siempre: mandar a correr el
   que no es se parece demasiado a lo que esa nota vino a evitar.
+
+- **El asistente habla con Claude desde el navegador, con la clave del
+  administrador.** Es el botón de la chispa del encabezado, a la izquierda del
+  «+», y como él sólo se ve con el modo administrador encendido
+  (`pintarBotonAdmin` enseña y esconde los dos, y al apagar el modo cierra la
+  hoja). Vive en `18-asistente.js`, en la hoja `#modal-asistente`, montada la
+  primera vez que se abre.
+
+  ```js
+  window.abrirAsistente()  window.cerrarAsistente()
+  window.preguntarAlAsistente(texto)   // el bucle: stream → herramientas → stream
+  window.HERRAMIENTAS_ASISTENTE        // lo que el modelo puede pedir
+  window.EJECUTAR_HERRAMIENTA          // cómo se contesta cada una, con `sb`
+  window.MODELO_ASISTENTE  window.LIBRERIA_ANTHROPIC
+  ```
+
+  Cinco cosas que hay que mantener:
+
+  - **La clave no sale de ese aparato.** No hay servidor que la guarde, y en la
+    base la leería cualquiera con la clave `anon`; así que se teclea en la hoja y
+    vive en `localStorage.claveAnthropicAsistente`. Una clave rechazada (401) se
+    borra sola y la hoja vuelve a pedirla. Una Edge Function no lo resolvería:
+    sin autenticación de verdad en la aplicación, cualquiera con la clave `anon`
+    podría llamarla y gastar la cuenta.
+  - **Las herramientas sólo leen**: todas acaban en un `.select()` con el
+    cliente de la aplicación, así que pasan por RLS y no pueden escribir aunque
+    el modelo lo pidiera. `consultar_tabla` admite sólo las tablas de
+    `TABLAS_DEL_ASISTENTE`, nunca `signature_data`, y recorta lo que devuelve a
+    `MAX_TEXTO_HERRAMIENTA`.
+  - **Las cifras salen de las funciones de la tarjeta del panel**
+    (`resumenDeEncuestaAdmin`, `padronDeLaEncuesta`, `preguntasEnPeriodo`,
+    `respuestasDelPeriodoDeTodos`), con las mismas columnas y cachés
+    (`prepararDatosDelAsistente`). Una herramienta que calcule por su cuenta
+    acabaría dando otro número del que se lee en pantalla.
+  - **El historial sólo crece por el final**: la respuesta se guarda con sus
+    bloques de pensamiento tal cual. Si algo falla a media pregunta se vuelve al
+    historial de antes de ella, que un `tool_use` sin su resultado rompería la
+    siguiente.
+  - **El SDK es el oficial, como módulo ES del CDN** (`import()` dinámico,
+    versión fija y sin `?v=`), con `dangerouslyAllowBrowser`. Va con
+    `fallbacks: "default"`; si la cuenta lo rechazara, se repite sin él.
 
 - **Un selector por atributo `style` se rompe en cuanto se toca ese estilo.**
   `setGrade` buscaba la tarjeta de la pregunta con

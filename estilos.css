@@ -7284,3 +7284,219 @@ html.fondo-anclado body {
    alinea las encuestas con el renglón del grupo. */
 .equipo-encuesta { padding-left: 4px; }
 .equipo-encuesta .persona-miniatura { width: 30px; height: 30px; font-size: 0.9rem; }
+
+/* ==========================================
+   ASISTENTE (18-asistente.js)
+   ==========================================
+   Una conversación como la de Claude: lo que se pregunta en una burbuja gris a
+   la derecha, lo que contesta a sangre y sin burbuja, y las consultas que hace
+   a la base en renglones grises de entre medias. La hoja va alta de entrada
+   —es una conversación, no un formulario— y el redactor queda pegado abajo,
+   encima del teclado gracias a `--alto-teclado`. */
+.asistente-hoja {
+    max-width: 640px;
+    overflow: hidden;
+    padding: 12px 0 0;
+    height: calc(100vh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
+    height: calc(100dvh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
+}
+
+.asistente-mensajes {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    padding: 16px 16px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.asistente-usuario {
+    align-self: flex-end;
+    max-width: 85%;
+    background: #f1f5f9;
+    color: #0f172a;
+    border-radius: 18px;
+    padding: 9px 14px;
+    font-size: 0.98rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.asistente-turno {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #0f172a;
+    font-size: 0.98rem;
+    line-height: 1.5;
+}
+
+/* Mientras escribe, un punto que late al final: lo que en Claude es el cursor. */
+.asistente-turno.esta-escribiendo::after {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #d97757;
+    animation: asistente-latido 1s ease-in-out infinite;
+}
+@keyframes asistente-latido {
+    0%, 100% { opacity: 0.35; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1); }
+}
+
+.asistente-texto { overflow-wrap: anywhere; }
+.asistente-texto[hidden] { display: none; }
+.asistente-texto p { margin: 0 0 8px; }
+.asistente-texto p:last-child { margin-bottom: 0; }
+.asistente-texto ul, .asistente-texto ol { margin: 0 0 8px; padding-left: 22px; }
+.asistente-texto li { margin: 2px 0; }
+.asistente-texto code {
+    background: #f1f5f9;
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: 0.88em;
+}
+.asistente-texto pre {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    margin: 0 0 8px;
+}
+.asistente-titulo { font-weight: 700; margin: 6px 0 4px; }
+
+/* Una tabla ancha se desplaza dentro de su caja, no arrastra la conversación. */
+.asistente-tabla { overflow-x: auto; margin: 0 0 8px; }
+.asistente-tabla table { border-collapse: collapse; font-size: 0.85rem; min-width: 100%; }
+.asistente-tabla th, .asistente-tabla td {
+    border-bottom: 1px solid #e2e8f0;
+    padding: 5px 8px;
+    text-align: left;
+    vertical-align: top;
+}
+.asistente-tabla th { color: #64748b; font-weight: 600; white-space: nowrap; }
+
+.asistente-consulta {
+    font-size: 0.82rem;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.asistente-consulta::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #94a3b8;
+    flex-shrink: 0;
+}
+.asistente-consulta.esta-consultando::before { background: #d97757; animation: asistente-latido 1s ease-in-out infinite; }
+.asistente-consulta.fallo { color: #b91c1c; }
+.asistente-consulta.fallo::before { background: #ef4444; }
+
+.asistente-nota { font-size: 0.85rem; color: #64748b; }
+.asistente-nota.es-error { color: #b91c1c; }
+
+.asistente-vacio {
+    margin: auto 0;
+    text-align: center;
+    padding: 20px 0;
+}
+.asistente-vacio-titulo { font-size: 1.3rem; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
+.asistente-sugerencias { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.asistente-sugerencia {
+    border: 1px solid #e2e8f0;
+    background: white;
+    border-radius: 14px;
+    padding: 11px 14px;
+    font-size: 0.92rem;
+    color: #334155;
+    text-align: left;
+    cursor: pointer;
+}
+.asistente-sugerencia:active { background: #f1f5f9; }
+
+/* El redactor: el campo crece con lo escrito hasta cinco renglones y el botón
+   redondo va a su derecha. 16px en el campo, por el zoom de Safari. */
+.asistente-redactor {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    margin: 0 12px calc(12px + env(safe-area-inset-bottom));
+    padding: 6px 6px 6px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 24px;
+    background: white;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+.asistente-redactor[hidden] { display: none; }
+.asistente-redactor textarea {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    outline: none;
+    resize: none;
+    font: inherit;
+    font-size: 16px;
+    line-height: 1.4;
+    padding: 7px 0;
+    max-height: 140px;
+    background: transparent;
+    color: #0f172a;
+}
+.asistente-enviar {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: #d97757;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+.asistente-enviar svg { width: 18px; height: 18px; }
+.asistente-enviar.esta-parando { background: #0f172a; }
+
+.asistente-clave {
+    margin: auto 0;
+    background: #f8fafc;
+    border-radius: 18px;
+    padding: 18px;
+    font-size: 0.92rem;
+    color: #334155;
+}
+.asistente-clave p { margin: 0 0 10px; line-height: 1.45; }
+.asistente-clave-titulo { font-size: 1.15rem; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
+.asistente-clave input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 16px;
+    padding: 11px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    margin: 4px 0 10px;
+}
+.asistente-clave-guardar {
+    width: 100%;
+    border: none;
+    border-radius: 12px;
+    padding: 12px;
+    background: #0f172a;
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.asistente-clave-error { color: #b91c1c; font-size: 0.85rem; margin-top: 8px; min-height: 1em; }

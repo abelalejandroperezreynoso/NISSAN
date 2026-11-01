@@ -231,6 +231,11 @@ window.abrirNuevoRegistro = () => {
 window.pintarBotonAdmin = () => {
     const btn = document.getElementById('btn-admin-encabezado');
     if (btn) btn.hidden = !window.modoAdminActivo;
+    // El asistente lee los datos de toda la plantilla: es del administrador.
+    const asistente = document.getElementById('btn-asistente-encabezado');
+    if (asistente) asistente.hidden = !window.modoAdminActivo;
+    // Al apagar el modo, la conversación no se queda a la vista.
+    if (!window.modoAdminActivo && window.cerrarAsistente) window.cerrarAsistente();
 };
 
 window.abrirPanelAdmin = () => {
