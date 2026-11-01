@@ -738,10 +738,15 @@ window.montarHojaAsistente = () => {
     if (document.getElementById('modal-asistente')) return;
     const hoja = document.createElement('div');
     hoja.id = 'modal-asistente';
-    hoja.className = 'hoja-overlay';
+    // A pantalla completa y no como hoja. Se queda la clase `hoja-overlay` en
+    // la capa —de ella cuelgan el teclado (`--alto-teclado`), el anclaje del
+    // documento y la exclusión del relleno de los `modal-`—, pero el interior
+    // ya no es `.hoja-contenido`: sin ella no hay tirador, ni esquinas, ni el
+    // gesto de deslizar hacia abajo, que en una pantalla completa no se espera.
+    hoja.className = 'hoja-overlay asistente-overlay';
     hoja.style.zIndex = '2000';
     hoja.innerHTML = `
-        <div class="hoja-contenido asistente-hoja">
+        <div class="asistente-pantalla">
             <div class="hoja-encabezado-lista">
                 <div style="min-width:0;">
                     <h3 class="hoja-titulo">Asistente</h3>
@@ -776,6 +781,9 @@ window.abrirAsistente = () => {
     if (window.cerrarPanelAdmin) window.cerrarPanelAdmin();
     window.montarHojaAsistente();
     document.getElementById('modal-asistente').style.display = 'flex';
+    // La franja de la barra de estado la pinta el fondo de <html>: con la
+    // pantalla blanca encima, el gris de `modal-abierto` dibujaría una costura.
+    document.documentElement.classList.add('asistente-abierto');
     window.asistente.pantalla = 'chat';
     // Sin clave aquí, lo primero que se ve es «Comprobando», no lo que dijo la
     // base la última vez: mientras tanto se trae la de Supabase.
@@ -795,6 +803,7 @@ window.abrirAsistente = () => {
 window.cerrarAsistente = () => {
     const hoja = document.getElementById('modal-asistente');
     if (hoja) hoja.style.display = 'none';
+    document.documentElement.classList.remove('asistente-abierto');
 };
 
 window.pintarEstadoAsistente = (ocupado, texto) => {

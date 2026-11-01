@@ -636,8 +636,9 @@ Las reglas para usarlo:
   `min-width:0` o se niega a encoger por debajo de su opción más larga. Las dos
   reglas viven en `estilos.css` bajo `.pregunta-wrapper`.
 
-  Queda a pantalla completa, y a propósito, sólo el visor de imágenes
-  (`#modal-visor`).
+  Quedan a pantalla completa, y a propósito, el visor de imágenes
+  (`#modal-visor`), la presentación (`#modal-presentacion-completa`) y el
+  asistente (`#modal-asistente`, se cuenta con él).
 
   Un observador en `1-config.js` marca `<html>` con la clase `modal-abierto`
   mientras haya algún overlay visible (id que empiece por `modal-` y
@@ -8516,8 +8517,23 @@ Las reglas para usarlo:
   modo encendido; `abrirAsistente` además lo comprueba con `checkAdmin`, cierra
   el panel antes de abrirse, y `pintarBotonAdmin` cierra la hoja al apagar el
   modo. Estuvo un tiempo como botón suelto en el encabezado, junto al «+», y se
-  llevó al panel para no sumar otro icono ahí. Vive en `18-asistente.js`, en la
-  hoja `#modal-asistente`, montada la primera vez que se abre.
+  llevó al panel para no sumar otro icono ahí. Vive en `18-asistente.js`, en
+  `#modal-asistente`, montado la primera vez que se abre.
+
+  **Va a pantalla completa, no como hoja**, a petición del usuario: es una
+  conversación que se lee larga. La capa conserva la clase `hoja-overlay` —de
+  ella cuelgan `--alto-teclado`, el anclaje del documento y la exclusión del
+  relleno de los `modal-`— con el modificador `asistente-overlay`, que le quita
+  el margen y el desenfoque y le pone el teclado como relleno de abajo; el
+  interior es `.asistente-pantalla` y **no** `.hoja-contenido`, así que no lleva
+  tirador ni esquinas ni el gesto de deslizar para cerrar: se cierra con la
+  cruz. El encabezado se aparta del reloj con `env(safe-area-inset-top)`, y
+  mientras está abierto `<html>` lleva `asistente-abierto`, que pinta de blanco
+  la franja de la barra de estado en lugar del gris de `modal-abierto` —con el
+  gris quedaba una costura contra el encabezado—. La ponen y la quitan
+  `abrirAsistente` y `cerrarAsistente`, que es por donde pasa también
+  `pintarBotonAdmin`. En pantalla ancha la conversación y el redactor se quedan
+  en una columna centrada de 760px.
 
   ```js
   window.abrirAsistente()  window.cerrarAsistente()

@@ -7290,15 +7290,57 @@ html.fondo-anclado body {
    ==========================================
    Una conversación como la de Claude: lo que se pregunta en una burbuja gris a
    la derecha, lo que contesta a sangre y sin burbuja, y las consultas que hace
-   a la base en renglones grises de entre medias. La hoja va alta de entrada
-   —es una conversación, no un formulario— y el redactor queda pegado abajo,
-   encima del teclado gracias a `--alto-teclado`. */
-.asistente-hoja {
-    max-width: 640px;
+   a la base en renglones grises de entre medias.
+
+   Va a pantalla completa y no como hoja: es una conversación que se lee
+   larga, y una hoja le quitaba el margen, el tirador y la franja de arriba.
+   La capa conserva `.hoja-overlay` —el teclado, el anclaje del documento—
+   y aquí se le quitan el margen, el desenfoque y la alineación abajo; el
+   interior no es `.hoja-contenido`, así que no hereda tirador, esquinas ni
+   el gesto de deslizar para cerrar. El teclado se aparta con el relleno de
+   abajo de la capa, que mide `--alto-teclado`, y el redactor queda encima. */
+.hoja-overlay.asistente-overlay {
+    padding: 0 0 var(--alto-teclado, 0px);
+    align-items: stretch;
+    background: white;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.asistente-pantalla {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
     overflow: hidden;
-    padding: 12px 0 0;
-    height: calc(100vh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
-    height: calc(100dvh - 16px - env(safe-area-inset-top) - var(--alto-teclado, 0px));
+    background: white;
+    animation: asistente-entrar 0.22s ease-out;
+}
+@keyframes asistente-entrar {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* El encabezado se aparta del reloj; la franja de la barra de estado de la
+   app instalada la pinta el fondo de <html>, que aquí tiene que ser blanco
+   como el encabezado o se ve la costura. */
+.asistente-pantalla .hoja-encabezado-lista {
+    padding-top: calc(12px + env(safe-area-inset-top));
+}
+html.modal-abierto.asistente-abierto { background-color: white; }
+
+/* En una pantalla ancha la conversación no se estira de lado a lado: se
+   queda en una columna de lectura centrada, como el redactor. */
+.asistente-pantalla .asistente-mensajes {
+    padding-left: max(16px, calc((100% - 760px) / 2));
+    padding-right: max(16px, calc((100% - 760px) / 2));
+}
+.asistente-pantalla .asistente-redactor {
+    width: calc(100% - 24px);
+    max-width: 736px;
+    align-self: center;
+    box-sizing: border-box;
 }
 
 .asistente-mensajes {
@@ -7431,7 +7473,9 @@ html.fondo-anclado body {
     display: flex;
     align-items: flex-end;
     gap: 8px;
-    margin: 0 12px calc(12px + env(safe-area-inset-bottom));
+    /* Con el teclado abierto el indicador de inicio queda debajo de él: ahí
+       sumarle su hueco dejaría 34px muertos entre el redactor y el teclado. */
+    margin: 0 12px calc(12px + max(0px, env(safe-area-inset-bottom) - var(--alto-teclado, 0px)));
     padding: 6px 6px 6px 14px;
     border: 1px solid #e2e8f0;
     border-radius: 24px;
