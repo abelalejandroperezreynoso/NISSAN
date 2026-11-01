@@ -1601,28 +1601,9 @@ textarea:focus {
 }
 
 /* Botón para agregar nuevo miembro al equipo en la vista rápida */
-.add-member-btn {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    border: 2px dashed #cbd5e1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    background: white;
-    font-size: 1.5rem;
-    color: #94a3b8;
-    transition: all 0.2s;
-    flex-shrink: 0;
-}
 
-.add-member-btn:hover {
-    border-color: #0ea5e9;
-    color: #0ea5e9;
-    background: #f0f9ff;
-    transform: scale(1.05);
-}
+
+
 
 .resultado-reclamo-item {
     padding: 12px;
@@ -1636,26 +1617,75 @@ textarea:focus {
 }
 
 /* Botón de Resumen de Equipo (Al inicio) */
-.team-summary-btn {
-    width: 50px;
-    height: 50px;
+/* «Mi Equipo» y «Agregar», al lado de las fotos del equipo: botones de
+   cristal como los de iOS 26. Un disco translúcido que deja ver el fondo con
+   desenfoque, un brillo arriba que lo despega del gris y una sombra suave
+   debajo; el icono es un SVG a trazo de SF Symbols, en el azul del sistema, y
+   no un emoji, que cada sistema dibuja a su manera. Miden 54px, lo mismo que
+   las fotos de al lado, para que los nombres queden a la misma altura. */
+.boton-cristal {
+    width: 54px;
+    height: 54px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-    border: 2px solid #7dd3fc;
-    color: #0284c7;
+    box-sizing: border-box;
+    margin-bottom: 5px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    transition: transform 0.2s;
     position: relative;
+    cursor: pointer;
+    color: #007AFF;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.55) 100%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.95),
+        inset 0 -2px 4px rgba(15, 23, 42, 0.05),
+        0 6px 16px rgba(15, 23, 42, 0.08),
+        0 1px 3px rgba(15, 23, 42, 0.08);
+    transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.3), box-shadow 0.2s;
 }
 
-.team-summary-btn:active {
-    transform: scale(0.95);
+/* El reflejo de arriba a la izquierda, que es lo que lo hace leerse como
+   cristal y no como un círculo blanco. Va por debajo del icono y del globo. */
+.boton-cristal::before {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: 50%;
+    background: radial-gradient(120% 80% at 30% 0%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 55%);
+    pointer-events: none;
 }
+
+.boton-cristal svg {
+    position: relative;
+    width: 26px;
+    height: 26px;
+}
+
+.team-member-container:active .boton-cristal {
+    transform: scale(0.9);
+    box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.95),
+        0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.boton-cristal-rotulo {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #007AFF;
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* «Agregar» es la acción secundaria: mismo cristal, rótulo en gris. */
+.boton-cristal-rotulo--secundario {
+    color: #64748b;
+    font-weight: 500;
+}
+
+
 
 /* =========================================
    ESTILOS AVATAR EN MODAL

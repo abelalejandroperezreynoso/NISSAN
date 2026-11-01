@@ -3616,11 +3616,16 @@ window.renderizarVistaRapidaEquipo = (forzarRender = false) => {
         btnTeam.className = 'team-member-container';
         btnTeam.onclick = window.abrirStatsEquipo;
         btnTeam.innerHTML = `
-            <div class="team-summary-btn" title="Ver desempeño grupal">
-                👥
+            <div class="boton-cristal" title="Ver desempeño grupal" aria-label="Mi equipo: ver desempeño grupal">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="16.6" cy="8.4" r="3" opacity="0.55"/>
+                    <path d="M15.4 13.4c3.5-.4 6.6 1.9 6.6 5.6v.6c0 .4-.3.6-.6.6h-4.1c.1-.3.1-.6.1-.9 0-2.2-.8-4.2-2-5.9z" opacity="0.55"/>
+                    <circle cx="9" cy="7.8" r="3.6"/>
+                    <path d="M9 13c4 0 7 2.6 7 6.3v.4c0 .5-.4.8-.8.8H2.8c-.4 0-.8-.3-.8-.8v-.4C2 15.6 5 13 9 13z"/>
+                </svg>
                 <div id="badge-team-total" class="notification-badge" style="display:none; background:#ea580c;">0</div>
             </div>
-            <div style="font-size:0.7rem; color:#0284c7; font-weight:bold; text-align:center; margin-top:5px;">Mi Equipo</div>
+            <div class="boton-cristal-rotulo">Mi Equipo</div>
         `;
         container.appendChild(btnTeam);
     }
@@ -3658,8 +3663,12 @@ window.renderizarVistaRapidaEquipo = (forzarRender = false) => {
     btnAdd.className = 'team-member-container';
     btnAdd.onclick = window.abrirModalReclamo;
     btnAdd.innerHTML = `
-        <div class="add-member-btn" title="Agregar a mi equipo">＋</div>
-        <div style="font-size:0.7rem; color:#94a3b8; text-align:center; margin-top:5px;">Agregar</div>
+        <div class="boton-cristal" title="Agregar a mi equipo" aria-label="Agregar a mi equipo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+                <path d="M12 5v14M5 12h14"/>
+            </svg>
+        </div>
+        <div class="boton-cristal-rotulo boton-cristal-rotulo--secundario">Agregar</div>
     `;
     container.appendChild(btnAdd);
 
