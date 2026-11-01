@@ -1503,6 +1503,65 @@ Las reglas para usarlo:
   liberados». El asistente sabe además qué es una difusión (lo dicen sus
   instrucciones): antes la buscaba entre las encuestas.
 
+- **Un registro de incidentes viejo se migra a encuesta, y lo hace el
+  asistente.** El sistema de incidentes es obsoleto: hoy se cargan como
+  encuestas de firma en una clasificación propia. Migrar uno es dejarlo como si
+  se hubiera cargado así desde el principio, y se pide al asistente, que ayuda
+  a elegir la clasificación (`clasificaciones_de_encuestas`: cuántas encuestas
+  tiene cada una, cuántas con firma y la más reciente) y después llama a
+  `migrar_incidente_a_encuesta`, que enseña su tarjeta y espera el «Confirmar».
+
+  ```js
+  await window.previaDeMigracion(id, clasificacion, modeloId)   // lo que dice la tarjeta; lanza si no se puede
+  await window.migrarIncidenteAEncuesta(previa, avisar)          // todo o nada
+  window.textoDeMigracion(resultado)
+  await window.modeloDeClasificacion(clasificacion, modeloId)    // la más reciente, o la pedida
+  ```
+
+  Lo que hace, en este orden:
+
+  1. **Crea la encuesta copiando el «modelo»** —la más reciente de la
+     clasificación, o la que se pida—: a quién va dirigida, sus revisores y sus
+     opciones. De «única vez», con el título y la fecha del registro
+     (`tituloDeCopia`) y su fecha en «Aplica desde». No se copia lo que es de
+     aquella encuesta y no de su forma (`COLUMNAS_QUE_NO_SE_COPIAN`: el id, el
+     alta, el relanzamiento, el apunte de quién asignó a quién, la vigencia).
+  2. **Una sola pregunta, la de firma del modelo** (o «Firmo de enterado» si no
+     la tiene): las demás preguntas no se pueden contestar por quien firmó
+     hace meses.
+  3. **Las fotos pasan al material**: se bajan, se encogen con
+     `paginasDeArchivo` como lo subido a mano y se suben con su miniatura. Una
+     difusión sin fotos propias toma las del registro al que está vinculada,
+     que es lo que enseñaba.
+  4. **Cada firma, una respuesta ya revisada** de esa persona —la primera si
+     firmó dos veces—, con su fecha y su misma imagen: el archivo no se mueve,
+     la respuesta nombra la url de siempre.
+  5. **El registro viejo se elimina** con `eliminarIncidenteCompleto(id, avisar,
+     { conservarFirmas: true })`, que borra sus filas y sus fotos —ya copiadas—
+     y deja los archivos de las firmas. Con eso deja de salir en el listado.
+
+  **Todo o nada**: si algo falla antes del paso 5, se deshace lo creado —las
+  respuestas, el material con sus archivos, la pregunta y la encuesta— y el
+  registro se queda como estaba. La tarjeta dice además a cuánta gente va a
+  tocar con la regla de siempre (`padronDeLaEncuesta`) y cuántos de ellos, sin
+  firmar, quedarán pendientes, y avisa si hay registros vinculados: **las
+  difusiones se migran antes que su incidente**, o se quedan sin las fotos que
+  tomaban de él.
+
+  **Las firmas migradas siguen en el bucket `signatures`**, y por eso el
+  registro se borra conservándolas: borrarlo por el bote de basura después se
+  las llevaría y dejaría las respuestas sin imagen. Migrar no libera espacio;
+  lo que libera son las fotos duplicadas que se quitan.
+
+- **Todo cambio del asistente se confirma en una ficha.** La tarjeta
+  (`contextoDeEscritura` en `18-asistente.js`, estilos `.asistente-cambio*`)
+  lleva el título —el nombre del registro entre comillas, sin su id—, cada dato
+  como «Rótulo: **valor**» (`campos`, pares de texto) y los dos botones a la
+  derecha, «Cancelar» con borde y «Confirmar» en negro —«Eliminar» en rojo al
+  borrar—. Las columnas se dicen en palabras (`ROTULO_DE_COLUMNA_ASISTENTE`) y
+  los valores también (`valorLegible`: «Sí», la frecuencia, el tipo de
+  pregunta). Toda herramienta nueva que escriba pasa por ahí, con sus `campos`.
+
 - **Quién debe firmar un registro.** No hay tabla que lo diga: la regla la
   sostiene el código, y desde que se separó en cuatro copias vive en un solo
   sitio, `1-config.js`. Le toca firmar a todo empleado **activo** dado de alta

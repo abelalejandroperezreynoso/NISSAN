@@ -819,7 +819,12 @@ window.textoDeBorradoIncidente = (r) => {
 // los archivos. Y sólo los de SU carpeta: una difusión sin fotos propias
 // guarda en `image_url` la primera foto del registro al que está vinculada,
 // y borrarla dejaría a aquél sin foto.
-window.eliminarIncidenteCompleto = async (id, avisar) => {
+//
+// Con `{ conservarFirmas: true }` —lo que pide la migración a encuesta— los
+// archivos de las firmas se quedan: las respuestas de la encuesta nueva los
+// nombran. Y no se prueba antes el permiso de Storage, que a esas alturas la
+// encuesta ya existe y lo único en juego son fotos ya copiadas al material.
+window.eliminarIncidenteCompleto = async (id, avisar, opciones = {}) => {
     const decir = (t) => { try { if (avisar) avisar(t); } catch (e) { /* sólo informa */ } };
     const r = { ok: false, id, firmasBorradas: 0, fotosBorradas: 0, archivosBorrados: 0,
         archivosPedidos: 0, archivosPendientes: [], vinculadosDesligados: 0, avisos: [] };
@@ -849,7 +854,8 @@ window.eliminarIncidenteCompleto = async (id, avisar) => {
         // Antes de tocar la fila, que Storage deje borrar: después ya no habría
         // de dónde sacar las rutas para reintentarlo, y el registro se iría
         // dejando sus archivos ocupando sitio para siempre.
-        for (const [bucket, rutas] of [[bF, rutasFirmas], [bI, rutasFotos]]) {
+        if (opciones.conservarFirmas) rutasFirmas.clear();
+        for (const [bucket, rutas] of (opciones.conservarFirmas ? [] : [[bF, rutasFirmas], [bI, rutasFotos]])) {
             if (rutas.size && await window.storageDejaBorrar(bucket) === false) {
                 r.error = `No se borró nada: Storage no deja borrar archivos del bucket «${bucket}», así que el registro se iría y sus archivos seguirían ocupando sitio. Falta darle el permiso de borrado.`;
                 r.sinPermiso = bucket;
@@ -960,6 +966,226 @@ window.borrar = async (id) => {
     alert(window.textoDeIncidenteEliminado(r));
     if (r.ok) window.recargarListadoCompleto();
     else if (card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
+};
+
+// =========================================================
+// --- MIGRAR UN REGISTRO A ENCUESTA ---
+// =========================================================
+// Los incidentes, difusiones y capacitaciones ya se cargan como encuestas de
+// firma en una clasificación propia. Migrar uno viejo es dejarlo como si se
+// hubiera cargado así desde el principio:
+//
+// - una encuesta nueva, copiada de otra de esa clasificación (el «modelo»):
+//   a quién va dirigida, sus revisores y sus opciones; de «única vez», con el
+//   nombre y la fecha del registro, y su pregunta de firma;
+// - sus fotos, como el material de la encuesta: cada una pasa por el mismo
+//   encogido que lo que se sube a mano, con su portada y su miniatura;
+// - cada firma, como una respuesta ya revisada de esa persona, con su fecha y
+//   su misma imagen —el archivo no se mueve: la respuesta lo nombra—;
+// - y el registro viejo, fuera del listado: se elimina, conservando los
+//   archivos de las firmas.
+//
+// Todo o nada: si algo falla antes de quitar el registro viejo, se deshace lo
+// que se creó y el registro se queda como estaba.
+
+// La encuesta más reciente de una clasificación, que sirve de modelo.
+window.modeloDeClasificacion = async (clasificacion, modeloId) => {
+    if (modeloId) {
+        const { data, error } = await sb.from('evaluations').select('*').eq('id', modeloId).maybeSingle();
+        if (error) throw error;
+        return data;
+    }
+    const norma = window.normalizarClasificacion || ((t) => String(t || '').trim().toLowerCase());
+    const { data, error } = await sb.from('evaluations').select('id, category, created_at')
+        .order('created_at', { ascending: false }).limit(2000);
+    if (error) throw error;
+    const elegida = (data || []).find(ev => norma(ev.category) === norma(clasificacion));
+    if (!elegida) return null;
+    const { data: fila, error: err2 } = await sb.from('evaluations').select('*').eq('id', elegida.id).maybeSingle();
+    if (err2) throw err2;
+    return fila;
+};
+
+// Lo que no se copia del modelo: lo que es de aquella encuesta y no de la forma
+// de las de su clasificación.
+window.COLUMNAS_QUE_NO_SE_COPIAN = ['id', 'created_at', 'relaunched_at', 'assigned_by', 'vigente_desde', 'destacado'];
+
+// Todo lo que dice la tarjeta, sin escribir nada. Lanza si no se puede migrar.
+window.previaDeMigracion = async (id, clasificacion, modeloId) => {
+    const { data: inc, error } = await sb.from('incidents').select('*').eq('id', id).maybeSingle();
+    if (error) throw error;
+    if (!inc) throw new Error(`No hay ningún registro de incidentes con el id ${id}.`);
+
+    const modelo = await window.modeloDeClasificacion(clasificacion, modeloId);
+    if (!modelo) throw new Error(`No hay ninguna encuesta en «${clasificacion}» que sirva de modelo. Elige una clasificación que ya tenga encuestas.`);
+
+    // La pregunta de firma del modelo, con su texto; sin ninguna, una de siempre.
+    const { data: preguntas } = await sb.from('evaluation_questions').select('*')
+        .eq('evaluation_id', modelo.id).order('order_index', { ascending: true });
+    const deFirma = (preguntas || []).find(q => window.esPreguntaDeFirma ? window.esPreguntaDeFirma(q) : q.question_type === 'signature');
+    const pregunta = {};
+    if (deFirma) Object.entries(deFirma).forEach(([k, v]) => { if (!['id', 'evaluation_id', 'created_at'].includes(k)) pregunta[k] = v; });
+    else Object.assign(pregunta, { question_text: 'Firmo de enterado', question_type: window.TIPO_PREGUNTA_FIRMA || 'signature' });
+    pregunta.order_index = 0;
+
+    // Una respuesta por persona: la primera vez que firmó.
+    const firmas = await window.todasLasFilas(() => sb.from('incident_signatures')
+        .select('employee_id, signature_data, created_at').eq('incident_id', id).order('created_at', { ascending: true }));
+    const porPersona = new Map();
+    firmas.forEach(f => { const k = String(f.employee_id); if (f.employee_id != null && !porPersona.has(k)) porPersona.set(k, f); });
+    const firmantes = [...porPersona.values()];
+
+    // Las fotos: las suyas y, en una difusión sin fotos propias, las del
+    // registro al que está vinculada, que es lo que se enseñaba.
+    let fotos = await window.todasLasFilas(() => sb.from('incident_gallery').select('image_url, position')
+        .eq('incident_id', id).order('position', { ascending: true }).order('id', { ascending: true }));
+    if (!fotos.length && inc.linked_incident_id) {
+        fotos = await window.todasLasFilas(() => sb.from('incident_gallery').select('image_url, position')
+            .eq('incident_id', inc.linked_incident_id).order('position', { ascending: true }).order('id', { ascending: true }));
+    }
+    if (!fotos.length && inc.image_url) fotos = [{ image_url: inc.image_url }];
+    const urls = fotos.map(f => f.image_url).filter(Boolean);
+
+    const fecha = window.fechaDeRegistro ? window.fechaDeRegistro(inc.date) : new Date(inc.date + 'T00:00:00');
+    const fechaValida = !!fecha && typeof fecha.getTime === 'function' && !isNaN(fecha.getTime());
+    const tipo = inc.tipo || 'Incidente';
+    const titulo = window.tituloDeCopia ? window.tituloDeCopia(inc.title, fechaValida ? fecha : new Date()) : inc.title;
+
+    const fila = {};
+    Object.entries(modelo).forEach(([k, v]) => { if (!window.COLUMNAS_QUE_NO_SE_COPIAN.includes(k)) fila[k] = v; });
+    fila.title = titulo;
+    fila.frequency = 'once';
+    fila.active = true;
+    const detalle = [tipo, inc.grado, inc.origen].filter(t => t && String(t).trim()).join(' · ');
+    fila.description = [detalle, 'Migrado del registro de incidentes.'].filter(Boolean).join('\n');
+    if (fechaValida && window.hayColumnaVigencia && await window.hayColumnaVigencia()) fila.vigente_desde = fecha.toISOString();
+
+    // A quién le va a tocar, con la regla de siempre.
+    let padron = null, pendientes = null;
+    if ((window.todosLosEmpleadosData || []).length && window.padronDeLaEncuesta) {
+        const gente = window.padronDeLaEncuesta({ ...fila, id: '__previa_migracion' });
+        padron = gente.length;
+        pendientes = gente.filter(e => !porPersona.has(String(e.id))).length;
+    }
+
+    // Los que están vinculados a éste se quedan sin vínculo, y una difusión sin
+    // fotos propias se queda además sin las que tomaba prestadas: se dice antes.
+    const { count: vinculados } = await sb.from('incidents').select('id', { count: 'exact', head: true }).eq('linked_incident_id', id);
+
+    return { inc, tipo, modelo, pregunta, firmantes, urls, fila, titulo, fecha: fechaValida ? fecha : null, padron, pendientes, vinculados: vinculados || 0 };
+};
+
+window.migrarIncidenteAEncuesta = async (previa, avisar) => {
+    const decir = (t) => { try { if (avisar) avisar(t); } catch (e) { /* sólo informa */ } };
+    const r = { ok: false, titulo: previa.titulo, respuestas: 0, fotos: 0, avisos: [] };
+    const creado = { evId: null, archivos: [] };
+    const user = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+
+    try {
+        decir('Creando la encuesta…');
+        const { data: ev, error: errEv } = await sb.from('evaluations').insert(previa.fila).select('id').single();
+        if (errEv) throw new Error('La base no aceptó la encuesta: ' + errEv.message);
+        creado.evId = ev.id;
+
+        const { data: q, error: errQ } = await sb.from('evaluation_questions')
+            .insert({ ...previa.pregunta, evaluation_id: ev.id }).select('id').single();
+        if (errQ) throw new Error('La base no aceptó la pregunta de firma: ' + errQ.message);
+
+        // El material: cada foto se baja, se encoge como lo subido a mano y se
+        // sube a la carpeta del documento.
+        if (previa.urls.length) {
+            const carpeta = window.carpetaDeMaterial(ev.id, previa.titulo);
+            const fichas = [];
+            let primera = null;
+            for (let i = 0; i < previa.urls.length; i++) {
+                decir(`Pasando las fotos al material… ${i + 1} de ${previa.urls.length}`);
+                const resp = await fetch(previa.urls[i], { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`No se pudo bajar la foto ${i + 1} (${resp.status}).`);
+                const crudo = await resp.blob();
+                const archivo = new File([crudo], `foto-${i + 1}.jpg`, { type: crudo.type || 'image/jpeg' });
+                const [pagina] = await window.paginasDeArchivo(archivo);
+                if (!primera) primera = pagina;
+                const { archivo: ruta, url } = await window.subirPaginaMaterial(pagina, window.rutaDePagina(carpeta, i, pagina.extensionSugerida));
+                creado.archivos.push(ruta);
+                fichas.push({ evaluation_id: ev.id, nombre: previa.titulo, archivo: ruta, url,
+                    tipo: pagina.type || 'image/webp', bytes: pagina.size, subido_por: user ? String(user.id) : null });
+            }
+            if (primera && window.subirMiniaturaMaterial) {
+                await window.subirMiniaturaMaterial(primera, carpeta);
+                if (window.rutaDeMiniatura) creado.archivos.push(window.rutaDeMiniatura(carpeta));
+            }
+            const { data: guardadas, error: errM } = await sb.from('materiales_encuesta').insert(fichas).select('id');
+            if (errM) throw new Error('La base no aceptó el material: ' + errM.message);
+            if ((guardadas || []).length !== fichas.length) throw new Error('La base no guardó las fichas del material: una política de seguridad lo impide.');
+            r.fotos = fichas.length;
+        }
+
+        // Cada firma, una respuesta ya revisada: la firma deja constancia y no
+        // se califica, así que no hay nada que revisar.
+        const fichaDe = new Map((window.todosLosEmpleadosData || []).map(e => [String(e.id), e]));
+        const filas = previa.firmantes.map(f => {
+            const emp = fichaDe.get(String(f.employee_id));
+            let area = emp && window.areaDeEmpleado ? window.areaDeEmpleado(emp) : null;
+            if (area === 'Sin Área') area = null;
+            return { evaluation_id: ev.id, employee_id: String(f.employee_id), employee_area: area,
+                answers_json: { [q.id]: f.signature_data }, grades_json: {},
+                review_status: 'Revisado', submitted_at: f.created_at || (previa.fecha || new Date()).toISOString() };
+        });
+        for (let i = 0; i < filas.length; i += 200) {
+            decir(`Pasando las firmas… ${Math.min(i + 200, filas.length)} de ${filas.length}`);
+            const tanda = filas.slice(i, i + 200);
+            const { data, error } = await sb.from('evaluation_responses').insert(tanda).select('id');
+            if (error) throw new Error('La base no aceptó las firmas: ' + error.message);
+            if ((data || []).length !== tanda.length) throw new Error('La base guardó menos firmas de las enviadas: una política de seguridad lo impide.');
+            r.respuestas += data.length;
+        }
+
+        // Y el registro viejo, fuera: sus fotos ya están en el material y sus
+        // firmas en las respuestas, que siguen nombrando los mismos archivos.
+        decir('Quitando el registro viejo…');
+        const borrado = await window.eliminarIncidenteCompleto(previa.inc.id, decir, { conservarFirmas: true });
+        if (!borrado.ok) throw new Error('No se pudo quitar el registro viejo: ' + (borrado.error || 'la base no lo dejó') + '.');
+        r.avisos.push(...(borrado.avisos || []));
+        r.vinculadosDesligados = borrado.vinculadosDesligados || 0;
+        r.ok = true;
+        r.evaluationId = ev.id;
+    } catch (e) {
+        r.error = e.message || String(e);
+        // Se deshace lo creado, de lo que cuelga a lo que sostiene.
+        if (creado.evId) {
+            decir('Deshaciendo…');
+            try {
+                await sb.from('evaluation_responses').delete().eq('evaluation_id', creado.evId);
+                await sb.from('materiales_encuesta').delete().eq('evaluation_id', creado.evId);
+                if (creado.archivos.length) await sb.storage.from(window.BUCKET_MATERIALES).remove(creado.archivos);
+                await sb.from('evaluation_questions').delete().eq('evaluation_id', creado.evId);
+                const { data } = await sb.from('evaluations').delete().eq('id', creado.evId).select('id');
+                if (!data || !data.length) r.avisos.push(`La encuesta a medio crear (id ${creado.evId}) no se pudo borrar: hay que quitarla a mano.`);
+            } catch (e2) {
+                r.avisos.push(`La encuesta a medio crear (id ${creado.evId}) no se pudo borrar del todo: ${e2.message || e2}.`);
+            }
+        }
+    }
+
+    if (r.ok) {
+        if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+        window.evalCache = null;
+        if (window.refrescarTarjetaDeEncuestas) window.refrescarTarjetaDeEncuestas();
+        const lista = document.getElementById('container-incidentes');
+        if (lista && lista.offsetParent !== null && window.recargarListadoCompleto) window.recargarListadoCompleto();
+    }
+    return r;
+};
+
+window.textoDeMigracion = (r) => {
+    if (!r.ok) {
+        const motivo = /[.!?]$/.test(r.error || '') ? r.error : `${r.error}.`;
+        return `No se migró: ${motivo}${r.avisos.length ? ' ' + r.avisos.join(' ') : ''} El registro sigue como estaba.`;
+    }
+    let t = `«${r.titulo}» ya es una encuesta: ${r.respuestas} ${r.respuestas === 1 ? 'firma' : 'firmas'} y ${r.fotos} ${r.fotos === 1 ? 'foto' : 'fotos'}. Ya no sale en el listado de incidentes.`;
+    if (r.vinculadosDesligados) t += ` ${r.vinculadosDesligados} registro${r.vinculadosDesligados === 1 ? '' : 's'} vinculado${r.vinculadosDesligados === 1 ? '' : 's'} quedó sin vínculo.`;
+    if (r.avisos.length) t += ' ' + r.avisos.join(' ');
+    return t;
 };
 
 window.abrirVisor = async (incidentId) => {

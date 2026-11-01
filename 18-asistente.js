@@ -34,7 +34,7 @@ window.asistente = {
     flujo: null,        // el stream en curso, para poder detenerlo
     detenido: false,
     pantalla: 'chat',   // 'chat' o 'clave', la del botón de la llave
-    confirmaciones: []  // las tarjetas que esperan «Aplicar» o «Cancelar»
+    confirmaciones: []  // las tarjetas que esperan «Confirmar» o «Cancelar»
 };
 
 // --- LA CLAVE ---
@@ -157,7 +157,7 @@ Puedes leer los datos de la aplicación y también crear, modificar y borrar reg
 Para cambiar datos:
 - Escribe sólo cuando el administrador lo pida. Si no queda claro qué quiere cambiar, pregunta antes.
 - Consulta primero los registros y sus columnas reales, y filtra por id siempre que puedas. No inventes ids ni nombres de columna.
-- Cada cambio se le enseña al administrador en una tarjeta y no se escribe hasta que pulsa «Aplicar»: no le pidas que confirme por escrito, la tarjeta ya lo hace. Si lo cancela, no insistas ni lo intentes de otra manera.
+- Cada cambio se le enseña al administrador en una tarjeta y no se escribe hasta que pulsa «Confirmar»: no le pidas que confirme por escrito, la tarjeta ya lo hace. Si lo cancela, no insistas ni lo intentes de otra manera.
 - Prefiere lo que tiene vuelta atrás: dar de baja a una persona (is_active = false) antes que borrarla, y apagar una encuesta (active = false) antes que borrarla con todo lo contestado.
 - Después de escribir, di lo que de verdad devolvió la herramienta (cuántas filas cambiaron), no lo que se esperaba. Si cambiaron menos de las esperadas, dilo.
 
@@ -168,6 +168,7 @@ Cómo funciona la aplicación:
 - Las encuestas hechas sólo de constancias (foto, firma, asistencia, curso previo) no se califican: entregarlas vale 100.
 - Los empleados se identifican por employee_id (texto); el nombre va como «Apellidos Nombres». supervisor_id es el employee_id de su jefe inmediato.
 - Los registros de incidentes viven en la tabla incidents, y la columna tipo dice qué son: «Incidente», «Difusión» o «Capacitación» (sin tipo cuenta como Incidente). Una difusión es un registro con tipo = 'Difusión', no una encuesta: para contarlas o buscarlas, filtra incidents por tipo. title es el nombre, date la fecha, grado la severidad de un incidente y linked_incident_id el registro al que está vinculado. Cada uno se firma de enterado (incident_signatures, una fila por persona) y tiene sus fotos en incident_gallery.
+- El sistema de incidentes ya es obsoleto: hoy se cargan como encuestas de firma en una clasificación propia. Para pasar uno viejo a encuesta usa migrar_incidente_a_encuesta. Si el administrador no dice a qué clasificación, consulta clasificaciones_de_encuestas y propón la que parezca de incidentes (las que llevan firma y títulos como los de los registros); si hay duda, pregúntale cuál con dos o tres opciones. Busca antes el id del registro en incidents por su título o su fecha. Al migrar, sus fotos pasan al material, cada firma pasa como respuesta firmada con su fecha y el registro deja de salir en el listado de incidentes. Para migrar varios, uno por llamada, y las difusiones vinculadas a un incidente antes que el incidente: usan sus fotos.
 - Borrar un registro de incidentes con borrar_registros lo elimina por completo: sus firmas, sus fotos y los archivos de ambas en Storage, que es lo que libera espacio (cerca de 1 MB de firmas por registro). Los registros vinculados a él no se borran: se quedan sin vínculo. Las firmas no se borran sueltas.
 
 ${window.catalogoDeTiposParaAsistente()}
@@ -291,6 +292,26 @@ window.HERRAMIENTAS_ASISTENTE = [
         }
     },
     {
+        name: 'clasificaciones_de_encuestas',
+        description: 'Las clasificaciones de encuestas que existen, cada una con cuántas encuestas tiene, cuántas llevan pregunta de firma, la más reciente y su fecha. Úsala para ayudar a elegir a qué clasificación migrar un registro de incidentes.',
+        input_schema: { type: 'object', properties: {}, additionalProperties: false }
+    },
+    {
+        name: 'migrar_incidente_a_encuesta',
+        description: 'Propone convertir un registro de incidentes (incidente, difusión o capacitación) en una encuesta de firma de la clasificación elegida, copiando la forma de otra encuesta de esa clasificación (el modelo): sus fotos pasan al material, cada firma pasa como respuesta firmada con su fecha y el registro sale del listado de incidentes. No se escribe nada hasta que el administrador lo confirma en pantalla. Un registro por llamada.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                incidente_id: { type: 'integer', description: 'El id del registro en incidents.' },
+                clasificacion: { type: 'string', description: 'La clasificación de destino, tal como la devuelve clasificaciones_de_encuestas.' },
+                encuesta_modelo_id: { type: 'integer', description: 'Opcional: la encuesta que sirve de modelo. Por defecto, la más reciente de la clasificación.' },
+                motivo: { type: 'string', description: 'En una frase, qué se va a hacer.' }
+            },
+            required: ['incidente_id', 'clasificacion', 'motivo'],
+            additionalProperties: false
+        }
+    },
+    {
         name: 'crear_registros',
         description: 'Propone dar de alta registros nuevos en una tabla. No se escribe nada hasta que el administrador lo confirma en pantalla; la herramienta devuelve si lo aprobó y qué quedó guardado. Hasta 50 filas por llamada. Consulta antes las columnas de la tabla para no inventarlas.',
         input_schema: {
@@ -346,7 +367,7 @@ window.ESCRITURA_DEL_ASISTENTE = {
     cursos_previos: 'cmb', evaluaciones_aplica: 'cmb', clasificaciones_revisores: 'cmb', clasificaciones_objetivo: 'cmb'
 };
 window.MAX_FILAS_ESCRITURA = 50;
-window.HERRAMIENTAS_QUE_ESCRIBEN = ['crear_registros', 'modificar_registros', 'borrar_registros'];
+window.HERRAMIENTAS_QUE_ESCRIBEN = ['crear_registros', 'modificar_registros', 'borrar_registros', 'migrar_incidente_a_encuesta'];
 
 window.TABLAS_DEL_ASISTENTE = ['evaluations', 'evaluation_questions', 'evaluation_responses', 'employees',
     'areas', 'plantas', 'lineas', 'equipos', 'incidents', 'incident_signatures', 'hallazgos', 'objectives',
@@ -381,6 +402,8 @@ window.rotuloDeHerramienta = (nombre, entrada) => {
         case 'buscar_empleados': return 'Buscó en la plantilla' + (e.texto ? ` «${e.texto}»` : '');
         case 'historial_de_empleado': return 'Revisó el historial de ' + (window.employeeNameMap?.[e.empleado_id] || e.empleado_id);
         case 'consultar_tabla': return (e.contar ? 'Contó ' : 'Consultó ') + tabla;
+        case 'clasificaciones_de_encuestas': return 'Revisó las clasificaciones';
+        case 'migrar_incidente_a_encuesta': return 'Propuso migrar un registro a encuesta';
         case 'crear_registros': return `Propuso un alta en ${tabla}`;
         case 'modificar_registros': return `Propuso un cambio en ${tabla}`;
         case 'borrar_registros': return `Propuso borrar en ${tabla}`;
@@ -609,9 +632,62 @@ window.EJECUTAR_HERRAMIENTA = {
         return e.contar ? { filas: count } : { filas: (data || []).length, datos: data };
     },
 
+    async clasificaciones_de_encuestas() {
+        await window.cargarEncuestasQuePuntuan();
+        const { data, error } = await sb.from('evaluations').select('id, title, category, created_at, active')
+            .order('created_at', { ascending: false }).limit(2000);
+        if (error) return { error: error.message };
+        const norma = window.normalizarClasificacion || ((t) => String(t || '').trim().toLowerCase());
+        const grupos = new Map();
+        (data || []).forEach(ev => {
+            const k = norma(ev.category);
+            if (!grupos.has(k)) grupos.set(k, { clasificacion: ev.category || 'General', encuestas: 0, activas: 0, con_firma: 0, mas_reciente: ev.title, fecha: diaDe(ev.created_at), ejemplos: [] });
+            const g = grupos.get(k);
+            g.encuestas++;
+            if (ev.active !== false) g.activas++;
+            if (window.constanciasDeEncuesta(ev).includes(window.TIPO_PREGUNTA_FIRMA)) g.con_firma++;
+            if (g.ejemplos.length < 3) g.ejemplos.push(ev.title);
+        });
+        return { clasificaciones: [...grupos.values()] };
+    },
+
+    async migrar_incidente_a_encuesta(e, ctx) {
+        if (!window.previaDeMigracion || !window.migrarIncidenteAEncuesta) return { error: 'Esta pantalla no sabe migrar registros.' };
+        let previa;
+        try { previa = await window.previaDeMigracion(e.incidente_id, e.clasificacion, e.encuesta_modelo_id); }
+        catch (err) { return { error: err.message || String(err) }; }
+
+        const n = previa.firmantes.length, f = previa.urls.length;
+        const fecha = previa.fecha ? previa.fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : 'sin fecha';
+        const dirigida = previa.padron == null ? 'Como el modelo'
+            : `${previa.padron} ${previa.padron === 1 ? 'persona' : 'personas'}, como el modelo`
+              + (previa.pendientes ? ` · ${previa.pendientes} sin firmar quedarán pendientes` : '');
+        const aprobado = await ctx.confirmar({
+            accion: 'migrar', motivo: e.motivo,
+            titulo: `Migrar «${previa.inc.title}» a encuesta`,
+            campos: [
+                ['Registro', `${previa.tipo} · ${fecha}`],
+                ['Clasificación', previa.fila.category || e.clasificacion],
+                ['Encuesta nueva', `${previa.titulo} · Única vez`],
+                ['Modelo', previa.modelo.title],
+                ['Firmas', n ? `${n} pasan como respuestas firmadas` : 'Ninguna'],
+                ['Material', f ? `${f} ${f === 1 ? 'foto' : 'fotos'}` : 'Sin fotos'],
+                ['Dirigida a', dirigida]
+            ],
+            nota: 'El registro sale del listado de incidentes; sus firmas se conservan en la encuesta.'
+                + (previa.vinculados ? ` ${previa.vinculados === 1 ? 'Un registro vinculado' : previa.vinculados + ' registros vinculados'} a éste se quedará${previa.vinculados === 1 ? '' : 'n'} sin vínculo y sin las fotos que tomaba${previa.vinculados === 1 ? '' : 'n'} de él: conviene migrarlo${previa.vinculados === 1 ? '' : 's'} antes.` : '')
+        });
+        if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se migró nada.' };
+
+        const r = await window.migrarIncidenteAEncuesta(previa, (t) => window.pintarEstadoAsistente(true, t));
+        ctx.resultado(r.ok, r.ok ? `Migrado · ${r.respuestas} firmas · ${r.fotos} fotos` : 'No se migró');
+        if (r.ok) despuesDeEscribir('evaluations');
+        return { aprobado: true, migrado: r.ok, encuesta_id: r.evaluationId || null, firmas: r.respuestas, fotos: r.fotos, detalle: window.textoDeMigracion(r) };
+    },
+
     // --- LAS QUE ESCRIBEN ---
     // Las tres siguen el mismo camino: comprobar, enseñar el cambio exacto en
-    // una tarjeta de la conversación, esperar el «Aplicar» del administrador y
+    // una tarjeta de la conversación, esperar el «Confirmar» del administrador y
     // sólo entonces escribir, contando las filas del `.select()` —una política
     // de RLS que lo rechace no da error, sólo afecta a cero filas—. Escriben
     // con el cliente de la aplicación, así que no pueden más que ella.
@@ -623,10 +699,14 @@ window.EJECUTAR_HERRAMIENTA = {
         if (!filas.length) return { error: 'No hay ninguna fila que crear.' };
         if (filas.length > window.MAX_FILAS_ESCRITURA) return { error: `Son ${filas.length} filas; el tope es ${window.MAX_FILAS_ESCRITURA} por llamada.` };
 
+        // Con una fila, cada columna es un dato de la ficha; con varias, una
+        // línea por fila.
         const aprobado = await ctx.confirmar({
             accion: 'crear', tabla: e.tabla, motivo: e.motivo,
-            titulo: `Crear ${filas.length} ${filas.length === 1 ? 'registro' : 'registros'} en ${window.nombreDeTablaAsistente(e.tabla)}`,
-            filas: filas.slice(0, 5).map(f => cambiosEnHtml(f)), resto: filas.length - 5
+            titulo: filas.length === 1 ? `Nuevo registro en ${window.nombreDeTablaAsistente(e.tabla)}`
+                : `${filas.length} registros nuevos en ${window.nombreDeTablaAsistente(e.tabla)}`,
+            campos: filas.length === 1 ? camposDeFila(filas[0]) : [['Dónde', window.nombreDeTablaAsistente(e.tabla)], ['Registros', filas.length]],
+            filas: filas.length === 1 ? [] : filas.slice(0, 5).map(lineaDeFila), resto: filas.length - 5
         });
         if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló el cambio. No se escribió nada.' };
 
@@ -651,9 +731,10 @@ window.EJECUTAR_HERRAMIENTA = {
 
         const aprobado = await ctx.confirmar({
             accion: 'modificar', tabla: e.tabla, motivo: e.motivo,
-            titulo: `Modificar ${previa.total} ${previa.total === 1 ? 'registro' : 'registros'} en ${window.nombreDeTablaAsistente(e.tabla)}`,
-            filtros: previa.filtrosTexto, filas: previa.muestra, resto: previa.total - previa.muestra.length,
-            cambios: cambiosEnHtml(cambios)
+            titulo: previa.total === 1 ? `Cambiar ${nombreDeFilaAsistente(previa.filas[0])}`
+                : `Cambiar ${previa.total} registros de ${window.nombreDeTablaAsistente(e.tabla)}`,
+            campos: [...(previa.total === 1 ? [['Dónde', window.nombreDeTablaAsistente(e.tabla)]] : []), ...camposDeFila(cambios)],
+            filas: previa.total === 1 ? [] : previa.muestra, resto: previa.total - previa.muestra.length
         });
         if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló el cambio. No se escribió nada.' };
 
@@ -683,7 +764,7 @@ window.EJECUTAR_HERRAMIENTA = {
             const aprobado = await ctx.confirmar({
                 accion: 'borrar', tabla: e.tabla, motivo: e.motivo,
                 titulo: `Eliminar a ${emp.name || emp.employee_id || emp.id}`,
-                filas: previa.muestra,
+                campos: [['Puesto', emp.puesto || emp.position || ''], ['Departamento', emp.department || emp.departamento || '']],
                 nota: 'Se borra su ficha y todo su historial, sin vuelta atrás. Después se te preguntará otra vez con el detalle de lo que se lleva. Para que sólo deje de aparecer, mejor darlo de baja.'
             });
             if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se borró nada.' };
@@ -701,10 +782,16 @@ window.EJECUTAR_HERRAMIENTA = {
         if (e.tabla === 'incidents' && window.eliminarIncidenteCompleto) {
             const ids = previa.filas.map(f => f.id).filter(v => v != null);
             const resumen = await window.resumenDeBorradoIncidente(ids);
+            const uno = previa.filas.length === 1 ? previa.filas[0] : null;
             const aprobado = await ctx.confirmar({
                 accion: 'borrar', tabla: e.tabla, motivo: e.motivo,
-                titulo: `Eliminar ${ids.length} ${ids.length === 1 ? 'registro' : 'registros'} de incidentes por completo`,
-                filtros: previa.filtrosTexto, filas: previa.muestra, resto: previa.total - previa.muestra.length,
+                titulo: uno ? `Eliminar «${uno.title || ('#' + uno.id)}»` : `Eliminar ${ids.length} registros de incidentes`,
+                campos: [
+                    ...(uno ? [['Tipo', uno.tipo || 'Incidente'], ['Fecha', uno.date ? String(uno.date).slice(0, 10) : '']] : [['Registros', ids.length]]),
+                    ['Firmas', resumen.firmas == null ? 'sin contar' : resumen.firmas],
+                    ['Fotos', resumen.fotos == null ? 'sin contar' : resumen.fotos]
+                ],
+                filas: uno ? [] : previa.muestra, resto: previa.total - previa.muestra.length,
                 nota: window.textoDeBorradoIncidente(resumen)
             });
             if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se borró nada.' };
@@ -741,8 +828,10 @@ window.EJECUTAR_HERRAMIENTA = {
 
         const aprobado = await ctx.confirmar({
             accion: 'borrar', tabla: e.tabla, motivo: e.motivo,
-            titulo: `Borrar ${previa.total} ${previa.total === 1 ? 'registro' : 'registros'} en ${window.nombreDeTablaAsistente(e.tabla)}`,
-            filtros: previa.filtrosTexto, filas: previa.muestra, resto: previa.total - previa.muestra.length,
+            titulo: previa.total === 1 ? `Eliminar ${nombreDeFilaAsistente(previa.filas[0])}`
+                : `Eliminar ${previa.total} registros de ${window.nombreDeTablaAsistente(e.tabla)}`,
+            campos: [['Dónde', window.nombreDeTablaAsistente(e.tabla)], ...(previa.total === 1 ? [] : [['Registros', previa.total]])],
+            filas: previa.total === 1 ? [] : previa.muestra, resto: previa.total - previa.muestra.length,
             nota: nota || 'Se borra de forma permanente.'
         });
         if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se borró nada.' };
@@ -822,6 +911,14 @@ function valorCorto(v) {
     return t && t.length > 90 ? t.slice(0, 90) + '…' : String(t);
 }
 
+// El nombre de una fila para el título de su tarjeta, entre comillas y sin el
+// id, que no le dice nada a quien confirma; sin nombre, el rótulo de siempre.
+function nombreDeFilaAsistente(f) {
+    const nombre = ['title', 'name', 'nombre', 'question_text', 'descripcion', 'description', 'titulo']
+        .map(k => f && f[k]).find(v => typeof v === 'string' && v.trim());
+    return nombre ? `«${valorCorto(nombre)}»` : rotuloDeFila(f || {});
+}
+
 // Una fila se reconoce por su nombre, no por su JSON.
 function rotuloDeFila(f) {
     const nombre = ['title', 'name', 'nombre', 'question_text', 'descripcion', 'description', 'titulo']
@@ -830,9 +927,29 @@ function rotuloDeFila(f) {
     return [id, nombre ? valorCorto(nombre) : ''].filter(Boolean).join(' · ') || valorCorto(f);
 }
 
-function cambiosEnHtml(obj) {
-    return Object.entries(obj).map(([k, v]) =>
-        `<span class="asistente-cambio-col">${window.sanitizeForHTML(k)}</span> ${window.sanitizeForHTML(valorCorto(v))}`).join('<br>');
+// Una fila como datos de la ficha: «Título: …», con el nombre de la columna en
+// palabras cuando se sabe —quien confirma no tiene por qué saber qué es
+// `is_active`—.
+const ROTULO_DE_COLUMNA_ASISTENTE = {
+    title: 'Título', name: 'Nombre', nombre: 'Nombre', category: 'Clasificación', frequency: 'Frecuencia',
+    active: 'Activa', is_active: 'Activo', description: 'Descripción', date: 'Fecha', tipo: 'Tipo',
+    question_text: 'Pregunta', question_type: 'Tipo de pregunta', review_status: 'Estado', puesto: 'Puesto',
+    department: 'Departamento', supervisor_id: 'Jefe inmediato', is_obligatory: 'Obligatoria',
+    vigente_desde: 'Aplica desde', grado: 'Grado', origen: 'Origen'
+};
+function valorLegible(k, v) {
+    if (v === true) return 'Sí';
+    if (v === false) return 'No';
+    if (v === null) return 'Vacío';
+    if (k === 'frequency' && window.textoDeFrecuencia) return window.textoDeFrecuencia(v);
+    if (k === 'question_type' && window.tipoDePregunta && window.tipoDePregunta(v)) return window.tipoDePregunta(v).nombre;
+    return valorCorto(v);
+}
+function camposDeFila(obj) {
+    return Object.entries(obj || {}).map(([k, v]) => [ROTULO_DE_COLUMNA_ASISTENTE[k] || k, valorLegible(k, v)]);
+}
+function lineaDeFila(obj) {
+    return camposDeFila(obj).slice(0, 4).map(([r, v]) => `${r}: ${v}`).join(' · ');
 }
 
 // Lo escrito cambia lo que enseñan las demás pantallas.
@@ -1577,7 +1694,7 @@ window.nuevoTurnoAsistente = () => {
             };
         },
         // La tarjeta de un cambio: dice exactamente qué se va a escribir y no
-        // deja que pase nada hasta que se pulse «Aplicar». Devuelve lo que
+        // deja que pase nada hasta que se pulse «Confirmar». Devuelve lo que
         // necesita la herramienta: `confirmar` (una promesa con la decisión) y
         // `resultado`, que escribe en la tarjeta lo que de verdad quedó.
         contextoDeEscritura() {
@@ -1587,18 +1704,20 @@ window.nuevoTurnoAsistente = () => {
                     const esc = window.sanitizeForHTML;
                     tarjeta = document.createElement('div');
                     tarjeta.className = 'asistente-cambio' + (p.accion === 'borrar' ? ' es-borrado' : '');
-                    const lista = (p.filas || []).map(f => `<li>${p.accion === 'crear' ? f : esc(f)}</li>`).join('')
+                    // Una ficha: el título, y debajo cada dato como «Rótulo: valor»,
+                    // que es como se lee de un vistazo qué se va a escribir.
+                    const campos = (p.campos || []).filter(c => c && c[1] !== undefined && c[1] !== null && c[1] !== '')
+                        .map(([r, v]) => `<div class="asistente-cambio-campo"><span class="asistente-cambio-campo-rotulo">${esc(r)}:</span> <span class="asistente-cambio-campo-valor">${esc(String(v))}</span></div>`).join('');
+                    const lista = (p.filas || []).map(f => `<li>${esc(f)}</li>`).join('')
                         + (p.resto > 0 ? `<li class="asistente-cambio-resto">y ${p.resto} más</li>` : '');
                     tarjeta.innerHTML = `
                         <div class="asistente-cambio-titulo">${esc(p.titulo)}</div>
-                        ${p.motivo ? `<div class="asistente-cambio-motivo">${esc(p.motivo)}</div>` : ''}
-                        ${p.filtros && p.filtros.length ? `<div class="asistente-cambio-rotulo">Dónde</div><div class="asistente-cambio-mono">${p.filtros.map(esc).join('<br>')}</div>` : ''}
-                        ${lista ? `<div class="asistente-cambio-rotulo">${p.accion === 'crear' ? 'Filas nuevas' : 'Registros'}</div><ul class="asistente-cambio-lista">${lista}</ul>` : ''}
-                        ${p.cambios ? `<div class="asistente-cambio-rotulo">Cambios</div><div class="asistente-cambio-mono">${p.cambios}</div>` : ''}
+                        ${campos ? `<div class="asistente-cambio-campos">${campos}</div>` : ''}
+                        ${lista ? `<ul class="asistente-cambio-lista">${lista}</ul>` : ''}
                         ${p.nota ? `<div class="asistente-cambio-nota">${esc(p.nota)}</div>` : ''}
                         <div class="asistente-cambio-botones">
                             <button type="button" class="asistente-cambio-cancelar">Cancelar</button>
-                            <button type="button" class="asistente-cambio-aplicar">${p.accion === 'borrar' ? 'Borrar' : 'Aplicar'}</button>
+                            <button type="button" class="asistente-cambio-aplicar">${p.accion === 'borrar' ? 'Eliminar' : 'Confirmar'}</button>
                         </div>
                         <div class="asistente-cambio-estado" hidden></div>`;
                     nodo.appendChild(tarjeta);
