@@ -8164,14 +8164,12 @@ Las reglas para usarlo:
 
   Cuatro cosas que hay que mantener:
 
-  - **La hoja la comparte el «Reporte de Equipo»** (`abrirStatsEquipo`, el
-    botón «Mi Equipo»), que sigue con su radar y su ranking. Cada vista esconde
-    el cuerpo de la otra —`#stats-persona-cuerpo` y `#stats-equipo-cuerpo`— y
-    limpia lo que la otra dejó insertado.
+  - **La hoja y su cuerpo los comparte el «Reporte de Equipo»**
+    (`abrirStatsEquipo`, el botón «Mi Equipo»): las dos vistas escriben en
+    `#stats-persona-cuerpo` con `innerHTML`, así que no hay nada que la otra
+    deje insertado ni que limpiar.
   - **La foto es un `<label for>`** sobre `#inp-avatar-persona`, nunca un
-    `.click()`, por el toque fantasma de iOS; y ese id no es el
-    `inp-avatar-upload` de la vista de equipo, que las dos viven en el mismo
-    documento. De baja no se cambia nada.
+    `.click()`, por el toque fantasma de iOS. De baja no se cambia nada.
   - **Las encuestas no se tocan.** Abrirían la encuesta de quien mira, no la de
     esta persona; los grupos se despliegan solos (el `<details>` sin
     `preventDefault`) y no hay hoja de detalle de una clasificación a la que ir.
@@ -8181,15 +8179,45 @@ Las reglas para usarlo:
     (`currentStatsEmpId`): se puede bajar a un subordinado mientras la consulta
     de encuestas va de camino.
 
-  - **La hoja no se desplaza: lo hacen sus dos cuerpos**
-    (`.stats-cuerpo-desplazable`), o el encabezado se iba por arriba al primer
-    arrastre. Por eso la vista de equipo mete su foto y su fila de caras
-    **dentro** de `#stats-equipo-cuerpo` y no detrás del encabezado: fuera del
-    cuerpo se quedarían fijas debajo de él.
+  **La hoja no se desplaza: lo hace su cuerpo** (`.stats-cuerpo-desplazable`),
+  o el encabezado se iba por arriba al primer arrastre.
 
   La flecha del encabezado lleva, en modo administrador, al jefe inmediato; si
   no, por donde se vino (`statsHistoryStack`). Y «Entrar como …» es una fila del
   final, sólo administrando y nunca de uno mismo: era una llave suelta al pie.
+
+  **El «Reporte de Equipo» va igual**, y por lo mismo se quedó sin radar y sin
+  «Tabla de Posiciones»: calculaban con su propia regla —sólo
+  `target_positions`, cualquier respuesta revisada sin mirar el periodo y un 0%
+  en lo que sólo deja constancia— y daban cifras del equipo que no cuadraban con
+  las que cada quien ve en su inicio. Se fueron también la foto grande del jefe
+  (su perfil está en su tarjeta del inicio), la fila de caras y el desplegable
+  de clasificación. Hoy son tres secciones:
+
+  ```js
+  window.pendientesDelEquipo(miembros)       // la suma de sus `statsPendientes`
+  window.cargarEncuestasDelEquipo(activos)   // `filasDeEncuestasDeEmpleado` de cada quien
+  window.clasificacionesDelEquipo(porMiembro)  window.listaDeEncuestasDelEquipo(porMiembro)
+  window.pintarMiembrosDelEquipo()  window.abrirMiembroDelEquipo(i)
+  ```
+
+  - **Pendientes del equipo**, con la misma lista de la hoja de una persona
+    (`listaDePendientesDePersona`) sobre la suma de su gente activa.
+  - **Encuestas**, una clasificación por renglón con el icono de la peor
+    encuesta de cualquiera, cuántos tienen pendientes y el promedio del equipo
+    —la media del promedio de cada persona en esa clasificación, sin contar a
+    quien no tiene nada calificado—; dentro, cada persona, la que más debe
+    primero. El renglón de arriba promedia el `promedioPorClasificacion` de
+    cada quien, que es la cifra de su tarjeta del inicio.
+  - **Miembros**, de mejor promedio a peor —lo que era el ranking—, con su
+    puesto, su cifra y su cuenta de pendientes; de baja al final. Cada fila
+    lleva a la hoja de esa persona, y su flecha de volver, de regreso aquí.
+
+  Las encuestas se piden **de seis en seis personas**: es una consulta por
+  cabeza, la de su tarjeta del inicio, y lanzarlas todas a la vez desde un
+  teléfono en 4G es la manera de que alguna se caiga por tiempo. Lo que llega
+  tarde comprueba que la hoja siga en el equipo (`currentStatsEmpId ===
+  'EQUIPO'`).
 
 - **Ya no hay accesos directos.** El panel de inicio llevó una tarjeta
   «🚀 Accesos Directos» con dos cuadros —Encuestas y Capacitaciones— que

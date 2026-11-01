@@ -3870,63 +3870,11 @@ div.innerHTML = `
 };
 
 window.actualizarResumenPendientesEnModal = (empId) => {
-    // La hoja de una persona tiene su propia lista de pendientes; lo de abajo
-    // es del «Reporte de Equipo», que comparte la hoja.
-    const listaPersona = document.getElementById('persona-pendientes');
-    if (listaPersona && empId !== 'EQUIPO') {
-        if (String(window.currentStatsEmpId) === String(empId)) {
-            listaPersona.innerHTML = window.listaDePendientesDePersona(window.statsPendientes[empId]);
-        }
-        return;
-    }
-
-    const summaryBox = document.getElementById('stats-summary-content');
-    if(!summaryBox) return;
-
-    // NUEVO: Aplicar difuminado si es inactivo
-    const empData = window.todosLosEmpleadosData ? window.todosLosEmpleadosData.find(e => String(e.id) === String(empId)) : null;
-    if (empData && empData.isActive === false) {
-        summaryBox.style.opacity = "0.5";
-        summaryBox.style.filter = "grayscale(100%)";
-    } else {
-        summaryBox.style.opacity = "1";
-        summaryBox.style.filter = "none";
-    }
-
-    const modal = document.getElementById('modal-stats-empleado');
-    if(modal && modal.style.display === 'none') return;
-    if(empId === 'EQUIPO') return;
-    if(window.currentStatsEmpId !== empId) return;
-    
-    const stats = window.statsPendientes[empId];
-    
-    const cardStyle = "flex: 1; min-width: 100px; padding: 12px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.03); border: 1px solid transparent;";
-
-    if (!stats) {
-        summaryBox.innerHTML = "<div style='text-align:center; color:#64748b; padding: 10px;'>⏳ Calculando...</div>";
-    } else if (stats.total === 0 && stats.porCalificar === 0) {
-        summaryBox.innerHTML = `
-            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; text-align: center;">
-                <div style="font-size: 2rem; margin-bottom: 5px;">🎉</div>
-                <div style="color: #166534; font-weight: bold; font-size: 1rem;">¡Todo al día!</div>
-                <div style="color: #15803d; font-size: 0.85rem;">No hay tareas pendientes.</div>
-            </div>`;
-    } else {
-        let cardsHtml = '';
-        if (stats.incidentes > 0) {
-            cardsHtml += `<div style="${cardStyle} background: #fff1f2; border-color: #fecdd3;"><div style="font-size: 1.5rem; color: #e11d48; font-weight: 800; line-height: 1;">${stats.incidentes}</div><div style="font-size: 0.75rem; color: #9f1239; font-weight: 600; margin-top: 4px;">Incidentes</div></div>`;
-        }
-        if (stats.difusiones > 0) {
-            cardsHtml += `<div style="${cardStyle} background: #eff6ff; border-color: #bfdbfe;"><div style="font-size: 1.5rem; color: #2563eb; font-weight: 800; line-height: 1;">${stats.difusiones}</div><div style="font-size: 0.75rem; color: #1e40af; font-weight: 600; margin-top: 4px;">Difusiones</div></div>`;
-        }
-        if (stats.evaluaciones > 0) {
-            cardsHtml += `<div style="${cardStyle} background: #f5f3ff; border-color: #ddd6fe;"><div style="font-size: 1.5rem; color: #7c3aed; font-weight: 800; line-height: 1;">${stats.evaluaciones}</div><div style="font-size: 0.75rem; color: #5b21b6; font-weight: 600; margin-top: 4px;">Encuestas</div></div>`;
-        }
-        if (stats.porCalificar > 0) {
-            cardsHtml += `<div style="${cardStyle} background: #fff7ed; border-color: #fed7aa;"><div style="font-size: 1.5rem; color: #ea580c; font-weight: 800; line-height: 1;">${stats.porCalificar}</div><div style="font-size: 0.75rem; color: #9a3412; font-weight: 600; margin-top: 4px;">Por Calificar</div></div>`;
-        }
-        summaryBox.innerHTML = `<div style="display: flex; flex-wrap: wrap; gap: 10px;">${cardsHtml}</div><div style="margin-top: 10px; font-size: 0.75rem; color: #94a3b8; text-align: center;">Total pendientes: <b>${stats.total}</b></div>`;
-    }
+    // La lista de pendientes de la hoja de una persona; la del equipo la
+    // repinta `abrirStatsEquipo` cuando llegan las cuentas.
+    const lista = document.getElementById('persona-pendientes');
+    if (!lista || empId === 'EQUIPO' || String(window.currentStatsEmpId) !== String(empId)) return;
+    lista.innerHTML = window.listaDePendientesDePersona(window.statsPendientes[empId]);
 };
 
 window.calcularPendientesBatch = async (idsEmpleados) => {
@@ -4494,8 +4442,8 @@ window.iniciarSesionComo = (empId) => {
 // su lugar es la tarjeta del inicio misma: `filasDeEncuestasDeEmpleado`, con
 // `leTocaEstaEncuesta`, `esEvaluacionPendiente` y `puntajeDeRespuesta`.
 //
-// La hoja la comparte el «Reporte de Equipo» (`abrirStatsEquipo`), que sigue
-// con lo suyo: cada vista esconde el cuerpo de la otra.
+// La hoja —y su cuerpo— la comparte el «Reporte de Equipo»
+// (`abrirStatsEquipo`): cada vista lo reescribe entero.
 
 // Los dos iconos de la ficha, los mismos de la tarjeta del inicio.
 window.ICONO_DEPARTAMENTO = '<path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M3 21h18"/><path d="M8 8h3M8 12h3M8 16h3"/>';
@@ -4760,18 +4708,7 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
 
     window.currentStatsEmpId = empId;
 
-    // Lo que dejó el «Reporte de Equipo», que comparte la hoja.
-    ['team-ranking-container', 'team-category-filter-container', 'modal-avatar-wrapper',
-     'modal-sub-team-view', 'admin-discreet-login-btn'].forEach(id => {
-        const n = document.getElementById(id);
-        if (n) n.remove();
-    });
-    if (window.radarChartInstances) {
-        window.radarChartInstances.forEach(c => c.destroy());
-        window.radarChartInstances = [];
-    }
-    const cuerpoEquipo = document.getElementById('stats-equipo-cuerpo');
-    if (cuerpoEquipo) cuerpoEquipo.hidden = true;
+    // El cuerpo lo comparte el «Reporte de Equipo»: se reescribe entero.
     const cuerpo = document.getElementById('stats-persona-cuerpo');
     if (!cuerpo) return;
     cuerpo.hidden = false;
@@ -4867,515 +4804,281 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
     window.pintarEquipoDePersona(empId);
 };
 
-window.abrirStatsEquipo = async (isBack = false) => {
-    const oldSubTeam = document.getElementById('modal-sub-team-view');
-    if(oldSubTeam) oldSubTeam.remove();
-    const oldFilter = document.getElementById('team-category-filter-container');
-    if(oldFilter) oldFilter.remove();
+// ─── El «Reporte de Equipo» ────────────────────────────────────────────────
+// Lo abre «Mi Equipo» y va en la misma hoja y en el mismo cuerpo que la de
+// una persona: el encabezado fijo, el fondo gris de las listas agrupadas y tres
+// secciones —lo que le falta al equipo, cómo va en cada clasificación y quién
+// es quién—.
+//
+// **El radar y la «Tabla de Posiciones» se fueron por lo mismo que el radar de
+// una persona**: calculaban con una regla suya —sólo el puesto, cualquier
+// respuesta revisada sin mirar el periodo y un 0% en lo que sólo deja
+// constancia—, así que el equipo salía con cifras que no cuadraban con las que
+// cada quien ve en su inicio. Aquí cada persona pasa por
+// `filasDeEncuestasDeEmpleado`, que es la tarjeta del inicio, y el equipo es la
+// suma de eso.
 
-    const user = JSON.parse(localStorage.getItem("usuarioLogueado"));
-    const misDirectos = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(user.id));
-    if (misDirectos.length === 0) { alert("No tienes equipo asignado aún."); return; }
-    
+const filaMiniaturaEquipo = (emp) => `<span class="persona-miniatura">${emp && emp.avatar
+    ? `<img src="${window.procesarUrlImagen(emp.avatar)}" loading="lazy" alt="">`
+    : '<span aria-hidden="true">👤</span>'}</span>`;
+
+const colorDePuntaje = (p) => (p !== null && p !== undefined && typeof window.getColorScore === 'function')
+    ? window.getColorScore(p) : '#94a3b8';
+
+// Lo que le falta al equipo: la suma de las cuentas de cada quien, las mismas
+// del globo de su foto. Sin las de quien está de baja, que no cuentan.
+window.pendientesDelEquipo = (miembros) => {
+    const suma = { total: 0, incidentes: 0, difusiones: 0, evaluaciones: 0, porCalificar: 0 };
+    let alguno = false;
+    miembros.forEach(emp => {
+        const s = window.statsPendientes && window.statsPendientes[emp.id];
+        if (!s) return;
+        alguno = true;
+        Object.keys(suma).forEach(k => { suma[k] += s[k] || 0; });
+    });
+    return alguno ? suma : null;
+};
+
+// Cómo va el equipo en cada clasificación, a partir de las filas de cada
+// persona. Dentro de una clasificación, el promedio de cada quien es el plano
+// de sus encuestas —la regla del renglón de la tarjeta del inicio— y el del
+// equipo es la media de esos promedios, sin contar a quien no tiene nada
+// calificado: un cero ahí se leería como haberlo hecho mal.
+window.clasificacionesDelEquipo = (porMiembro) => {
+    const peso = (f) => (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1));
+    const grupos = [];
+    const porClave = {};
+    porMiembro.forEach(({ emp, filas }) => {
+        const suyas = {};
+        filas.forEach(f => {
+            const clave = window.normalizarClasificacion(f.ev.category);
+            if (!suyas[clave]) suyas[clave] = { nombre: String(f.ev.category || 'General').trim() || 'General', filas: [] };
+            suyas[clave].filas.push(f);
+        });
+        Object.entries(suyas).forEach(([clave, c]) => {
+            if (!porClave[clave]) {
+                porClave[clave] = { nombre: c.nombre, personas: [], pendientes: 0, peor: null };
+                grupos.push(porClave[clave]);
+            }
+            const g = porClave[clave];
+            const ps = c.filas.map(f => f.puntaje).filter(p => p !== null && p !== undefined);
+            const pendientes = c.filas.filter(f => f.vencimiento.mostrar).length;
+            g.personas.push({
+                emp, pendientes, total: c.filas.length,
+                promedio: ps.length ? Math.round(ps.reduce((a, b) => a + b, 0) / ps.length) : null
+            });
+            g.pendientes += pendientes;
+            c.filas.forEach(f => { if (!g.peor || peso(f) < peso(g.peor)) g.peor = f; });
+        });
+    });
+    grupos.forEach(g => {
+        const ps = g.personas.map(p => p.promedio).filter(p => p !== null);
+        g.promedio = ps.length ? Math.round(ps.reduce((a, b) => a + b, 0) / ps.length) : null;
+        g.conPendientes = g.personas.filter(p => p.pendientes > 0).length;
+        // Dentro, quien más debe primero: es a quien hay que ir a buscar.
+        g.personas.sort((a, b) => (b.pendientes - a.pendientes)
+            || ((a.promedio ?? 101) - (b.promedio ?? 101))
+            || a.emp.name.localeCompare(b.emp.name, 'es'));
+    });
+    grupos.sort((a, b) => (peso(a.peor) - peso(b.peor)) || a.nombre.localeCompare(b.nombre, 'es'));
+    return grupos;
+};
+
+window.listaDeEncuestasDelEquipo = (porMiembro) => {
+    const grupos = window.clasificacionesDelEquipo(porMiembro);
+    if (grupos.length === 0) return `<div class="persona-vacio">El equipo no tiene encuestas asignadas.</div>`;
+
+    const bloques = grupos.map(g => {
+        const renglones = g.personas.map(p => {
+            const estado = p.pendientes > 0
+                ? `<span style="color:#dc2626; font-weight:700;">${p.pendientes} pendiente${p.pendientes === 1 ? '' : 's'}</span> de ${p.total}`
+                : `${p.total} al día`;
+            const resultado = p.promedio === null ? ''
+                : ` · <span style="color:${colorDePuntaje(p.promedio)}; font-weight:700;">${p.promedio}%</span>`;
+            return `
+                <div class="persona-encuesta equipo-encuesta">
+                    ${filaMiniaturaEquipo(p.emp)}
+                    <div style="flex:1; min-width:0;">
+                        <div class="persona-encuesta-titulo">${escPersona(p.emp.name)}</div>
+                        <div class="persona-encuesta-detalle">${estado}${resultado}</div>
+                    </div>
+                </div>`;
+        }).join('');
+
+        const pie = [
+            g.conPendientes > 0
+                ? `${g.conPendientes} de ${g.personas.length} con pendientes`
+                : `${g.personas.length} persona${g.personas.length === 1 ? '' : 's'} al día`,
+            g.promedio === null ? null : `<span style="color:${colorDePuntaje(g.promedio)}; font-weight:700;">${g.promedio}%</span>`
+        ].filter(Boolean).join(' · ');
+
+        return `
+            <details class="grupo-asignadas">
+                <summary>
+                    ${window.iconoDeAsignada(g.peor.estado)}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${escPersona(g.nombre)}</div>
+                        <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
+                    </div>
+                    <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                         stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </summary>
+                ${renglones}
+            </details>`;
+    }).join('');
+
+    // El renglón de arriba: cuánta gente debe algo y el promedio del equipo,
+    // que es la media del de cada persona —el de su tarjeta del inicio—.
+    const conPendientes = porMiembro.filter(m => m.filas.some(f => f.vencimiento.mostrar)).length;
+    const ps = porMiembro.map(m => m.promedio).filter(p => p !== null && p !== undefined);
+    const promedio = ps.length ? Math.round(ps.reduce((a, b) => a + b, 0) / ps.length) : null;
+    const resumen = [
+        conPendientes === 0 ? 'Nadie tiene encuestas pendientes'
+            : `${conPendientes} de ${porMiembro.length} con encuestas pendientes`,
+        promedio === null ? null : `promedio <span style="color:${colorDePuntaje(promedio)};">${promedio}%</span>`
+    ].filter(Boolean).join(' · ');
+
+    return `<div class="persona-encuestas-resumen">${resumen}</div>${bloques}`;
+};
+
+// Los miembros: una fila por persona con su foto, su puesto, su promedio y su
+// cuenta de pendientes, que lleva a su hoja. De mejor promedio a peor —era la
+// «Tabla de Posiciones»—; sin nada calificado, después, y de baja al final.
+window.pintarMiembrosDelEquipo = () => {
+    const hueco = document.getElementById('equipo-miembros');
+    if (!hueco || window.currentStatsEmpId !== 'EQUIPO') return;
+    const resultados = window.resultadosDelEquipo || {};
+    const miembros = [...(window.equipoDelReporte || [])].sort((a, b) =>
+        ((a.isActive === false) - (b.isActive === false))
+        || (((resultados[b.id] && resultados[b.id].promedio) ?? -1) - ((resultados[a.id] && resultados[a.id].promedio) ?? -1))
+        || a.name.localeCompare(b.name, 'es'));
+    window.equipoDelReporteOrdenado = miembros;
+    hueco.innerHTML = miembros.map((emp, i) => {
+        const deBaja = emp.isActive === false;
+        const stats = window.statsPendientes && window.statsPendientes[emp.id];
+        const cuenta = stats && stats.total > 0
+            ? `<span class="persona-cuenta">${stats.total > 99 ? '99+' : stats.total}</span>` : '';
+        const r = resultados[emp.id];
+        const promedio = !deBaja && r && r.promedio !== null && r.promedio !== undefined
+            ? ` · <span style="color:${colorDePuntaje(r.promedio)}; font-weight:700;">${r.promedio}%</span>` : '';
+        return `
+            <button type="button" class="fila-ios${deBaja ? ' esta-apagado' : ''}" onclick="window.abrirMiembroDelEquipo(${i})">
+                ${filaMiniaturaEquipo(emp)}
+                <span class="fila-ios-texto">
+                    <span class="fila-ios-titulo">${escPersona(emp.name)}</span>
+                    <span class="fila-ios-detalle">${escPersona(deBaja ? 'Dado de baja' : (emp.puesto || 'Colaborador'))}${promedio}</span>
+                </span>
+                ${cuenta}
+                <span class="fila-ios-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>`;
+    }).join('');
+};
+
+window.abrirMiembroDelEquipo = (i) => {
+    const emp = (window.equipoDelReporteOrdenado || [])[i];
+    if (emp) window.abrirStatsEmpleado(emp.id, emp.name, emp.puesto);
+};
+
+// Las encuestas de cada quien, de seis en seis: es una consulta por persona,
+// la misma de su tarjeta del inicio, y lanzarlas todas a la vez desde un
+// teléfono en 4G es la manera de que alguna se caiga por tiempo.
+window.cargarEncuestasDelEquipo = async (activos) => {
+    const hueco = document.getElementById('equipo-encuestas');
+    if (!hueco) return;
+    const sigue = () => window.currentStatsEmpId === 'EQUIPO'
+        && document.getElementById('equipo-encuestas') === hueco;
+    try {
+        const encuestas = await window.encuestasActivasParaTarjeta();
+        if (!encuestas) throw new Error('sin encuestas');
+        const porMiembro = [];
+        for (let i = 0; i < activos.length; i += 6) {
+            const tanda = await Promise.all(activos.slice(i, i + 6).map(async emp => {
+                const r = await window.filasDeEncuestasDeEmpleado(emp, encuestas);
+                return r ? { emp, filas: r.filas, promedio: window.promedioPorClasificacion(r.filas) } : null;
+            }));
+            if (!sigue()) return;
+            tanda.forEach(m => { if (m) porMiembro.push(m); });
+        }
+        window.resultadosDelEquipo = {};
+        porMiembro.forEach(m => { window.resultadosDelEquipo[m.emp.id] = { promedio: m.promedio }; });
+        hueco.innerHTML = porMiembro.length
+            ? window.listaDeEncuestasDelEquipo(porMiembro)
+            : `<div class="persona-vacio">El equipo no tiene encuestas asignadas.</div>`;
+        window.pintarMiembrosDelEquipo();
+    } catch (e) {
+        console.warn('No se pudieron cargar las encuestas del equipo:', e.message);
+        if (sigue()) hueco.innerHTML = `<div class="persona-vacio">No se pudieron cargar las encuestas del equipo.</div>`;
+    }
+};
+
+window.abrirStatsEquipo = async (isBack = false) => {
+    let user = null;
+    try { user = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null'); } catch (e) { user = null; }
+    if (!user) return;
+    const misDirectos = (window.todosLosEmpleadosData || []).filter(e => String(e.supId) === String(user.id));
+    if (misDirectos.length === 0) { alert('No tienes equipo asignado aún.'); return; }
+
     const modal = document.getElementById('modal-stats-empleado');
-    const title = document.getElementById('stats-emp-name');
-    
+    const cuerpo = document.getElementById('stats-persona-cuerpo');
+    if (!modal || !cuerpo) return;
+
     if (!window.statsHistoryStack) window.statsHistoryStack = [];
-    const isOpen = modal && modal.style.display === 'flex';
-    
+    const isOpen = modal.style.display === 'flex';
     if (!isBack) {
         if (isOpen && window.currentStatsEmpId && window.currentStatsEmpId !== 'EQUIPO') {
-            const currentEmp = window.todosLosEmpleadosData.find(e => String(e.id) === String(window.currentStatsEmpId));
-            if (currentEmp) {
-                window.statsHistoryStack.push({ id: currentEmp.id, name: currentEmp.name, puesto: currentEmp.puesto });
-            }
+            const actual = window.todosLosEmpleadosData.find(e => String(e.id) === String(window.currentStatsEmpId));
+            if (actual) window.statsHistoryStack.push({ id: actual.id, name: actual.name, puesto: actual.puesto });
         } else if (!isOpen) {
             window.statsHistoryStack = [];
         }
     }
-
     window.currentStatsEmpId = 'EQUIPO';
 
-    // La hoja es la misma que la de una persona: se esconde su cuerpo, se
-    // enseña el del equipo y el encabezado vuelve a ser sólo el título, que la
-    // flecha de volver de esta vista la lleva su propio título.
-    const cuerpoPersona = document.getElementById('stats-persona-cuerpo');
-    if (cuerpoPersona) { cuerpoPersona.hidden = true; cuerpoPersona.innerHTML = ''; }
-    const cuerpoEquipo = document.getElementById('stats-equipo-cuerpo');
-    if (cuerpoEquipo) cuerpoEquipo.hidden = false;
-    const btnVolverStats = document.getElementById('btn-volver-stats');
-    if (btnVolverStats) { btnVolverStats.hidden = true; btnVolverStats.onclick = null; }
-    const subtituloStats = document.getElementById('stats-emp-subtitulo');
-    if (subtituloStats) subtituloStats.textContent = '';
-    
-    const summaryBox = document.getElementById('stats-summary-content');
-    const containerScroll = document.getElementById('radar-scroll-container');
-    const noData = document.getElementById('stats-no-data');
-    const oldAvatarDiv = document.getElementById('modal-avatar-wrapper');
-    if(oldAvatarDiv) oldAvatarDiv.remove();
-    
+    const activos = misDirectos.filter(e => e.isActive !== false);
+    window.equipoDelReporte = misDirectos;
+    window.resultadosDelEquipo = {};
+
+    const titulo = document.getElementById('stats-emp-name');
+    const subtitulo = document.getElementById('stats-emp-subtitulo');
+    if (titulo) titulo.textContent = 'Mi equipo';
+    if (subtitulo) subtitulo.textContent = `${activos.length} colaborador${activos.length === 1 ? '' : 'es'}`
+        + (misDirectos.length > activos.length ? ` · ${misDirectos.length - activos.length} de baja` : '');
+    const btnVolver = document.getElementById('btn-volver-stats');
+    if (btnVolver) {
+        const hayAtras = window.statsHistoryStack.length > 0;
+        btnVolver.hidden = !hayAtras;
+        btnVolver.title = 'Volver';
+        btnVolver.setAttribute('aria-label', 'Volver');
+        btnVolver.onclick = hayAtras ? () => window.volverStatsAnterior() : null;
+    }
+
+    cuerpo.hidden = false;
+    cuerpo.innerHTML = `
+        <div class="hoja-grupo-titulo">Pendientes del equipo</div>
+        <div id="equipo-pendientes" class="lista-ios persona-seccion">${window.listaDePendientesDePersona(window.pendientesDelEquipo(activos))}</div>
+
+        <div class="hoja-grupo-titulo">Encuestas</div>
+        <div id="equipo-encuestas" class="persona-encuestas persona-seccion">
+            <div class="persona-vacio">Cargando…</div>
+        </div>
+
+        <div class="hoja-grupo-titulo">Miembros · ${misDirectos.length}</div>
+        <div id="equipo-miembros" class="lista-ios persona-seccion"></div>
+    `;
+    cuerpo.scrollTop = 0;
     modal.style.display = 'flex';
-    
-    let backBtnHtml = '';
-        if (window.statsHistoryStack && window.statsHistoryStack.length > 0) {
-            backBtnHtml = `<button onclick="window.volverStatsAnterior()" style="background:none; border:none; color:#0f172a; font-size:1.1rem; cursor:pointer; padding:0; margin-right:8px; display:flex; align-items:center; outline:none;" title="Volver al anterior">⬅</button>`;
-        }
-        
-    title.innerHTML = `
-                <div style="display: flex; align-items: center;">
-                    ${backBtnHtml}
-                    Reporte de Equipo 
-                </div>
-                <div style="font-size:0.8rem; color:#64748b; font-weight:normal; margin-top:4px;">${user.name} | ${misDirectos.length} colaboradores</div>
-            `;
 
-            const modalContent = modal.querySelector('div');
-            const headerDiv = modalContent.querySelector('div');
-            
-            const managerObj = window.todosLosEmpleadosData.find(e => String(e.id) === String(user.id));
-            const currentAvatarUrl = (managerObj && managerObj.avatar) ? managerObj.avatar : null;
+    window.pintarMiembrosDelEquipo();
+    window.cargarEncuestasDelEquipo(activos);
 
-            let avatarImgHtml = `<div style="font-size:2.5rem;">👤</div>`;
-            if(currentAvatarUrl) {
-                const safeUrl = window.procesarUrlImagen(currentAvatarUrl);
-                avatarImgHtml = `<img src="${safeUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-            }
-            
-            const avatarWrapper = document.createElement('div');
-            avatarWrapper.id = 'modal-avatar-wrapper';
-            avatarWrapper.style.cssText = "display:flex; justify-content:center; margin-bottom:15px; margin-top:10px;";
-            
-           const clickAction = `onclick="if(event.target.tagName !== 'INPUT') document.getElementById('inp-avatar-upload').click()"`;
-            
-            // Obtener los pendientes del Jefe (usuario actual)
-            const myStats = window.statsPendientes[user.id];
-            const myDisplayBadge = (myStats && myStats.total > 0) ? 'flex' : 'none';
-            const myTextBadge = (myStats && myStats.total > 0) ? (myStats.total > 99 ? '99+' : myStats.total) : '0';
-
-            avatarWrapper.innerHTML = `
-                <div style="display:flex; flex-direction:column; align-items:center;">
-                    <div style="position: relative; display: inline-block;">
-
-                        <div class="avatar-circle-large" ${clickAction} title="Cambiar foto">
-                            ${avatarImgHtml}
-                            <div class="avatar-edit-overlay">📷</div>
-                            <input type="file" id="inp-avatar-upload" style="display:none;" accept="image/*" onchange="window.cambiarFotoPerfil(this, '${user.id}')">
-                        </div>
-
-                        <div id="badge-count-${user.id}" class="notification-badge" style="display:${myDisplayBadge}; position:absolute; top:-5px; right:-5px; width:24px; height:24px; font-size:0.8rem; z-index:10; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
-                            ${myTextBadge}
-                        </div>
-
-                    </div>
-                </div>
-            `;
-            
-            // Dentro del cuerpo del equipo y no detrás del encabezado: es el
-            // cuerpo el que se desplaza, y lo que quedara fuera se quedaría fijo
-            // debajo del encabezado.
-            if (cuerpoEquipo) cuerpoEquipo.insertAdjacentElement('afterbegin', avatarWrapper);
-            else headerDiv.insertAdjacentElement('afterend', avatarWrapper);
-
-            const subWrapper = document.createElement('div');
-            subWrapper.id = 'modal-sub-team-view';
-            subWrapper.style.cssText = "margin-bottom: 15px; padding: 0 10px; margin-top: 15px;";
-            subWrapper.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569; font-size:0.8rem; text-transform:uppercase; letter-spacing: 0.5px; text-align: center;">👥 Miembros del Equipo</h4>`;
-            
-            const subContainer = document.createElement('div');
-            subContainer.style.cssText = "display:flex; gap:15px; overflow-x:auto; padding:10px 5px; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; justify-content: center; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; flex-wrap: wrap;";
-            
-            misDirectos.forEach(sub => {
-                 let subAvatarHtml = '👤';
-                 let subBgStyle = 'background:#eff6ff; border:none;';
-                 if (sub.avatar) {
-                     const safeSubUrl = window.procesarUrlImagen(sub.avatar);
-                     subAvatarHtml = `<img src="${safeSubUrl}" loading="lazy" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-                     subBgStyle = 'background:white; border:none; padding:0;';
-                 }
-                 
-                 // NUEVO: Variables de estilo para subordinados inactivos
-                 let subOpacityStyle = sub.isActive === false ? 'opacity: 0.5; filter: grayscale(100%);' : '';
-                 let subBadgeInactivo = sub.isActive === false ? `<div style="position:absolute; bottom:-2px; background:#64748b; color:white; font-size:0.45rem; padding:1px 3px; border-radius:3px; font-weight:bold; z-index:10; border: 1px solid white;">INACTIVO</div>` : '';
-
-                 const subDiv = document.createElement('div');
-                 subDiv.className = 'team-member-container';
-                 subDiv.onclick = () => { window.abrirStatsEmpleado(sub.id, sub.name, sub.puesto); };
-                 subDiv.innerHTML = `
-                    <div style="width:49px; height:49px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.2rem; margin-bottom:3px; box-shadow:0 1px 2px rgba(0,0,0,0.05); position:relative; ${subBgStyle} ${subOpacityStyle}">
-                        ${subAvatarHtml}
-                        <div id="badge-count-${sub.id}" class="notification-badge" style="display:none; width:16px; height:16px; font-size:0.6rem; right:-2px; top:-2px;">0</div>
-                        ${subBadgeInactivo}
-                    </div>
-                    <div style="font-size:0.65rem; color:#334155; text-align:center; line-height:1.2; max-width:60px; white-space:normal; ${subOpacityStyle}">
-                        ${sub.name.split(' ')[0]}
-                    </div>
-                 `;
-                 subContainer.appendChild(subDiv);
-                 
-                 const stats = window.statsPendientes[sub.id];
-                 if(stats && stats.total > 0) {
-                     const badge = subDiv.querySelector('.notification-badge');
-                     if(badge) {
-                         badge.innerText = stats.total > 99 ? '99+' : stats.total;
-                         badge.style.display = 'flex';
-                     }
-                 }
-            });
-            
-            subWrapper.appendChild(subContainer);
-            avatarWrapper.insertAdjacentElement('afterend', subWrapper);
-
-        if (window.radarChartInstances) { window.radarChartInstances.forEach(c => c.destroy()); window.radarChartInstances = []; }
-        if(containerScroll) containerScroll.innerHTML = '';
-    
-    noData.style.display = 'block';
-    noData.innerText = "Calculando promedios y ranking...";
-    
-    let totalInc = 0, totalDif = 0, totalEval = 0, totalCalif = 0;
-    misDirectos.forEach(emp => {
-        const s = window.statsPendientes[emp.id];
-        if (s) { totalInc += s.incidentes || 0; totalDif += s.difusiones || 0; totalEval += s.evaluaciones || 0; totalCalif += s.porCalificar || 0; }
-    });
-    
-    const cardStyle = "flex: 1; min-width: 100px; padding: 12px; border-radius: 12px; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.03); border: 1px solid transparent;";
-    let cardsHtml = '';
-    if (totalInc > 0) cardsHtml += `<div style="${cardStyle} background: #fff1f2; border-color: #fecdd3;"><div style="font-size: 1.5rem; color: #e11d48; font-weight: 800; line-height: 1;">${totalInc}</div><div style="font-size: 0.75rem; color: #9f1239; font-weight: 600; margin-top: 4px;">Incidentes</div></div>`;
-    if (totalDif > 0) cardsHtml += `<div style="${cardStyle} background: #eff6ff; border-color: #bfdbfe;"><div style="font-size: 1.5rem; color: #2563eb; font-weight: 800; line-height: 1;">${totalDif}</div><div style="font-size: 0.75rem; color: #1e40af; font-weight: 600; margin-top: 4px;">Difusiones</div></div>`;
-    if (totalEval > 0) cardsHtml += `<div style="${cardStyle} background: #f5f3ff; border-color: #ddd6fe;"><div style="font-size: 1.5rem; color: #7c3aed; font-weight: 800; line-height: 1;">${totalEval}</div><div style="font-size: 0.75rem; color: #5b21b6; font-weight: 600; margin-top: 4px;">Encuestas</div></div>`;
-    if (totalCalif > 0) cardsHtml += `<div style="${cardStyle} background: #fff7ed; border-color: #fed7aa;"><div style="font-size: 1.5rem; color: #ea580c; font-weight: 800; line-height: 1;">${totalCalif}</div><div style="font-size: 0.75rem; color: #9a3412; font-weight: 600; margin-top: 4px;">Por Calificar</div></div>`;
-    
-    if (cardsHtml === '') summaryBox.innerHTML = `<div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 20px; text-align: center;"><div style="font-size: 2rem; margin-bottom: 5px;">🎉</div><div style="color: #166534; font-weight: bold; font-size: 1rem;">¡Todo al día!</div><div style="color: #15803d; font-size: 0.85rem;">El equipo no tiene pendientes.</div></div>`;
-    else summaryBox.innerHTML = `<div style="display: flex; flex-wrap: wrap; gap: 10px;">${cardsHtml}</div>`;
-
-    try {
-        // 🔥 NUEVO: Unimos al equipo directo con el jefe actual en un solo arreglo
-        const equipoYJefe = [...misDirectos];
-        if (managerObj) equipoYJefe.push(managerObj);
-
-        // Usamos el arreglo combinado para buscar encuestas y graficar
-        const ids = equipoYJefe.map(e => e.id);
-        
-        const { data: activeEvals } = await sb.from('evaluations').select('id, title, category, target_positions, is_obligatory').eq('active', true);
-        if (!activeEvals) throw new Error("No hay evaluaciones");
-        
-        const { data: responses } = await sb.from('evaluation_responses')
-            .select('evaluation_id, employee_id, grades_json, review_status, submitted_at')
-            .in('employee_id', ids)
-            .in('review_status', ['Revisado', 'Certificada']) // 🔥 CORRECCIÓN CLAVE
-            .order('submitted_at', { ascending: false });
-
-                const uniqueCategories = [...new Set(activeEvals.map(ev => ev.category || 'General'))].sort();
-                const filterContainer = document.createElement('div');
-                filterContainer.id = 'team-category-filter-container';
-                
-                filterContainer.style.cssText = "margin: 0 0 20px 0; width: 100%; display: flex; justify-content: center; text-align: center;";
-                
-                const renderizarSelector = (categoriaActiva) => {
-                    const categorias = ['TODAS', ...uniqueCategories];
-                    const optionsHtml = categorias.map(cat => {
-                        const texto = cat === 'TODAS' ? 'General' : cat;
-                        return `<option value="${cat}" ${cat === categoriaActiva ? 'selected' : ''}>${texto}</option>`;
-                    }).join('');
-                    
-                    filterContainer.innerHTML = `
-                        <div style="position:relative; display:inline-flex; justify-content:center; align-items:center; width: fit-content;">
-                            <select id="select-team-category" style="font-size:1.2rem; font-weight:700; color:#334155; border:none; background:transparent; outline:none; cursor:pointer; appearance:none; padding-right:20px; margin:0; font-family:inherit; text-align:center; text-align-last:center;">
-                                ${optionsHtml}
-                            </select>
-                            <span style="position:absolute; right:0; color:#334155; font-size:0.75rem; pointer-events:none;">▼</span>
-                        </div>
-                    `;
-                    
-                    const selectEl = filterContainer.querySelector('#select-team-category');
-                    selectEl.addEventListener('change', (e) => {
-                        const nuevaCat = e.target.value;
-                        renderizarSelector(nuevaCat);
-                        // 🔥 Pasamos equipoYJefe en lugar de misDirectos
-                        renderizarGraficosEquipo(equipoYJefe, activeEvals, responses, nuevaCat);
-                    });
-                };
-                
-                containerScroll.insertAdjacentElement('beforebegin', filterContainer);
-                
-                renderizarSelector('TODAS');
-                // 🔥 Pasamos equipoYJefe en lugar de misDirectos
-                renderizarGraficosEquipo(equipoYJefe, activeEvals, responses, 'TODAS');
-                noData.style.display = 'none';
-
-    } catch (e) {
-        console.error(e);
-        noData.style.display = 'block';
-        noData.innerText = "No hay suficientes datos para el promedio.";
-    }
-};
-
-window.renderizarGraficosEquipo = (misDirectos, activeEvals, responses, categoriaFiltro) => {
-    const containerScroll = document.getElementById('radar-scroll-container');
-    const oldRanking = document.getElementById('team-ranking-container');
-    
-    if(oldRanking) oldRanking.remove();
-    if (window.radarChartInstances) { window.radarChartInstances.forEach(c => c.destroy()); window.radarChartInstances = []; }
-    containerScroll.innerHTML = '';
-    
-    let evalsFiltradas = activeEvals;
-    if (categoriaFiltro !== 'TODAS') {
-        evalsFiltradas = activeEvals.filter(ev => (ev.category || 'General') === categoriaFiltro);
-    }
-    const idsEvalsFiltradas = evalsFiltradas.map(e => e.id);
-
-    const verificaTarget = (evalObj, puestoEmp) => {
-        let targets = ['ALL'];
-        if (evalObj.target_positions) {
-            try { targets = typeof evalObj.target_positions === 'string' ? JSON.parse(evalObj.target_positions) : evalObj.target_positions; } catch(err){}
-        }
-        if (!Array.isArray(targets)) targets = ['ALL'];
-        const p = (puestoEmp || '').trim().toUpperCase();
-        return targets.length === 0 || targets.includes('ALL') || targets.map(t => String(t).toUpperCase().trim()).includes(p);
-    };
-
-    const uniqueResponsesMap = {};
-    if (responses) {
-        responses.forEach(r => {
-            if (!idsEvalsFiltradas.includes(r.evaluation_id)) return;
-            const key = `${r.employee_id}_${r.evaluation_id}`;
-            const existing = uniqueResponsesMap[key];
-            if (!existing || new Date(r.submitted_at) > new Date(existing.submitted_at)) {
-                uniqueResponsesMap[key] = r;
-            }
-        });
-    }
-    const uniqueResponses = Object.values(uniqueResponsesMap);
-
-    const promediosRadar = {};
-    evalsFiltradas.forEach(ev => promediosRadar[ev.title] = { suma: 0, count: 0 });
-    
-    const puntajesEmpleados = {};
-    misDirectos.forEach(e => puntajesEmpleados[e.id] = {
-        name: e.name,
-        puesto: (e.puesto || '').trim().toUpperCase(),
-        totalScore: 0,
-        countSurveys: 0,
-        respuestasSet: new Set(),
-        certificadasSet: new Set()
-    });
-    
-    uniqueResponses.forEach(r => {
-        const evalObj = evalsFiltradas.find(e => e.id === r.evaluation_id);
-        if (!evalObj) return;
-
-        const empData = puntajesEmpleados[r.employee_id];
-        if (!empData) return;
-
-        if (!verificaTarget(evalObj, empData.puesto)) return;
-
-        let totalPts = 0, maxPts = 0;
-        Object.values(r.grades_json || {}).forEach(g => {
-            maxPts++;
-            if (g.type === 'list_match' && Array.isArray(g.items)) {
-    const aciertos = g.items.filter(i => i.status === 'correct').length;
-    const tot = g.totalExpected || Math.max(g.items.length, 1); // 🔥 Calcula en base al total esperado
-    totalPts += (aciertos / tot);
-} else if (g.type === 'numeric_score') {
-                    totalPts += (g.percentage / 100);
-            } else {
-                if ((typeof g === 'object' ? g.status : g) === 'correct') totalPts++;
-            }
-        });
-        const score = maxPts > 0 ? (totalPts / maxPts) * 100 : 0;
-        
-        if (promediosRadar[evalObj.title]) {
-            promediosRadar[evalObj.title].suma += score;
-            promediosRadar[evalObj.title].count += 1;
-        }
-        empData.totalScore += score;
-        empData.countSurveys += 1;
-        empData.respuestasSet.add(r.evaluation_id);
-        
-        if (r.review_status === 'Certificada') {
-            empData.certificadasSet.add(r.evaluation_id);
-        }
-    });
-
-    const listaRanking = Object.values(puntajesEmpleados).map(e => {
-        let expectedCount = 0;
-        let obligatoryAssigned = 0;
-        let obligatoryCompleted = 0;
-
-        evalsFiltradas.forEach(ev => {
-            const isTarget = verificaTarget(ev, e.puesto);
-
-            if (isTarget) {
-                const isObligatory = ev.is_obligatory !== false;
-                const hasAnswered = e.respuestasSet.has(ev.id);
-
-                if (isObligatory) {
-                    expectedCount++;
-                    obligatoryAssigned++;
-                    if (hasAnswered) obligatoryCompleted++;
-                } else if (hasAnswered) {
-                    expectedCount++;
-                }
-            }
-        });
-
-        const incompleto = obligatoryCompleted < obligatoryAssigned;
-        const divisor = expectedCount > 0 ? expectedCount : 1;
-        
-        const promedioReal = Math.round(e.totalScore / divisor);
-        const isFullyCertified = (expectedCount > 0 && e.certificadasSet.size === expectedCount);
-        
-        return {
-            name: e.name,
-            promedio: promedioReal,
-            participacion: e.countSurveys,
-            totalEsperado: expectedCount,
-            incompleto: incompleto,
-            isFullyCertified: isFullyCertified
-        };
-    }).sort((a, b) => {
-        return b.promedio - a.promedio;
-    });
-    
-    let rankingHtml = `
-            <div id="team-ranking-container" style="margin-bottom:20px;">
-                <h4 style="margin:0 0 10px 0; color:#334155; font-size:0.9rem; border-bottom:1px solid #e2e8f0; padding-bottom:5px;">
-                    👥 Tabla de Posiciones
-                </h4>
-                <div style="display:flex; flex-direction:column; gap:8px;">
-        `;
-    
-    listaRanking.forEach((item, idx) => {
-        let medal = `<span style="width:20px; display:inline-block; text-align:center; color:#94a3b8; font-weight:bold;">${idx + 1}</span>`;
-        if (idx === 0) medal = '🥇'; if (idx === 1) medal = '🥈'; if (idx === 2) medal = '🥉';
-        
-        let colorScore = '#10b981';
-        if (item.promedio < 90) colorScore = '#f59e0b';
-        if (item.promedio < 70) colorScore = '#ef4444';
-        
-        let scoreDisplay = `<div style="font-weight:bold; color:${colorScore};">${item.promedio}%</div>`;
-        let warningHtml = '';
-
-        if (item.incompleto) {
-            warningHtml = `<div style="font-size:0.65rem; color:#ef4444; font-weight:bold; margin-top:2px;">⚠️ Faltan obligatorias</div>`;
-        }
-
-        if (item.totalEsperado > 0 && item.participacion === 0) {
-            colorScore = '#ef4444';
-            scoreDisplay = `<div style="font-weight:bold; color:${colorScore};">0%</div>`;
-        } else if(item.totalEsperado === 0) {
-            colorScore = '#94a3b8';
-            scoreDisplay = `<div style="font-weight:bold; color:${colorScore};">-</div>`;
-        }
-        
-        let nameDisplay = `<div style="font-size:0.9rem; color:#1e293b; font-weight:500;">${item.name}</div>`;
-        if (item.isFullyCertified) {
-            nameDisplay = `<div style="font-size:0.9rem; color:#1d4ed8; font-weight:bold; display:flex; align-items:center; gap:4px;">${item.name} <span title="¡Todas sus encuestas evaluadas están certificadas!" style="font-size:0.85rem; background:#eff6ff; padding:2px 6px; border-radius:12px; border:1px solid #bfdbfe;">⭐ Certificado</span></div>`;
-        }
-
-        rankingHtml += `
-            <div style="display:flex; align-items:center; justify-content:space-between; background:white; padding:8px 12px; border-radius:8px; border:1px solid ${item.incompleto ? '#fee2e2' : (item.isFullyCertified ? '#bfdbfe' : '#f1f5f9')};">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <div style="font-size:1.1rem;">${medal}</div>
-                    <div>
-                        ${nameDisplay}
-                        ${warningHtml}
-                    </div>
-                </div>
-                <div style="text-align:right;">
-                    ${scoreDisplay}
-                    <div style="font-size:0.7rem; color:#64748b;">${item.participacion} / ${item.totalEsperado} eval.</div>
-                </div>
-            </div>
-        `;
-    });
-    rankingHtml += `</div></div>`;
-        
-    containerScroll.insertAdjacentHTML('afterend', rankingHtml);
-
-    const labels = Object.keys(promediosRadar);
-    if (labels.length === 0) {
-        containerScroll.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:20px;">No hay evaluaciones en esta categoría.</div>';
-        return;
-    }
-
-    const dataPoints = labels.map(k => {
-        const item = promediosRadar[k];
-        return item.count > 0 ? Math.round(item.suma / item.count) : 0;
-    });
-
-    const formattedLabels = labels.map((label, idx) => {
-        const words = label.split(' ');
-        const lines = [];
-        while(words.length > 0) lines.push(words.splice(0, 3).join(' '));
-        lines.push(`${dataPoints[idx]}%`);
-        return lines;
-    });
-
-    const chartWrapper = document.createElement('div');
-    chartWrapper.style.cssText = "min-width: 100%; flex: 1; background: white; border-radius: 12px; padding: 10px; display:flex; flex-direction:column; align-items:center;";
-    const canvasContainer = document.createElement('div');
-    canvasContainer.style.cssText = "position:relative; height:250px; width:100%;";
-    const canvasEl = document.createElement('canvas');
-    canvasContainer.appendChild(canvasEl);
-    chartWrapper.appendChild(canvasContainer);
-    containerScroll.appendChild(chartWrapper);
-
-    const newChart = new Chart(canvasEl.getContext('2d'), {
-        type: 'radar',
-        data: {
-            labels: formattedLabels,
-            datasets: [{
-                label: `Promedio ${categoriaFiltro === 'TODAS' ? 'Global' : categoriaFiltro} (%)`,
-                data: dataPoints,
-                backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                borderColor: '#22c55e',
-                pointBackgroundColor: '#166534',
-                borderWidth: 1.5,
-                pointRadius: 0,
-                pointHoverRadius: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                r: {
-                    angleLines: { display: false },
-                    grid: { color: '#f1f5f9' },
-                    pointLabels: {
-                        font: { size: 9, weight: 'bold' },
-                        color: '#334155',
-                        display: true
-                    },
-                    suggestedMin: 0,
-                    suggestedMax: 100,
-                    ticks: { display: false }
-                }
-            },
-            plugins: { legend: { display: false }, tooltip: { enabled: false } }
-        },
-        plugins: [{
-            id: 'centerTextPlugin',
-            afterDatasetsDraw(chart) {
-                const { ctx, width, height } = chart;
-                const data = chart.data.datasets[0].data;
-                const sum = data.reduce((a, b) => a + b, 0);
-                const avg = data.length > 0 ? Math.round(sum / data.length) : 0;
-                
-                ctx.save();
-                ctx.font = "bolder 1.5rem -apple-system, BlinkMacSystemFont, sans-serif";
-                ctx.fillStyle = "#166534";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.lineWidth = 4;
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-                ctx.strokeText(avg + "%", width / 2, height / 2);
-                ctx.fillText(avg + "%", width / 2, height / 2);
-                ctx.restore();
-            }
-        }]
-    });
-    window.radarChartInstances.push(newChart);
+    // Las cuentas de cada quien suelen estar ya calculadas —son los globos de
+    // las caras del inicio—; sólo se piden las que falten.
+    await window.calcularPendientesBatch(activos.map(e => e.id));
+    if (window.currentStatsEmpId !== 'EQUIPO') return;
+    const lista = document.getElementById('equipo-pendientes');
+    if (lista) lista.innerHTML = window.listaDePendientesDePersona(window.pendientesDelEquipo(activos));
+    window.pintarMiembrosDelEquipo();
 };
 
 window.abrirModalReclamo = () => {
@@ -5495,17 +5198,6 @@ window.cambiarFotoPerfil = async (input, empId) => {
         window.renderizarVistaRapidaEquipo(true);
         // La ficha de la hoja de una persona, si es la suya la que está abierta.
         if (window.repintarFotoDePersona) window.repintarFotoDePersona(empId);
-        const avatarWrapper = document.getElementById('modal-avatar-wrapper');
-        if(avatarWrapper) {
-            const clickAction = `onclick="if(event.target.tagName !== 'INPUT') document.getElementById('inp-avatar-upload').click()"`;
-            avatarWrapper.innerHTML = `
-                <div class="avatar-circle-large" ${clickAction} title="Cambiar foto">
-                    <img src="${publicUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">
-                    <div class="avatar-edit-overlay">📷</div>
-                    <input type="file" id="inp-avatar-upload" style="display:none;" accept="image/*" onchange="window.cambiarFotoPerfil(this, '${empId}')">
-                </div>
-            `;
-        }
         const userLog = JSON.parse(localStorage.getItem("usuarioLogueado"));
         if(userLog && String(userLog.id) === String(empId)) {
              const headerIconDiv = document.getElementById('header-user-icon');
