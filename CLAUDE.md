@@ -8527,13 +8527,25 @@ Las reglas para usarlo:
   el margen y el desenfoque y le pone el teclado como relleno de abajo; el
   interior es `.asistente-pantalla` y **no** `.hoja-contenido`, así que no lleva
   tirador ni esquinas ni el gesto de deslizar para cerrar: se cierra con la
-  cruz. El encabezado se aparta del reloj con `env(safe-area-inset-top)`, y
-  mientras está abierto `<html>` lleva `asistente-abierto`, que pinta de blanco
-  la franja de la barra de estado en lugar del gris de `modal-abierto` —con el
-  gris quedaba una costura contra el encabezado—. La ponen y la quitan
-  `abrirAsistente` y `cerrarAsistente`, que es por donde pasa también
-  `pintarBotonAdmin`. En pantalla ancha la conversación y el redactor se quedan
-  en una columna centrada de 760px.
+  flecha. En pantalla ancha la conversación y el redactor se quedan en una
+  columna centrada de 760px.
+
+  **El encabezado copia el de la aplicación de Claude**: botones redondos
+  blancos que flotan (`.asistente-flotante`) —la flecha de cerrar a la
+  izquierda, el título y el subtítulo detrás de ella, y a la derecha el círculo
+  que gira mientras trabaja (`#asistente-actividad`) y el «…»—, sin línea de
+  separación: la conversación pasa por debajo y la desvanece un degradado.
+  Nueva conversación, copiarla y la clave de la API viven en el menú del «…»
+  (`alternarMenuAsistente`, `opcionesDelMenuAsistente`), una tarjeta dentro de
+  la misma pantalla que se arma al abrirla, así cada opción sale apagada cuando
+  no vale; tocar fuera la cierra.
+
+  **El fondo es el gris del panel (#f0f2f5) y no blanco**, y es a propósito: en
+  un iPhone real la franja de la barra de estado de la app instalada se quedó en
+  ese gris aunque se pintara `<html>` de blanco al abrir —la primera versión lo
+  hizo con una clase `asistente-abierto` y la captura salió con la costura
+  igual—. Con el mismo gris debajo no hay costura que depender de que iOS
+  repinte esa franja.
 
   ```js
   window.abrirAsistente()  window.cerrarAsistente()
@@ -8576,25 +8588,61 @@ Las reglas para usarlo:
     comparten un mismo ámbito, y uno repetido revienta el archivo entero al
     cargar (pasó con `fechaCorta`). Los de aquí llevan nombres largos a
     propósito.
-  - **Las herramientas sólo leen**: todas acaban en un `.select()` con el
-    cliente de la aplicación, así que pasan por RLS y no pueden escribir aunque
-    el modelo lo pidiera. `consultar_tabla` admite sólo las tablas de
-    `TABLAS_DEL_ASISTENTE`, nunca `signature_data`, y recorta lo que devuelve a
-    `MAX_TEXTO_HERRAMIENTA`.
+  - **Lee, crea, modifica y borra, y nada se escribe sin el «Aplicar» del
+    administrador.** Las de leer acaban en un `.select()`; `consultar_tabla`
+    admite sólo las tablas de `TABLAS_DEL_ASISTENTE`, nunca `signature_data`, y
+    recorta lo que devuelve a `MAX_TEXTO_HERRAMIENTA`. Las tres que escriben
+    —`crear_registros`, `modificar_registros` y `borrar_registros`— no escriben
+    al llamarlas: dibujan en la conversación una tarjeta con el cambio exacto
+    (tabla, filtros, las filas que toca contadas antes y los valores nuevos) y
+    esperan a que se pulse «Aplicar» o «Cancelar»
+    (`turno.contextoDeEscritura()`); sin esa tarjeta no escriben nunca.
+    Detener la respuesta cancela la que esté esperando.
+
+    ```js
+    window.ESCRITURA_DEL_ASISTENTE   // { tabla: 'cmb' }: qué se puede crear, modificar y borrar
+    window.MAX_FILAS_ESCRITURA       // 50 por llamada
+    window.HERRAMIENTAS_QUE_ESCRIBEN
+    ```
+
+    Siete reglas que lo sostienen:
+
+    - **Sin filtro no hay update ni delete**, que alcanzaría la tabla entera,
+      y por encima de 50 filas se pide acotar.
+    - **Se escribe contra los ids que se enseñaron** (`in('id', …)`), no
+      contra los filtros: si entre medias entró otra fila que también los
+      cumple, no se toca. Las tablas sin `id` vuelven a los filtros.
+    - **Cuenta las filas del `.select()`** y la tarjeta dice lo que de verdad
+      quedó —«Sólo cambiaron 1 de 2»—: una política de RLS que lo rechace no
+      da error.
+    - **Escribe con el cliente de la aplicación**, así que no puede más que
+      ella.
+    - **No se fabrica constancia**: las firmas de enterado y las actas de
+      certificación no están en la lista, y en `evaluation_responses` no se
+      crea nada (sí se modifica, para el estado de revisión, y se borra).
+    - **Una persona se elimina por `eliminarEmpleadoConHistorial`**, de una en
+      una, que hace el barrido de su historial y vuelve a preguntar con el
+      detalle; un delete a secas dejaría su historial sin dueño. Al borrar una
+      encuesta la tarjeta dice cuántas respuestas tiene.
+    - **Las de leer van a la vez y las que escriben, de una en una y detrás**,
+      cada una con su tarjeta. Después de escribir se tiran las cachés
+      (`despuesDeEscribir`): el panel, la plantilla y la tarjeta de encuestas.
+
+    Las instrucciones del modelo le piden escribir sólo cuando se le pida,
+    consultar antes los ids y las columnas, preferir dar de baja y apagar antes
+    que borrar, y decir lo que devolvió la herramienta y no lo que esperaba.
   - **Las cifras salen de las funciones de la tarjeta del panel**
     (`resumenDeEncuestaAdmin`, `padronDeLaEncuesta`, `preguntasEnPeriodo`,
     `respuestasDelPeriodoDeTodos`), con las mismas columnas y cachés
     (`prepararDatosDelAsistente`). Una herramienta que calcule por su cuenta
     acabaría dando otro número del que se lee en pantalla.
-  - **La conversación se copia desde el encabezado** (el botón de las dos
-    hojas, `window.copiarConversacionAsistente`): sale del historial y no de lo
+  - **La conversación se copia desde el menú del «…»**
+    (`window.copiarConversacionAsistente`): sale del historial y no de lo
     dibujado —«Tú:» y «Asistente:» con el Markdown tal cual, y las consultas
     que hizo como renglones con «·»—, así que una pregunta que falló no se
-    copia. Sólo se ve con una conversación a la vista y se apaga mientras se
-    escribe la respuesta (`pintarEstadoAsistente`). Sin `navigator.clipboard`
-    —contexto no seguro o Safari viejo— copia con un textarea escondido y
-    `execCommand`; el aviso va al subtítulo y el icono pasa a palomita un
-    momento, nunca texto sobre el botón.
+    copia. La opción sale apagada sin conversación o mientras se escribe la
+    respuesta. Sin `navigator.clipboard` —contexto no seguro o Safari viejo—
+    copia con un textarea escondido y `execCommand`; el aviso va al subtítulo.
   - **El historial sólo crece por el final**: la respuesta se guarda con sus
     bloques de pensamiento tal cual. Si algo falla a media pregunta se vuelve al
     historial de antes de ella, que un `tool_use` sin su resultado rompería la

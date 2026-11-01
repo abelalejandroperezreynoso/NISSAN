@@ -7299,22 +7299,29 @@ html.fondo-anclado body {
    interior no es `.hoja-contenido`, así que no hereda tirador, esquinas ni
    el gesto de deslizar para cerrar. El teclado se aparta con el relleno de
    abajo de la capa, que mide `--alto-teclado`, y el redactor queda encima. */
+/* El fondo es el gris del panel, #f0f2f5, y no blanco: es el color con el que
+   `html.modal-abierto` pinta la franja de la barra de estado de la app
+   instalada, y en un iPhone real esa franja no cambió al blanco que se le
+   pidió —se veía gris sobre un encabezado blanco—. Con el mismo gris debajo
+   no hay costura, y los botones blancos flotando encima son además el aspecto
+   de la aplicación de Claude. */
 .hoja-overlay.asistente-overlay {
     padding: 0 0 var(--alto-teclado, 0px);
     align-items: stretch;
-    background: white;
+    background: #f0f2f5;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
 }
 
 .asistente-pantalla {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
     height: 100%;
     min-height: 0;
     overflow: hidden;
-    background: white;
+    background: #f0f2f5;
     animation: asistente-entrar 0.22s ease-out;
 }
 @keyframes asistente-entrar {
@@ -7322,20 +7329,128 @@ html.fondo-anclado body {
     to { opacity: 1; transform: none; }
 }
 
-/* El encabezado se aparta del reloj; la franja de la barra de estado de la
-   app instalada la pinta el fondo de <html>, que aquí tiene que ser blanco
-   como el encabezado o se ve la costura. */
-.asistente-pantalla .hoja-encabezado-lista {
-    padding-top: calc(12px + env(safe-area-inset-top));
+/* El encabezado de la app de Claude: botones redondos blancos que flotan, el
+   título a la izquierda tras la flecha, y la conversación pasando por debajo
+   con un degradado que la desvanece en vez de una línea de separación. */
+.asistente-encabezado {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 22px;
+    background: linear-gradient(to bottom, #f0f2f5 0%, #f0f2f5 62%, rgba(240, 242, 245, 0));
+    pointer-events: none;   /* el degradado no se come los toques de la lista */
 }
-html.modal-abierto.asistente-abierto { background-color: white; }
+.asistente-encabezado > * { pointer-events: auto; }
 
-/* En una pantalla ancha la conversación no se estira de lado a lado: se
+.asistente-flotante {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: white;
+    color: #1c1c1e;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.09), 0 0 0 0.5px rgba(15, 23, 42, 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.asistente-flotante svg { width: 22px; height: 22px; }
+.asistente-flotante:active { transform: scale(0.94); }
+.asistente-flotante[hidden] { display: none; }
+
+.asistente-encabezado-texto { flex: 1; min-width: 0; pointer-events: none; }
+.asistente-encabezado-titulo {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1c1c1e;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.asistente-encabezado-subtitulo {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* El círculo de «trabajando»: un aro gris con un tramo azul que gira. */
+.asistente-actividad { cursor: default; }
+.asistente-actividad:active { transform: none; }
+.asistente-giro {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2.4px solid #d1d5db;
+    border-top-color: #2563eb;
+    animation: asistente-girar 0.9s linear infinite;
+}
+@keyframes asistente-girar { to { transform: rotate(360deg); } }
+
+/* El menú del «…»: una tarjeta blanca debajo del botón, alineada a la derecha,
+   con la opción a la izquierda y su icono a la derecha, como los menús de iOS. */
+.asistente-menu {
+    position: absolute;
+    top: calc(60px + env(safe-area-inset-top));
+    right: 14px;
+    min-width: 230px;
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 10px 34px rgba(15, 23, 42, 0.18), 0 0 0 0.5px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+    animation: asistente-menu-entrar 0.16s ease-out;
+    transform-origin: top right;
+}
+.asistente-menu[hidden] { display: none; }
+@keyframes asistente-menu-entrar {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: none; }
+}
+.asistente-menu-opcion {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 13px 16px;
+    border: none;
+    background: white;
+    color: #1c1c1e;
+    font-size: 1rem;
+    text-align: left;
+    cursor: pointer;
+}
+.asistente-menu-opcion + .asistente-menu-opcion { border-top: 0.5px solid rgba(60, 60, 67, 0.18); }
+.asistente-menu-opcion svg { width: 19px; height: 19px; flex-shrink: 0; }
+.asistente-menu-opcion:active { background: #f2f2f7; }
+.asistente-menu-opcion:disabled { color: #b0b4bb; cursor: default; background: white; }
+
+/* La conversación empieza debajo del encabezado flotante y pasa por debajo de
+   él al desplazarse. En una pantalla ancha no se estira de lado a lado: se
    queda en una columna de lectura centrada, como el redactor. */
 .asistente-pantalla .asistente-mensajes {
+    padding-top: calc(76px + env(safe-area-inset-top));
     padding-left: max(16px, calc((100% - 760px) / 2));
     padding-right: max(16px, calc((100% - 760px) / 2));
 }
+.asistente-pantalla .asistente-usuario { background: #e2e5ea; }
+.asistente-pantalla .asistente-texto code { background: #e5e7eb; }
+.asistente-pantalla .asistente-texto pre { background: white; }
+.asistente-pantalla .asistente-sugerencia { border-color: transparent; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06); }
+.asistente-pantalla .asistente-clave { background: white; }
+.asistente-pantalla .asistente-tabla th, .asistente-pantalla .asistente-tabla td { border-bottom-color: #d8dce3; }
 .asistente-pantalla .asistente-redactor {
     width: calc(100% - 24px);
     max-width: 736px;
@@ -7444,6 +7559,61 @@ html.modal-abierto.asistente-abierto { background-color: white; }
 .asistente-consulta.esta-consultando::before { background: #d97757; animation: asistente-latido 1s ease-in-out infinite; }
 .asistente-consulta.fallo { color: #b91c1c; }
 .asistente-consulta.fallo::before { background: #ef4444; }
+
+/* La tarjeta de un cambio que propone el asistente: qué se va a escribir,
+   dónde y en qué filas, y los dos botones. Nada se escribe sin el «Aplicar». */
+.asistente-cambio {
+    background: white;
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
+    border-left: 4px solid #2563eb;
+    font-size: 0.9rem;
+    color: #1c1c1e;
+}
+.asistente-cambio.es-borrado { border-left-color: #dc2626; }
+.asistente-cambio.esta-aplicado { border-left-color: #16a34a; }
+.asistente-cambio.esta-cancelado, .asistente-cambio.fallo { border-left-color: #94a3b8; }
+.asistente-cambio-titulo { font-weight: 700; font-size: 0.98rem; }
+.asistente-cambio-motivo { color: #4b5563; margin-top: 3px; line-height: 1.4; }
+.asistente-cambio-rotulo {
+    margin-top: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #8a8f98;
+}
+.asistente-cambio-mono {
+    margin-top: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    color: #334155;
+}
+.asistente-cambio-col { color: #2563eb; font-weight: 600; }
+.asistente-cambio-lista { margin: 3px 0 0; padding-left: 18px; line-height: 1.45; overflow-wrap: anywhere; }
+.asistente-cambio-lista li { margin: 2px 0; }
+.asistente-cambio-resto { color: #8a8f98; list-style: none; margin-left: -18px; }
+.asistente-cambio-nota { margin-top: 10px; color: #b45309; font-size: 0.84rem; line-height: 1.4; }
+.asistente-cambio.es-borrado .asistente-cambio-nota { color: #b91c1c; }
+.asistente-cambio-botones { display: flex; gap: 8px; margin-top: 12px; }
+.asistente-cambio-botones button {
+    flex: 1;
+    border-radius: 12px;
+    padding: 11px;
+    font-size: 0.98rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.asistente-cambio-cancelar { background: #f1f2f4; border: none; color: #1c1c1e; }
+.asistente-cambio-aplicar { background: #2563eb; border: none; color: white; }
+.asistente-cambio.es-borrado .asistente-cambio-aplicar { background: #dc2626; }
+.asistente-cambio-estado { margin-top: 10px; font-weight: 600; color: #4b5563; }
+.asistente-cambio-estado[hidden] { display: none; }
+.asistente-cambio.esta-aplicado .asistente-cambio-estado { color: #15803d; }
+.asistente-cambio.fallo .asistente-cambio-estado { color: #b91c1c; }
 
 .asistente-nota { font-size: 0.85rem; color: #64748b; }
 .asistente-nota.es-error { color: #b91c1c; }

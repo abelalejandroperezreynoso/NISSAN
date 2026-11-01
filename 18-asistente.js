@@ -33,7 +33,8 @@ window.asistente = {
     ocupado: false,
     flujo: null,        // el stream en curso, para poder detenerlo
     detenido: false,
-    pantalla: 'chat'    // 'chat' o 'clave', la del botón de la llave
+    pantalla: 'chat',   // 'chat' o 'clave', la del botón de la llave
+    confirmaciones: []  // las tarjetas que esperan «Aplicar» o «Cancelar»
 };
 
 // --- LA CLAVE ---
@@ -151,7 +152,14 @@ window.sistemaDelAsistente = () => {
     const fecha = hoy.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     return `Eres el asistente del panel de mantenimiento y seguridad de una planta de Nissan (NMEX). Te habla el administrador de la aplicación, en español. Hoy es ${fecha} (${window.diaLocal ? window.diaLocal(hoy) : hoy.toISOString().slice(0, 10)}).
 
-Puedes leer los datos de la aplicación con las herramientas; no puedes cambiar nada. Antes de dar una cifra, consúltala: no la inventes ni la deduzcas de memoria. Si una pregunta es ambigua (varias encuestas con nombre parecido), busca primero y di cuál elegiste, o pregunta.
+Puedes leer los datos de la aplicación y también crear, modificar y borrar registros con crear_registros, modificar_registros y borrar_registros. Antes de dar una cifra, consúltala: no la inventes ni la deduzcas de memoria. Si una pregunta es ambigua (varias encuestas con nombre parecido), busca primero y di cuál elegiste, o pregunta.
+
+Para cambiar datos:
+- Escribe sólo cuando el administrador lo pida. Si no queda claro qué quiere cambiar, pregunta antes.
+- Consulta primero los registros y sus columnas reales, y filtra por id siempre que puedas. No inventes ids ni nombres de columna.
+- Cada cambio se le enseña al administrador en una tarjeta y no se escribe hasta que pulsa «Aplicar»: no le pidas que confirme por escrito, la tarjeta ya lo hace. Si lo cancela, no insistas ni lo intentes de otra manera.
+- Prefiere lo que tiene vuelta atrás: dar de baja a una persona (is_active = false) antes que borrarla, y apagar una encuesta (active = false) antes que borrarla con todo lo contestado.
+- Después de escribir, di lo que de verdad devolvió la herramienta (cuántas filas cambiaron), no lo que se esperaba. Si cambiaron menos de las esperadas, dilo.
 
 Cómo funciona la aplicación:
 - Las encuestas (tabla evaluations) se agrupan por clasificación (category) y tienen una frecuencia: once (única vez), weekly, monthly, etc. Cada una se mide en su periodo vigente: la mensual en el mes en curso, la semanal en la semana.
@@ -260,8 +268,64 @@ window.HERRAMIENTAS_ASISTENTE = [
             required: ['tabla'],
             additionalProperties: false
         }
+    },
+    {
+        name: 'crear_registros',
+        description: 'Propone dar de alta registros nuevos en una tabla. No se escribe nada hasta que el administrador lo confirma en pantalla; la herramienta devuelve si lo aprobó y qué quedó guardado. Hasta 50 filas por llamada. Consulta antes las columnas de la tabla para no inventarlas.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                tabla: { type: 'string' },
+                filas: { type: 'array', items: { type: 'object' }, description: 'Cada fila, como objeto columna → valor.' },
+                motivo: { type: 'string', description: 'En una frase, qué se va a hacer y por qué: se le enseña al administrador.' }
+            },
+            required: ['tabla', 'filas', 'motivo'],
+            additionalProperties: false
+        }
+    },
+    {
+        name: 'modificar_registros',
+        description: 'Propone cambiar columnas de los registros que cumplan los filtros (al menos uno; lo normal es por id). Se cuentan antes las filas afectadas y no se escribe nada hasta que el administrador lo confirma en pantalla. Hasta 50 filas por llamada.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                tabla: { type: 'string' },
+                filtros: { type: 'array', items: { type: 'object' }, description: 'Los mismos de consultar_tabla: [{columna, operador, valor}].' },
+                cambios: { type: 'object', description: 'Columna → valor nuevo.' },
+                motivo: { type: 'string', description: 'En una frase, qué se cambia y por qué.' }
+            },
+            required: ['tabla', 'filtros', 'cambios', 'motivo'],
+            additionalProperties: false
+        }
+    },
+    {
+        name: 'borrar_registros',
+        description: 'Propone borrar de forma permanente los registros que cumplan los filtros (al menos uno; lo normal es por id). Se cuentan antes y no se borra nada hasta que el administrador lo confirma en pantalla. Hasta 50 filas. Para empleados, de una persona en una, y se borra también su historial: si sólo se quiere que deje de aparecer, mejor modificar is_active a false. Para encuestas, apagarla (active=false) conserva lo contestado.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                tabla: { type: 'string' },
+                filtros: { type: 'array', items: { type: 'object' } },
+                motivo: { type: 'string', description: 'En una frase, qué se borra y por qué.' }
+            },
+            required: ['tabla', 'filtros', 'motivo'],
+            additionalProperties: false
+        }
     }
 ].map(h => ({ ...h, eager_input_streaming: true }));
+
+// Qué se puede escribir y cómo: c (crear), m (modificar), b (borrar). Quedan
+// fuera las firmas de enterado y las actas de certificación, que son la
+// constancia de lo que hizo una persona y no se fabrican; y nadie crea
+// respuestas de encuesta en nombre de otro.
+window.ESCRITURA_DEL_ASISTENTE = {
+    evaluations: 'cmb', evaluation_questions: 'cmb', evaluation_responses: 'mb', employees: 'cmb',
+    areas: 'cmb', plantas: 'cmb', lineas: 'cmb', equipos: 'cmb', incidents: 'cmb', hallazgos: 'cmb',
+    objectives: 'cmb', refacciones: 'cmb', scheduled_evaluations: 'cmb', vacaciones: 'cmb',
+    cursos_previos: 'cmb', evaluaciones_aplica: 'cmb', clasificaciones_revisores: 'cmb', clasificaciones_objetivo: 'cmb'
+};
+window.MAX_FILAS_ESCRITURA = 50;
+window.HERRAMIENTAS_QUE_ESCRIBEN = ['crear_registros', 'modificar_registros', 'borrar_registros'];
 
 window.TABLAS_DEL_ASISTENTE = ['evaluations', 'evaluation_questions', 'evaluation_responses', 'employees',
     'areas', 'plantas', 'lineas', 'equipos', 'incidents', 'incident_signatures', 'hallazgos', 'objectives',
@@ -281,6 +345,9 @@ window.rotuloDeHerramienta = (nombre, entrada) => {
         case 'buscar_empleados': return 'Buscó en la plantilla' + (e.texto ? ` «${e.texto}»` : '');
         case 'historial_de_empleado': return 'Revisó el historial de ' + (window.employeeNameMap?.[e.empleado_id] || e.empleado_id);
         case 'consultar_tabla': return `Consultó ${e.tabla}`;
+        case 'crear_registros': return `Propuso crear ${Array.isArray(e.filas) ? e.filas.length : ''} en ${e.tabla}`.replace('  ', ' ');
+        case 'modificar_registros': return `Propuso modificar ${e.tabla}`;
+        case 'borrar_registros': return `Propuso borrar en ${e.tabla}`;
         default: return nombre;
     }
 };
@@ -497,22 +564,219 @@ window.EJECUTAR_HERRAMIENTA = {
         let consulta = e.contar
             ? sb.from(e.tabla).select('*', { count: 'exact', head: true })
             : sb.from(e.tabla).select(columnas).limit(limite);
-        for (const f of (e.filtros || [])) {
-            const op = f.operador;
-            if (!['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'in', 'is'].includes(op)) return { error: `Operador no admitido: ${op}` };
-            if (op === 'in') consulta = consulta.in(f.columna, Array.isArray(f.valor) ? f.valor : [f.valor]);
-            else consulta = consulta[op](f.columna, f.valor);
-        }
+        const filtrada = filtrarAsistente(consulta, e.filtros || []);
+        if (filtrada.error) return { error: filtrada.error };
+        consulta = filtrada.consulta;
         if (e.orden && !e.contar) consulta = consulta.order(e.orden, { ascending: !!e.ascendente });
         const { data, error, count } = await consulta;
         if (error) return { error: error.message };
         return e.contar ? { filas: count } : { filas: (data || []).length, datos: data };
+    },
+
+    // --- LAS QUE ESCRIBEN ---
+    // Las tres siguen el mismo camino: comprobar, enseñar el cambio exacto en
+    // una tarjeta de la conversación, esperar el «Aplicar» del administrador y
+    // sólo entonces escribir, contando las filas del `.select()` —una política
+    // de RLS que lo rechace no da error, sólo afecta a cero filas—. Escriben
+    // con el cliente de la aplicación, así que no pueden más que ella.
+
+    async crear_registros(e, ctx) {
+        const permiso = permisoDeEscritura(e.tabla, 'c');
+        if (permiso) return { error: permiso };
+        const filas = Array.isArray(e.filas) ? e.filas.filter(f => f && typeof f === 'object' && !Array.isArray(f)) : [];
+        if (!filas.length) return { error: 'No hay ninguna fila que crear.' };
+        if (filas.length > window.MAX_FILAS_ESCRITURA) return { error: `Son ${filas.length} filas; el tope es ${window.MAX_FILAS_ESCRITURA} por llamada.` };
+
+        const aprobado = await ctx.confirmar({
+            accion: 'crear', tabla: e.tabla, motivo: e.motivo,
+            titulo: `Crear ${filas.length} ${filas.length === 1 ? 'registro' : 'registros'} en ${e.tabla}`,
+            filas: filas.slice(0, 5).map(f => cambiosEnHtml(f)), resto: filas.length - 5
+        });
+        if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló el cambio. No se escribió nada.' };
+
+        const { data, error } = await sb.from(e.tabla).insert(filas).select();
+        if (error) { ctx.resultado(false, error.message); return { error: 'La base lo rechazó: ' + error.message }; }
+        const n = (data || []).length;
+        ctx.resultado(n === filas.length, n === filas.length ? `Creado${n === 1 ? '' : 's'} ${n}` : `Sólo se guardaron ${n} de ${filas.length}`);
+        despuesDeEscribir(e.tabla);
+        return { aprobado: true, creadas: n, pedidas: filas.length, filas: (data || []).slice(0, 20),
+            aviso: n < filas.length ? 'La base guardó menos filas de las pedidas: puede que una política de seguridad lo impida.' : null };
+    },
+
+    async modificar_registros(e, ctx) {
+        const permiso = permisoDeEscritura(e.tabla, 'm');
+        if (permiso) return { error: permiso };
+        const cambios = e.cambios && typeof e.cambios === 'object' && !Array.isArray(e.cambios) ? e.cambios : null;
+        if (!cambios || !Object.keys(cambios).length) return { error: 'No hay ningún cambio que aplicar.' };
+        if ('id' in cambios) return { error: 'El id de un registro no se cambia.' };
+
+        const previa = await previaDeEscritura(e.tabla, e.filtros);
+        if (previa.error) return { error: previa.error };
+
+        const aprobado = await ctx.confirmar({
+            accion: 'modificar', tabla: e.tabla, motivo: e.motivo,
+            titulo: `Modificar ${previa.total} ${previa.total === 1 ? 'registro' : 'registros'} de ${e.tabla}`,
+            filtros: previa.filtrosTexto, filas: previa.muestra, resto: previa.total - previa.muestra.length,
+            cambios: cambiosEnHtml(cambios)
+        });
+        if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló el cambio. No se escribió nada.' };
+
+        const destino = destinoDeEscritura(sb.from(e.tabla).update(cambios), previa, e.filtros);
+        if (destino.error) return { error: destino.error };
+        const { data, error } = await destino.consulta.select();
+        if (error) { ctx.resultado(false, error.message); return { error: 'La base lo rechazó: ' + error.message }; }
+        const n = (data || []).length;
+        ctx.resultado(n === previa.total, n === previa.total ? `Modificado${n === 1 ? '' : 's'} ${n}` : `Sólo cambiaron ${n} de ${previa.total}`);
+        despuesDeEscribir(e.tabla);
+        return { aprobado: true, modificadas: n, esperadas: previa.total, filas: (data || []).slice(0, 20),
+            aviso: n < previa.total ? 'Cambiaron menos filas de las esperadas: una política de seguridad de la base puede no dejar modificar esta tabla.' : null };
+    },
+
+    async borrar_registros(e, ctx) {
+        const permiso = permisoDeEscritura(e.tabla, 'b');
+        if (permiso) return { error: permiso };
+        const previa = await previaDeEscritura(e.tabla, e.filtros);
+        if (previa.error) return { error: previa.error };
+
+        // Una persona no se borra con un delete: su historial vive en una
+        // docena de tablas que no se borran en cascada. Pasa por la misma
+        // función que la ficha, que hace el barrido y pregunta lo suyo.
+        if (e.tabla === 'employees') {
+            if (previa.total !== 1) return { error: `Los filtros dan ${previa.total} personas: se eliminan de una en una, por su id.` };
+            const emp = previa.filas[0];
+            const aprobado = await ctx.confirmar({
+                accion: 'borrar', tabla: e.tabla, motivo: e.motivo,
+                titulo: `Eliminar a ${emp.name || emp.employee_id || emp.id}`,
+                filas: previa.muestra,
+                nota: 'Se borra su ficha y todo su historial, sin vuelta atrás. Después se te preguntará otra vez con el detalle de lo que se lleva. Para que sólo deje de aparecer, mejor darlo de baja.'
+            });
+            if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se borró nada.' };
+            const seFue = await window.eliminarEmpleadoConHistorial(emp, (t) => window.pintarEstadoAsistente(true, t || 'Eliminando…'));
+            ctx.resultado(!!seFue, seFue ? 'Eliminado' : 'No se eliminó');
+            if (seFue) despuesDeEscribir('employees');
+            return seFue ? { aprobado: true, eliminado: true }
+                : { aprobado: false, resultado: 'No se eliminó: el administrador lo canceló en la segunda confirmación o la base lo rechazó.' };
+        }
+
+        // Una encuesta se lleva lo que contestó todo el mundo: se dice antes.
+        let nota = null;
+        if (e.tabla === 'evaluations') {
+            const ids = previa.filas.map(f => f.id).filter(v => v != null);
+            if (ids.length) {
+                const { count } = await sb.from('evaluation_responses').select('id', { count: 'exact', head: true }).in('evaluation_id', ids);
+                if (count) nota = `Tiene${ids.length === 1 ? '' : 'n'} ${count} respuestas, que se perderán o impedirán el borrado. Apagarla (active = false) las conserva.`;
+            }
+        }
+
+        const aprobado = await ctx.confirmar({
+            accion: 'borrar', tabla: e.tabla, motivo: e.motivo,
+            titulo: `Borrar ${previa.total} ${previa.total === 1 ? 'registro' : 'registros'} de ${e.tabla}`,
+            filtros: previa.filtrosTexto, filas: previa.muestra, resto: previa.total - previa.muestra.length,
+            nota: nota || 'Se borra de forma permanente.'
+        });
+        if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se borró nada.' };
+
+        const destino = destinoDeEscritura(sb.from(e.tabla).delete(), previa, e.filtros);
+        if (destino.error) return { error: destino.error };
+        const { data, error } = await destino.consulta.select();
+        if (error) {
+            ctx.resultado(false, error.message);
+            const ligada = error.code === '23503' ? ' Otros registros dependen de éste; apagarlo o desligarlos primero.' : '';
+            return { error: 'La base lo rechazó: ' + error.message + ligada };
+        }
+        const n = (data || []).length;
+        ctx.resultado(n === previa.total, n === previa.total ? `Borrado${n === 1 ? '' : 's'} ${n}` : `Sólo se borraron ${n} de ${previa.total}`);
+        despuesDeEscribir(e.tabla);
+        return { aprobado: true, borradas: n, esperadas: previa.total,
+            aviso: n < previa.total ? 'Se borraron menos filas de las esperadas: una política de seguridad de la base puede no dejar borrar en esta tabla.' : null };
     }
 };
 
+// --- AYUDANTES DE LA ESCRITURA ---
+
+const OPERADORES_ASISTENTE = ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'ilike', 'in', 'is'];
+
+// Los filtros de consultar_tabla, para leer y para escribir.
+function filtrarAsistente(consulta, filtros) {
+    for (const f of (filtros || [])) {
+        if (!f || typeof f.columna !== 'string' || !f.columna) return { error: 'Cada filtro necesita su columna.' };
+        if (!OPERADORES_ASISTENTE.includes(f.operador)) return { error: `Operador no admitido: ${f.operador}` };
+        if (f.operador === 'in') consulta = consulta.in(f.columna, Array.isArray(f.valor) ? f.valor : [f.valor]);
+        else consulta = consulta[f.operador](f.columna, f.valor);
+    }
+    return { consulta };
+}
+
+function permisoDeEscritura(tabla, letra) {
+    const permitido = window.ESCRITURA_DEL_ASISTENTE[tabla];
+    if (!permitido) return `En la tabla ${tabla} no se puede escribir desde el asistente.`;
+    if (!permitido.includes(letra)) {
+        const que = { c: 'crear', m: 'modificar', b: 'borrar' }[letra];
+        return `En ${tabla} no se puede ${que} desde el asistente.`;
+    }
+    return null;
+}
+
+// Cuenta y enseña lo que se va a tocar antes de tocarlo. Sin filtros no se
+// escribe nada: un update o un delete sin filtro alcanzaría la tabla entera.
+async function previaDeEscritura(tabla, filtros) {
+    if (!Array.isArray(filtros) || !filtros.length) return { error: 'Hace falta al menos un filtro (lo normal es por id): sin filtro se tocaría la tabla entera.' };
+    const tope = window.MAX_FILAS_ESCRITURA;
+    const filtrada = filtrarAsistente(sb.from(tabla).select('*', { count: 'exact' }).limit(tope + 1), filtros);
+    if (filtrada.error) return { error: filtrada.error };
+    const { data, error, count } = await filtrada.consulta;
+    if (error) return { error: error.message };
+    const total = count ?? (data || []).length;
+    if (!total) return { error: 'Ningún registro cumple esos filtros: no hay nada que cambiar.' };
+    if (total > tope) return { error: `Los filtros alcanzan ${total} registros; el tope es ${tope} por llamada. Acota más.` };
+    const filas = data || [];
+    return {
+        total, filas,
+        // Si todas tienen id, la escritura va contra esos ids exactos: lo que se
+        // enseñó es lo que se toca, aunque entre medias entre otra fila que
+        // también cumpla los filtros.
+        ids: filas.length === total && filas.every(f => f.id !== undefined && f.id !== null) ? filas.map(f => f.id) : null,
+        muestra: filas.slice(0, 5).map(rotuloDeFila),
+        filtrosTexto: filtros.map(f => `${f.columna} ${f.operador} ${valorCorto(f.valor)}`)
+    };
+}
+
+function destinoDeEscritura(consulta, previa, filtros) {
+    if (previa.ids) return { consulta: consulta.in('id', previa.ids) };
+    return filtrarAsistente(consulta, filtros);
+}
+
+function valorCorto(v) {
+    const t = typeof v === 'string' ? v : JSON.stringify(v);
+    return t && t.length > 90 ? t.slice(0, 90) + '…' : String(t);
+}
+
+// Una fila se reconoce por su nombre, no por su JSON.
+function rotuloDeFila(f) {
+    const nombre = ['title', 'name', 'nombre', 'question_text', 'descripcion', 'description', 'titulo']
+        .map(k => f[k]).find(v => typeof v === 'string' && v.trim());
+    const id = f.id !== undefined ? `#${f.id}` : (f.employee_id ? `#${f.employee_id}` : '');
+    return [id, nombre ? valorCorto(nombre) : ''].filter(Boolean).join(' · ') || valorCorto(f);
+}
+
+function cambiosEnHtml(obj) {
+    return Object.entries(obj).map(([k, v]) =>
+        `<span class="asistente-cambio-col">${window.sanitizeForHTML(k)}</span> ${window.sanitizeForHTML(valorCorto(v))}`).join('<br>');
+}
+
+// Lo escrito cambia lo que enseñan las demás pantallas.
+function despuesDeEscribir(tabla) {
+    if (window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+    if (tabla === 'employees' && window.cargarDatosEmpleados) window.cargarDatosEmpleados();
+    if (['evaluations', 'evaluation_questions'].includes(tabla)) {
+        window.evalCache = null;
+        if (window.refrescarTarjetaDeEncuestas) window.refrescarTarjetaDeEncuestas();
+    }
+}
+
 // La puerta de todas: comprueba lo que llegó y nunca lanza, que un fallo es un
 // `tool_result` con `is_error` y no una conversación rota.
-window.ejecutarHerramientaAsistente = async (bloque) => {
+window.ejecutarHerramientaAsistente = async (bloque, ctx) => {
     const fn = window.EJECUTAR_HERRAMIENTA[bloque.name];
     const def = window.HERRAMIENTAS_ASISTENTE.find(h => h.name === bloque.name);
     const entrada = bloque.input;
@@ -525,7 +789,11 @@ window.ejecutarHerramientaAsistente = async (bloque) => {
     if (faltan.length) return responder(`Faltan campos: ${faltan.join(', ')}`, true);
 
     try {
-        const resultado = await fn(entrada);
+        // Las que escriben necesitan la tarjeta de confirmación de este turno.
+        if (window.HERRAMIENTAS_QUE_ESCRIBEN.includes(bloque.name) && !(ctx && ctx.confirmar)) {
+            return responder('No hay dónde pedir la confirmación del administrador: no se escribió nada.', true);
+        }
+        const resultado = await fn(entrada, ctx);
         let texto = JSON.stringify(resultado);
         if (texto.length > window.MAX_TEXTO_HERRAMIENTA) {
             texto = texto.slice(0, window.MAX_TEXTO_HERRAMIENTA) + '… [recortado: pide menos filas o menos columnas]';
@@ -602,7 +870,20 @@ window.preguntarAlAsistente = async (texto) => {
             const usos = respuesta.content.filter(b => b.type === 'tool_use');
             window.pintarEstadoAsistente(true, 'Consultando datos…');
             const chips = usos.map(u => turno.herramienta(window.rotuloDeHerramienta(u.name, u.input)));
-            const resultados = await Promise.all(usos.map(u => window.ejecutarHerramientaAsistente(u)));
+            // Las de leer van a la vez; las que escriben, de una en una y
+            // detrás, cada una con su tarjeta: dos confirmaciones a la vez se
+            // leen mal, y lo que se lea en la misma vuelta ya está.
+            const resultados = new Array(usos.length);
+            await Promise.all(usos.map(async (u, i) => {
+                if (!window.HERRAMIENTAS_QUE_ESCRIBEN.includes(u.name)) resultados[i] = await window.ejecutarHerramientaAsistente(u);
+            }));
+            for (let i = 0; i < usos.length; i++) {
+                if (resultados[i]) continue;
+                resultados[i] = a.detenido
+                    ? { type: 'tool_result', tool_use_id: usos[i].id, content: 'Detenido por el administrador: no se escribió nada.', is_error: true }
+                    : await window.ejecutarHerramientaAsistente(usos[i], turno.contextoDeEscritura());
+                window.pintarEstadoAsistente(true, 'Consultando datos…');
+            }
             resultados.forEach((r, i) => chips[i].terminar(!r.is_error));
             if (a.detenido) throw new Anthropic.APIUserAbortError();
             // Todos los resultados en un solo mensaje.
@@ -643,6 +924,8 @@ window.detenerAsistente = () => {
     const a = window.asistente;
     a.detenido = true;
     if (a.flujo) a.flujo.abort();
+    // Una tarjeta esperando confirmación se da por cancelada.
+    (a.confirmaciones || []).slice().forEach(resolver => resolver(false));
 };
 
 window.nuevaConversacionAsistente = () => {
@@ -656,7 +939,6 @@ window.nuevaConversacionAsistente = () => {
 const ICONO_ASISTENTE_ENVIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 const ICONO_ASISTENTE_PARAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>';
 const ICONO_ASISTENTE_COPIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg>';
-const ICONO_ASISTENTE_COPIADO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
 // --- COPIAR LA CONVERSACIÓN ---
 // Sale del historial y no de lo que hay dibujado: es lo que de verdad se le
@@ -711,18 +993,14 @@ window.copiarAlPortapapeles = async (texto) => {
 
 window.copiarConversacionAsistente = async () => {
     const texto = window.textoDeConversacionAsistente();
-    const btn = document.getElementById('btn-copiar-asistente');
     const sub = document.getElementById('subtitulo-asistente');
     if (!texto) return;
     const ok = await window.copiarAlPortapapeles(texto);
-    // El aviso va al subtítulo y el botón cambia de icono un momento: es un
-    // botón sin texto, así que no se le escribe nada encima.
+    // El aviso va al subtítulo del encabezado, que es lo que se ve al cerrarse
+    // el menú.
     if (sub && !window.asistente.ocupado) sub.textContent = ok ? 'Conversación copiada' : 'No se pudo copiar';
-    if (btn && ok) btn.innerHTML = ICONO_ASISTENTE_COPIADO;
     clearTimeout(window.__avisoCopiaAsistente);
     window.__avisoCopiaAsistente = setTimeout(() => {
-        const b = document.getElementById('btn-copiar-asistente');
-        if (b) b.innerHTML = ICONO_ASISTENTE_COPIAR;
         if (!window.asistente.ocupado && window.asistente.pantalla === 'chat') window.pintarEstadoAsistente(false);
     }, 1800);
 };
@@ -747,24 +1025,22 @@ window.montarHojaAsistente = () => {
     hoja.style.zIndex = '2000';
     hoja.innerHTML = `
         <div class="asistente-pantalla">
-            <div class="hoja-encabezado-lista">
-                <div style="min-width:0;">
-                    <h3 class="hoja-titulo">Asistente</h3>
-                    <div id="subtitulo-asistente" class="hoja-subtitulo"></div>
+            <div class="asistente-encabezado">
+                <button class="asistente-flotante" onclick="window.cerrarAsistente()" title="Cerrar" aria-label="Cerrar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+                </button>
+                <div class="asistente-encabezado-texto">
+                    <div class="asistente-encabezado-titulo">Asistente</div>
+                    <div id="subtitulo-asistente" class="asistente-encabezado-subtitulo"></div>
                 </div>
-                <div class="hoja-acciones">
-                    <button id="btn-nueva-conversacion" class="ios-boton-icono" onclick="window.nuevaConversacionAsistente()"
-                            title="Nueva conversación" aria-label="Nueva conversación">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                    </button>
-                    <button id="btn-copiar-asistente" class="ios-boton-icono" onclick="window.copiarConversacionAsistente()"
-                            title="Copiar conversación" aria-label="Copiar conversación" hidden>${ICONO_ASISTENTE_COPIAR}</button>
-                    <button id="btn-clave-asistente" class="ios-boton-icono" onclick="window.abrirPantallaClave()"
-                            title="Clave de la API" aria-label="Clave de la API">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2.5 2.5"/></svg>
-                    </button>
-                    <button onclick="window.cerrarAsistente()" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
-                </div>
+                <span id="asistente-actividad" class="asistente-flotante asistente-actividad" title="Trabajando" hidden>
+                    <span class="asistente-giro" aria-hidden="true"></span>
+                </span>
+                <button id="btn-menu-asistente" class="asistente-flotante" onclick="window.alternarMenuAsistente(event)"
+                        title="Más opciones" aria-label="Más opciones" aria-haspopup="menu" aria-expanded="false">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+                </button>
+                <div id="menu-asistente" class="asistente-menu" role="menu" hidden></div>
             </div>
             <div id="asistente-mensajes" class="asistente-mensajes"></div>
             <form id="asistente-redactor" class="asistente-redactor" onsubmit="event.preventDefault(); window.enviarDesdeRedactor();">
@@ -781,9 +1057,6 @@ window.abrirAsistente = () => {
     if (window.cerrarPanelAdmin) window.cerrarPanelAdmin();
     window.montarHojaAsistente();
     document.getElementById('modal-asistente').style.display = 'flex';
-    // La franja de la barra de estado la pinta el fondo de <html>: con la
-    // pantalla blanca encima, el gris de `modal-abierto` dibujaría una costura.
-    document.documentElement.classList.add('asistente-abierto');
     window.asistente.pantalla = 'chat';
     // Sin clave aquí, lo primero que se ve es «Comprobando», no lo que dijo la
     // base la última vez: mientras tanto se trae la de Supabase.
@@ -803,26 +1076,68 @@ window.abrirAsistente = () => {
 window.cerrarAsistente = () => {
     const hoja = document.getElementById('modal-asistente');
     if (hoja) hoja.style.display = 'none';
-    document.documentElement.classList.remove('asistente-abierto');
+    window.cerrarMenuAsistente();
 };
+
+// --- EL MENÚ «…» ---
+// Como el de la aplicación de Claude: un menú que sale debajo del botón, dentro
+// de la misma pantalla, con lo que antes eran tres botones del encabezado.
+// Se arma al abrirlo, así cada opción dice si se puede usar en ese momento.
+const ICONO_MENU_NUEVA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+const ICONO_MENU_CLAVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2.5 2.5"/></svg>';
+
+window.opcionesDelMenuAsistente = () => {
+    const a = window.asistente;
+    const enChat = a.pantalla === 'chat' && !!window.claveDelAsistente();
+    const hay = a.mensajes.length > 0;
+    return [
+        { texto: 'Nueva conversación', icono: ICONO_MENU_NUEVA, accion: 'window.nuevaConversacionAsistente()', apagada: !enChat || (!hay && !a.ocupado) },
+        { texto: 'Copiar conversación', icono: ICONO_ASISTENTE_COPIAR, accion: 'window.copiarConversacionAsistente()', apagada: !enChat || !hay || a.ocupado },
+        { texto: 'Clave de la API', icono: ICONO_MENU_CLAVE, accion: 'window.abrirPantallaClave()', apagada: a.ocupado }
+    ];
+};
+
+window.alternarMenuAsistente = (ev) => {
+    if (ev) ev.stopPropagation();
+    const menu = document.getElementById('menu-asistente');
+    if (!menu) return;
+    if (!menu.hidden) { window.cerrarMenuAsistente(); return; }
+    menu.innerHTML = window.opcionesDelMenuAsistente().map(o => `
+        <button class="asistente-menu-opcion" role="menuitem" ${o.apagada ? 'disabled' : ''}
+                onclick="window.cerrarMenuAsistente(); ${o.accion}">
+            <span>${o.texto}</span>${o.icono}
+        </button>`).join('');
+    menu.hidden = false;
+    const btn = document.getElementById('btn-menu-asistente');
+    if (btn) btn.setAttribute('aria-expanded', 'true');
+};
+
+window.cerrarMenuAsistente = () => {
+    const menu = document.getElementById('menu-asistente');
+    if (menu) menu.hidden = true;
+    const btn = document.getElementById('btn-menu-asistente');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+};
+
+// Tocar fuera lo cierra. Uno solo para toda la aplicación, como el «soltar»
+// del lienzo de firmas.
+document.addEventListener('click', (e) => {
+    const menu = document.getElementById('menu-asistente');
+    if (menu && !menu.hidden && !menu.contains(e.target)) window.cerrarMenuAsistente();
+});
 
 window.pintarEstadoAsistente = (ocupado, texto) => {
     const sub = document.getElementById('subtitulo-asistente');
-    if (sub) sub.textContent = ocupado ? (texto || 'Pensando…') : 'Lee los datos de la aplicación';
+    if (sub) sub.textContent = ocupado ? (texto || 'Pensando…') : 'NISSAN · Lee y modifica datos';
+    // Mientras trabaja, el círculo que gira junto al «…», como en la app de Claude.
+    const actividad = document.getElementById('asistente-actividad');
+    if (actividad) actividad.hidden = !ocupado;
     const btn = document.getElementById('btn-enviar-asistente');
     if (btn) {
         btn.innerHTML = ocupado ? ICONO_ASISTENTE_PARAR : ICONO_ASISTENTE_ENVIAR;
         btn.title = ocupado ? 'Detener' : 'Enviar';
         btn.setAttribute('aria-label', btn.title);
         btn.classList.toggle('esta-parando', !!ocupado);
-    }
-    // Copiar sólo sale con una conversación a la vista, y se apaga mientras se
-    // escribe la respuesta: se copiaría a medias.
-    const copiar = document.getElementById('btn-copiar-asistente');
-    if (copiar) {
-        copiar.hidden = window.asistente.pantalla !== 'chat' || !window.claveDelAsistente()
-            || window.asistente.mensajes.length === 0;
-        copiar.disabled = !!ocupado;
     }
 };
 
@@ -1095,6 +1410,59 @@ window.nuevoTurnoAsistente = () => {
             nodo.appendChild(c);
             bajarAlFinal();
             return { terminar(ok) { c.classList.remove('esta-consultando'); c.classList.toggle('fallo', !ok); } };
+        },
+        // La tarjeta de un cambio: dice exactamente qué se va a escribir y no
+        // deja que pase nada hasta que se pulse «Aplicar». Devuelve lo que
+        // necesita la herramienta: `confirmar` (una promesa con la decisión) y
+        // `resultado`, que escribe en la tarjeta lo que de verdad quedó.
+        contextoDeEscritura() {
+            let tarjeta = null;
+            return {
+                confirmar(p) {
+                    const esc = window.sanitizeForHTML;
+                    tarjeta = document.createElement('div');
+                    tarjeta.className = 'asistente-cambio' + (p.accion === 'borrar' ? ' es-borrado' : '');
+                    const lista = (p.filas || []).map(f => `<li>${p.accion === 'crear' ? f : esc(f)}</li>`).join('')
+                        + (p.resto > 0 ? `<li class="asistente-cambio-resto">y ${p.resto} más</li>` : '');
+                    tarjeta.innerHTML = `
+                        <div class="asistente-cambio-titulo">${esc(p.titulo)}</div>
+                        ${p.motivo ? `<div class="asistente-cambio-motivo">${esc(p.motivo)}</div>` : ''}
+                        ${p.filtros && p.filtros.length ? `<div class="asistente-cambio-rotulo">Dónde</div><div class="asistente-cambio-mono">${p.filtros.map(esc).join('<br>')}</div>` : ''}
+                        ${lista ? `<div class="asistente-cambio-rotulo">${p.accion === 'crear' ? 'Filas nuevas' : 'Registros'}</div><ul class="asistente-cambio-lista">${lista}</ul>` : ''}
+                        ${p.cambios ? `<div class="asistente-cambio-rotulo">Cambios</div><div class="asistente-cambio-mono">${p.cambios}</div>` : ''}
+                        ${p.nota ? `<div class="asistente-cambio-nota">${esc(p.nota)}</div>` : ''}
+                        <div class="asistente-cambio-botones">
+                            <button type="button" class="asistente-cambio-cancelar">Cancelar</button>
+                            <button type="button" class="asistente-cambio-aplicar">${p.accion === 'borrar' ? 'Borrar' : 'Aplicar'}</button>
+                        </div>
+                        <div class="asistente-cambio-estado" hidden></div>`;
+                    nodo.appendChild(tarjeta);
+                    bajarAlFinal();
+                    window.pintarEstadoAsistente(true, 'Esperando tu confirmación…');
+                    const a = window.asistente;
+                    return new Promise(resolve => {
+                        const decidir = (si) => {
+                            a.confirmaciones = a.confirmaciones.filter(r => r !== decidir);
+                            tarjeta.querySelector('.asistente-cambio-botones').remove();
+                            const estado = tarjeta.querySelector('.asistente-cambio-estado');
+                            estado.hidden = false;
+                            estado.textContent = si ? 'Aplicando…' : 'Cancelado';
+                            if (!si) tarjeta.classList.add('esta-cancelado');
+                            window.pintarEstadoAsistente(true, si ? 'Escribiendo en la base…' : 'Pensando…');
+                            resolve(si);
+                        };
+                        a.confirmaciones.push(decidir);
+                        tarjeta.querySelector('.asistente-cambio-cancelar').onclick = () => decidir(false);
+                        tarjeta.querySelector('.asistente-cambio-aplicar').onclick = () => decidir(true);
+                    });
+                },
+                resultado(ok, texto) {
+                    if (!tarjeta) return;
+                    const estado = tarjeta.querySelector('.asistente-cambio-estado');
+                    if (estado) { estado.hidden = false; estado.textContent = texto; }
+                    tarjeta.classList.add(ok ? 'esta-aplicado' : 'fallo');
+                }
+            };
         },
         nota(texto, esError) {
             const n = document.createElement('div');
