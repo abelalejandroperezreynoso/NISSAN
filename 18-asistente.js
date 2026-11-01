@@ -1085,6 +1085,30 @@ window.montarHojaAsistente = () => {
             </form>
         </div>`;
     document.body.appendChild(hoja);
+    window.engancharBotonEnviarAsistente();
+};
+
+// El botón de enviar no le quita el foco al campo, y en el teléfono envía al
+// levantar el dedo. Sin esto, tocarlo sólo cerraba el teclado: el campo perdía
+// el foco, el teclado bajaba, la pantalla —que se ajusta al área visible— bajaba
+// con él, y cuando iOS entregaba el click el botón ya no estaba bajo el dedo.
+// - `mousedown` con `preventDefault` es lo que impide que el foco salte al
+//   botón (en un escritorio, y en el teléfono si llegara a sintetizarse).
+// - `touchend` con `preventDefault` cancela el click que vendría después —o se
+//   enviaría dos veces— y envía él mismo, sólo si el dedo se levantó dentro del
+//   botón: arrastrar fuera es arrepentirse, como en cualquier botón de iOS.
+window.engancharBotonEnviarAsistente = () => {
+    const btn = document.getElementById('btn-enviar-asistente');
+    if (!btn || btn.__enganchado) return;
+    btn.__enganchado = true;
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('touchend', (e) => {
+        const t = e.changedTouches && e.changedTouches[0];
+        const r = btn.getBoundingClientRect();
+        const dentro = !t || (t.clientX >= r.left - 8 && t.clientX <= r.right + 8 && t.clientY >= r.top - 8 && t.clientY <= r.bottom + 8);
+        e.preventDefault();
+        if (dentro) window.enviarDesdeRedactor();
+    }, { passive: false });
 };
 
 window.abrirAsistente = () => {

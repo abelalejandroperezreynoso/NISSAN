@@ -8540,6 +8540,16 @@ Las reglas para usarlo:
   capa lleva `con-teclado`, que le quita al redactor el hueco del indicador de
   inicio, que entonces queda debajo del teclado.
 
+  **Y el botón de enviar no le quita el foco al campo**
+  (`window.engancharBotonEnviarAsistente`): `mousedown` con `preventDefault`,
+  y en el teléfono envía en el `touchend` —también con `preventDefault`, que
+  cancela el click de después y evita enviar dos veces— si el dedo se levantó
+  dentro del botón. Con un botón normal, tocarlo **sólo cerraba el teclado**:
+  el campo perdía el foco, el teclado bajaba, la pantalla bajaba con él por el
+  ajuste de aquí arriba y el click llegaba cuando el botón ya no estaba bajo el
+  dedo. Las dos cosas van juntas: ajustar la pantalla al viewport visual es lo
+  que mueve el botón, y no soltar el foco es lo que evita que se mueva.
+
   **El encabezado copia el de la aplicación de Claude**: botones redondos
   blancos que flotan (`.asistente-flotante`) —la flecha de cerrar a la
   izquierda, el título y el subtítulo detrás de ella, y a la derecha el círculo
