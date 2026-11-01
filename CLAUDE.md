@@ -8529,33 +8529,32 @@ Las reglas para usarlo:
 
   Cinco cosas que hay que mantener:
 
-  - **La clave se guarda en Supabase detrás de una frase de acceso**, para
-    usarla desde cualquier aparato (`sql/clave-asistente.sql`, también en
+  - **La clave se guarda en Supabase y basta con ser administrador para
+    usarla**, desde cualquier aparato (`sql/clave-asistente.sql`, también en
     `supabase/migrations/`). La tabla `asistente_clave` lleva RLS sin políticas
     y sin permisos para `anon`: sólo se entra por cuatro funciones `security
-    definer` —`estado_clave_asistente`, `guardar_clave_asistente`,
-    `obtener_clave_asistente(frase)` y `borrar_clave_asistente`—. Hace falta la
-    frase porque **la clave `anon` y la contraseña de administrador están en el
-    JavaScript**: protegida con cualquiera de las dos, la leería cualquiera que
-    abra la aplicación. De la frase se guarda sólo su hash bcrypt, y una
-    equivocada tarda un segundo en contestar.
+    definer` —`estado_clave_asistente`, `guardar_clave_asistente(clave)`,
+    `obtener_clave_asistente()` y `borrar_clave_asistente`—. Llevó un tiempo
+    una frase de acceso y se quitó a petición del usuario: entrar como
+    administrador basta. **Eso es una puerta abierta y hay que saberlo**: la
+    clave `anon` y la contraseña de administrador están en el JavaScript, así
+    que quien lea el código puede pedirle la clave a la base. Por eso el botón
+    de eliminarla está siempre a mano, y una filtrada se revoca además en
+    console.anthropic.com.
 
     ```js
     await window.sincronizarClaveAsistente()   // la copia local, de acuerdo con la base
+    await window.traerClaveAsistente()         // la de Supabase a este aparato
     window.claveRemotaAsistente                // { disponible, guardada, huella, guardadaEn }
-    window.abrirPantallaClave()                // el botón de la llave: cambiar, quitar, eliminar
+    window.abrirPantallaClave()                // el botón de la llave: cambiar, eliminar
     ```
 
     Cada aparato se queda una copia en `localStorage` con su **huella** (los 12
     primeros hex del sha256), y al abrir el asistente la compara con la de la
-    base: si se eliminó o se cambió desde otro aparato, la copia se borra sola.
-    Sin red o sin el script, la copia se queda —no se sabe si sigue valiendo— y
-    una clave nueva se guarda sólo en ese aparato, diciéndolo. **Eliminar no
-    pide la frase**, a propósito: es el sentido seguro y no puede quedarse
-    bloqueado por haberla olvidado; **reemplazarla sí**, o cualquiera pondría
-    su clave y recibiría las consultas. Un 401 de Anthropic lleva a la pantalla
-    de la clave. Una Edge Function no habría resuelto nada: sin autenticación de
-    verdad en la aplicación, cualquiera con la clave `anon` podría llamarla.
+    base: si no tiene ninguna o la de la base es otra, la trae; si en la base
+    ya no hay, borra la suya. Sin red o sin el script, la copia se queda —no se
+    sabe si sigue valiendo— y una clave nueva se guarda sólo en ese aparato,
+    diciéndolo. Un 401 de Anthropic lleva a la pantalla de la clave.
   - **Los nombres de arriba del archivo no pueden repetirse con los de otro
     script**: los `const` de nivel superior de todos los `<script>` clásicos
     comparten un mismo ámbito, y uno repetido revienta el archivo entero al
