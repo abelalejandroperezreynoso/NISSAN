@@ -1619,9 +1619,9 @@ textarea:focus {
 /* Botón de Resumen de Equipo (Al inicio) */
 /* «Mi Equipo» y «Agregar», al lado de las fotos del equipo: botones de
    cristal como los de iOS 26. Un disco translúcido que deja ver el fondo con
-   desenfoque, un brillo arriba que lo despega del gris y una sombra suave
-   debajo; el icono es un SVG a trazo de SF Symbols, en el azul del sistema, y
-   no un emoji, que cada sistema dibuja a su manera. Miden 54px, lo mismo que
+   desenfoque y una sombra suave debajo, sin sombra ni brillo por dentro —se
+   leían como un borde gris pegado al canto—; el icono es un SVG a trazo de SF
+   Symbols, en negro, y no un emoji, que cada sistema dibuja a su manera. Miden 54px, lo mismo que
    las fotos de al lado, para que los nombres queden a la misma altura. */
 .boton-cristal {
     width: 54px;
@@ -1634,28 +1634,15 @@ textarea:focus {
     justify-content: center;
     position: relative;
     cursor: pointer;
-    color: #007AFF;
-    background: linear-gradient(160deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.55) 100%);
+    color: #1c1c1e;
+    background: rgba(255, 255, 255, 0.88);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
     backdrop-filter: blur(20px) saturate(180%);
     border: 1px solid rgba(255, 255, 255, 0.8);
     box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.95),
-        inset 0 -2px 4px rgba(15, 23, 42, 0.05),
         0 6px 16px rgba(15, 23, 42, 0.08),
         0 1px 3px rgba(15, 23, 42, 0.08);
     transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.3), box-shadow 0.2s;
-}
-
-/* El reflejo de arriba a la izquierda, que es lo que lo hace leerse como
-   cristal y no como un círculo blanco. Va por debajo del icono y del globo. */
-.boton-cristal::before {
-    content: '';
-    position: absolute;
-    inset: 1px;
-    border-radius: 50%;
-    background: radial-gradient(120% 80% at 30% 0%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 55%);
-    pointer-events: none;
 }
 
 .boton-cristal svg {
@@ -1666,9 +1653,7 @@ textarea:focus {
 
 .team-member-container:active .boton-cristal {
     transform: scale(0.9);
-    box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.95),
-        0 2px 6px rgba(15, 23, 42, 0.08);
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 .boton-cristal-rotulo {
