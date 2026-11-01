@@ -8653,6 +8653,29 @@ Las reglas para usarlo:
     copia. La opción sale apagada sin conversación o mientras se escribe la
     respuesta. Sin `navigator.clipboard` —contexto no seguro o Safari viejo—
     copia con un textarea escondido y `execCommand`; el aviso va al subtítulo.
+  - **Lo que contesta se lee en un teléfono, y eso decide cómo se dibuja.**
+    Tres cosas que van juntas:
+
+    - **Las instrucciones del modelo le piden hablar con las palabras de la
+      pantalla** —«las preguntas», «Rango numérico», «por calificar»— y no con
+      las de la base, preferir listas a tablas y no meter párrafos en una
+      celda. Llevan además el catálogo de tipos de pregunta
+      (`window.catalogoDeTiposParaAsistente`, sacado de `TIPOS_DE_PREGUNTA`),
+      que es de donde saca los nombres: sin él contestaba con `range` y
+      `list_match`.
+    - **Las tablas de tres columnas o más pasan a tarjetas en un teléfono**
+      (`.asistente-tabla--apilable`, por debajo de 560px): la primera celda es
+      el título y las demás llevan encima el rótulo de su columna, que el
+      Markdown pone en `data-etiqueta`. Y el texto parte las palabras con
+      `overflow-wrap: break-word`, **nunca con `anywhere`**: ése le deja a una
+      columna encoger hasta una letra, y la tabla salía «ran / ge».
+    - **Los renglones de consulta dicen lo que se consultó en palabras**
+      (`NOMBRE_DE_TABLA_ASISTENTE`: «Consultó las preguntas», no
+      `evaluation_questions`), **la misma consulta seguida se cuenta en un solo
+      renglón** («· 3 veces») y un fallo sólo pinta el punto, y sólo si fallaron
+      todas: el modelo reintenta y acierta, y el renglón entero en rojo se leía
+      como que algo se había roto. Las tarjetas de cambios nombran la tabla
+      igual.
   - **El historial sólo crece por el final**: la respuesta se guarda con sus
     bloques de pensamiento tal cual. Si algo falla a media pregunta se vuelve al
     historial de antes de ella, que un `tool_use` sin su resultado rompería la

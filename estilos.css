@@ -7453,7 +7453,6 @@ html.fondo-anclado body {
 .asistente-pantalla .asistente-texto pre { background: white; }
 .asistente-pantalla .asistente-sugerencia { border-color: transparent; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06); }
 .asistente-pantalla .asistente-clave { background: white; }
-.asistente-pantalla .asistente-tabla th, .asistente-pantalla .asistente-tabla td { border-bottom-color: #d8dce3; }
 .asistente-overlay.con-teclado .asistente-redactor { margin-bottom: 8px; }
 .asistente-pantalla .asistente-redactor {
     width: calc(100% - 24px);
@@ -7511,39 +7510,98 @@ html.fondo-anclado body {
     50% { opacity: 1; transform: scale(1); }
 }
 
-.asistente-texto { overflow-wrap: anywhere; }
+/* `break-word` y no `anywhere`: los dos parten una palabra que no cabe en su
+   renglón, pero `anywhere` además le deja a una celda de tabla encoger hasta
+   una letra —el ancho mínimo de la columna pasa a ser un carácter—, y así salía
+   «ran / ge» en la columna de un tipo de pregunta. */
+.asistente-texto { overflow-wrap: break-word; }
 .asistente-texto[hidden] { display: none; }
-.asistente-texto p { margin: 0 0 8px; }
-.asistente-texto p:last-child { margin-bottom: 0; }
-.asistente-texto ul, .asistente-texto ol { margin: 0 0 8px; padding-left: 22px; }
-.asistente-texto li { margin: 2px 0; }
+.asistente-texto p { margin: 0 0 10px; }
+.asistente-texto p:last-child, .asistente-texto > :last-child { margin-bottom: 0; }
+.asistente-texto ul, .asistente-texto ol { margin: 0 0 10px; padding-left: 20px; }
+.asistente-texto li { margin: 4px 0; padding-left: 2px; }
+.asistente-texto li::marker { color: #8a8f98; }
+.asistente-texto strong { font-weight: 650; color: #0f172a; }
 .asistente-texto code {
-    background: #f1f5f9;
+    background: #e5e7eb;
     border-radius: 5px;
     padding: 1px 5px;
-    font-size: 0.88em;
+    font-size: 0.86em;
 }
 .asistente-texto pre {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 10px;
+    background: white;
+    border-radius: 12px;
+    padding: 10px 12px;
     overflow-x: auto;
     font-size: 0.82rem;
-    margin: 0 0 8px;
+    margin: 0 0 10px;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
 }
-.asistente-titulo { font-weight: 700; margin: 6px 0 4px; }
+.asistente-texto hr { border: none; border-top: 0.5px solid rgba(60, 60, 67, 0.25); margin: 12px 0; }
+.asistente-texto blockquote {
+    margin: 0 0 10px;
+    padding: 2px 0 2px 12px;
+    border-left: 3px solid #cbd5e1;
+    color: #475569;
+}
+.asistente-titulo { font-weight: 700; font-size: 1.02rem; margin: 14px 0 6px; color: #0f172a; }
+.asistente-texto > .asistente-titulo:first-child { margin-top: 0; }
 
-/* Una tabla ancha se desplaza dentro de su caja, no arrastra la conversación. */
-.asistente-tabla { overflow-x: auto; margin: 0 0 8px; }
-.asistente-tabla table { border-collapse: collapse; font-size: 0.85rem; min-width: 100%; }
+/* Las tablas van en una tarjeta blanca, como una lista agrupada de iOS: el
+   rótulo de las columnas en gris pequeño y un separador fino entre filas. Una
+   tabla ancha se desplaza dentro de su caja y no arrastra la conversación. */
+.asistente-tabla {
+    overflow-x: auto;
+    margin: 2px 0 10px;
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+    -webkit-overflow-scrolling: touch;
+}
+.asistente-tabla table { border-collapse: collapse; font-size: 0.86rem; min-width: 100%; line-height: 1.4; }
 .asistente-tabla th, .asistente-tabla td {
-    border-bottom: 1px solid #e2e8f0;
-    padding: 5px 8px;
+    padding: 8px 12px;
     text-align: left;
     vertical-align: top;
+    overflow-wrap: break-word;
 }
-.asistente-tabla th { color: #64748b; font-weight: 600; white-space: nowrap; }
+.asistente-tabla th {
+    color: #8a8f98;
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    border-bottom: 0.5px solid rgba(60, 60, 67, 0.2);
+}
+.asistente-tabla tbody tr + tr td { border-top: 0.5px solid rgba(60, 60, 67, 0.14); }
+.asistente-tabla td:first-child { font-weight: 600; color: #0f172a; }
+
+/* En un teléfono, una tabla de tres columnas o más se lee como tarjetas: cada
+   fila es un bloque con la primera celda de título y las demás debajo, cada una
+   con el rótulo de su columna encima (`data-etiqueta`, que pone el Markdown). */
+@media (max-width: 560px) {
+    .asistente-tabla--apilable { overflow: visible; }
+    .asistente-tabla--apilable table, .asistente-tabla--apilable tbody,
+    .asistente-tabla--apilable tr, .asistente-tabla--apilable td { display: block; width: 100%; box-sizing: border-box; }
+    .asistente-tabla--apilable thead { display: none; }
+    .asistente-tabla--apilable tr { padding: 10px 14px; }
+    .asistente-tabla--apilable tbody tr + tr { border-top: 0.5px solid rgba(60, 60, 67, 0.14); }
+    .asistente-tabla--apilable tbody tr + tr td { border-top: none; }
+    .asistente-tabla--apilable td { padding: 0; }
+    .asistente-tabla--apilable td:first-child { font-size: 0.95rem; margin-bottom: 2px; }
+    .asistente-tabla--apilable td:not(:first-child) { margin-top: 6px; color: #334155; }
+    .asistente-tabla--apilable td:not(:first-child)::before {
+        content: attr(data-etiqueta);
+        display: block;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #8a8f98;
+        margin-bottom: 1px;
+    }
+    .asistente-tabla--apilable td:not(:first-child):empty { display: none; }
+}
 
 .asistente-consulta {
     font-size: 0.82rem;
@@ -7561,7 +7619,6 @@ html.fondo-anclado body {
     flex-shrink: 0;
 }
 .asistente-consulta.esta-consultando::before { background: #d97757; animation: asistente-latido 1s ease-in-out infinite; }
-.asistente-consulta.fallo { color: #b91c1c; }
 .asistente-consulta.fallo::before { background: #ef4444; }
 
 /* La tarjeta de un cambio que propone el asistente: qué se va a escribir,
