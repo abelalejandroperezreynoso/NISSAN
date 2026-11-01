@@ -7500,3 +7500,28 @@ html.fondo-anclado body {
     cursor: pointer;
 }
 .asistente-clave-error { color: #b91c1c; font-size: 0.85rem; margin-top: 8px; min-height: 1em; }
+
+/* La pantalla de la clave del asistente: dos acciones secundarias debajo de la
+   principal y la de eliminar en rojo, como en Ajustes. */
+.asistente-clave button:disabled { opacity: 0.55; cursor: default; }
+.asistente-clave-secundario,
+.asistente-clave-eliminar {
+    width: 100%;
+    margin-top: 10px;
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: white;
+}
+.asistente-clave-secundario { border: 1px solid #cbd5e1; color: #0f172a; }
+.asistente-clave-eliminar { border: 1px solid #fecaca; color: #b91c1c; margin-top: 18px; }
+.asistente-clave-nota { font-size: 0.8rem; color: #64748b; margin-top: 8px !important; }
+.asistente-clave-plegable { margin: 4px 0 6px; }
+.asistente-clave-plegable > summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: #0f172a;
+    padding: 8px 0;
+}

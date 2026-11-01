@@ -8529,12 +8529,38 @@ Las reglas para usarlo:
 
   Cinco cosas que hay que mantener:
 
-  - **La clave no sale de ese aparato.** No hay servidor que la guarde, y en la
-    base la leería cualquiera con la clave `anon`; así que se teclea en la hoja y
-    vive en `localStorage.claveAnthropicAsistente`. Una clave rechazada (401) se
-    borra sola y la hoja vuelve a pedirla. Una Edge Function no lo resolvería:
-    sin autenticación de verdad en la aplicación, cualquiera con la clave `anon`
-    podría llamarla y gastar la cuenta.
+  - **La clave se guarda en Supabase detrás de una frase de acceso**, para
+    usarla desde cualquier aparato (`sql/clave-asistente.sql`, también en
+    `supabase/migrations/`). La tabla `asistente_clave` lleva RLS sin políticas
+    y sin permisos para `anon`: sólo se entra por cuatro funciones `security
+    definer` —`estado_clave_asistente`, `guardar_clave_asistente`,
+    `obtener_clave_asistente(frase)` y `borrar_clave_asistente`—. Hace falta la
+    frase porque **la clave `anon` y la contraseña de administrador están en el
+    JavaScript**: protegida con cualquiera de las dos, la leería cualquiera que
+    abra la aplicación. De la frase se guarda sólo su hash bcrypt, y una
+    equivocada tarda un segundo en contestar.
+
+    ```js
+    await window.sincronizarClaveAsistente()   // la copia local, de acuerdo con la base
+    window.claveRemotaAsistente                // { disponible, guardada, huella, guardadaEn }
+    window.abrirPantallaClave()                // el botón de la llave: cambiar, quitar, eliminar
+    ```
+
+    Cada aparato se queda una copia en `localStorage` con su **huella** (los 12
+    primeros hex del sha256), y al abrir el asistente la compara con la de la
+    base: si se eliminó o se cambió desde otro aparato, la copia se borra sola.
+    Sin red o sin el script, la copia se queda —no se sabe si sigue valiendo— y
+    una clave nueva se guarda sólo en ese aparato, diciéndolo. **Eliminar no
+    pide la frase**, a propósito: es el sentido seguro y no puede quedarse
+    bloqueado por haberla olvidado; **reemplazarla sí**, o cualquiera pondría
+    su clave y recibiría las consultas. Un 401 de Anthropic lleva a la pantalla
+    de la clave. Una Edge Function no habría resuelto nada: sin autenticación de
+    verdad en la aplicación, cualquiera con la clave `anon` podría llamarla.
+  - **Los nombres de arriba del archivo no pueden repetirse con los de otro
+    script**: los `const` de nivel superior de todos los `<script>` clásicos
+    comparten un mismo ámbito, y uno repetido revienta el archivo entero al
+    cargar (pasó con `fechaCorta`). Los de aquí llevan nombres largos a
+    propósito.
   - **Las herramientas sólo leen**: todas acaban en un `.select()` con el
     cliente de la aplicación, así que pasan por RLS y no pueden escribir aunque
     el modelo lo pidiera. `consultar_tabla` admite sólo las tablas de

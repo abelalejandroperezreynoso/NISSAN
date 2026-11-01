@@ -30,20 +30,83 @@ window.asistente = {
     ocupado: false,
     flujo: null,        // el stream en curso, para poder detenerlo
     detenido: false,
+    pantalla: 'chat',   // 'chat' o 'clave', la del botón de la llave
     sinFallbacks: false // si la cuenta rechazara el parámetro, se deja de mandar
 };
 
 // --- LA CLAVE ---
+// Se guarda en Supabase para usarla desde cualquier aparato, detrás de una
+// frase de acceso que no está en el código (sql/clave-asistente.sql): la clave
+// `anon` y la contraseña de administrador viven en el JavaScript, así que no
+// protegerían nada. Cada aparato se queda una copia en `localStorage` junto a
+// su huella, y al abrir el asistente comprueba que la de la base siga siendo la
+// misma: si se eliminó o se cambió desde otro aparato, la copia se borra sola.
+
+window.LLAVE_HUELLA_ASISTENTE = 'huellaClaveAsistente';
 
 window.claveDelAsistente = () => {
     try { return localStorage.getItem(window.LLAVE_CLAVE_ASISTENTE) || ''; } catch (e) { return ''; }
 };
-window.guardarClaveDelAsistente = (clave) => {
+window.huellaLocalAsistente = () => {
+    try { return localStorage.getItem(window.LLAVE_HUELLA_ASISTENTE) || ''; } catch (e) { return ''; }
+};
+window.guardarClaveDelAsistente = (clave, huella) => {
     try {
         if (clave) localStorage.setItem(window.LLAVE_CLAVE_ASISTENTE, clave);
         else localStorage.removeItem(window.LLAVE_CLAVE_ASISTENTE);
+        if (clave && huella) localStorage.setItem(window.LLAVE_HUELLA_ASISTENTE, huella);
+        else localStorage.removeItem(window.LLAVE_HUELLA_ASISTENTE);
         return true;
     } catch (e) { return false; }
+};
+
+// Lo que dijo la base la última vez: { disponible: true, guardada, huella,
+// guardadaEn } o { disponible: false, motivo: 'sin-funcion' | 'sin-red' }.
+window.claveRemotaAsistente = null;
+
+const motivoDeError = (error) => {
+    const m = String((error && (error.message || error.details)) || '');
+    if ((error && error.code === 'PGRST202') || /could not find the function/i.test(m)) return 'sin-funcion';
+    for (const k of ['frase_incorrecta', 'frase_corta', 'clave_invalida', 'sin_clave']) if (m.includes(k)) return k;
+    return 'otro';
+};
+
+window.TEXTO_ERROR_CLAVE = {
+    frase_incorrecta: 'La frase de acceso no es correcta.',
+    frase_corta: 'La frase de acceso necesita al menos 8 caracteres.',
+    clave_invalida: 'Eso no parece una clave de Anthropic (empieza por sk-ant-).',
+    sin_clave: 'Ya no hay ninguna clave guardada en Supabase.',
+    'sin-funcion': 'Falta correr sql/clave-asistente.sql en Supabase.',
+    otro: 'No se pudo hablar con Supabase. Revisa la conexión.'
+};
+
+window.consultarClaveRemota = async () => {
+    try {
+        const { data, error } = await sb.rpc('estado_clave_asistente');
+        if (error) {
+            window.claveRemotaAsistente = { disponible: false,
+                motivo: motivoDeError(error) === 'sin-funcion' ? 'sin-funcion' : 'sin-red' };
+        } else {
+            const fila = (Array.isArray(data) ? data[0] : data) || {};
+            window.claveRemotaAsistente = { disponible: true, guardada: !!fila.guardada,
+                huella: fila.huella || '', guardadaEn: fila.guardada_en || null };
+        }
+    } catch (e) {
+        window.claveRemotaAsistente = { disponible: false, motivo: 'sin-red' };
+    }
+    return window.claveRemotaAsistente;
+};
+
+// Deja la copia de este aparato de acuerdo con la base. Sin red, o sin el
+// script corrido, la copia se queda: no se puede saber si sigue valiendo, y
+// quitarla dejaría al administrador sin asistente por una consulta caída.
+window.sincronizarClaveAsistente = async () => {
+    const r = await window.consultarClaveRemota();
+    if (r.disponible && window.claveDelAsistente() &&
+        (!r.guardada || r.huella !== window.huellaLocalAsistente())) {
+        window.guardarClaveDelAsistente('');
+    }
+    return r;
 };
 
 // --- EL SDK ---
@@ -535,8 +598,9 @@ window.preguntarAlAsistente = async (texto) => {
         a.mensajes.length = inicio;
         turno.nota(window.textoDeErrorAsistente(err, Anthropic), true);
         if (Anthropic && err instanceof Anthropic.AuthenticationError) {
-            window.guardarClaveDelAsistente('');
-            setTimeout(() => window.pintarAsistente(), 1800);
+            // La clave guardada ya no vale: se lleva a la pantalla de la clave,
+            // que es desde donde se elimina o se cambia por otra.
+            setTimeout(() => window.abrirPantallaClave(), 1800);
         }
     } finally {
         a.ocupado = false;
@@ -549,7 +613,7 @@ window.preguntarAlAsistente = async (texto) => {
 window.textoDeErrorAsistente = (err, Anthropic) => {
     if (!Anthropic) return err && err.message ? err.message : 'No se pudo conectar.';
     if (err instanceof Anthropic.APIUserAbortError || window.asistente.detenido) return 'Detenido.';
-    if (err instanceof Anthropic.AuthenticationError) return 'La clave de la API no es válida. Vuelve a escribirla.';
+    if (err instanceof Anthropic.AuthenticationError) return 'Anthropic rechazó la clave guardada (quizá se revocó). Cámbiala o elimínala.';
     if (err instanceof Anthropic.PermissionDeniedError) return 'La clave no tiene permiso para usar este modelo.';
     if (err instanceof Anthropic.RateLimitError) return 'Demasiadas peticiones seguidas. Espera un momento e inténtalo de nuevo.';
     if (err instanceof Anthropic.APIConnectionError) return 'Sin conexión con la API. Revisa la red.';
@@ -599,7 +663,7 @@ window.montarHojaAsistente = () => {
                             title="Nueva conversación" aria-label="Nueva conversación">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                     </button>
-                    <button id="btn-clave-asistente" class="ios-boton-icono" onclick="window.pedirClaveAsistente()"
+                    <button id="btn-clave-asistente" class="ios-boton-icono" onclick="window.abrirPantallaClave()"
                             title="Clave de la API" aria-label="Clave de la API">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2.5 2.5"/></svg>
                     </button>
@@ -621,7 +685,14 @@ window.abrirAsistente = () => {
     if (window.cerrarPanelAdmin) window.cerrarPanelAdmin();
     window.montarHojaAsistente();
     document.getElementById('modal-asistente').style.display = 'flex';
+    window.asistente.pantalla = 'chat';
     window.pintarAsistente();
+    // Lo de la base llega después: si la clave se eliminó o se cambió desde
+    // otro aparato, la copia de éste se quita y la hoja se repinta.
+    const habia = window.claveDelAsistente();
+    window.sincronizarClaveAsistente().then(() => {
+        if (!habia || habia !== window.claveDelAsistente()) window.pintarAsistente();
+    });
     // La plantilla y las cachés se piden de una vez, mientras se escribe.
     window.prepararDatosDelAsistente().catch(() => {});
     window.cargarSdkAnthropic().catch(() => {});
@@ -650,21 +721,11 @@ window.pintarAsistente = () => {
     const redactor = document.getElementById('asistente-redactor');
     if (!cont) return;
     const clave = window.claveDelAsistente();
-    redactor.hidden = !clave;
+    redactor.hidden = !clave || window.asistente.pantalla === 'clave';
     window.pintarEstadoAsistente(window.asistente.ocupado);
 
-    if (!clave) {
-        cont.innerHTML = `
-            <div class="asistente-clave">
-                <div class="asistente-clave-titulo">Conecta el asistente</div>
-                <p>Escribe una clave de la API de Anthropic (empieza por <code>sk-ant-</code>). Se guarda sólo en este aparato y se usa para hablar con Claude desde aquí.</p>
-                <p>El asistente lee encuestas, respuestas y la plantilla para contestar; no puede cambiar nada.</p>
-                <input id="inp-clave-asistente" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…">
-                <button class="asistente-clave-guardar" onclick="window.guardarClaveDesdeHoja()">Guardar</button>
-                <div id="error-clave-asistente" class="asistente-clave-error"></div>
-            </div>`;
-        return;
-    }
+    if (window.asistente.pantalla === 'clave') { window.pintarPantallaClave(); return; }
+    if (!clave) { window.pintarPantallaSinClave(); return; }
 
     if (window.asistente.mensajes.length === 0) {
         cont.innerHTML = `
@@ -697,20 +758,207 @@ window.redibujarHistorialAsistente = () => {
     if (turno) turno.cerrar();
 };
 
-window.pedirClaveAsistente = () => {
+// --- LAS PANTALLAS DE LA CLAVE ---
+// Viven en el mismo cuerpo que la conversación, como las pantallas de la hoja
+// de evaluaciones: apilar otra hoja dejaría dos tiradores a la vista.
+
+const fechaDeClaveAsistente = (f) => f ? new Date(f).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+const campoClave = (id, placeholder, autocompletar) =>
+    `<input id="${id}" type="password" autocomplete="${autocompletar || 'off'}" autocapitalize="off" spellcheck="false" placeholder="${placeholder}">`;
+
+const marcoClave = (titulo, cuerpo) => {
+    const cont = document.getElementById('asistente-mensajes');
+    const redactor = document.getElementById('asistente-redactor');
+    if (redactor) redactor.hidden = true;
+    if (cont) cont.innerHTML = `
+        <div class="asistente-clave">
+            <div class="asistente-clave-titulo">${titulo}</div>
+            ${cuerpo}
+            <div id="error-clave-asistente" class="asistente-clave-error"></div>
+        </div>`;
+};
+
+const decirErrorClave = (texto) => {
+    const err = document.getElementById('error-clave-asistente');
+    if (err) err.textContent = texto;
+};
+
+// Apaga los botones de la pantalla mientras la base contesta: una frase mal
+// escrita tarda un segundo a propósito, y en ese segundo se vuelve a pulsar.
+const ocuparClave = (ocupada) => {
+    document.querySelectorAll('.asistente-clave button').forEach(b => { b.disabled = ocupada; });
+    window.pintarEstadoAsistente(false);
+    const sub = document.getElementById('subtitulo-asistente');
+    if (sub && ocupada) sub.textContent = 'Hablando con Supabase…';
+};
+
+// Sin clave en este aparato: se pide la frase si hay una en Supabase, o una
+// clave nueva si no la hay.
+window.pintarPantallaSinClave = () => {
+    const r = window.claveRemotaAsistente;
+    if (!r) {
+        marcoClave('Comprobando la clave…', '<p>Preguntando a Supabase si hay una clave guardada.</p>');
+        return;
+    }
+    if (!r.disponible && r.motivo === 'sin-red') {
+        marcoClave('Sin conexión', `<p>No se pudo preguntar a Supabase si hay una clave guardada.</p>
+            <button class="asistente-clave-guardar" onclick="window.reintentarClaveAsistente()">Reintentar</button>`);
+        return;
+    }
+    if (r.disponible && r.guardada) {
+        marcoClave('Usar la clave guardada', `
+            <p>Hay una clave de Anthropic guardada en Supabase desde el ${fechaDeClaveAsistente(r.guardadaEn)}. Escribe la frase de acceso para usarla en este aparato.</p>
+            ${campoClave('inp-frase-asistente', 'Frase de acceso', 'current-password')}
+            <button class="asistente-clave-guardar" onclick="window.desbloquearClaveAsistente()">Usar en este aparato</button>
+            <button class="asistente-clave-secundario" onclick="window.abrirPantallaClave()">Cambiar o eliminar la clave</button>`);
+        return;
+    }
+    const sinFuncion = !r.disponible;
+    marcoClave('Conecta el asistente', `
+        <p>Escribe una clave de la API de Anthropic (empieza por <code>sk-ant-</code>). ${sinFuncion
+            ? 'Por ahora se guarda sólo en este aparato: falta correr <code>sql/clave-asistente.sql</code> en Supabase.'
+            : 'Se guarda en Supabase, protegida con una frase de acceso que eliges tú, para usarla desde cualquier aparato.'}</p>
+        ${campoClave('inp-clave-asistente', 'sk-ant-…')}
+        ${sinFuncion ? '' : campoClave('inp-frase-asistente', 'Frase de acceso (mín. 8)', 'new-password')
+            + campoClave('inp-frase2-asistente', 'Repite la frase de acceso', 'new-password')}
+        <p class="asistente-clave-nota">La frase no se guarda en ningún sitio: si la olvidas, elimina la clave y vuelve a guardarla.</p>
+        <button class="asistente-clave-guardar" onclick="window.guardarClaveNueva(${sinFuncion})">Guardar</button>`);
+};
+
+window.reintentarClaveAsistente = async () => {
+    window.claveRemotaAsistente = null;
+    window.pintarAsistente();
+    await window.sincronizarClaveAsistente();
+    window.pintarAsistente();
+};
+
+const campoDeClave = (id) => ((document.getElementById(id) || {}).value || '').trim();
+
+window.guardarClaveNueva = async (soloLocal, fraseActual) => {
+    const clave = campoDeClave('inp-clave-asistente');
+    if (!/^sk-ant-/.test(clave)) { decirErrorClave(window.TEXTO_ERROR_CLAVE.clave_invalida); return; }
+
+    if (soloLocal) {
+        if (!window.guardarClaveDelAsistente(clave)) { decirErrorClave('Este navegador no deja guardarla.'); return; }
+        window.asistente.pantalla = 'chat';
+        window.pintarAsistente();
+        return;
+    }
+
+    const frase = document.getElementById('inp-frase-asistente').value;
+    const frase2 = document.getElementById('inp-frase2-asistente').value;
+    if (frase.length < 8) { decirErrorClave(window.TEXTO_ERROR_CLAVE.frase_corta); return; }
+    if (frase !== frase2) { decirErrorClave('Las dos frases no coinciden.'); return; }
+
+    ocuparClave(true);
+    const { data: huella, error } = await sb.rpc('guardar_clave_asistente',
+        { p_clave: clave, p_frase: frase, p_frase_actual: fraseActual ?? null });
+    ocuparClave(false);
+    if (error) { decirErrorClave(window.TEXTO_ERROR_CLAVE[motivoDeError(error)]); return; }
+    if (!huella) { decirErrorClave('Supabase no confirmó el guardado.'); return; }
+
+    window.guardarClaveDelAsistente(clave, huella);
+    await window.consultarClaveRemota();
+    window.asistente.pantalla = 'chat';
+    window.pintarAsistente();
+};
+
+window.desbloquearClaveAsistente = async () => {
+    const frase = document.getElementById('inp-frase-asistente').value;
+    if (!frase) { decirErrorClave('Escribe la frase de acceso.'); return; }
+    ocuparClave(true);
+    const { data: clave, error } = await sb.rpc('obtener_clave_asistente', { p_frase: frase });
+    const r = await window.consultarClaveRemota();
+    ocuparClave(false);
+    if (error) {
+        const motivo = motivoDeError(error);
+        decirErrorClave(window.TEXTO_ERROR_CLAVE[motivo]);
+        if (motivo === 'sin_clave') window.pintarAsistente();
+        return;
+    }
+    window.guardarClaveDelAsistente(clave, r.huella);
+    window.asistente.pantalla = 'chat';
+    window.pintarAsistente();
+};
+
+// --- La pantalla del botón de la llave: cambiar, quitar o eliminar ---
+
+window.abrirPantallaClave = async () => {
     if (window.asistente.ocupado) return;
-    if (window.claveDelAsistente() && !confirm('¿Quitar la clave guardada en este aparato y escribir otra?')) return;
+    window.asistente.pantalla = 'clave';
+    window.pintarAsistente();
+    await window.consultarClaveRemota();
+    if (window.asistente.pantalla === 'clave') window.pintarAsistente();
+};
+
+window.volverAlChatAsistente = () => {
+    window.asistente.pantalla = 'chat';
+    window.pintarAsistente();
+};
+
+window.pintarPantallaClave = () => {
+    const r = window.claveRemotaAsistente;
+    const local = !!window.claveDelAsistente();
+    const volver = `<button class="asistente-clave-secundario" onclick="window.volverAlChatAsistente()">Volver</button>`;
+
+    if (!r) { marcoClave('Clave de la API', '<p>Preguntando a Supabase…</p>' + volver); return; }
+
+    const enAparato = local ? 'Este aparato la tiene lista para usar.' : 'Este aparato todavía no la usa.';
+    let estado;
+    if (!r.disponible) {
+        estado = r.motivo === 'sin-funcion'
+            ? `<p>La clave vive sólo en este aparato: falta correr <code>sql/clave-asistente.sql</code> en Supabase.</p>`
+            : `<p>No se pudo preguntar a Supabase. ${enAparato}</p>`;
+    } else if (r.guardada) {
+        estado = `<p>Guardada en Supabase desde el ${fechaDeClaveAsistente(r.guardadaEn)} · huella <code>${window.sanitizeForHTML(r.huella.slice(0, 6))}</code>. ${enAparato}</p>`;
+    } else {
+        estado = `<p>No hay ninguna clave guardada en Supabase.</p>`;
+    }
+
+    const cambiar = r.disponible && r.guardada ? `
+        <details class="asistente-clave-plegable">
+            <summary>Cambiar la clave</summary>
+            ${campoClave('inp-clave-asistente', 'Clave nueva sk-ant-…')}
+            ${campoClave('inp-frase-actual-asistente', 'Frase de acceso actual', 'current-password')}
+            ${campoClave('inp-frase-asistente', 'Frase nueva (mínimo 8)', 'new-password')}
+            ${campoClave('inp-frase2-asistente', 'Repite la frase nueva', 'new-password')}
+            <button class="asistente-clave-guardar" onclick="window.cambiarClaveAsistente()">Guardar la clave nueva</button>
+        </details>` : (r.disponible && !r.guardada
+            ? `<button class="asistente-clave-guardar" onclick="window.volverAlChatAsistente()">Guardar una clave</button>` : '');
+
+    const quitar = local ? `<button class="asistente-clave-secundario" onclick="window.quitarClaveDeEsteAparato()">Quitar de este aparato</button>` : '';
+    const eliminar = (r.disponible && r.guardada) || (!r.disponible && local)
+        ? `<button class="asistente-clave-eliminar" onclick="window.eliminarClaveAsistente()">Eliminar la clave</button>
+           <p class="asistente-clave-nota">Eliminarla la borra de Supabase y de todos los aparatos la próxima vez que abran el asistente. Si crees que se filtró, revócala también en console.anthropic.com.</p>` : '';
+
+    marcoClave('Clave de la API', estado + cambiar + quitar + eliminar + (local ? volver : ''));
+};
+
+window.cambiarClaveAsistente = () => {
+    const actual = document.getElementById('inp-frase-actual-asistente').value;
+    if (!actual) { decirErrorClave('Escribe la frase de acceso actual.'); return; }
+    return window.guardarClaveNueva(false, actual);
+};
+
+window.quitarClaveDeEsteAparato = () => {
     window.guardarClaveDelAsistente('');
     window.pintarAsistente();
 };
 
-window.guardarClaveDesdeHoja = () => {
-    const inp = document.getElementById('inp-clave-asistente');
-    const err = document.getElementById('error-clave-asistente');
-    const clave = (inp.value || '').trim();
-    if (!/^sk-ant-/.test(clave)) { err.textContent = 'Eso no parece una clave de Anthropic.'; return; }
-    if (!window.guardarClaveDelAsistente(clave)) { err.textContent = 'Este navegador no deja guardarla.'; return; }
+window.eliminarClaveAsistente = async () => {
+    if (!confirm('¿Eliminar la clave de la API? Se borra de Supabase y deja de funcionar en todos los aparatos.')) return;
+    const r = window.claveRemotaAsistente;
+    if (r && r.disponible) {
+        ocuparClave(true);
+        const { error } = await sb.rpc('borrar_clave_asistente');
+        ocuparClave(false);
+        if (error) { decirErrorClave(window.TEXTO_ERROR_CLAVE[motivoDeError(error)]); return; }
+    }
+    window.guardarClaveDelAsistente('');
+    // Se comprueba lo que de verdad quedó, no lo que se esperaba.
+    const despues = await window.consultarClaveRemota();
     window.pintarAsistente();
+    if (despues.disponible && despues.guardada) decirErrorClave('Supabase sigue teniendo una clave: no se pudo eliminar.');
 };
 
 window.usarSugerenciaAsistente = (i) => window.preguntarAlAsistente(window.SUGERENCIAS_ASISTENTE[i]);
