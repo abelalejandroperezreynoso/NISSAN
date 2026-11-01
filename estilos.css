@@ -1744,23 +1744,11 @@ textarea:focus {
         gap: 15px !important;
     }
 
-    #header-user-info {
-        width: 100%;
-        text-align: left !important;       /* CAMBIO: Fuerza el texto a la izquierda */
-        padding-right: 0 !important;
-        margin-bottom: 5px;
-        
-        /* Aseguramos que el contenedor interno también se alinee a la izquierda */
-        display: flex;
-        flex-direction: row;
-        justify-content: flex-start;
-        align-items: center;
-    }
-    
-    /* El avatar mantiene su margen derecho pero ya no se centra automáticamente */
-    #header-user-info > div:first-child {
-        margin: 0 15px 0 0 !important; /* Margen solo a la derecha */
-    }
+    /* Aquí hubo reglas para #header-user-info —en fila, y con margen para su
+       primer hijo— de cuando la foto iba dentro de ese bloque. Desde que la
+       foto va fuera y el bloque es el texto (.panel-usuario-info), ponían el
+       nombre, el puesto y los datos uno al lado del otro y los recortaban a
+       tres letras. Ese id no lleva reglas: la maqueta es de sus clases. */
 
     /* La GRÁFICA no lleva medidas aquí a propósito. Las pone el marcado que
        arma window.mostrarDashboard, y son fluidas: ancho al 100% de la
