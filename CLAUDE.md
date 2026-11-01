@@ -8570,6 +8570,15 @@ Las reglas para usarlo:
     `respuestasDelPeriodoDeTodos`), con las mismas columnas y cachés
     (`prepararDatosDelAsistente`). Una herramienta que calcule por su cuenta
     acabaría dando otro número del que se lee en pantalla.
+  - **La conversación se copia desde el encabezado** (el botón de las dos
+    hojas, `window.copiarConversacionAsistente`): sale del historial y no de lo
+    dibujado —«Tú:» y «Asistente:» con el Markdown tal cual, y las consultas
+    que hizo como renglones con «·»—, así que una pregunta que falló no se
+    copia. Sólo se ve con una conversación a la vista y se apaga mientras se
+    escribe la respuesta (`pintarEstadoAsistente`). Sin `navigator.clipboard`
+    —contexto no seguro o Safari viejo— copia con un textarea escondido y
+    `execCommand`; el aviso va al subtítulo y el icono pasa a palomita un
+    momento, nunca texto sobre el botón.
   - **El historial sólo crece por el final**: la respuesta se guarda con sus
     bloques de pensamiento tal cual. Si algo falla a media pregunta se vuelve al
     historial de antes de ella, que un `tool_use` sin su resultado rompería la

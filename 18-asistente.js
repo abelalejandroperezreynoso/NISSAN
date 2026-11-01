@@ -655,6 +655,77 @@ window.nuevaConversacionAsistente = () => {
 
 const ICONO_ASISTENTE_ENVIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 const ICONO_ASISTENTE_PARAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>';
+const ICONO_ASISTENTE_COPIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg>';
+const ICONO_ASISTENTE_COPIADO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+// --- COPIAR LA CONVERSACIÓN ---
+// Sale del historial y no de lo que hay dibujado: es lo que de verdad se le
+// preguntó y se contestó, en Markdown tal cual llegó, con las consultas que
+// hizo entre medias. Una pregunta que falló ya no está en el historial
+// (se vuelve al de antes), así que tampoco se copia.
+window.textoDeConversacionAsistente = () => {
+    const partes = [];
+    window.asistente.mensajes.forEach(m => {
+        if (m.role === 'user' && typeof m.content === 'string') {
+            partes.push('Tú:\n' + m.content);
+        } else if (m.role === 'assistant' && Array.isArray(m.content)) {
+            const consultas = m.content.filter(b => b.type === 'tool_use')
+                .map(u => '· ' + window.rotuloDeHerramienta(u.name, u.input));
+            const texto = m.content.filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
+            const cuerpo = [texto, consultas.join('\n')].filter(Boolean).join('\n\n');
+            if (!cuerpo) return;
+            // Una respuesta que pasó por herramientas llega en varios mensajes
+            // seguidos: se juntan bajo un solo «Asistente».
+            const ultima = partes[partes.length - 1];
+            if (ultima && ultima.startsWith('Asistente:\n')) partes[partes.length - 1] = ultima + '\n\n' + cuerpo;
+            else partes.push('Asistente:\n' + cuerpo);
+        }
+    });
+    if (!partes.length) return '';
+    const fecha = new Date().toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
+    return `Conversación con el asistente · ${fecha}\n\n` + partes.join('\n\n');
+};
+
+// `navigator.clipboard` sólo existe en contexto seguro y algunos Safari viejos
+// no lo tienen: entonces se copia con un textarea escondido y `execCommand`.
+window.copiarAlPortapapeles = async (texto) => {
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(texto);
+            return true;
+        }
+    } catch (e) { /* se intenta a la antigua */ }
+    const area = document.createElement('textarea');
+    area.value = texto;
+    area.setAttribute('readonly', '');
+    // 16px, o Safari en iOS hace zoom al enfocarlo aunque no se vea.
+    area.style.cssText = 'position:fixed; top:0; left:-9999px; opacity:0; font-size:16px;';
+    document.body.appendChild(area);
+    area.select();
+    area.setSelectionRange(0, texto.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    area.remove();
+    return ok;
+};
+
+window.copiarConversacionAsistente = async () => {
+    const texto = window.textoDeConversacionAsistente();
+    const btn = document.getElementById('btn-copiar-asistente');
+    const sub = document.getElementById('subtitulo-asistente');
+    if (!texto) return;
+    const ok = await window.copiarAlPortapapeles(texto);
+    // El aviso va al subtítulo y el botón cambia de icono un momento: es un
+    // botón sin texto, así que no se le escribe nada encima.
+    if (sub && !window.asistente.ocupado) sub.textContent = ok ? 'Conversación copiada' : 'No se pudo copiar';
+    if (btn && ok) btn.innerHTML = ICONO_ASISTENTE_COPIADO;
+    clearTimeout(window.__avisoCopiaAsistente);
+    window.__avisoCopiaAsistente = setTimeout(() => {
+        const b = document.getElementById('btn-copiar-asistente');
+        if (b) b.innerHTML = ICONO_ASISTENTE_COPIAR;
+        if (!window.asistente.ocupado && window.asistente.pantalla === 'chat') window.pintarEstadoAsistente(false);
+    }, 1800);
+};
 
 window.SUGERENCIAS_ASISTENTE = [
     '¿Cómo va la encuesta más reciente?',
@@ -681,6 +752,8 @@ window.montarHojaAsistente = () => {
                             title="Nueva conversación" aria-label="Nueva conversación">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                     </button>
+                    <button id="btn-copiar-asistente" class="ios-boton-icono" onclick="window.copiarConversacionAsistente()"
+                            title="Copiar conversación" aria-label="Copiar conversación" hidden>${ICONO_ASISTENTE_COPIAR}</button>
                     <button id="btn-clave-asistente" class="ios-boton-icono" onclick="window.abrirPantallaClave()"
                             title="Clave de la API" aria-label="Clave de la API">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14.5 8.5l2.5 2.5"/></svg>
@@ -733,6 +806,14 @@ window.pintarEstadoAsistente = (ocupado, texto) => {
         btn.title = ocupado ? 'Detener' : 'Enviar';
         btn.setAttribute('aria-label', btn.title);
         btn.classList.toggle('esta-parando', !!ocupado);
+    }
+    // Copiar sólo sale con una conversación a la vista, y se apaga mientras se
+    // escribe la respuesta: se copiaría a medias.
+    const copiar = document.getElementById('btn-copiar-asistente');
+    if (copiar) {
+        copiar.hidden = window.asistente.pantalla !== 'chat' || !window.claveDelAsistente()
+            || window.asistente.mensajes.length === 0;
+        copiar.disabled = !!ocupado;
     }
 };
 
