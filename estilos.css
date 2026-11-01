@@ -35,8 +35,9 @@ body {
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    padding-top: 60px;
+    padding: 60px 16px 0;
     height: 100vh;
+    height: 100dvh;
     width: 100%;
     background: linear-gradient(135deg, #f0f2f5 0%, #e3f2fd 100%);
     position: fixed;
@@ -52,6 +53,10 @@ body {
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
     width: 100%;
     max-width: 360px;
+    /* Sin border-box, el 100% es del contenido y los 30px de relleno de cada
+       lado se suman encima: en un iPhone de 375 la tarjeta medía 420 y se
+       salía por los dos bordes, con las esquinas cortadas. */
+    box-sizing: border-box;
     text-align: center;
 }
 
@@ -130,7 +135,7 @@ body {
 #suggestions-list {
     position: absolute;
     top: 100%;
-    left: 70px;
+    left: 0;
     right: 0;
     background: white;
     border: 1px solid #e2e8f0;
