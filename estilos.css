@@ -7263,3 +7263,19 @@ html.fondo-anclado body {
     font-size: 0.9rem;
     padding: 4px 0 10px;
 }
+
+/* Los dos cuerpos de la hoja de una persona —el suyo y el del «Reporte de
+   Equipo»— son los que se desplazan, no la hoja: así el encabezado se queda a
+   la vista. `min-height: 0` es lo que deja encoger a un hijo de un flex en
+   columna; sin él el cuerpo mide lo que su contenido y empuja la hoja. */
+.stats-cuerpo-desplazable {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+.stats-cuerpo-desplazable[hidden] { display: none; }
+#stats-equipo-cuerpo { padding-bottom: env(safe-area-inset-bottom); }

@@ -8181,6 +8181,12 @@ Las reglas para usarlo:
     (`currentStatsEmpId`): se puede bajar a un subordinado mientras la consulta
     de encuestas va de camino.
 
+  - **La hoja no se desplaza: lo hacen sus dos cuerpos**
+    (`.stats-cuerpo-desplazable`), o el encabezado se iba por arriba al primer
+    arrastre. Por eso la vista de equipo mete su foto y su fila de caras
+    **dentro** de `#stats-equipo-cuerpo` y no detrás del encabezado: fuera del
+    cuerpo se quedarían fijas debajo de él.
+
   La flecha del encabezado lleva, en modo administrador, al jefe inmediato; si
   no, por donde se vino (`statsHistoryStack`). Y «Entrar como …» es una fila del
   final, sólo administrando y nunca de uno mismo: era una llave suelta al pie.

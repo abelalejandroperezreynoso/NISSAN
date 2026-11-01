@@ -20,7 +20,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-11-01-8">
+    <link rel="stylesheet" href="estilos.css?v=2026-11-01-9">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -708,7 +708,10 @@
     <div id="modal-responder-eval" class="hoja-overlay" style="z-index:999999;"></div>
 
     <div id="modal-stats-empleado" class="hoja-overlay" style="z-index:3000;">
-            <div class="hoja-contenido" style="max-width:500px; overflow-y: auto; overflow-x: hidden; padding: 12px 0 0;">
+            <!-- La hoja no se desplaza: lo hacen sus dos cuerpos, y así el
+                 encabezado —con la flecha de volver y la cruz— se queda a la
+                 vista en vez de irse por arriba al primer arrastre. -->
+            <div class="hoja-contenido" style="max-width:500px; overflow: hidden; padding: 12px 0 0;">
                 
                 <div class="hoja-encabezado-lista">
                     <div style="display:flex; align-items:center; gap:8px; min-width:0;">
@@ -727,9 +730,9 @@
                      window.abrirStatsEmpleado. Lo de debajo es del «Reporte de
                      Equipo» (window.abrirStatsEquipo), que comparte la hoja;
                      cada vista esconde el cuerpo de la otra. -->
-                <div id="stats-persona-cuerpo" class="persona-cuerpo" hidden></div>
+                <div id="stats-persona-cuerpo" class="persona-cuerpo stats-cuerpo-desplazable" hidden></div>
 
-                <div id="stats-equipo-cuerpo">
+                <div id="stats-equipo-cuerpo" class="stats-cuerpo-desplazable">
                 <div style="padding: 0 25px;">
                                 <div style="background: white; border-radius: 16px; padding: 15px; border: none; margin-top: 15px;">
                                     
@@ -1157,26 +1160,26 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-11-01-8"></script>
-    <script src="2a-core-nav.js?v=2026-11-01-8"></script>
-    <script src="2b-core-dashboard.js?v=2026-11-01-8"></script>
-    <script src="3-incidentes.js?v=2026-11-01-8"></script>
-    <script src="4-evaluaciones-base.js?v=2026-11-01-8"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-11-01-8"></script>
-    <script src="17-hoja-excel.js?v=2026-11-01-8"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-11-01-8"></script>
-    <script src="5-objetivos.js?v=2026-11-01-8"></script>
-    <script src="6-calendario.js?v=2026-11-01-8"></script>
-    <script src="7-pendientes.js?v=2026-11-01-8"></script>
-    <script src="8-hallazgos.js?v=2026-11-01-8"></script>
-    <script src="9-estadisticas.js?v=2026-11-01-8"></script>
+    <script src="1-config.js?v=2026-11-01-9"></script>
+    <script src="2a-core-nav.js?v=2026-11-01-9"></script>
+    <script src="2b-core-dashboard.js?v=2026-11-01-9"></script>
+    <script src="3-incidentes.js?v=2026-11-01-9"></script>
+    <script src="4-evaluaciones-base.js?v=2026-11-01-9"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-11-01-9"></script>
+    <script src="17-hoja-excel.js?v=2026-11-01-9"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-11-01-9"></script>
+    <script src="5-objetivos.js?v=2026-11-01-9"></script>
+    <script src="6-calendario.js?v=2026-11-01-9"></script>
+    <script src="7-pendientes.js?v=2026-11-01-9"></script>
+    <script src="8-hallazgos.js?v=2026-11-01-9"></script>
+    <script src="9-estadisticas.js?v=2026-11-01-9"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-11-01-8"></script>
-    <script src="13-gestion.js?v=2026-11-01-8"></script>
-    <script src="14-vacaciones.js?v=2026-11-01-8"></script>
-    <script src="15-presentacion.js?v=2026-11-01-8"></script>
-    <script src="16-cursos.js?v=2026-11-01-8"></script>
-    <script src="10-refacciones.js?v=2026-11-01-8"></script> 
+    <script src="12-almacenamiento.js?v=2026-11-01-9"></script>
+    <script src="13-gestion.js?v=2026-11-01-9"></script>
+    <script src="14-vacaciones.js?v=2026-11-01-9"></script>
+    <script src="15-presentacion.js?v=2026-11-01-9"></script>
+    <script src="16-cursos.js?v=2026-11-01-9"></script>
+    <script src="10-refacciones.js?v=2026-11-01-9"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

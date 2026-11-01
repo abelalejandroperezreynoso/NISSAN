@@ -4849,8 +4849,9 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
         ${filaEntrarComo}
     `;
 
-    const hoja = modal.querySelector('.hoja-contenido');
-    if (hoja) hoja.scrollTop = 0;
+    // Quien se desplaza es el cuerpo, no la hoja: una persona nueva empieza
+    // arriba.
+    cuerpo.scrollTop = 0;
     modal.style.display = 'flex';
 
     window.pintarEquipoDePersona(empId);
@@ -4969,7 +4970,11 @@ window.abrirStatsEquipo = async (isBack = false) => {
                 </div>
             `;
             
-            headerDiv.insertAdjacentElement('afterend', avatarWrapper);
+            // Dentro del cuerpo del equipo y no detrás del encabezado: es el
+            // cuerpo el que se desplaza, y lo que quedara fuera se quedaría fijo
+            // debajo del encabezado.
+            if (cuerpoEquipo) cuerpoEquipo.insertAdjacentElement('afterbegin', avatarWrapper);
+            else headerDiv.insertAdjacentElement('afterend', avatarWrapper);
 
             const subWrapper = document.createElement('div');
             subWrapper.id = 'modal-sub-team-view';
