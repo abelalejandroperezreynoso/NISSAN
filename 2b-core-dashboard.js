@@ -584,6 +584,18 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
             window.pintarTarjetaAdmin(userHeader, avatarUrl ? headerAvatarHtml : '');
             window.renderizarVistaRapidaEquipo(false);
         } else if (userHeader) {
+            // Lo de la ficha y no lo de la sesión: la sesión dura treinta días
+            // y un cambio de puesto o de área posterior no aparecería ahí.
+            const ficha = currentUserData || user;
+            const esc = (t) => window.sanitizeForHTML ? window.sanitizeForHTML(String(t ?? '')) : String(t ?? '');
+            const areaDeUsuario = (ficha.area && ficha.area !== 'Sin Área') ? ficha.area : '';
+            const ICONO_DEPTO = '<path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M3 21h18"/><path d="M8 8h3M8 12h3M8 16h3"/>';
+            const ICONO_AREA = '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>';
+            const datoDeUsuario = (icono, texto, rotulo) => `
+                        <div class="panel-usuario-dato" title="${rotulo}: ${esc(texto)}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icono}</svg>
+                            <span>${esc(texto)}</span>
+                        </div>`;
             // FIX DEFINITIVO: Forzamos la visualización en bloque aquí también
             userHeader.style.display = 'block';
             
@@ -593,30 +605,20 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
                      propagación. -->
                 <div class="panel-usuario-resumen" onclick="window.alternarPanelUsuario()">
                     
-                    <div id="header-user-info" style="min-width: 0; flex: 1;">
-                        <!-- El flotado va en el envoltorio y no en la foto,
-                             que es lo que hace que el nombre y el puesto la
-                             rodeen. -->
-                        <div style="float: left; margin-right: 15px;">
-                            <div id="header-user-icon" onclick="event.stopPropagation(); window.abrirStatsEmpleado('${user.id}', '${user.name}', '${user.puesto || 'Colaborador'}')"
-                                    style="width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); cursor:pointer; position:relative; flex-shrink:0; ${headerBgStyle}">
-                                ${headerAvatarHtml}
-                                <div id="badge-count-${user.id}" class="notification-badge" style="display:none;">0</div>
-                            </div>
-                        </div>
+                    <div id="header-user-icon" onclick="event.stopPropagation(); window.abrirStatsEmpleado('${user.id}', '${user.name}', '${user.puesto || 'Colaborador'}')"
+                            style="width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); cursor:pointer; position:relative; flex-shrink:0; ${headerBgStyle}">
+                        ${headerAvatarHtml}
+                        <div id="badge-count-${user.id}" class="notification-badge" style="display:none;">0</div>
+                    </div>
 
-                        <div style="overflow: hidden;">
-                            <div class="user-name-display" style="font-size: clamp(1rem, 5vw, 1.3rem); font-weight: 700; color: #1e293b; line-height: 1.1; word-wrap: break-word;">
-                                ${user.name}
-                            </div>
-                            
-                            <div class="user-meta-display" style="font-size: clamp(0.7rem, 3.5vw, 0.85rem); color: #64748b; margin-top: 4px; line-height: 1.2;">
-                                <span style="font-weight: 600; color: #334155;">${user.puesto || 'Colaborador'}</span>
-                                <span style="margin: 0 4px; color: #cbd5e1;">|</span>
-                                <span>${user.dept || 'General'}</span>
-                                ${user.area ? `<span style="margin: 0 4px; color: #cbd5e1;">|</span><span>${user.area}</span>` : ''}
-                            </div>
-                        </div>
+                    <!-- Nombre, puesto y, debajo, un renglón para el
+                         departamento y otro para el área: seguidos con «|»
+                         se partían por cualquier sitio. -->
+                    <div id="header-user-info" class="panel-usuario-info">
+                        <div class="panel-usuario-nombre">${esc(user.name)}</div>
+                        <div class="panel-usuario-puesto">${esc(ficha.puesto || 'Colaborador')}</div>
+                        ${datoDeUsuario(ICONO_DEPTO, ficha.dept || 'General', 'Departamento')}
+                        ${areaDeUsuario ? datoDeUsuario(ICONO_AREA, areaDeUsuario, 'Área') : ''}
                     </div>
 
                     <button id="btn-panel-usuario" class="ios-boton-icono panel-usuario-chevron"
