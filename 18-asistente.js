@@ -167,7 +167,8 @@ Cómo funciona la aplicación:
 - Las respuestas (evaluation_responses) tienen review_status: Pendiente (por calificar), Revisado, Certificada, Mal Revisada o Falsa (anulada).
 - Las encuestas hechas sólo de constancias (foto, firma, asistencia, curso previo) no se califican: entregarlas vale 100.
 - Los empleados se identifican por employee_id (texto); el nombre va como «Apellidos Nombres». supervisor_id es el employee_id de su jefe inmediato.
-- Los registros de incidentes (incidents) se firman de enterado (incident_signatures).
+- Los registros de incidentes viven en la tabla incidents, y la columna tipo dice qué son: «Incidente», «Difusión» o «Capacitación» (sin tipo cuenta como Incidente). Una difusión es un registro con tipo = 'Difusión', no una encuesta: para contarlas o buscarlas, filtra incidents por tipo. title es el nombre, date la fecha, grado la severidad de un incidente y linked_incident_id el registro al que está vinculado. Cada uno se firma de enterado (incident_signatures, una fila por persona) y tiene sus fotos en incident_gallery.
+- Borrar un registro de incidentes con borrar_registros lo elimina por completo: sus firmas, sus fotos y los archivos de ambas en Storage, que es lo que libera espacio (cerca de 1 MB de firmas por registro). Los registros vinculados a él no se borran: se quedan sin vínculo. Las firmas no se borran sueltas.
 
 ${window.catalogoDeTiposParaAsistente()}
 
@@ -320,7 +321,7 @@ window.HERRAMIENTAS_ASISTENTE = [
     },
     {
         name: 'borrar_registros',
-        description: 'Propone borrar de forma permanente los registros que cumplan los filtros (al menos uno; lo normal es por id). Se cuentan antes y no se borra nada hasta que el administrador lo confirma en pantalla. Hasta 50 filas. Para empleados, de una persona en una, y se borra también su historial: si sólo se quiere que deje de aparecer, mejor modificar is_active a false. Para encuestas, apagarla (active=false) conserva lo contestado.',
+        description: 'Propone borrar de forma permanente los registros que cumplan los filtros (al menos uno; lo normal es por id). Se cuentan antes y no se borra nada hasta que el administrador lo confirma en pantalla. Hasta 50 filas. Para empleados, de una persona en una, y se borra también su historial: si sólo se quiere que deje de aparecer, mejor modificar is_active a false. Para encuestas, apagarla (active=false) conserva lo contestado. Para registros de incidentes (incidents), se borran por completo con sus firmas, sus fotos y sus archivos, que es lo que libera espacio.',
         input_schema: {
             type: 'object',
             properties: {
@@ -691,6 +692,41 @@ window.EJECUTAR_HERRAMIENTA = {
             if (seFue) despuesDeEscribir('employees');
             return seFue ? { aprobado: true, eliminado: true }
                 : { aprobado: false, resultado: 'No se eliminó: el administrador lo canceló en la segunda confirmación o la base lo rechazó.' };
+        }
+
+        // Un registro de incidentes no se borra con un delete: sus firmas y sus
+        // fotos son archivos de Storage —ahí está el espacio— que se quedarían
+        // sin dueño. Pasa por la misma función que el bote de basura de su
+        // tarjeta, de uno en uno.
+        if (e.tabla === 'incidents' && window.eliminarIncidenteCompleto) {
+            const ids = previa.filas.map(f => f.id).filter(v => v != null);
+            const resumen = await window.resumenDeBorradoIncidente(ids);
+            const aprobado = await ctx.confirmar({
+                accion: 'borrar', tabla: e.tabla, motivo: e.motivo,
+                titulo: `Eliminar ${ids.length} ${ids.length === 1 ? 'registro' : 'registros'} de incidentes por completo`,
+                filtros: previa.filtrosTexto, filas: previa.muestra, resto: previa.total - previa.muestra.length,
+                nota: window.textoDeBorradoIncidente(resumen)
+            });
+            if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se borró nada.' };
+            const resultados = [];
+            for (let i = 0; i < ids.length; i++) {
+                const r = await window.eliminarIncidenteCompleto(ids[i], (t) =>
+                    window.pintarEstadoAsistente(true, ids.length > 1 ? `${i + 1} de ${ids.length} · ${t}` : t));
+                resultados.push(r);
+            }
+            const bien = resultados.filter(r => r.ok);
+            const suma = (k) => bien.reduce((s, r) => s + (r[k] || 0), 0);
+            const pendientes = suma('archivosPedidos') - suma('archivosBorrados');
+            ctx.resultado(bien.length === ids.length && !pendientes,
+                bien.length === ids.length
+                    ? `Eliminado${ids.length === 1 ? '' : 's'} ${bien.length} · ${suma('archivosBorrados')} archivos liberados${pendientes ? ` · ${pendientes} sin borrar` : ''}`
+                    : `Sólo se eliminaron ${bien.length} de ${ids.length}`);
+            despuesDeEscribir(e.tabla);
+            return { aprobado: true, eliminados: bien.length, pedidos: ids.length,
+                firmas_borradas: suma('firmasBorradas'), fotos_borradas: suma('fotosBorradas'),
+                archivos_liberados: suma('archivosBorrados'), archivos_sin_borrar: pendientes,
+                vinculados_desligados: suma('vinculadosDesligados'),
+                detalle: resultados.map(r => window.textoDeIncidenteEliminado(r)) };
         }
 
         // Una encuesta se lleva lo que contestó todo el mundo: se dice antes.

@@ -712,44 +712,254 @@ document.getElementById('btn-guardar-db').onclick = async () => {
 
 window.editar = (id) => { window.idEditando = id; window.abrirModal(); };
 
-window.borrar = async (id) => {
-    if(confirm("¿Borrar registro y todas sus evidencias físicas (fotos y firmas)?")) {
-        
-        const card = document.getElementById(`card-${id}`);
-        if (card) { card.style.opacity = '0.5'; card.style.pointerEvents = 'none'; }
-        
-        const loading = document.getElementById('loading-indicator');
-        if (loading) { loading.innerText = 'Borrando registro y archivos...'; loading.style.display = 'block'; }
+// =========================================================
+// --- ELIMINAR UN REGISTRO POR COMPLETO ---
+// =========================================================
+// Un registro (incidente, difusión o capacitación) deja tres cosas: su fila,
+// las filas de sus firmas y de su galería, y los archivos de esas firmas y
+// fotos en Storage. El espacio está en lo último —una imagen por firma, unos
+// 450 por registro—, así que borrar sólo la fila no libera casi nada y deja
+// los archivos sin dueño. Esto lo borra todo, y lo usan el bote de basura de
+// la tarjeta y el asistente: dos maneras de borrar acabarían borrando cosas
+// distintas.
 
-        try {
-            const { data: galleryFiles } = await sb.storage.from('incident-images').list(`gallery/${id}`);
-            if (galleryFiles && galleryFiles.length > 0) {
-                const pathsToRemove = galleryFiles.map(file => `gallery/${id}/${file.name}`);
-                await sb.storage.from('incident-images').remove(pathsToRemove);
-            }
+window.BUCKET_FIRMAS_INCIDENTES = 'signatures';
+window.BUCKET_IMAGENES_INCIDENTES = 'incident-images';
 
-            const { data: sigFiles } = await sb.storage.from('signatures').list(`signatures/${id}`);
-            if (sigFiles && sigFiles.length > 0) {
-                const pathsToRemove = sigFiles.map(file => `signatures/${id}/${file.name}`);
-                await sb.storage.from('signatures').remove(pathsToRemove);
-            }
-
-            const { error } = await sb.from('incidents').delete().eq('id', id);
-            if (error) throw error;
-
-            if(window.invalidarCacheDashboard) window.invalidarCacheDashboard();
-            
-            alert("Registro y archivos eliminados completamente.");
-            window.recargarListadoCompleto();
-
-        } catch (err) {
-            console.error("Error durante el borrado:", err);
-            alert("Hubo un error al intentar borrar: " + err.message);
-            if (card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
-        } finally {
-            if (loading) { loading.style.display = 'none'; loading.innerText = 'Buscando datos...'; }
-        }
+// Todas las filas de una consulta, de mil en mil: un registro con 455 firmas
+// cabe en una página, pero el tope de PostgREST corta en silencio.
+window.todasLasFilas = async (armar) => {
+    const filas = [];
+    for (let desde = 0; ; desde += 1000) {
+        const { data, error } = await armar().range(desde, desde + 999);
+        if (error) throw error;
+        filas.push(...(data || []));
+        if (!data || data.length < 1000) return filas;
     }
+};
+
+// Lo que hay en una carpeta de un bucket, paginando. Un bucket que la
+// política no deja listar devuelve vacío sin error —pasa con el de firmas—,
+// así que esto sólo suma a las rutas que dicen las filas, nunca las sustituye.
+window.archivosDeCarpeta = async (bucket, carpeta) => {
+    const rutas = [];
+    try {
+        for (let desde = 0; ; desde += 1000) {
+            const { data, error } = await sb.storage.from(bucket).list(carpeta, { limit: 1000, offset: desde });
+            if (error || !data || !data.length) break;
+            data.forEach(o => { if (o.id && o.name !== '.emptyFolderPlaceholder') rutas.push(`${carpeta}/${o.name}`); });
+            if (data.length < 1000) break;
+        }
+    } catch (e) { /* sin listado, valen las filas */ }
+    return rutas;
+};
+
+// La ruta dentro del bucket de una url pública; '' si es de otro bucket.
+window.rutaDeArchivoIncidente = (url, bucket) => {
+    if (window.rutaDeUrlDeBucket) return window.rutaDeUrlDeBucket(url, bucket);
+    const texto = String(url || '');
+    const marca = `/${bucket}/`;
+    const corte = texto.indexOf(marca);
+    if (corte < 0) return '';
+    let ruta = texto.slice(corte + marca.length).split('?')[0].split('#')[0];
+    try { ruta = decodeURIComponent(ruta); } catch (e) { /* tal cual */ }
+    return ruta;
+};
+
+// ¿Deja Storage borrar en este bucket? Se prueba con un archivo de un byte
+// que se sube y se borra: una política que no deje borrar no da error, sólo
+// devuelve una lista vacía, y eso no se puede saber de otra manera. true,
+// false, o null si ni siquiera se pudo subir (entonces no se sabe y se
+// sigue: lo que no se borre se dirá al final). Una vez por bucket y sesión.
+window.permisoDeBorradoStorage = {};
+window.storageDejaBorrar = async (bucket) => {
+    if (bucket in window.permisoDeBorradoStorage) return window.permisoDeBorradoStorage[bucket];
+    let deja = null;
+    try {
+        const ruta = `_sonda/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
+        const { error: errSubir } = await sb.storage.from(bucket).upload(ruta, new Blob(['x'], { type: 'image/jpeg' }), { contentType: 'image/jpeg' });
+        if (!errSubir) {
+            const { data } = await sb.storage.from(bucket).remove([ruta]);
+            deja = (data || []).length > 0;
+        }
+    } catch (e) { deja = null; }
+    if (deja !== null) window.permisoDeBorradoStorage[bucket] = deja;
+    return deja;
+};
+
+// Cuánto se lleva un registro, sin traerse ninguna fila: lo que se enseña en
+// la confirmación.
+window.resumenDeBorradoIncidente = async (ids) => {
+    const lista = (Array.isArray(ids) ? ids : [ids]).filter(v => v != null);
+    const contar = async (consulta) => { try { const { count, error } = await consulta; return error ? null : (count || 0); } catch (e) { return null; } };
+    const [firmas, fotos, vinculados] = await Promise.all([
+        contar(sb.from('incident_signatures').select('id', { count: 'exact', head: true }).in('incident_id', lista)),
+        contar(sb.from('incident_gallery').select('id', { count: 'exact', head: true }).in('incident_id', lista)),
+        contar(sb.from('incidents').select('id', { count: 'exact', head: true }).in('linked_incident_id', lista)
+            .not('id', 'in', `(${lista.join(',')})`))
+    ]);
+    return { firmas, fotos, vinculados };
+};
+
+// El texto de esa confirmación, el mismo en la tarjeta y en el asistente.
+window.textoDeBorradoIncidente = (r) => {
+    const n = (v, uno, varios) => v == null ? `${varios} sin contar` : `${v} ${v === 1 ? uno : varios}`;
+    const partes = [n(r.firmas, 'firma de enterado', 'firmas de enterado'), n(r.fotos, 'foto', 'fotos')];
+    let texto = `Se borran ${partes.join(' y ')}, con sus archivos. Sin vuelta atrás.`;
+    if (r.vinculados) texto += ` ${r.vinculados === 1 ? 'Un registro vinculado se queda' : `${r.vinculados} registros vinculados se quedan`} sin vínculo (no se borra${r.vinculados === 1 ? '' : 'n'}).`;
+    return texto;
+};
+
+// Borra un registro y todo lo suyo. Nunca lanza: devuelve lo que de verdad
+// pasó, que es lo que se le dice a quien lo pidió.
+//
+// El orden es el de lo que no tiene vuelta atrás: primero se reúnen las
+// rutas (de las filas, que el bucket de firmas no se deja listar), después se
+// borra la fila —si la base se niega, no se ha perdido nada— y sólo entonces
+// los archivos. Y sólo los de SU carpeta: una difusión sin fotos propias
+// guarda en `image_url` la primera foto del registro al que está vinculada,
+// y borrarla dejaría a aquél sin foto.
+window.eliminarIncidenteCompleto = async (id, avisar) => {
+    const decir = (t) => { try { if (avisar) avisar(t); } catch (e) { /* sólo informa */ } };
+    const r = { ok: false, id, firmasBorradas: 0, fotosBorradas: 0, archivosBorrados: 0,
+        archivosPedidos: 0, archivosPendientes: [], vinculadosDesligados: 0, avisos: [] };
+    const bF = window.BUCKET_FIRMAS_INCIDENTES, bI = window.BUCKET_IMAGENES_INCIDENTES;
+    const carpetaFirmas = `signatures/${id}/`, carpetaFotos = `gallery/${id}/`;
+
+    try {
+        decir('Buscando sus archivos…');
+        const { data: inc, error: errInc } = await sb.from('incidents').select('id, title, tipo, image_url').eq('id', id).maybeSingle();
+        if (errInc) throw errInc;
+        if (!inc) { r.error = 'Ese registro ya no existe.'; return r; }
+        r.titulo = inc.title; r.tipo = inc.tipo || 'Incidente';
+
+        const firmas = await window.todasLasFilas(() => sb.from('incident_signatures').select('id, signature_data').eq('incident_id', id).order('id'));
+        const fotos = await window.todasLasFilas(() => sb.from('incident_gallery').select('id, image_url').eq('incident_id', id).order('id'));
+
+        const rutasFirmas = new Set(), rutasFotos = new Set();
+        firmas.forEach(f => { const p = window.rutaDeArchivoIncidente(f.signature_data, bF); if (p.startsWith(carpetaFirmas)) rutasFirmas.add(p); });
+        fotos.forEach(f => { const p = window.rutaDeArchivoIncidente(f.image_url, bI); if (p.startsWith(carpetaFotos)) rutasFotos.add(p); });
+        const portada = window.rutaDeArchivoIncidente(inc.image_url, bI);
+        if (portada.startsWith(carpetaFotos)) rutasFotos.add(portada);
+        // Lo que se dejó atrás antes —una firma borrada de una en una se lleva
+        // la fila y no el archivo— sólo se encuentra listando la carpeta.
+        (await window.archivosDeCarpeta(bF, carpetaFirmas.slice(0, -1))).forEach(p => rutasFirmas.add(p));
+        (await window.archivosDeCarpeta(bI, carpetaFotos.slice(0, -1))).forEach(p => rutasFotos.add(p));
+
+        // Antes de tocar la fila, que Storage deje borrar: después ya no habría
+        // de dónde sacar las rutas para reintentarlo, y el registro se iría
+        // dejando sus archivos ocupando sitio para siempre.
+        for (const [bucket, rutas] of [[bF, rutasFirmas], [bI, rutasFotos]]) {
+            if (rutas.size && await window.storageDejaBorrar(bucket) === false) {
+                r.error = `No se borró nada: Storage no deja borrar archivos del bucket «${bucket}», así que el registro se iría y sus archivos seguirían ocupando sitio. Falta darle el permiso de borrado.`;
+                r.sinPermiso = bucket;
+                return r;
+            }
+        }
+
+        // La fila. Si las firmas o la galería la tienen declarada sin borrado en
+        // cascada, la base responde 23503: se quita lo que la sujeta y se
+        // reintenta una vez.
+        decir('Borrando el registro…');
+        const borrarFila = () => sb.from('incidents').delete().eq('id', id).select('id');
+        let { data: borrada, error: errBorrar } = await borrarFila();
+        if (errBorrar && errBorrar.code === '23503') {
+            const { data: desligados } = await sb.from('incidents').update({ linked_incident_id: null }).eq('linked_incident_id', id).select('id');
+            r.vinculadosDesligados += (desligados || []).length;
+            await sb.from('incident_signatures').delete().eq('incident_id', id);
+            await sb.from('incident_gallery').delete().eq('incident_id', id);
+            ({ data: borrada, error: errBorrar } = await borrarFila());
+        }
+        if (errBorrar) { r.error = 'La base no dejó borrarlo: ' + errBorrar.message; return r; }
+        if (!borrada || !borrada.length) { r.error = 'La base no dejó borrarlo (una política de seguridad lo impide). No se borró nada.'; return r; }
+        r.ok = true;
+
+        // Lo que colgaba de ella. Con borrado en cascada ya no queda nada y
+        // esto no toca ninguna fila; sin él, son las que se quedarían huérfanas.
+        const quedan = async (tabla, campo) => {
+            const { data, error } = await sb.from(tabla).delete().eq(campo, id).select('id');
+            if (error) r.avisos.push(`No se pudieron borrar sus filas de ${tabla}: ${error.message}`);
+            return (data || []).length;
+        };
+        const sueltasFirmas = await quedan('incident_signatures', 'incident_id');
+        const sueltasFotos = await quedan('incident_gallery', 'incident_id');
+        r.firmasBorradas = Math.max(firmas.length, sueltasFirmas);
+        r.fotosBorradas = Math.max(fotos.length, sueltasFotos);
+
+        // Los que estaban vinculados a él se quedan, sin el vínculo, y sin la
+        // foto que tomaban prestada de su carpeta.
+        const { data: vinc } = await sb.from('incidents').select('id, image_url').eq('linked_incident_id', id);
+        for (const v of (vinc || [])) {
+            const cambios = { linked_incident_id: null };
+            if (window.rutaDeArchivoIncidente(v.image_url, bI).startsWith(carpetaFotos)) cambios.image_url = null;
+            const { data } = await sb.from('incidents').update(cambios).eq('id', v.id).select('id');
+            r.vinculadosDesligados += (data || []).length;
+        }
+        // Y los que ya no lo apuntan pero siguen con su foto (la base pudo
+        // poner el vínculo a null por su cuenta).
+        await sb.from('incidents').update({ image_url: null }).like('image_url', `%/${bI}/${carpetaFotos}%`);
+
+        // Los archivos, de cien en cien, contando lo que de verdad se fue: una
+        // política que no deje borrar no da error, sólo devuelve una lista vacía.
+        const quitar = async (bucket, rutas) => {
+            const lista = [...rutas];
+            r.archivosPedidos += lista.length;
+            for (let i = 0; i < lista.length; i += 100) {
+                decir(`Borrando archivos… ${Math.min(i + 100, lista.length)} de ${lista.length}`);
+                const tanda = lista.slice(i, i + 100);
+                try {
+                    const { data, error } = await sb.storage.from(bucket).remove(tanda);
+                    const idos = new Set((data || []).map(o => o.name));
+                    r.archivosBorrados += idos.size;
+                    tanda.filter(p => !idos.has(p)).forEach(p => r.archivosPendientes.push({ bucket, ruta: p, motivo: error ? error.message : null }));
+                } catch (e) {
+                    tanda.forEach(p => r.archivosPendientes.push({ bucket, ruta: p, motivo: e.message }));
+                }
+            }
+        };
+        await quitar(bF, rutasFirmas);
+        await quitar(bI, rutasFotos);
+        if (r.archivosPendientes.length) {
+            const porBucket = {};
+            r.archivosPendientes.forEach(p => { porBucket[p.bucket] = (porBucket[p.bucket] || 0) + 1; });
+            Object.entries(porBucket).forEach(([b, n]) =>
+                r.avisos.push(`Storage no dejó borrar ${n} ${n === 1 ? 'archivo' : 'archivos'} del bucket «${b}»: le falta el permiso de borrado.`));
+        }
+    } catch (e) {
+        r.error = (r.ok ? 'El registro se borró, pero falló la limpieza: ' : 'No se borró: ') + (e.message || e);
+    }
+    if (r.ok && window.invalidarCacheDashboard) window.invalidarCacheDashboard();
+    return r;
+};
+
+// Lo que se le dice a quien lo pidió, en una frase.
+window.textoDeIncidenteEliminado = (r) => {
+    if (!r.ok) return r.error || 'No se borró.';
+    let t = `Se borró «${r.titulo}» con ${r.firmasBorradas} ${r.firmasBorradas === 1 ? 'firma' : 'firmas'} y ${r.fotosBorradas} ${r.fotosBorradas === 1 ? 'foto' : 'fotos'}; `
+        + `${r.archivosBorrados} de ${r.archivosPedidos} archivos liberados.`;
+    if (r.vinculadosDesligados) t += ` ${r.vinculadosDesligados} vinculado${r.vinculadosDesligados === 1 ? '' : 's'} quedó sin vínculo.`;
+    if (r.avisos.length) t += ' ' + r.avisos.join(' ');
+    if (r.error) t += ' ' + r.error;
+    return t;
+};
+
+window.borrar = async (id) => {
+    const inc = (window.incidentCache || {})[id] || {};
+    const resumen = await window.resumenDeBorradoIncidente(id);
+    const nombre = inc.title ? `«${inc.title}»` : 'este registro';
+    if (!confirm(`¿Eliminar ${nombre} por completo?\n\n${window.textoDeBorradoIncidente(resumen)}`)) return;
+
+    const card = document.getElementById(`card-${id}`);
+    if (card) { card.style.opacity = '0.5'; card.style.pointerEvents = 'none'; }
+    const loading = document.getElementById('loading-indicator');
+    const avisar = (t) => { if (loading) { loading.innerText = t; loading.style.display = 'block'; } };
+    avisar('Borrando registro y archivos...');
+
+    const r = await window.eliminarIncidenteCompleto(id, avisar);
+    if (loading) { loading.style.display = 'none'; loading.innerText = 'Buscando datos...'; }
+    alert(window.textoDeIncidenteEliminado(r));
+    if (r.ok) window.recargarListadoCompleto();
+    else if (card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
 };
 
 window.abrirVisor = async (incidentId) => {

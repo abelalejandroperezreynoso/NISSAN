@@ -42,7 +42,7 @@ Los mensajes de commit van en español.
 | `15-presentacion.js` | La presentación semanal y la mensual —una sola, con dos cortes—: la diapositiva del resultado de la planta, en la hoja y en `.pptx` |
 | `16-cursos.js` | Las hojas de «Programar curso» (el jefe, para quien no ha tomado el curso de una encuesta) y «Elige a tu jefe inmediato»; las reglas viven en `1-config.js` |
 | `17-hoja-excel.js` | Convierte un libro de Excel en páginas de material: dibuja sus celdas, fotos y figuras en un lienzo |
-| `18-asistente.js` | El asistente del administrador: una conversación con Claude que lee los datos de la aplicación con herramientas de sólo lectura |
+| `18-asistente.js` | El asistente del administrador: una conversación con Claude que lee los datos de la aplicación y, con la confirmación del administrador, los crea, modifica y borra |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -1451,6 +1451,57 @@ Las reglas para usarlo:
   sin nada detrás—. Lo que **no** se toca son los archivos de los buckets (el
   avatar, las imágenes de firma) ni los arreglos `target_employees` y
   `reviewer_employees` de las encuestas, que son asignación y no historial.
+
+- **Eliminar un registro de incidentes lo borra entero, archivos incluidos.**
+  Un registro —incidente, difusión o capacitación, que es la columna `tipo` de
+  `incidents`— deja su fila, las de sus firmas (`incident_signatures`) y su
+  galería (`incident_gallery`) y, sobre todo, **los archivos**: una imagen por
+  firma en el bucket `signatures` (unas 450 por registro, ~1 MB) y sus fotos en
+  `incident-images`. El espacio está ahí, así que borrar sólo la fila no libera
+  casi nada y deja los archivos sin dueño para siempre: «Consumo» no busca
+  huérfanos en esos dos buckets.
+
+  ```js
+  await window.resumenDeBorradoIncidente(ids)   // { firmas, fotos, vinculados }, contados sin traer filas
+  window.textoDeBorradoIncidente(resumen)       // lo que se enseña al confirmar
+  await window.eliminarIncidenteCompleto(id, avisar)   // nunca lanza; dice lo que de verdad pasó
+  window.textoDeIncidenteEliminado(resultado)
+  await window.storageDejaBorrar(bucket)        // true | false | null, una vez por sesión
+  ```
+
+  Lo usan **el bote de basura de la tarjeta** (`window.borrar`) y **el
+  asistente** (`borrar_registros` sobre `incidents`), y por eso es una sola
+  función: dos maneras de borrar acabarían borrando cosas distintas. El borrado
+  de antes listaba las carpetas con `list()` sin límite —que devuelve 100— y se
+  dejaba ~350 firmas de cada registro.
+
+  Cinco cosas que hay que mantener:
+
+  - **Las rutas salen de las filas, no del listado.** El bucket `signatures` no
+    se deja listar desde la aplicación (devuelve vacío sin error), así que las
+    rutas de las firmas se sacan de `signature_data`; listar la carpeta sólo
+    suma lo que se dejó atrás antes —borrar una firma suelta se lleva la fila y
+    no el archivo—. Todo paginado de mil en mil.
+  - **Sólo se borra lo de su carpeta** (`signatures/<id>/`, `gallery/<id>/`).
+    Una difusión sin fotos propias guarda en `image_url` la primera foto del
+    registro al que está vinculada, y borrarla dejaría a aquél sin foto.
+  - **Antes de tocar nada se prueba que Storage deje borrar**
+    (`storageDejaBorrar`: sube un archivo de un byte a `_sonda/` y lo borra).
+    Una política que no deje borrar no da error, sólo devuelve una lista vacía,
+    y descubrirlo después de borrar la fila es haber perdido las rutas para
+    reintentarlo. Sin permiso no se borra nada y se dice qué bucket falta; el
+    permiso es `sql/borrado-archivos-incidentes.sql`.
+  - **Primero la fila, después los archivos**, que es el orden de lo que no
+    tiene vuelta atrás. Si la base responde 23503 —firmas o galería sin borrado
+    en cascada—, se quita lo que la sujeta y se reintenta una vez; después se
+    borran las filas que hubieran quedado, que con cascada no tocan nada.
+  - **Los registros vinculados no se borran: se quedan sin vínculo**, y sin la
+    foto que tomaban prestada de su carpeta. Se dice al confirmar.
+
+  Todo cuenta lo que de verdad pasó —filas del `.select()`, archivos que
+  devolvió `remove()`— y el texto final lo dice: «1202 de 1202 archivos
+  liberados». El asistente sabe además qué es una difusión (lo dicen sus
+  instrucciones): antes la buscaba entre las encuestas.
 
 - **Quién debe firmar un registro.** No hay tabla que lo diga: la regla la
   sostiene el código, y desde que se separó en cuatro copias vive en un solo
@@ -8646,7 +8697,10 @@ Las reglas para usarlo:
     - **Una persona se elimina por `eliminarEmpleadoConHistorial`**, de una en
       una, que hace el barrido de su historial y vuelve a preguntar con el
       detalle; un delete a secas dejaría su historial sin dueño. Al borrar una
-      encuesta la tarjeta dice cuántas respuestas tiene.
+      encuesta la tarjeta dice cuántas respuestas tiene. **Un registro de
+      incidentes se elimina por `eliminarIncidenteCompleto`**, con sus firmas,
+      sus fotos y sus archivos, y la tarjeta dice cuántas firmas y fotos se
+      lleva: es lo que libera espacio (ver «Eliminar un registro de incidentes»).
     - **Las de leer van a la vez y las que escriben, de una en una y detrás**,
       cada una con su tarjeta. Después de escribir se tiran las cachés
       (`despuesDeEscribir`): el panel, la plantilla y la tarjeta de encuestas.
