@@ -1537,6 +1537,64 @@ window.verPeriodoDeLaTarjeta = (indice) => {
         <div>${resumen}</div>`;
 };
 
+// Las encuestas activas con todas las columnas y las cachés que hacen falta
+// para decidir a quién le toca cada una y en qué estado está. La comparten la
+// tarjeta de encuestas del inicio y la hoja de una persona
+// (`abrirStatsEmpleado`): las dos tienen que decir lo mismo de la misma
+// encuesta, y eso sólo pasa si las dos parten de la misma consulta. null si la
+// base no respondió.
+window.encuestasActivasParaTarjeta = async () => {
+    // Las mismas columnas que pide el badge, y por lo mismo: sin ellas
+    // `esEvaluacionPendiente` decide con lo que no se le dio —una encuesta
+    // sin `requires_min_score` pediría repetirse aunque tenga el mínimo
+    // apagado— y `leTocaEstaEncuesta` se la contaría a quien no le toca.
+    // Y `reviewer_employees`, que es de donde salen las miniaturas de quién
+    // revisa en la hoja de detalle: sin la columna, `revisoresDeEncuesta`
+    // sólo vería los de la clasificación y enseñaría los heredados en una
+    // encuesta que nombra a los suyos. Es la trampa de `requires_min_score`.
+    //
+    // Y `pregunta_si_aplica`, que es lo que decide si la encuesta es suya o
+    // todavía le está preguntando: sin la columna, `leTocaEstaEncuesta`
+    // se la cuenta como asignada a quien ni siquiera ha contestado que le
+    // aplique. La trampa de siempre.
+    const campos = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRevisores(
+        await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(
+            'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments')))))));
+
+    // Igual que en el panel de pendientes: las ventanas de las encuestas
+    // que pasan lista se piden antes, porque `esEvaluacionPendiente` las
+    // consulta sin poder esperar.
+    await window.cargarVentanasDeAsistencia();
+
+    // Y qué encuestas puntúan, por lo mismo: `resumenDeEncuestaAdmin` lo
+    // pregunta sin poder esperar, y sin la caché una hecha sólo de
+    // asistencias o evidencias volvería a repartir su cero sobre el padrón.
+    await window.cargarEncuestasQuePuntuan();
+
+    // Quién revisa puede venir de la clasificación, y `revisoresDeEncuesta`
+    // lo pregunta sin poder esperar cuando se abre la hoja de detalle.
+    await window.cargarRevisoresDeClasificaciones();
+
+    // El objetivo de cada clasificación, que la hoja de detalle mide sin
+    // poder esperar.
+    if (window.cargarObjetivosDeClasificaciones) await window.cargarObjetivosDeClasificaciones();
+
+    // Y lo que se contestó a «¿te aplica esta encuesta?», que es lo que
+    // separa la encuesta asignada de la que todavía está preguntando:
+    // `leTocaEstaEncuesta` lo mira sin poder esperar.
+    if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
+    // Y el curso que falta: si espera a que su jefe se lo programe, la encuesta no le pide nada.
+    if (window.cargarCursosPrevios) await window.cargarCursosPrevios();
+    // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
+    if (window.cargarVacaciones) await window.cargarVacaciones();
+
+    const { data: encuestas, error } = await sb.from('evaluations')
+        .select(campos)
+        .eq('active', true);
+    if (error || !encuestas) return null;
+    return encuestas;
+};
+
 window.cargarEncuestasAsignadas = async (userId) => {
     const cont = document.getElementById('container-encuestas-asignadas');
     if (!cont) return;
@@ -1557,118 +1615,108 @@ window.cargarEncuestasAsignadas = async (userId) => {
             || JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
         if (!empleado) return;
 
-        // Las mismas columnas que pide el badge, y por lo mismo: sin ellas
-        // `esEvaluacionPendiente` decide con lo que no se le dio —una encuesta
-        // sin `requires_min_score` pediría repetirse aunque tenga el mínimo
-        // apagado— y `leTocaEstaEncuesta` se la contaría a quien no le toca.
-        // Y `reviewer_employees`, que es de donde salen las miniaturas de quién
-        // revisa en la hoja de detalle: sin la columna, `revisoresDeEncuesta`
-        // sólo vería los de la clasificación y enseñaría los heredados en una
-        // encuesta que nombra a los suyos. Es la trampa de `requires_min_score`.
-        //
-        // Y `pregunta_si_aplica`, que es lo que decide si la encuesta es suya o
-        // todavía le está preguntando: sin la columna, `leTocaEstaEncuesta`
-        // se la cuenta como asignada a quien ni siquiera ha contestado que le
-        // aplique. La trampa de siempre.
-        const campos = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(await window.camposConRevisores(
-            await window.camposConRelanzamiento(await window.camposConMinimo(await window.camposConReintento(
-                'id, title, category, frequency, created_at, mode, is_obligatory, target_employees, target_positions, target_departments')))))));
-
-        // Igual que en el panel de pendientes: las ventanas de las encuestas
-        // que pasan lista se piden antes, porque `esEvaluacionPendiente` las
-        // consulta sin poder esperar.
-        await window.cargarVentanasDeAsistencia();
-
-        // Y qué encuestas puntúan, por lo mismo: `resumenDeEncuestaAdmin` lo
-        // pregunta sin poder esperar, y sin la caché una hecha sólo de
-        // asistencias o evidencias volvería a repartir su cero sobre el padrón.
-        await window.cargarEncuestasQuePuntuan();
-
-        // Quién revisa puede venir de la clasificación, y `revisoresDeEncuesta`
-        // lo pregunta sin poder esperar cuando se abre la hoja de detalle.
-        await window.cargarRevisoresDeClasificaciones();
-
-        // El objetivo de cada clasificación, que la hoja de detalle mide sin
-        // poder esperar.
-        if (window.cargarObjetivosDeClasificaciones) await window.cargarObjetivosDeClasificaciones();
-
-        // Y lo que se contestó a «¿te aplica esta encuesta?», que es lo que
-        // separa la encuesta asignada de la que todavía está preguntando:
-        // `leTocaEstaEncuesta` lo mira sin poder esperar.
-        if (window.cargarDecisionesDeAplica) await window.cargarDecisionesDeAplica();
-        // Y el curso que falta: si espera a que su jefe se lo programe, la encuesta no le pide nada.
-        if (window.cargarCursosPrevios) await window.cargarCursosPrevios();
-        // Y las vacaciones: un periodo relevado no es de quien se fue, sino de su relevo.
-        if (window.cargarVacaciones) await window.cargarVacaciones();
-
-        const { data: encuestas, error } = await sb.from('evaluations')
-            .select(campos)
-            .eq('active', true);
-        if (error || !encuestas) return;
+        const encuestas = await window.encuestasActivasParaTarjeta();
+        if (!encuestas) return;
 
         // En modo administrador la tarjeta es de la empresa entera: todas las
         // encuestas activas, y no sólo las que le tocan a quien mira.
         const esAdmin = !!window.modoAdminActivo;
-        const tieneEquipo = window.tieneEquipoDirecto(empStrId);
-        const mias = esAdmin ? encuestas
-            : encuestas.filter(ev => window.leTocaEstaEncuesta(ev, empleado, tieneEquipo));
-        if (mias.length === 0) return;
-
         const ahora = new Date();
+
+        // Contestando, las filas son las de esta persona y salen de
+        // `filasDeEncuestasDeEmpleado`, que es lo que también dibuja la hoja de
+        // detalle de un colaborador: las dos dicen lo mismo de la misma persona.
+        if (!esAdmin) {
+            const propias = await window.filasDeEncuestasDeEmpleado(empleado, encuestas, ahora);
+            if (!propias) return;
+            return window.dibujarTarjetaDeEncuestas(cont, propias.filas, propias.respuestas, false, false, empStrId);
+        }
+
+        const mias = encuestas;
+        if (mias.length === 0) return;
 
         // `review_status` y `grades_json` son para el plazo de reintento: sin
         // el puntaje no se sabe si hay que reponer la encuesta.
-        let respuestas = [];
-        let topeRespuestas = false;
-        if (esAdmin) {
-            const traidas = await window.respuestasDelPeriodoDeTodos(mias, ahora);
-            respuestas = traidas.respuestas;
-            topeRespuestas = traidas.tope;
-            // La presentación semanal la lee para saber si puede reusar estas
-            // respuestas o tiene que pedir las suyas.
-            window.topeDeLaTarjeta = traidas.tope;
-        } else {
-            const { data } = await sb.from('evaluation_responses')
-                .select(await window.camposConApoyo('id, evaluation_id, submitted_at, review_status, grades_json'))
-                .eq('employee_id', empStrId)
-                .in('evaluation_id', mias.map(e => e.id));
-            respuestas = data || [];
-        }
+        const traidas = await window.respuestasDelPeriodoDeTodos(mias, ahora);
+        const respuestas = traidas.respuestas;
+        const topeRespuestas = traidas.tope;
+        // La presentación semanal la lee para saber si puede reusar estas
+        // respuestas o tiene que pedir las suyas.
+        window.topeDeLaTarjeta = traidas.tope;
 
-        const puntajeDe = window.puntajeDeRespuesta;
-
+        // Administrando, la encuesta no es de quien mira: su estado es el
+        // neutro —una palomita diría que está «al día» de algo que no le
+        // toca— y lo que dice el renglón es cómo va la encuesta.
         const filas = mias.map(ev => {
-            // Administrando, la encuesta no es de quien mira: su estado es el
-            // neutro —una palomita diría que está «al día» de algo que no le
-            // toca— y lo que dice el renglón es cómo va la encuesta.
-            if (esAdmin) {
-                const resumen = window.resumenDeEncuestaAdmin(ev, respuestas, ahora);
-                return {
-                    ev, resumen, resp: null,
-                    vencimiento: { mostrar: false },
-                    estado: { texto: 'Encuesta de la empresa', neutro: true, color: '#94a3b8', listo: true },
-                    puntaje: resumen.promedio
-                };
-            }
-
-            const contestaQuienMira = (ev.mode || 'self') !== 'boss';
-            const vencimiento = window.esEvaluacionPendiente(
-                respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, contestaQuienMira, null, empStrId);
-            // La respuesta del periodo se guarda: de ella salen el puntaje del
-            // renglón y la fecha que enseña la hoja de detalle.
-            const resp = window.respuestaDelPeriodo(ev, respuestas, ahora);
+            const resumen = window.resumenDeEncuestaAdmin(ev, respuestas, ahora);
             return {
-                ev, vencimiento, resp,
-                estado: window.estadoDeAsignada(vencimiento),
-                puntaje: puntajeDe(resp)
+                ev, resumen, resp: null,
+                vencimiento: { mostrar: false },
+                estado: { texto: 'Encuesta de la empresa', neutro: true, color: '#94a3b8', listo: true },
+                puntaje: resumen.promedio
             };
         });
+
+        return window.dibujarTarjetaDeEncuestas(cont, filas, respuestas, true, topeRespuestas, null);
+    } catch (e) {
+        // Nada que enseñar es mejor que una tarjeta rota: el resto del inicio
+        // no depende de esto.
+        console.warn('No se pudieron cargar las encuestas asignadas:', e.message);
+    }
+};
+
+// Las encuestas que le tocan a una persona, cada una con su estado y su
+// puntaje del periodo que corre. Es la regla de la tarjeta del inicio entera
+// —`leTocaEstaEncuesta` para a quién le toca, `esEvaluacionPendiente` para en
+// qué estado está y `puntajeDeRespuesta` para la cifra— y la usan la tarjeta y
+// la hoja de detalle de un colaborador, que por eso no pueden discrepar.
+//
+// `encuestas` son las de `encuestasActivasParaTarjeta`, que ya dejó cargadas
+// las cachés que estas reglas preguntan sin poder esperar. null si la persona
+// no tiene ninguna, o si no se pudo consultar.
+window.filasDeEncuestasDeEmpleado = async (empleado, encuestas, ahora = new Date()) => {
+    if (!empleado || !encuestas) return null;
+    const empStrId = String(empleado.id).trim();
+    const tieneEquipo = window.tieneEquipoDirecto(empStrId);
+    const mias = encuestas.filter(ev => window.leTocaEstaEncuesta(ev, empleado, tieneEquipo));
+    if (mias.length === 0) return null;
+
+    // `review_status` y `grades_json` son para el plazo de reintento: sin
+    // el puntaje no se sabe si hay que reponer la encuesta.
+    const { data, error } = await sb.from('evaluation_responses')
+        .select(await window.camposConApoyo('id, evaluation_id, submitted_at, review_status, grades_json'))
+        .eq('employee_id', empStrId)
+        .in('evaluation_id', mias.map(e => e.id));
+    if (error) return null;
+    const respuestas = data || [];
+
+    const filas = mias.map(ev => {
+        const contestaQuienMira = (ev.mode || 'self') !== 'boss';
+        const vencimiento = window.esEvaluacionPendiente(
+            respuestas, ev.id, ev.frequency, window.inicioDeEncuesta(ev), ev, contestaQuienMira, null, empStrId);
+        // La respuesta del periodo se guarda: de ella salen el puntaje del
+        // renglón y la fecha que enseña la hoja de detalle.
+        const resp = window.respuestaDelPeriodo(ev, respuestas, ahora);
+        return {
+            ev, vencimiento, resp,
+            estado: window.estadoDeAsignada(vencimiento),
+            puntaje: window.puntajeDeRespuesta(resp)
+        };
+    });
+    return { filas, respuestas };
+};
+
+// Lo que queda de `cargarEncuestasAsignadas` una vez hechas las filas: la
+// gráfica, el resumen y los grupos, en la tarjeta del inicio.
+window.dibujarTarjetaDeEncuestas = (cont, filas, respuestas, esAdmin, topeRespuestas, empStrId) => {
+    try {
 
         window.respuestasAsignadas = respuestas || [];
         // De quién es, para las vacaciones: al tocar un punto de la gráfica se
         // vuelve a preguntar `esEvaluacionPendiente` y tiene que saber de quién
         // son esas respuestas para reconocer una semana relevada.
         window.empleadoDeLaTarjeta = esAdmin ? null : empStrId;
+        const ahora = new Date();
 
         const { resumen, bloques } = window.cuerpoTarjetaEncuestas(filas, esAdmin, topeRespuestas);
 
@@ -3822,6 +3870,16 @@ div.innerHTML = `
 };
 
 window.actualizarResumenPendientesEnModal = (empId) => {
+    // La hoja de una persona tiene su propia lista de pendientes; lo de abajo
+    // es del «Reporte de Equipo», que comparte la hoja.
+    const listaPersona = document.getElementById('persona-pendientes');
+    if (listaPersona && empId !== 'EQUIPO') {
+        if (String(window.currentStatsEmpId) === String(empId)) {
+            listaPersona.innerHTML = window.listaDePendientesDePersona(window.statsPendientes[empId]);
+        }
+        return;
+    }
+
     const summaryBox = document.getElementById('stats-summary-content');
     if(!summaryBox) return;
 
@@ -4420,12 +4478,271 @@ window.iniciarSesionComo = (empId) => {
     }
 };
 
+// ==========================================
+// LA HOJA DE UNA PERSONA
+// ==========================================
+// Se abre al tocar una foto —la propia o la de alguien del equipo— y dice, en
+// este orden, quién es, qué le falta, cómo va con sus encuestas y quién tiene a
+// su cargo. Era una foto de 100px suelta, una fila de caras en un recuadro
+// punteado y un radar con su propio cálculo, todo separado por huecos, sin un
+// rótulo que dijera para qué servía cada bloque y con los pendientes al final.
+//
+// **El radar se fue, y no sólo por el sitio.** Calculaba con una regla suya
+// —sólo el puesto, la última respuesta que hubiera sin mirar el periodo, y un
+// 0% en las encuestas que sólo dejan constancia— y por eso decía «Incidentes
+// 0%» de la misma persona que la tarjeta del inicio daba al 100%. Lo que va en
+// su lugar es la tarjeta del inicio misma: `filasDeEncuestasDeEmpleado`, con
+// `leTocaEstaEncuesta`, `esEvaluacionPendiente` y `puntajeDeRespuesta`.
+//
+// La hoja la comparte el «Reporte de Equipo» (`abrirStatsEquipo`), que sigue
+// con lo suyo: cada vista esconde el cuerpo de la otra.
+
+// Los dos iconos de la ficha, los mismos de la tarjeta del inicio.
+window.ICONO_DEPARTAMENTO = '<path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M3 21h18"/><path d="M8 8h3M8 12h3M8 16h3"/>';
+window.ICONO_AREA = '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>';
+
+const escPersona = (t) => window.sanitizeForHTML
+    ? window.sanitizeForHTML(String(t ?? '')) : String(t ?? '');
+
+// La foto de la ficha, con su botón de cámara: tocarla cambia la foto de
+// perfil, que es el único sitio de la aplicación donde se hace. Es un `<label
+// for>` y no un `.click()` sobre el campo escondido, que en iOS es
+// indistinguible del toque fantasma de las ruedas. A quien está de baja no se
+// le cambia nada: sin `for` ni campo, la foto es sólo foto.
+window.fotoDePersona = (emp, empId) => {
+    const url = emp && emp.avatar ? window.procesarUrlImagen(emp.avatar) : '';
+    const imagen = url
+        ? `<img src="${url}" alt="">`
+        : `<span class="persona-foto-vacia" aria-hidden="true">👤</span>`;
+    const deBaja = emp && emp.isActive === false;
+    if (deBaja) return `<div class="persona-foto esta-de-baja">${imagen}</div>`;
+    return `
+        <label class="persona-foto" for="inp-avatar-persona" title="Cambiar foto" aria-label="Cambiar foto">
+            ${imagen}
+            <span class="persona-foto-camara" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            </span>
+        </label>
+        <input type="file" id="inp-avatar-persona" accept="image/*" style="display:none;"
+               onchange="window.cambiarFotoPerfil(this, '${escPersona(empId)}')">`;
+};
+
+// Cambiada la foto, la ficha se repinta sola: es la misma persona.
+window.repintarFotoDePersona = (empId) => {
+    if (String(window.currentStatsEmpId) !== String(empId)) return;
+    const hueco = document.getElementById('persona-foto-hueco');
+    if (!hueco) return;
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(empId));
+    hueco.innerHTML = window.fotoDePersona(emp, empId);
+};
+
+// Un renglón de la ficha con su icono: el departamento o el área. De una línea
+// y recortado; lo entero, en el globo.
+const datoDePersona = (icono, texto, rotulo) => `
+    <div class="panel-usuario-dato" title="${rotulo}: ${escPersona(texto)}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icono}</svg>
+        <span>${escPersona(texto)}</span>
+    </div>`;
+
+// La ficha: la foto y, a su lado, lo mismo que la tarjeta del inicio —nombre,
+// puesto, departamento y área—, con las mismas clases.
+window.fichaDePersona = (emp, empId, nombre, puesto) => {
+    const area = emp && emp.area && emp.area !== 'Sin Área' ? emp.area : '';
+    const deBaja = emp && emp.isActive === false;
+    return `
+        <div class="persona-ficha">
+            <div id="persona-foto-hueco">${window.fotoDePersona(emp, empId)}</div>
+            <div class="panel-usuario-info">
+                <div class="panel-usuario-nombre">${escPersona(nombre)}</div>
+                <div class="panel-usuario-puesto">${escPersona(puesto || 'Colaborador')}</div>
+                ${datoDePersona(window.ICONO_DEPARTAMENTO, (emp && emp.dept) || 'General', 'Departamento')}
+                ${area ? datoDePersona(window.ICONO_AREA, area, 'Área') : ''}
+                ${deBaja ? '<span class="persona-baja">Dado de baja</span>' : ''}
+            </div>
+        </div>`;
+};
+
+// Lo que le falta, como lista de ajustes: una fila por cada clase de pendiente
+// con su cuenta a la derecha, o una sola fila verde si no le falta nada. Sale
+// de `statsPendientes`, que es la misma cuenta del globo de su foto.
+window.listaDePendientesDePersona = (stats) => {
+    if (!stats) return `<div class="fila-ios persona-fila-cargando">Calculando…</div>`;
+    const filas = [
+        ['Firmas de incidentes', stats.incidentes, '#dc2626'],
+        ['Difusiones', stats.difusiones, '#2563eb'],
+        ['Encuestas', stats.evaluaciones, '#7c3aed'],
+        ['Por calificar', stats.porCalificar, '#ea580c']
+    ].filter(([, n]) => n > 0);
+
+    if (filas.length === 0) {
+        return `
+            <div class="fila-ios persona-fila-estatica">
+                <span class="persona-al-dia" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="10" fill="#22c55e"/><path d="M7.5 12.4l3 3 6-6.6" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </span>
+                <span class="fila-ios-texto"><span class="fila-ios-titulo">Todo al día</span></span>
+            </div>`;
+    }
+    return filas.map(([rotulo, n, color]) => `
+        <div class="fila-ios persona-fila-estatica">
+            <span class="fila-ios-texto"><span class="fila-ios-titulo">${rotulo}</span></span>
+            <span class="persona-cuenta" style="background:${color};">${n > 99 ? '99+' : n}</span>
+        </div>`).join('');
+};
+
+// Las encuestas de la persona, agrupadas por clasificación como en la tarjeta
+// del inicio: el renglón de cada clasificación con el icono de la que peor
+// está, cuántas faltan y su promedio, y sus encuestas al desplegarla. Aquí el
+// <details> lo abre el navegador solo —no hay hoja de detalle a la que ir: las
+// de una clasificación hablan de quien mira, no de esta persona— y las
+// encuestas no se tocan, que abrirían la encuesta de quien mira.
+window.listaDeEncuestasDePersona = (filas, esYo) => {
+    const promedioDe = (unas) => {
+        const ps = unas.map(f => f.puntaje).filter(p => p !== null && p !== undefined);
+        return ps.length ? Math.round(ps.reduce((a, b) => a + b, 0) / ps.length) : null;
+    };
+    const peso = (f) => (!f.vencimiento.mostrar ? 2 : (f.vencimiento.vencida ? 0 : 1));
+    const reciente = (a, b) => ((Date.parse(b.ev.created_at) || 0) - (Date.parse(a.ev.created_at) || 0))
+        || ((Number(b.ev.id) || 0) - (Number(a.ev.id) || 0));
+    const color = (p) => (p !== null && typeof window.getColorScore === 'function') ? window.getColorScore(p) : '#64748b';
+    // Los estados hablan en segunda persona —«lo programa tu jefe»—, que de
+    // otra persona no se entiende.
+    const texto = (t) => esYo ? t : String(t).replace(/\btu jefe\b/g, 'su jefe');
+
+    const grupos = [];
+    const porClave = {};
+    filas.forEach(f => {
+        const clave = window.normalizarClasificacion(f.ev.category);
+        if (!porClave[clave]) {
+            porClave[clave] = { nombre: String(f.ev.category || 'General').trim() || 'General', filas: [] };
+            grupos.push(porClave[clave]);
+        }
+        porClave[clave].filas.push(f);
+    });
+    grupos.forEach(g => g.filas.sort((a, b) => (peso(a) - peso(b)) || reciente(a, b)));
+    const pesoDelGrupo = (g) => Math.min(...g.filas.map(peso));
+    grupos.sort((a, b) => (pesoDelGrupo(a) - pesoDelGrupo(b)) || a.nombre.localeCompare(b.nombre, 'es'));
+
+    const bloques = grupos.map(g => {
+        const renglones = g.filas.map(({ ev, estado, puntaje }) => {
+            const ritmo = window.textoDeFrecuencia ? window.textoDeFrecuencia(ev.frequency) : '';
+            const resultado = puntaje !== null && puntaje !== undefined
+                ? ` · <span style="color:${color(puntaje)}; font-weight:700;">${puntaje}%</span>`
+                : ((estado.listo && !estado.relevada && !estado.diceTexto) ? ''
+                    : ` · <span style="color:${estado.color}; font-weight:700;">${escPersona(texto(estado.texto))}</span>`);
+            return `
+                <div class="persona-encuesta" title="${escPersona(texto(estado.texto))}">
+                    ${window.iconoDeAsignada(estado)}
+                    <div style="flex:1; min-width:0;">
+                        <div class="persona-encuesta-titulo">${escPersona(ev.title || 'Sin título')}</div>
+                        <div class="persona-encuesta-detalle">${escPersona(ritmo)}${resultado}</div>
+                    </div>
+                </div>`;
+        }).join('');
+
+        const pendientes = g.filas.filter(f => f.vencimiento.mostrar).length;
+        const promedio = promedioDe(g.filas);
+        const pie = [
+            pendientes > 0
+                ? `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${g.filas.length}`
+                : `${g.filas.length} encuesta${g.filas.length === 1 ? '' : 's'} al día`,
+            promedio === null ? null : `<span style="color:${color(promedio)}; font-weight:700;">${promedio}%</span>`
+        ].filter(Boolean).join(' · ');
+
+        return `
+            <details class="grupo-asignadas">
+                <summary>
+                    ${window.iconoDeAsignada(g.filas[0].estado)}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:0.8rem; font-weight:800; color:#334155; text-transform:uppercase; letter-spacing:0.4px;">${escPersona(g.nombre)}</div>
+                        <div style="font-size:0.72rem; color:#94a3b8;">${pie}</div>
+                    </div>
+                    <svg class="grupo-asignadas-flecha" width="18" height="18" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+                         stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                </summary>
+                ${renglones}
+            </details>`;
+    }).join('');
+
+    // El renglón de arriba, con la regla de la tarjeta: pesando por
+    // clasificación, no promediando las encuestas en plano.
+    const pendientes = filas.filter(f => f.vencimiento.mostrar).length;
+    const promedio = window.promedioPorClasificacion(filas);
+    const resumen = [
+        pendientes === 0 ? `Ninguna pendiente de ${filas.length}`
+            : `${pendientes} pendiente${pendientes === 1 ? '' : 's'} de ${filas.length}`,
+        promedio === null ? null : `promedio <span style="color:${color(promedio)};">${promedio}%</span>`
+    ].filter(Boolean).join(' · ');
+
+    return `<div class="persona-encuestas-resumen">${resumen}</div>${bloques}`;
+};
+
+// Pide y dibuja las encuestas. Se comprueba al volver que la hoja siga siendo
+// de la misma persona: se pudo bajar a un subordinado mientras la consulta iba
+// de camino, y escribir ahí las encuestas del anterior sería mentir.
+window.cargarEncuestasDePersona = async (emp, empId, esYo) => {
+    const hueco = document.getElementById('persona-encuestas');
+    if (!hueco) return;
+    const sigue = () => String(window.currentStatsEmpId) === String(empId)
+        && document.getElementById('persona-encuestas') === hueco;
+    try {
+        const encuestas = await window.encuestasActivasParaTarjeta();
+        const propias = encuestas ? await window.filasDeEncuestasDeEmpleado(emp, encuestas) : null;
+        if (!sigue()) return;
+        hueco.innerHTML = propias
+            ? window.listaDeEncuestasDePersona(propias.filas, esYo)
+            : `<div class="persona-vacio">${encuestas ? 'No tiene encuestas asignadas.' : 'No se pudieron cargar sus encuestas.'}</div>`;
+    } catch (e) {
+        console.warn('No se pudieron cargar las encuestas de la persona:', e.message);
+        if (sigue()) hueco.innerHTML = `<div class="persona-vacio">No se pudieron cargar sus encuestas.</div>`;
+    }
+};
+
+// Su equipo directo como lista: una fila por persona con su foto, su puesto y
+// su cuenta de pendientes, que lleva a su propia hoja. Se repinta cuando llegan
+// las cuentas, que se calculan después de dibujar.
+window.pintarEquipoDePersona = (empId) => {
+    const hueco = document.getElementById('persona-equipo');
+    if (!hueco || String(window.currentStatsEmpId) !== String(empId)) return;
+    const suyos = (window.todosLosEmpleadosData || [])
+        .filter(e => String(e.supId) === String(empId))
+        .sort((a, b) => ((a.isActive === false) - (b.isActive === false)) || a.name.localeCompare(b.name, 'es'));
+    window.equipoDeLaPersona = suyos;
+    hueco.innerHTML = suyos.map((sub, i) => {
+        const stats = window.statsPendientes && window.statsPendientes[sub.id];
+        const cuenta = stats && stats.total > 0
+            ? `<span class="persona-cuenta">${stats.total > 99 ? '99+' : stats.total}</span>` : '';
+        const deBaja = sub.isActive === false;
+        return `
+            <button type="button" class="fila-ios${deBaja ? ' esta-apagado' : ''}" onclick="window.abrirSubordinadoDePersona(${i})">
+                <span class="persona-miniatura">${sub.avatar
+                    ? `<img src="${window.procesarUrlImagen(sub.avatar)}" loading="lazy" alt="">`
+                    : '<span aria-hidden="true">👤</span>'}</span>
+                <span class="fila-ios-texto">
+                    <span class="fila-ios-titulo">${escPersona(sub.name)}</span>
+                    <span class="fila-ios-detalle">${escPersona(deBaja ? 'Dado de baja' : (sub.puesto || 'Colaborador'))}</span>
+                </span>
+                ${cuenta}
+                <span class="fila-ios-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>`;
+    }).join('');
+};
+
+// Por índice y no por nombre en el `onclick`: un apellido con apóstrofo parte
+// el atributo.
+window.abrirSubordinadoDePersona = (i) => {
+    const sub = (window.equipoDeLaPersona || [])[i];
+    if (sub) window.abrirStatsEmpleado(sub.id, sub.name, sub.puesto);
+};
+
 window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) => {
     const modal = document.getElementById('modal-stats-empleado');
-    
+    if (!modal) return;
+
     if (!window.statsHistoryStack) window.statsHistoryStack = [];
-    const isOpen = modal && modal.style.display === 'flex';
-    
+    const isOpen = modal.style.display === 'flex';
+
     if (!isBack) {
         if (isOpen && window.currentStatsEmpId && window.currentStatsEmpId !== empId) {
             if (window.currentStatsEmpId === 'EQUIPO') {
@@ -4440,467 +4757,115 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
             window.statsHistoryStack = [];
         }
     }
-    
-    const title = document.getElementById('stats-emp-name');
-    const containerScroll = document.getElementById('radar-scroll-container');
-    const noData = document.getElementById('stats-no-data');
-    
-    const oldRanking = document.getElementById('team-ranking-container');
-    if(oldRanking) oldRanking.remove();
-    const oldFilter = document.getElementById('team-category-filter-container');
-    if(oldFilter) oldFilter.remove();
-    const oldAvatarDiv = document.getElementById('modal-avatar-wrapper');
-    if(oldAvatarDiv) oldAvatarDiv.remove();
-    const oldSubTeam = document.getElementById('modal-sub-team-view');
-    if(oldSubTeam) oldSubTeam.remove();
-    
+
     window.currentStatsEmpId = empId;
-    
-    const btnFantasma = document.getElementById('admin-discreet-login-btn');
-    if (btnFantasma) btnFantasma.remove();
-    
-    const empleadoObj = window.todosLosEmpleadosData.find(e => String(e.id) === String(empId));
-    const currentAvatarUrl = (empleadoObj && empleadoObj.avatar) ? empleadoObj.avatar : null;
-    
-    let avatarImgHtml = `<div style="font-size:2.5rem;">👤</div>`;
-    if(currentAvatarUrl) {
-        const safeUrl = window.procesarUrlImagen(currentAvatarUrl);
-        avatarImgHtml = `<img src="${safeUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-    }
-    
-    const avatarWrapper = document.createElement('div');
-    avatarWrapper.id = 'modal-avatar-wrapper';
-    
-    // NUEVO: Definimos el difuminado si el empleado no está activo
-    const isInactive = empleadoObj && empleadoObj.isActive === false;
-    const blurStyle = isInactive ? 'opacity: 0.5; filter: grayscale(100%);' : '';
-    
-    avatarWrapper.style.cssText = `display:flex; justify-content:center; margin-bottom:15px; margin-top:10px; ${blurStyle}`;
-    const clickAction = isInactive ? '' : `onclick="if(event.target.tagName !== 'INPUT') document.getElementById('inp-avatar-upload').click()"`;
-    const editableAction = empId !== 'EQUIPO' ? clickAction : '';
-    const hoverIcon = empId !== 'EQUIPO' ? `<div class="avatar-edit-overlay">📷</div>` : '';
-    
-    avatarWrapper.innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center;">
-            <div class="avatar-circle-large" ${editableAction} title="Cambiar foto">
-                ${avatarImgHtml}
-                ${hoverIcon}
-                <input type="file" id="inp-avatar-upload" style="display:none;" accept="image/*" onchange="window.cambiarFotoPerfil(this, '${empId}')">
-            </div>
-        </div>
-    `;
-    
-    const modalContent = modal.querySelector('div');
-    const headerDiv = modalContent.querySelector('div');
-    headerDiv.insertAdjacentElement('afterend', avatarWrapper);
 
-    if (window.todosLosEmpleadosData && empId !== 'EQUIPO') {
-        const susSubordinados = window.todosLosEmpleadosData.filter(e => String(e.supId) === String(empId));
-        if (susSubordinados.length > 0) {
-            const subWrapper = document.createElement('div');
-            subWrapper.id = 'modal-sub-team-view';
-            subWrapper.style.cssText = "margin-bottom: 15px; padding: 0 10px;";
-            subWrapper.innerHTML = `<h4 style="margin:0 0 10px 0; color:#475569; font-size:0.8rem; text-transform:uppercase; letter-spacing: 0.5px; text-align: center;">👥 Equipo a su cargo</h4>`;
-            
-            const subContainer = document.createElement('div');
-            subContainer.style.cssText = "display:flex; gap:15px; overflow-x:auto; padding:10px 5px; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; justify-content: center; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; flex-wrap: wrap;";
-            
-            susSubordinados.forEach(sub => {
-                let subAvatarHtml = '👤';
-                let subBgStyle = 'background:#eff6ff; border:none;';
-                if (sub.avatar) {
-                    const safeSubUrl = window.procesarUrlImagen(sub.avatar);
-                    subAvatarHtml = `<img src="${safeSubUrl}" loading="lazy" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-                    subBgStyle = 'background:white; border:none; padding:0;';
-                }
-                
-                // NUEVO: Variables de estilo para subordinados inactivos
-                let subOpacityStyle = sub.isActive === false ? 'opacity: 0.5; filter: grayscale(100%);' : '';
-                let subBadgeInactivo = sub.isActive === false ? `<div style="position:absolute; bottom:-2px; background:#64748b; color:white; font-size:0.45rem; padding:1px 3px; border-radius:3px; font-weight:bold; z-index:10; border: 1px solid white;">INACTIVO</div>` : '';
-
-                const subDiv = document.createElement('div');
-                subDiv.className = 'team-member-container';
-                subDiv.onclick = () => { window.abrirStatsEmpleado(sub.id, sub.name, sub.puesto); };
-                subDiv.innerHTML = `
-                        <div style="width:49px; height:49px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.2rem; margin-bottom:3px; box-shadow:0 1px 2px rgba(0,0,0,0.05); position:relative; ${subBgStyle} ${subOpacityStyle}">
-                            ${subAvatarHtml}
-                            <div id="badge-count-${sub.id}" class="notification-badge" style="display:none; width:16px; height:16px; font-size:0.6rem; right:-2px; top:-2px;">0</div>
-                            ${subBadgeInactivo}
-                        </div>
-                        <div style="font-size:0.65rem; color:#334155; text-align:center; line-height:1.1; max-width:60px; white-space:normal; ${subOpacityStyle}">
-                            ${sub.name.split(' ')[0]}
-                        </div>
-                     `;
-                subContainer.appendChild(subDiv);
-            });
-
-            subWrapper.appendChild(subContainer);
-            avatarWrapper.insertAdjacentElement('afterend', subWrapper);
-
-            setTimeout(() => window.calcularPendientesBatch(susSubordinados.map(s => s.id)), 200);
-        }
-    }
-    
-    if(modal) modal.style.display = 'flex';
-    
-    const empDept = (empleadoObj && empleadoObj.dept) ? empleadoObj.dept : 'General';
-    
-    let backBtnHtml = '';
-    let titleTooltip = "Volver al anterior";
-    let onclickAction = "window.volverStatsAnterior()";
-    
-    if (window.modoAdminActivo && empleadoObj && empleadoObj.supId && empleadoObj.supId !== 'null' && empleadoObj.supId !== '') {
-        const jefeData = window.todosLosEmpleadosData.find(e => String(e.id) === String(empleadoObj.supId));
-        if (jefeData) {
-            onclickAction = `window.abrirStatsEmpleado('${jefeData.id}', '${jefeData.name}', '${jefeData.puesto}')`;
-            titleTooltip = `Volver a ${jefeData.name} (Jefe Inmediato)`;
-            
-            backBtnHtml = `<button onclick="${onclickAction}" style="background:none; border:none; color:#0284c7; font-size:1.1rem; cursor:pointer; padding:0; margin-right:8px; display:flex; align-items:center; outline:none;" title="${titleTooltip}">⬅</button>`;
-        }
-    }
-    
-    if (!backBtnHtml && window.statsHistoryStack && window.statsHistoryStack.length > 0) {
-        backBtnHtml = `<button onclick="${onclickAction}" style="background:none; border:none; color:#0284c7; font-size:1.1rem; cursor:pointer; padding:0; margin-right:8px; display:flex; align-items:center; outline:none;" title="${titleTooltip}">⬅</button>`;
-    }
-    
-    if(title) {
-        const empAreaHtml = (empleadoObj && empleadoObj.area) ? `<span style="margin: 0 5px; color: #cbd5e1;">|</span> ${empleadoObj.area}` : '';
-        // NUEVO: Etiqueta roja en el título del modal
-        const empInactivoBadge = (empleadoObj && empleadoObj.isActive === false) ? `<span style="background:#ef4444; color:white; font-size:0.6rem; padding:2px 6px; border-radius:10px; font-weight:bold; margin-left:8px; vertical-align:middle;">INACTIVO</span>` : '';
-        
-        title.innerHTML = `
-                    <div style="display: flex; align-items: center; margin-bottom: 4px;">
-                        ${backBtnHtml}
-                        <div style="font-size: 0.75rem; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800;">Detalle de Colaborador</div>
-                    </div>
-                    ${empName} ${empInactivoBadge}
-                    <div style="font-size:0.8rem; color:#64748b; font-weight:normal; margin-top:4px;">
-                        ${empPuesto || 'Colaborador'} <span style="margin: 0 5px; color: #cbd5e1;">|</span> ${empDept} ${empAreaHtml}
-                    </div>
-                `;
-    }
-    
+    // Lo que dejó el «Reporte de Equipo», que comparte la hoja.
+    ['team-ranking-container', 'team-category-filter-container', 'modal-avatar-wrapper',
+     'modal-sub-team-view', 'admin-discreet-login-btn'].forEach(id => {
+        const n = document.getElementById(id);
+        if (n) n.remove();
+    });
     if (window.radarChartInstances) {
-        window.radarChartInstances.forEach(chart => chart.destroy());
+        window.radarChartInstances.forEach(c => c.destroy());
         window.radarChartInstances = [];
     }
-    if(containerScroll) containerScroll.innerHTML = '';
-    
-    if(window.CACHE_DASHBOARD && window.CACHE_DASHBOARD.pendientes) {
+    const cuerpoEquipo = document.getElementById('stats-equipo-cuerpo');
+    if (cuerpoEquipo) cuerpoEquipo.hidden = true;
+    const cuerpo = document.getElementById('stats-persona-cuerpo');
+    if (!cuerpo) return;
+    cuerpo.hidden = false;
+
+    const emp = (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(empId)) || null;
+    const nombre = (emp && emp.name) || empName || '';
+    const puesto = (emp && emp.puesto) || empPuesto || 'Colaborador';
+    let user = null;
+    try { user = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null'); } catch (e) { user = null; }
+    const esYo = !!(user && String(user.id) === String(empId));
+
+    // El encabezado: dónde se está, y la flecha de volver si hay a dónde. El
+    // administrador sube al jefe inmediato de quien mira; los demás vuelven por
+    // donde vinieron.
+    const titulo = document.getElementById('stats-emp-name');
+    const subtitulo = document.getElementById('stats-emp-subtitulo');
+    if (titulo) titulo.textContent = esYo ? 'Mi perfil' : 'Colaborador';
+    if (subtitulo) subtitulo.textContent = '';
+    const btnVolver = document.getElementById('btn-volver-stats');
+    if (btnVolver) {
+        const jefe = window.modoAdminActivo && emp && emp.supId
+            ? (window.todosLosEmpleadosData || []).find(e => String(e.id) === String(emp.supId)) : null;
+        if (jefe) {
+            btnVolver.hidden = false;
+            btnVolver.title = `Ir a ${jefe.name}, su jefe inmediato`;
+            btnVolver.setAttribute('aria-label', btnVolver.title);
+            btnVolver.onclick = () => window.abrirStatsEmpleado(jefe.id, jefe.name, jefe.puesto);
+        } else if (window.statsHistoryStack.length > 0) {
+            btnVolver.hidden = false;
+            btnVolver.title = 'Volver';
+            btnVolver.setAttribute('aria-label', 'Volver');
+            btnVolver.onclick = () => window.volverStatsAnterior();
+        } else {
+            btnVolver.hidden = true;
+            btnVolver.onclick = null;
+        }
+    }
+
+    const suyos = (window.todosLosEmpleadosData || []).filter(e => String(e.supId) === String(empId));
+    // «Mario García» y no «García»: aquí los nombres empiezan por los apellidos.
+    const nombreCorto = (window.nombreDeAgenda ? window.nombreDeAgenda(nombre) : String(nombre).split(' ')[0])
+        || 'esta persona';
+
+    // En modo administrador, la fila de entrar como esa persona: era una llave
+    // suelta al pie de la hoja, sin decir qué hacía. A uno mismo no.
+    const filaEntrarComo = (window.modoAdminActivo && !esYo) ? `
+        <div class="lista-ios persona-seccion">
+            <button type="button" class="fila-ios" onclick="window.iniciarSesionComo('${escPersona(empId)}')">
+                <span class="fila-ios-icono fila-ios-icono--tinta" style="background:#64748b;" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2L20 3M16 7l3 3M14 9l2 2"/></svg>
+                </span>
+                <span class="fila-ios-texto">
+                    <span class="fila-ios-titulo">Entrar como ${escPersona(nombreCorto)}</span>
+                    <span class="fila-ios-detalle fila-ios-detalle--envuelve">Abre la aplicación con su sesión, para ver lo que ve</span>
+                </span>
+                <span class="fila-ios-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>
+        </div>` : '';
+
+    cuerpo.innerHTML = `
+        ${window.fichaDePersona(emp, empId, nombre, puesto)}
+
+        <div class="hoja-grupo-titulo">Pendientes</div>
+        <div id="persona-pendientes" class="lista-ios persona-seccion">${window.listaDePendientesDePersona(null)}</div>
+
+        <div class="hoja-grupo-titulo">Encuestas</div>
+        <div id="persona-encuestas" class="persona-encuestas persona-seccion">
+            <div class="persona-vacio">Cargando…</div>
+        </div>
+
+        ${suyos.length ? `
+            <div class="hoja-grupo-titulo">Equipo a su cargo · ${suyos.length}</div>
+            <div id="persona-equipo" class="lista-ios persona-seccion"></div>` : ''}
+
+        ${filaEntrarComo}
+    `;
+
+    const hoja = modal.querySelector('.hoja-contenido');
+    if (hoja) hoja.scrollTop = 0;
+    modal.style.display = 'flex';
+
+    window.pintarEquipoDePersona(empId);
+    window.cargarEncuestasDePersona(emp || { id: empId, name: nombre, puesto }, empId, esYo);
+
+    // Las cuentas de pendientes se rehacen: la hoja es lo que alguien abre para
+    // ver cómo va una persona ahora, no hace cinco minutos.
+    if (window.CACHE_DASHBOARD && window.CACHE_DASHBOARD.pendientes) {
         delete window.CACHE_DASHBOARD.pendientes[empId];
     }
-    
-    const summaryBox = document.getElementById('stats-summary-content');
-    if(summaryBox) summaryBox.innerHTML = "<div style='text-align:center; color:#64748b; padding: 10px;'>🔄 Actualizando pendientes...</div>";
-    
-    await window.calcularPendientesBatch([empId]);
+    await window.calcularPendientesBatch([empId, ...suyos.map(s => s.id)]);
     window.actualizarResumenPendientesEnModal(empId);
-    
-    const oldDiscreetBtn = document.getElementById('admin-discreet-login-btn');
-    if (oldDiscreetBtn) oldDiscreetBtn.remove();
-    
-    if (window.modoAdminActivo && String(empId) !== 'EQUIPO') {
-        const discreetBtnWrapper = document.createElement('div');
-        discreetBtnWrapper.id = 'admin-discreet-login-btn';
-        discreetBtnWrapper.style.cssText = "display: flex; justify-content: center; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #e2e8f0;";
-        
-        discreetBtnWrapper.innerHTML = `
-                <button onclick="window.iniciarSesionComo('${empId}')" 
-                        title="Simular sesión como ${empName.split(' ')[0]}"
-                        onmouseover="this.style.background='#e2e8f0'; this.style.transform='scale(1.1)'" 
-                        onmouseout="this.style.background='#f8fafc'; this.style.transform='scale(1)'" 
-                        style="background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; width: 36px; height: 36px; border-radius: 50%; font-size: 1.1rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s ease; outline: none; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                    🔑
-                </button>
-            `;
-        if (summaryBox && summaryBox.parentElement) {
-            summaryBox.parentElement.appendChild(discreetBtnWrapper);
-        }
-    }
-    
-    if(noData) {
-        noData.style.display = 'block';
-        noData.innerText = "Cargando datos...";
-    }
-    
-    try {
-        const { data: activeEvals, error: errEvals } = await sb.from('evaluations').select('id, title, category, target_positions, is_obligatory').eq('active', true);
-        if(errEvals) throw errEvals;
-        
-        const { data: responses, error: errResps } = await sb.from('evaluation_responses')
-        .select('evaluation_id, grades_json, submitted_at, review_status')
-        .eq('employee_id', empId)
-        .in('review_status', ['Revisado', 'Certificada']) // 🔥 CORRECCIÓN CLAVE
-        .order('submitted_at', { ascending: false });
-        if (errResps) throw errResps;
-        
-        const uniqueResponsesMap = {};
-        if (responses) {
-            responses.forEach(r => {
-                const key = r.evaluation_id;
-                if (!uniqueResponsesMap[key]) {
-                    uniqueResponsesMap[key] = r;
-                }
-            });
-        }
-        const uniqueResponses = Object.values(uniqueResponsesMap);
-        
-        const validScores = [];
-        const userPuestoNorm = (empPuesto || "SIN PUESTO").toUpperCase().trim();
-        
-        if (activeEvals) {
-            activeEvals.forEach(evalObj => {
-                let targets = evalObj.target_positions;
-                if (typeof targets === 'string') {
-                    try { targets = JSON.parse(targets); } catch(e) { targets = ['ALL']; }
-                }
-                if (!Array.isArray(targets)) targets = ['ALL'];
-                
-                let isApplicable = false;
-                if (targets.length === 0 || targets.includes('ALL')) {
-                    isApplicable = true;
-                } else {
-                    const targetsNorm = targets.map(t => String(t).toUpperCase().trim());
-                    if (targetsNorm.includes(userPuestoNorm)) isApplicable = true;
-                }
-                
-                if (!isApplicable) return;
-                
-                const isObligatory = (evalObj.is_obligatory !== false);
-                const response = uniqueResponses.find(r => r.evaluation_id === evalObj.id);
-                const cat = evalObj.category || "General";
-                const title = evalObj.title || "Sin Título";
-                
-                if (response) {
-                    let totalPts = 0, maxPts = 0;
-                    const grades = response.grades_json || {};
-                    Object.values(grades).forEach(g => {
-                        maxPts++;
-                       if (g.type === 'list_match' && Array.isArray(g.items)) {
-    const aciertos = g.items.filter(i => i.status === 'correct').length;
-    const tot = g.totalExpected || Math.max(g.items.length, 1); // 🔥 Calcula en base al total esperado
-    totalPts += (aciertos / tot);
-} else if (g.type === 'numeric_score') {
-                            totalPts += (g.percentage / 100);
-                        } else {
-                            const status = (typeof g === 'object') ? g.status : g;
-                            if (status === 'correct') totalPts++;
-                        }
-                    });
-                    
-                    const score = maxPts > 0 ? (totalPts / maxPts) * 100 : 0;
-                    validScores.push({ title, category: cat, score });
-                    
-                } else if (isObligatory) {
-                    validScores.push({ title, category: cat, score: 0 });
-                }
-            });
-        }
-        
-        if (validScores.length === 0) {
-            if(noData) { noData.style.display = 'block'; noData.innerText = "No hay evaluaciones aplicables o revisadas."; }
-            return;
-        }
-        
-        if(noData) noData.style.display = 'none';
-        
-        const categoryGroups = {};
-        validScores.forEach(item => {
-            if (!categoryGroups[item.category]) categoryGroups[item.category] = [];
-            categoryGroups[item.category].push(item);
-        });
-        
-        const uniqueCategories = Object.keys(categoryGroups).sort();
-        
-        let finalLabels = [];
-        let finalDataPoints = [];
-        let catTitle = "VISIÓN GENERAL";
-        
-        if (uniqueCategories.length === 1) {
-            const catName = uniqueCategories[0];
-            catTitle = catName;
-            const surveys = categoryGroups[catName];
-            
-            surveys.forEach(s => {
-                const words = s.title.split(' ');
-                const lines = [];
-                while(words.length > 0) lines.push(words.splice(0, 4).join(' '));
-                lines.push(`${Math.round(s.score)}%`);
-                
-                finalLabels.push(lines);
-                finalDataPoints.push(Math.round(s.score));
-            });
-            
-        } else {
-            uniqueCategories.forEach(cat => {
-                const surveys = categoryGroups[cat];
-                const sum = surveys.reduce((a, b) => a + b.score, 0);
-                const avg = Math.round(sum / surveys.length);
-                
-                const words = cat.split(' ');
-                const lines = [];
-                while(words.length > 0) lines.push(words.splice(0, 4).join(' '));
-                lines.push(`${avg}%`);
-                
-                finalLabels.push(lines);
-                finalDataPoints.push(avg);
-            });
-        }
-        
-                const generalWrapper = document.createElement('div');
-                generalWrapper.style.cssText = `min-width: 260px; max-width: 450px; margin: 0 auto; flex: 1; background: white; border-radius: 12px; padding: 10px; border: 1px solid #f1f5f9; display:flex; flex-direction:column; align-items:center; ${blurStyle}`;
-                generalWrapper.innerHTML = `<div style="font-weight:800; color:#64748b; margin-bottom:5px; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">${catTitle}</div>`;
-                
-                const generalCanvasContainer = document.createElement('div');
-                generalCanvasContainer.style.cssText = "position:relative; height:220px; width:100%;";
-                const generalCanvasEl = document.createElement('canvas');
-                generalCanvasContainer.appendChild(generalCanvasEl);
-                generalWrapper.appendChild(generalCanvasContainer);
-                containerScroll.appendChild(generalWrapper);
-
-        const generalChart = new Chart(generalCanvasEl.getContext('2d'), {
-                            type: 'radar',
-                            data: {
-                                labels: finalLabels,
-                                datasets: [{
-                                    data: finalDataPoints,
-                                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                                    borderColor: '#22c55e',
-                                    pointBackgroundColor: '#166534',
-                                    borderWidth: 1.5,
-                                    pointRadius: 0,
-                                    pointHoverRadius: 0
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                layout: { padding: 25 },
-                                scales: {
-                                    r: {
-                                        angleLines: { display: false },
-                                        grid: { color: '#f1f5f9' },
-                                        pointLabels: { font: { size: 9, weight: 'bold' }, color: '#334155', display: true, padding: 8 },
-                                        suggestedMin: 0, suggestedMax: 100, ticks: { display: false }
-                                    }
-                                },
-                                plugins: { legend: { display: false }, tooltip: { enabled: false } }
-                            },
-                            plugins: [{
-                                id: 'centerTextPlugin',
-                                afterDatasetsDraw(chart) {
-                                    const { ctx } = chart;
-                                    const data = chart.data.datasets[0].data;
-                                    const sum = data.reduce((a, b) => a + b, 0);
-                                    const avg = data.length > 0 ? Math.round(sum / data.length) : 0;
-                                    
-                                    const x = chart.scales.r.xCenter;
-                                    const y = chart.scales.r.yCenter;
-                                    
-                                    ctx.save();
-                                    ctx.font = "bold 0.9rem -apple-system, BlinkMacSystemFont, sans-serif";
-                                    ctx.fillStyle = "#166534";
-                                    ctx.textAlign = "center";
-                                    ctx.textBaseline = "middle";
-                                    ctx.lineWidth = 2.5;
-                                    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-                                    ctx.strokeText(avg + "%", x, y);
-                                    ctx.fillText(avg + "%", x, y);
-                                    ctx.restore();
-                                }
-                            }]
-                        });
-                window.radarChartInstances.push(generalChart);
-
-                if (uniqueCategories.length > 1) {
-                    uniqueCategories.forEach(cat => {
-                        const surveys = categoryGroups[cat];
-                        const labelsIndiv = [];
-                        const dataIndiv = [];
-
-                        surveys.forEach(s => {
-                            const words = s.title.split(' ');
-                            const lines = [];
-                            while(words.length > 0) lines.push(words.splice(0, 3).join(' '));
-                            lines.push(`${Math.round(s.score)}%`);
-                            
-                            labelsIndiv.push(lines);
-                            dataIndiv.push(Math.round(s.score));
-                        });
-
-                        const chartWrapper = document.createElement('div');
-                        chartWrapper.style.cssText = "min-width: 260px; max-width: 450px; flex: 1; background: white; border-radius: 12px; padding: 10px; border: 1px solid #f1f5f9; display:flex; flex-direction:column; align-items:center;";
-                        chartWrapper.innerHTML = `<div style="font-weight:800; color:#64748b; margin-bottom:5px; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">${cat}</div>`;
-                        
-                        const canvasContainer = document.createElement('div');
-                        canvasContainer.style.cssText = "position:relative; height:220px; width:100%;";
-                        const canvasEl = document.createElement('canvas');
-                        canvasContainer.appendChild(canvasEl);
-                        chartWrapper.appendChild(canvasContainer);
-                        containerScroll.appendChild(chartWrapper);
-
-                        const newChart = new Chart(canvasEl.getContext('2d'), {
-                                                    type: 'radar',
-                                                    data: {
-                                                        labels: labelsIndiv,
-                                                        datasets: [{
-                                                            data: dataIndiv,
-                                                            backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                                                            borderColor: '#22c55e',
-                                                            pointBackgroundColor: '#166534',
-                                                            borderWidth: 1.5,
-                                                            pointRadius: 0,
-                                                            pointHoverRadius: 0
-                                                        }]
-                                                    },
-                                                    options: {
-                                                        responsive: true,
-                                                        maintainAspectRatio: false,
-                                                        layout: { padding: 25 },
-                                                        scales: {
-                                                            r: {
-                                                                angleLines: { display: false },
-                                                                grid: { color: '#f1f5f9' },
-                                                                pointLabels: { font: { size: 9, weight: 'bold' }, color: '#334155', display: true, padding: 8 },
-                                                                suggestedMin: 0, suggestedMax: 100, ticks: { display: false }
-                                                            }
-                                                        },
-                                                        plugins: { legend: { display: false }, tooltip: { enabled: false } }
-                                                    },
-                                                    plugins: [{
-                                                        id: 'centerTextPlugin',
-                                                        afterDatasetsDraw(chart) {
-                                                            const { ctx } = chart;
-                                                            const data = chart.data.datasets[0].data;
-                                                            const sum = data.reduce((a, b) => a + b, 0);
-                                                            const avg = data.length > 0 ? Math.round(sum / data.length) : 0;
-                                                            
-                                                            const x = chart.scales.r.xCenter;
-                                                            const y = chart.scales.r.yCenter;
-                                                            
-                                                            ctx.save();
-                                                            ctx.font = "bold 0.9rem -apple-system, BlinkMacSystemFont, sans-serif";
-                                                            ctx.fillStyle = "#166534";
-                                                            ctx.textAlign = "center";
-                                                            ctx.textBaseline = "middle";
-                                                            ctx.lineWidth = 2.5;
-                                                            ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-                                                            ctx.strokeText(avg + "%", x, y);
-                                                            ctx.fillText(avg + "%", x, y);
-                                                            ctx.restore();
-                                                        }
-                                                    }]
-                                                });
-                                                window.radarChartInstances.push(newChart);
-                    });
-                }
-        
-    } catch (e) {
-        console.error(e);
-        if(noData) { noData.style.display = 'block'; noData.innerText = "Error cargando gráficas."; }
-    }
+    window.pintarEquipoDePersona(empId);
 };
-    
+
 window.abrirStatsEquipo = async (isBack = false) => {
     const oldSubTeam = document.getElementById('modal-sub-team-view');
     if(oldSubTeam) oldSubTeam.remove();
@@ -4929,6 +4894,18 @@ window.abrirStatsEquipo = async (isBack = false) => {
     }
 
     window.currentStatsEmpId = 'EQUIPO';
+
+    // La hoja es la misma que la de una persona: se esconde su cuerpo, se
+    // enseña el del equipo y el encabezado vuelve a ser sólo el título, que la
+    // flecha de volver de esta vista la lleva su propio título.
+    const cuerpoPersona = document.getElementById('stats-persona-cuerpo');
+    if (cuerpoPersona) { cuerpoPersona.hidden = true; cuerpoPersona.innerHTML = ''; }
+    const cuerpoEquipo = document.getElementById('stats-equipo-cuerpo');
+    if (cuerpoEquipo) cuerpoEquipo.hidden = false;
+    const btnVolverStats = document.getElementById('btn-volver-stats');
+    if (btnVolverStats) { btnVolverStats.hidden = true; btnVolverStats.onclick = null; }
+    const subtituloStats = document.getElementById('stats-emp-subtitulo');
+    if (subtituloStats) subtituloStats.textContent = '';
     
     const summaryBox = document.getElementById('stats-summary-content');
     const containerScroll = document.getElementById('radar-scroll-container');
@@ -5487,7 +5464,9 @@ window.cambiarFotoPerfil = async (input, empId) => {
     if (file.size === 0) { alert("El archivo seleccionado está vacío."); return; }
     let blobFinal = file;
     try { blobFinal = await window.comprimirImagen(file); } catch (compressionError) { console.warn("No se pudo comprimir la imagen, se usará el archivo original.", compressionError); }
-    const avatarCircle = input.closest('.avatar-circle-large');
+    const avatarCircle = input.closest('.avatar-circle-large')
+        || (input.previousElementSibling && input.previousElementSibling.classList.contains('persona-foto')
+            ? input.previousElementSibling : null);
     let loader = null;
     if (avatarCircle) {
         loader = document.createElement('div');
@@ -5509,6 +5488,8 @@ window.cambiarFotoPerfil = async (input, empId) => {
         if (empIndex !== -1) { window.todosLosEmpleadosData[empIndex].avatar = publicUrl; }
         
         window.renderizarVistaRapidaEquipo(true);
+        // La ficha de la hoja de una persona, si es la suya la que está abierta.
+        if (window.repintarFotoDePersona) window.repintarFotoDePersona(empId);
         const avatarWrapper = document.getElementById('modal-avatar-wrapper');
         if(avatarWrapper) {
             const clickAction = `onclick="if(event.target.tagName !== 'INPUT') document.getElementById('inp-avatar-upload').click()"`;

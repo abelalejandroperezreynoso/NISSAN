@@ -20,7 +20,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-11-01-7">
+    <link rel="stylesheet" href="estilos.css?v=2026-11-01-8">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -711,10 +711,25 @@
             <div class="hoja-contenido" style="max-width:500px; overflow-y: auto; overflow-x: hidden; padding: 12px 0 0;">
                 
                 <div class="hoja-encabezado-lista">
-                    <h3 id="stats-emp-name" class="hoja-titulo">Detalle de desempeño</h3>
+                    <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                        <button id="btn-volver-stats" class="ios-boton-icono" hidden title="Volver" aria-label="Volver">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        <div style="min-width:0;">
+                            <h3 id="stats-emp-name" class="hoja-titulo">Detalle de desempeño</h3>
+                            <div id="stats-emp-subtitulo" class="hoja-subtitulo"></div>
+                        </div>
+                    </div>
                     <button onclick="document.getElementById('modal-stats-empleado').style.display='none'" class="ios-boton-icono ios-boton-cerrar" title="Cerrar" aria-label="Cerrar"></button>
                 </div>
 
+                <!-- La ficha de una persona: se arma entera con innerHTML en
+                     window.abrirStatsEmpleado. Lo de debajo es del «Reporte de
+                     Equipo» (window.abrirStatsEquipo), que comparte la hoja;
+                     cada vista esconde el cuerpo de la otra. -->
+                <div id="stats-persona-cuerpo" class="persona-cuerpo" hidden></div>
+
+                <div id="stats-equipo-cuerpo">
                 <div style="padding: 0 25px;">
                                 <div style="background: white; border-radius: 16px; padding: 15px; border: none; margin-top: 15px;">
                                     
@@ -730,7 +745,8 @@
                 <h4 style="margin:0 0 10px 0; color:#475569; font-size:0.8rem; text-transform:uppercase; letter-spacing: 0.5px;">⚡ Estado de Pendientes</h4>
                 <div id="stats-summary-content"></div>
             </div>
-            
+                </div>
+
         </div>
     </div>
 
@@ -1141,26 +1157,26 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-11-01-7"></script>
-    <script src="2a-core-nav.js?v=2026-11-01-7"></script>
-    <script src="2b-core-dashboard.js?v=2026-11-01-7"></script>
-    <script src="3-incidentes.js?v=2026-11-01-7"></script>
-    <script src="4-evaluaciones-base.js?v=2026-11-01-7"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-11-01-7"></script>
-    <script src="17-hoja-excel.js?v=2026-11-01-7"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-11-01-7"></script>
-    <script src="5-objetivos.js?v=2026-11-01-7"></script>
-    <script src="6-calendario.js?v=2026-11-01-7"></script>
-    <script src="7-pendientes.js?v=2026-11-01-7"></script>
-    <script src="8-hallazgos.js?v=2026-11-01-7"></script>
-    <script src="9-estadisticas.js?v=2026-11-01-7"></script>
+    <script src="1-config.js?v=2026-11-01-8"></script>
+    <script src="2a-core-nav.js?v=2026-11-01-8"></script>
+    <script src="2b-core-dashboard.js?v=2026-11-01-8"></script>
+    <script src="3-incidentes.js?v=2026-11-01-8"></script>
+    <script src="4-evaluaciones-base.js?v=2026-11-01-8"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-11-01-8"></script>
+    <script src="17-hoja-excel.js?v=2026-11-01-8"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-11-01-8"></script>
+    <script src="5-objetivos.js?v=2026-11-01-8"></script>
+    <script src="6-calendario.js?v=2026-11-01-8"></script>
+    <script src="7-pendientes.js?v=2026-11-01-8"></script>
+    <script src="8-hallazgos.js?v=2026-11-01-8"></script>
+    <script src="9-estadisticas.js?v=2026-11-01-8"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-11-01-7"></script>
-    <script src="13-gestion.js?v=2026-11-01-7"></script>
-    <script src="14-vacaciones.js?v=2026-11-01-7"></script>
-    <script src="15-presentacion.js?v=2026-11-01-7"></script>
-    <script src="16-cursos.js?v=2026-11-01-7"></script>
-    <script src="10-refacciones.js?v=2026-11-01-7"></script> 
+    <script src="12-almacenamiento.js?v=2026-11-01-8"></script>
+    <script src="13-gestion.js?v=2026-11-01-8"></script>
+    <script src="14-vacaciones.js?v=2026-11-01-8"></script>
+    <script src="15-presentacion.js?v=2026-11-01-8"></script>
+    <script src="16-cursos.js?v=2026-11-01-8"></script>
+    <script src="10-refacciones.js?v=2026-11-01-8"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

@@ -8129,6 +8129,62 @@ Las reglas para usarlo:
     único que sabe `padronDeLaEncuesta`: quien se dio de baja desde entonces
     entra como ajeno en su propio periodo en vez de como destinatario.
 
+- **La hoja de una persona dice quién es, qué le falta, cómo va y a quién
+  tiene a su cargo, en ese orden.** Es la que se abre al tocar una foto —la
+  propia o la de alguien del equipo— (`window.abrirStatsEmpleado`, en
+  `2b-core-dashboard.js`). Era una foto de 100px suelta, una fila de caras en un
+  recuadro punteado y un radar, separados por huecos y sin un rótulo que dijera
+  para qué servía cada cosa; que tocar la foto la cambiaba no lo decía nada.
+
+  ```js
+  window.fichaDePersona(emp, empId, nombre, puesto)  // foto con su cámara + nombre, puesto, depto, área
+  window.listaDePendientesDePersona(stats)           // de `statsPendientes`
+  window.listaDeEncuestasDePersona(filas, esYo)      // los grupos de la tarjeta del inicio
+  window.cargarEncuestasDePersona(emp, empId, esYo)
+  window.pintarEquipoDePersona(empId)  window.abrirSubordinadoDePersona(i)
+  window.repintarFotoDePersona(empId)                // la llama `cambiarFotoPerfil`
+  ```
+
+  **El radar se quitó porque mentía.** Calculaba con una regla suya —sólo el
+  puesto, la última respuesta que hubiera sin mirar el periodo y un 0% en las
+  encuestas que sólo dejan constancia— y decía «Incidentes 0%» de la misma
+  persona que la tarjeta del inicio daba al 100%. En su lugar van **las
+  encuestas con la regla de la tarjeta del inicio**, y por eso se partió
+  `cargarEncuestasAsignadas` en tres:
+
+  ```js
+  await window.encuestasActivasParaTarjeta()                 // las columnas y las cachés de siempre
+  await window.filasDeEncuestasDeEmpleado(emp, encuestas)    // { filas, respuestas } de una persona
+  window.dibujarTarjetaDeEncuestas(cont, filas, respuestas, esAdmin, tope, empStrId)
+  ```
+
+  La tarjeta y la hoja pasan por las dos primeras, así que **no pueden
+  discrepar**. Toda regla nueva sobre a quién le toca una encuesta o en qué
+  estado está entra ahí, no en la hoja.
+
+  Cuatro cosas que hay que mantener:
+
+  - **La hoja la comparte el «Reporte de Equipo»** (`abrirStatsEquipo`, el
+    botón «Mi Equipo»), que sigue con su radar y su ranking. Cada vista esconde
+    el cuerpo de la otra —`#stats-persona-cuerpo` y `#stats-equipo-cuerpo`— y
+    limpia lo que la otra dejó insertado.
+  - **La foto es un `<label for>`** sobre `#inp-avatar-persona`, nunca un
+    `.click()`, por el toque fantasma de iOS; y ese id no es el
+    `inp-avatar-upload` de la vista de equipo, que las dos viven en el mismo
+    documento. De baja no se cambia nada.
+  - **Las encuestas no se tocan.** Abrirían la encuesta de quien mira, no la de
+    esta persona; los grupos se despliegan solos (el `<details>` sin
+    `preventDefault`) y no hay hoja de detalle de una clasificación a la que ir.
+    Los estados en segunda persona —«lo programa tu jefe»— se dicen «su jefe»
+    cuando no es uno mismo.
+  - **Lo que llega tarde comprueba que la hoja siga siendo de esa persona**
+    (`currentStatsEmpId`): se puede bajar a un subordinado mientras la consulta
+    de encuestas va de camino.
+
+  La flecha del encabezado lleva, en modo administrador, al jefe inmediato; si
+  no, por donde se vino (`statsHistoryStack`). Y «Entrar como …» es una fila del
+  final, sólo administrando y nunca de uno mismo: era una llave suelta al pie.
+
 - **Ya no hay accesos directos.** El panel de inicio llevó una tarjeta
   «🚀 Accesos Directos» con dos cuadros —Encuestas y Capacitaciones— que
   abrían lo que el administrador hubiera marcado como destacado desde
