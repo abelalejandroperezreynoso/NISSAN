@@ -1665,7 +1665,7 @@ textarea:focus {
     height: 100px;
     border-radius: 50%;
     background: #eff6ff;
-    border: 3px solid #bfdbfe;
+    border: none;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1677,7 +1677,6 @@ textarea:focus {
 }
 
 .avatar-circle-large:hover {
-    border-color: #3b82f6;
     transform: scale(1.02);
 }
 
@@ -2324,10 +2323,11 @@ textarea:focus {
     justify-content: center;
     flex-shrink: 0;
     box-shadow: 0 4px 6px -1px rgba(211, 47, 47, 0.35);
-    /* La foto del usuario son 60px MÁS su borde de 2px, y aquí no hay
-       `box-sizing`, así que mide 64. Este borde transparente es lo que deja el
-       escudo del mismo tamaño: sin él, el panel daba un salto de 4px al
-       encender el modo y otro al llegar la foto. */
+    /* La foto del usuario mide 64px —sin borde desde que se le quitó el
+       contorno azul—, y aquí no hay `box-sizing`: estos 60 más el borde
+       transparente de 2px son lo que deja el escudo del mismo tamaño. Sin él,
+       el panel daba un salto de 4px al encender el modo y otro al llegar la
+       foto. */
     border: 2px solid transparent;
 }
 
@@ -2342,7 +2342,7 @@ textarea:focus {
    no pega un salto al encender el modo. */
 .tarjeta-admin-icono--foto {
     background: white;
-    border: 2px solid #fecaca;
+    border-color: transparent;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     cursor: pointer;
     position: relative;

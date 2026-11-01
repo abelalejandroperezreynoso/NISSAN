@@ -481,7 +481,7 @@ window.mostrarDashboard = async (user) => {
         } else {
             userHeader.innerHTML = `
                 <div class="panel-usuario-resumen">
-                    <div class="skeleton" style="width:60px; height:60px; border-radius:50%; flex-shrink:0;"></div>
+                    <div class="skeleton" style="width:64px; height:64px; border-radius:50%; flex-shrink:0;"></div>
                     <div style="flex:1;">
                         <div class="skeleton" style="width: 50%; height: 20px; margin-bottom: 8px;"></div>
                         <div class="skeleton" style="width: 30%; height: 14px;"></div>
@@ -561,12 +561,12 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
         }
         
         let headerAvatarHtml = '👤';
-        let headerBgStyle = 'background:#eff6ff; border:2px solid #bfdbfe; padding:0;';
+        let headerBgStyle = 'background:#eff6ff; border:none; padding:0;';
         
         if (avatarUrl) {
             const safeUrl = window.procesarUrlImagen(avatarUrl);
             headerAvatarHtml = `<img src="${safeUrl}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-            headerBgStyle = 'background:white; border:2px solid #bfdbfe; padding:0;';
+            headerBgStyle = 'background:white; border:none; padding:0;';
         }
 
         if (userHeader && window.modoAdminActivo) {
@@ -606,7 +606,7 @@ if (!window.empleadosLoginCache || window.empleadosLoginCache.length === 0) {
                 <div class="panel-usuario-resumen" onclick="window.alternarPanelUsuario()">
                     
                     <div id="header-user-icon" onclick="event.stopPropagation(); window.abrirStatsEmpleado('${user.id}', '${user.name}', '${user.puesto || 'Colaborador'}')"
-                            style="width:60px; height:60px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); cursor:pointer; position:relative; flex-shrink:0; ${headerBgStyle}">
+                            style="width:64px; height:64px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); cursor:pointer; position:relative; flex-shrink:0; ${headerBgStyle}">
                         ${headerAvatarHtml}
                         <div id="badge-count-${user.id}" class="notification-badge" style="display:none;">0</div>
                     </div>
@@ -3630,11 +3630,11 @@ window.renderizarVistaRapidaEquipo = (forzarRender = false) => {
         div.className = 'team-member-container';
         div.onclick = () => { window.abrirStatsEmpleado(emp.id, emp.name, emp.puesto); };
         let avatarHtml = '👤';
-        let bgStyle = 'background:#eff6ff; border:2px solid #bfdbfe;';
+        let bgStyle = 'background:#eff6ff; border:none;';
         if (emp.avatar) {
             const safeUrl = window.procesarUrlImagen(emp.avatar);
             avatarHtml = `<img src="${safeUrl}" loading="lazy" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-            bgStyle = 'background:white; border:2px solid #bfdbfe; padding:0;';
+            bgStyle = 'background:white; border:none; padding:0;';
         }
         
         // NUEVO: Variables de estilo para inactivos
@@ -3642,7 +3642,7 @@ window.renderizarVistaRapidaEquipo = (forzarRender = false) => {
         let badgeInactivo = emp.isActive === false ? `<div style="position:absolute; bottom:-4px; background:#64748b; color:white; font-size:0.5rem; padding:2px 4px; border-radius:4px; font-weight:bold; z-index:10; border: 1px solid white;">INACTIVO</div>` : '';
 
         div.innerHTML = `
-            <div style="width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.5rem; margin-bottom:5px; box-shadow:0 2px 4px rgba(0,0,0,0.05); position:relative; ${bgStyle} ${opacityStyle}">
+            <div style="width:54px; height:54px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.5rem; margin-bottom:5px; box-shadow:0 2px 4px rgba(0,0,0,0.05); position:relative; ${bgStyle} ${opacityStyle}">
                 ${avatarHtml}
                 <div id="badge-count-${emp.id}" class="notification-badge" style="display:none;">0</div>
                 ${badgeInactivo}
@@ -3783,11 +3783,11 @@ window.renderizarListaTodosLosEmpleados = (empleados) => {
         };
         
         let avatarHtml = '👤';
-        let bgStyle = 'background:#eff6ff; border:2px solid #bfdbfe;';
+        let bgStyle = 'background:#eff6ff; border:none;';
         if (emp.avatar) {
             const safeUrl = window.procesarUrlImagen(emp.avatar);
             avatarHtml = `<img src="${safeUrl}" loading="lazy" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-            bgStyle = 'background:white; border:2px solid #bfdbfe; padding:0;';
+            bgStyle = 'background:white; border:none; padding:0;';
         }
         
         const stats = window.statsPendientes && window.statsPendientes[emp.id];
@@ -3799,7 +3799,7 @@ window.renderizarListaTodosLosEmpleados = (empleados) => {
         let badgeInactivo = emp.isActive === false ? `<div style="position:absolute; bottom:-4px; background:#64748b; color:white; font-size:0.5rem; padding:2px 4px; border-radius:4px; font-weight:bold; z-index:10; border: 1px solid white;">INACTIVO</div>` : '';
 
 div.innerHTML = `
-            <div style="width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.5rem; margin-bottom:5px; box-shadow:0 2px 4px rgba(0,0,0,0.05); position:relative; cursor:pointer; ${bgStyle} ${opacityStyle}">
+            <div style="width:54px; height:54px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.5rem; margin-bottom:5px; box-shadow:0 2px 4px rgba(0,0,0,0.05); position:relative; cursor:pointer; ${bgStyle} ${opacityStyle}">
                 ${avatarHtml}
                 <div id="badge-count-${emp.id}" class="notification-badge" style="display:${displayBadge};">${textBadge}</div>
                 ${badgeInactivo}
@@ -4498,11 +4498,11 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
             
             susSubordinados.forEach(sub => {
                 let subAvatarHtml = '👤';
-                let subBgStyle = 'background:#eff6ff; border:2px solid #bfdbfe;';
+                let subBgStyle = 'background:#eff6ff; border:none;';
                 if (sub.avatar) {
                     const safeSubUrl = window.procesarUrlImagen(sub.avatar);
                     subAvatarHtml = `<img src="${safeSubUrl}" loading="lazy" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-                    subBgStyle = 'background:white; border:2px solid #bfdbfe; padding:0;';
+                    subBgStyle = 'background:white; border:none; padding:0;';
                 }
                 
                 // NUEVO: Variables de estilo para subordinados inactivos
@@ -4513,7 +4513,7 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
                 subDiv.className = 'team-member-container';
                 subDiv.onclick = () => { window.abrirStatsEmpleado(sub.id, sub.name, sub.puesto); };
                 subDiv.innerHTML = `
-                        <div style="width:45px; height:45px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.2rem; margin-bottom:3px; box-shadow:0 1px 2px rgba(0,0,0,0.05); position:relative; ${subBgStyle} ${subOpacityStyle}">
+                        <div style="width:49px; height:49px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.2rem; margin-bottom:3px; box-shadow:0 1px 2px rgba(0,0,0,0.05); position:relative; ${subBgStyle} ${subOpacityStyle}">
                             ${subAvatarHtml}
                             <div id="badge-count-${sub.id}" class="notification-badge" style="display:none; width:16px; height:16px; font-size:0.6rem; right:-2px; top:-2px;">0</div>
                             ${subBadgeInactivo}
@@ -4995,11 +4995,11 @@ window.abrirStatsEquipo = async (isBack = false) => {
             
             misDirectos.forEach(sub => {
                  let subAvatarHtml = '👤';
-                 let subBgStyle = 'background:#eff6ff; border:2px solid #bfdbfe;';
+                 let subBgStyle = 'background:#eff6ff; border:none;';
                  if (sub.avatar) {
                      const safeSubUrl = window.procesarUrlImagen(sub.avatar);
                      subAvatarHtml = `<img src="${safeSubUrl}" loading="lazy" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">`;
-                     subBgStyle = 'background:white; border:2px solid #bfdbfe; padding:0;';
+                     subBgStyle = 'background:white; border:none; padding:0;';
                  }
                  
                  // NUEVO: Variables de estilo para subordinados inactivos
@@ -5010,7 +5010,7 @@ window.abrirStatsEquipo = async (isBack = false) => {
                  subDiv.className = 'team-member-container';
                  subDiv.onclick = () => { window.abrirStatsEmpleado(sub.id, sub.name, sub.puesto); };
                  subDiv.innerHTML = `
-                    <div style="width:45px; height:45px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.2rem; margin-bottom:3px; box-shadow:0 1px 2px rgba(0,0,0,0.05); position:relative; ${subBgStyle} ${subOpacityStyle}">
+                    <div style="width:49px; height:49px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.2rem; margin-bottom:3px; box-shadow:0 1px 2px rgba(0,0,0,0.05); position:relative; ${subBgStyle} ${subOpacityStyle}">
                         ${subAvatarHtml}
                         <div id="badge-count-${sub.id}" class="notification-badge" style="display:none; width:16px; height:16px; font-size:0.6rem; right:-2px; top:-2px;">0</div>
                         ${subBadgeInactivo}
