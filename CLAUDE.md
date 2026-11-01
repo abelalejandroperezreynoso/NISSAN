@@ -298,6 +298,15 @@ Las reglas para usarlo:
   en toda la app y esa franja se pinta hoy con el fondo de `<html>` de cada
   documento. Un cambio en el manifiesto sólo se aplica reinstalando el icono
   desde la pantalla de inicio; iOS congela el que había al añadirlo.
+
+  **El icono vive en `iconos/`** —`icono-180.png` para iOS, `192` y `512`
+  para el manifiesto—, sacados de un mismo dibujo: el engrane con la llave,
+  opaco y sin redondear, que las esquinas las pone iOS. iOS **no** lee los
+  `icons` del manifiesto: lo que pinta en la pantalla de inicio es el
+  `<link rel="apple-touch-icon">`, y sin él hace una captura de la página.
+  Por eso ese enlace va en las tres pantallas, junto al del manifiesto.
+  Cambiar el dibujo es reemplazar los tres archivos con el mismo nombre; quien
+  ya la tenga instalada no lo verá hasta quitarla y volver a añadirla.
 - **Safari en iOS agranda la letra al girar el teléfono**, y a veces no la
   devuelve al volver a vertical: la lista de clasificaciones del panel salía
   con otra letra después de ver la presentación a pantalla completa, que es lo
