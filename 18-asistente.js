@@ -302,7 +302,7 @@ window.HERRAMIENTAS_ASISTENTE = [
         input_schema: {
             type: 'object',
             properties: {
-                incidente_id: { type: 'integer', description: 'El id del registro en incidents.' },
+                incidente_id: { type: 'string', description: 'El id del registro en incidents: un UUID, entre comillas y tal como lo devuelve la consulta.' },
                 clasificacion: { type: 'string', description: 'La clasificación de destino, tal como la devuelve clasificaciones_de_encuestas.' },
                 encuesta_modelo_id: { type: 'integer', description: 'Opcional: la encuesta que sirve de modelo. Por defecto, la más reciente de la clasificación.' },
                 motivo: { type: 'string', description: 'En una frase, qué se va a hacer.' }
@@ -354,7 +354,11 @@ window.HERRAMIENTAS_ASISTENTE = [
             additionalProperties: false
         }
     }
-].map(h => ({ ...h, eager_input_streaming: true }));
+];
+// Sin `eager_input_streaming`: con él la API deja pasar la entrada sin
+// validar, y un JSON roto (un UUID sin comillas en un campo numérico) revienta
+// dentro del SDK al cerrar el bloque, antes de que nadie pueda contestarlo con
+// un `tool_result`: se perdía la pregunta entera con «JSON Parse error».
 
 // Qué se puede escribir y cómo: c (crear), m (modificar), b (borrar). Quedan
 // fuera las firmas de enterado y las actas de certificación, que son la
@@ -975,7 +979,7 @@ window.ejecutarHerramientaAsistente = async (bloque, ctx) => {
     const responder = (contenido, esError) => ({ type: 'tool_result', tool_use_id: bloque.id, content: contenido, ...(esError ? { is_error: true } : {}) });
 
     if (!fn || !def) return responder('Herramienta desconocida.', true);
-    // Con `eager_input_streaming` la API ya no valida la entrada: se mira aquí.
+    // La API ya valida que sea JSON; lo que pide el esquema se mira aquí.
     if (!entrada || typeof entrada !== 'object' || Array.isArray(entrada)) return responder('INVALID_JSON: la entrada no es un objeto.', true);
     const faltan = (def.input_schema.required || []).filter(k => entrada[k] === undefined || entrada[k] === null || entrada[k] === '');
     if (faltan.length) return responder(`Faltan campos: ${faltan.join(', ')}`, true);
