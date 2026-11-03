@@ -820,10 +820,12 @@ window.textoDeBorradoIncidente = (r) => {
 // guarda en `image_url` la primera foto del registro al que está vinculada,
 // y borrarla dejaría a aquél sin foto.
 //
-// Con `{ conservarFirmas: true }` —lo que pide la migración a encuesta— los
-// archivos de las firmas se quedan: las respuestas de la encuesta nueva los
-// nombran. Y no se prueba antes el permiso de Storage, que a esas alturas la
-// encuesta ya existe y lo único en juego son fotos ya copiadas al material.
+// Con `{ conservarRutas: Set }` —lo que pide la migración a encuesta— se quedan
+// los archivos de firma de esas rutas: las respuestas de la encuesta nueva los
+// nombran. Los demás —la gente que ya no está y las firmas repetidas— se
+// borran. Y no se prueba antes el permiso de Storage: lo probó la previa de la
+// migración, y a esas alturas la encuesta ya existe.
+// `{ conservarFirmas: true }` conserva todas.
 window.eliminarIncidenteCompleto = async (id, avisar, opciones = {}) => {
     const decir = (t) => { try { if (avisar) avisar(t); } catch (e) { /* sólo informa */ } };
     const r = { ok: false, id, firmasBorradas: 0, fotosBorradas: 0, archivosBorrados: 0,
@@ -854,8 +856,10 @@ window.eliminarIncidenteCompleto = async (id, avisar, opciones = {}) => {
         // Antes de tocar la fila, que Storage deje borrar: después ya no habría
         // de dónde sacar las rutas para reintentarlo, y el registro se iría
         // dejando sus archivos ocupando sitio para siempre.
+        const migrando = !!(opciones.conservarFirmas || opciones.conservarRutas);
         if (opciones.conservarFirmas) rutasFirmas.clear();
-        for (const [bucket, rutas] of (opciones.conservarFirmas ? [] : [[bF, rutasFirmas], [bI, rutasFotos]])) {
+        if (opciones.conservarRutas) opciones.conservarRutas.forEach(p => rutasFirmas.delete(p));
+        for (const [bucket, rutas] of (migrando ? [] : [[bF, rutasFirmas], [bI, rutasFotos]])) {
             if (rutas.size && await window.storageDejaBorrar(bucket) === false) {
                 r.error = `No se borró nada: Storage no deja borrar archivos del bucket «${bucket}», así que el registro se iría y sus archivos seguirían ocupando sitio. Falta darle el permiso de borrado.`;
                 r.sinPermiso = bucket;
@@ -909,6 +913,7 @@ window.eliminarIncidenteCompleto = async (id, avisar, opciones = {}) => {
         // política que no deje borrar no da error, sólo devuelve una lista vacía.
         const quitar = async (bucket, rutas) => {
             const lista = [...rutas];
+            const antes = r.archivosBorrados;
             r.archivosPedidos += lista.length;
             for (let i = 0; i < lista.length; i += 100) {
                 decir(`Borrando archivos… ${Math.min(i + 100, lista.length)} de ${lista.length}`);
@@ -922,8 +927,10 @@ window.eliminarIncidenteCompleto = async (id, avisar, opciones = {}) => {
                     tanda.forEach(p => r.archivosPendientes.push({ bucket, ruta: p, motivo: e.message }));
                 }
             }
+            return r.archivosBorrados - antes;
         };
-        await quitar(bF, rutasFirmas);
+        r.archivosFirmasPedidos = rutasFirmas.size;
+        r.archivosFirmasBorrados = await quitar(bF, rutasFirmas);
         await quitar(bI, rutasFotos);
         if (r.archivosPendientes.length) {
             const porBucket = {};
@@ -1028,12 +1035,46 @@ window.previaDeMigracion = async (id, clasificacion, modeloId) => {
     else Object.assign(pregunta, { question_text: 'Firmo de enterado', question_type: window.TIPO_PREGUNTA_FIRMA || 'signature' });
     pregunta.order_index = 0;
 
-    // Una respuesta por persona: la primera vez que firmó.
+    // Una respuesta por persona —la primera vez que firmó—, y sólo de quien
+    // sigue en la organización: la firma de alguien dado de baja, o que ya no
+    // está en la plantilla, no pasa a la encuesta y se elimina con el registro.
+    // Hace falta la plantilla para saberlo; sin ella no se migra, que se
+    // borrarían firmas de gente que sí está.
+    if (!(window.todosLosEmpleadosData || []).length && window.cargarDatosEmpleados) {
+        try { await window.cargarDatosEmpleados(); } catch (e) { /* se comprueba abajo */ }
+    }
+    const plantilla = window.todosLosEmpleadosData || [];
+    if (!plantilla.length) throw new Error('No se pudo cargar la plantilla, y sin ella no se sabe qué firmas son de gente que sigue en la organización. Inténtalo de nuevo.');
+    const fichaDe = new Map(plantilla.map(e => [String(e.id), e]));
+    const sigue = (e) => window.empleadoActivo ? window.empleadoActivo(e) : (e.isActive !== false && e.is_active !== false);
+
     const firmas = await window.todasLasFilas(() => sb.from('incident_signatures')
         .select('employee_id, signature_data, created_at').eq('incident_id', id).order('created_at', { ascending: true }));
     const porPersona = new Map();
     firmas.forEach(f => { const k = String(f.employee_id); if (f.employee_id != null && !porPersona.has(k)) porPersona.set(k, f); });
-    const firmantes = [...porPersona.values()];
+    const firmantes = [], descartados = [];
+    let bajas = 0, fuera = 0;
+    porPersona.forEach((f, k) => {
+        const emp = fichaDe.get(k);
+        if (emp && sigue(emp)) firmantes.push(f);
+        else { descartados.push(f); if (emp) bajas++; else fuera++; }
+    });
+    const quedan = new Set(firmantes.map(f => String(f.employee_id)));
+
+    // Los archivos que se quedan son los de esas firmas; los demás de su
+    // carpeta —los de la gente que ya no está y las firmas repetidas— se borran.
+    // Antes de crear nada, que Storage deje borrarlos: si no, se quedarían
+    // ocupando sitio sin ninguna fila que dijera dónde están.
+    const bF = window.BUCKET_FIRMAS_INCIDENTES, carpeta = `signatures/${id}/`;
+    const rutasConservar = new Set();
+    firmantes.forEach(f => { const p = window.rutaDeArchivoIncidente(f.signature_data, bF); if (p) rutasConservar.add(p); });
+    const porBorrar = firmas.filter(f => {
+        const p = window.rutaDeArchivoIncidente(f.signature_data, bF);
+        return p.startsWith(carpeta) && !rutasConservar.has(p);
+    }).length;
+    if (porBorrar && await window.storageDejaBorrar(bF) === false) {
+        throw new Error(`No se migró: hay ${porBorrar} ${porBorrar === 1 ? 'firma' : 'firmas'} de gente que ya no está o repetidas que habría que borrar, y Storage no deja borrar archivos del bucket «${bF}». Falta darle el permiso de borrado.`);
+    }
 
     // Las fotos: las suyas y, en una difusión sin fotos propias, las del
     // registro al que está vinculada, que es lo que se enseñaba.
@@ -1065,14 +1106,15 @@ window.previaDeMigracion = async (id, clasificacion, modeloId) => {
     if ((window.todosLosEmpleadosData || []).length && window.padronDeLaEncuesta) {
         const gente = window.padronDeLaEncuesta({ ...fila, id: '__previa_migracion' });
         padron = gente.length;
-        pendientes = gente.filter(e => !porPersona.has(String(e.id))).length;
+        pendientes = gente.filter(e => !quedan.has(String(e.id))).length;
     }
 
     // Los que están vinculados a éste se quedan sin vínculo, y una difusión sin
     // fotos propias se queda además sin las que tomaba prestadas: se dice antes.
     const { count: vinculados } = await sb.from('incidents').select('id', { count: 'exact', head: true }).eq('linked_incident_id', id);
 
-    return { inc, tipo, modelo, pregunta, firmantes, urls, fila, titulo, fecha: fechaValida ? fecha : null, padron, pendientes, vinculados: vinculados || 0 };
+    return { inc, tipo, modelo, pregunta, firmantes, descartados, bajas, fuera, rutasConservar, firmasPorBorrar: porBorrar,
+        urls, fila, titulo, fecha: fechaValida ? fecha : null, padron, pendientes, vinculados: vinculados || 0 };
 };
 
 window.migrarIncidenteAEncuesta = async (previa, avisar) => {
@@ -1143,9 +1185,11 @@ window.migrarIncidenteAEncuesta = async (previa, avisar) => {
         // Y el registro viejo, fuera: sus fotos ya están en el material y sus
         // firmas en las respuestas, que siguen nombrando los mismos archivos.
         decir('Quitando el registro viejo…');
-        const borrado = await window.eliminarIncidenteCompleto(previa.inc.id, decir, { conservarFirmas: true });
+        const borrado = await window.eliminarIncidenteCompleto(previa.inc.id, decir, { conservarRutas: previa.rutasConservar || new Set() });
         if (!borrado.ok) throw new Error('No se pudo quitar el registro viejo: ' + (borrado.error || 'la base no lo dejó') + '.');
         r.avisos.push(...(borrado.avisos || []));
+        r.descartadas = (previa.descartados || []).length;
+        r.archivosFirmasBorrados = borrado.archivosFirmasBorrados || 0;
         r.vinculadosDesligados = borrado.vinculadosDesligados || 0;
         r.ok = true;
         r.evaluationId = ev.id;
@@ -1183,6 +1227,7 @@ window.textoDeMigracion = (r) => {
         return `No se migró: ${motivo}${r.avisos.length ? ' ' + r.avisos.join(' ') : ''} El registro sigue como estaba.`;
     }
     let t = `«${r.titulo}» ya es una encuesta: ${r.respuestas} ${r.respuestas === 1 ? 'firma' : 'firmas'} y ${r.fotos} ${r.fotos === 1 ? 'foto' : 'fotos'}. Ya no sale en el listado de incidentes.`;
+    if (r.descartadas) t += ` Se eliminaron ${r.descartadas} ${r.descartadas === 1 ? 'firma' : 'firmas'} de gente que ya no está en la organización.`;
     if (r.vinculadosDesligados) t += ` ${r.vinculadosDesligados} registro${r.vinculadosDesligados === 1 ? '' : 's'} vinculado${r.vinculadosDesligados === 1 ? '' : 's'} quedó sin vínculo.`;
     if (r.avisos.length) t += ' ' + r.avisos.join(' ');
     return t;

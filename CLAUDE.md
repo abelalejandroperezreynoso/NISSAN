@@ -1533,12 +1533,19 @@ Las reglas para usarlo:
      `paginasDeArchivo` como lo subido a mano y se suben con su miniatura. Una
      difusión sin fotos propias toma las del registro al que está vinculada,
      que es lo que enseñaba.
-  4. **Cada firma, una respuesta ya revisada** de esa persona —la primera si
-     firmó dos veces—, con su fecha y su misma imagen: el archivo no se mueve,
-     la respuesta nombra la url de siempre.
+  4. **Cada firma de alguien que sigue en la organización, una respuesta ya
+     revisada** de esa persona —la primera si firmó dos veces—, con su fecha y
+     su misma imagen: el archivo no se mueve, la respuesta nombra la url de
+     siempre. **Las de gente dada de baja o que ya no está en la plantilla no
+     pasan**: se eliminan con el registro, fila y archivo. Lo decide
+     `empleadoActivo` sobre `todosLosEmpleadosData`, que por eso hace falta
+     cargada —sin ella la previa no deja migrar, que borraría firmas de gente
+     que sí está—.
   5. **El registro viejo se elimina** con `eliminarIncidenteCompleto(id, avisar,
-     { conservarFirmas: true })`, que borra sus filas y sus fotos —ya copiadas—
-     y deja los archivos de las firmas. Con eso deja de salir en el listado.
+     { conservarRutas })`, que borra sus filas y sus fotos —ya copiadas— y de
+     las firmas deja sólo los archivos que nombran las respuestas nuevas
+     (`previa.rutasConservar`): los de quien ya no está y los repetidos se
+     borran. Con eso deja de salir en el listado.
 
   **Todo o nada**: si algo falla antes del paso 5, se deshace lo creado —las
   respuestas, el material con sus archivos, la pregunta y la encuesta— y el
@@ -1550,8 +1557,14 @@ Las reglas para usarlo:
 
   **Las firmas migradas siguen en el bucket `signatures`**, y por eso el
   registro se borra conservándolas: borrarlo por el bote de basura después se
-  las llevaría y dejaría las respuestas sin imagen. Migrar no libera espacio;
-  lo que libera son las fotos duplicadas que se quitan.
+  las llevaría y dejaría las respuestas sin imagen. Lo que libera espacio son
+  las fotos duplicadas y las firmas de quien ya no está.
+
+  **Y antes de crear nada se prueba que Storage deje borrar firmas**
+  (`storageDejaBorrar`), si hay alguna que borrar: sin permiso no se migra,
+  que esos archivos se quedarían sin ninguna fila que dijera dónde están —el
+  bucket no se deja listar—. La tarjeta dice cuántas se eliminan, cuántas de
+  baja y cuántas fuera de la plantilla.
 
 - **Todo cambio del asistente se confirma en una ficha.** La tarjeta
   (`contextoDeEscritura` en `18-asistente.js`, estilos `.asistente-cambio*`)

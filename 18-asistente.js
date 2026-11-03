@@ -168,7 +168,7 @@ Cómo funciona la aplicación:
 - Las encuestas hechas sólo de constancias (foto, firma, asistencia, curso previo) no se califican: entregarlas vale 100.
 - Los empleados se identifican por employee_id (texto); el nombre va como «Apellidos Nombres». supervisor_id es el employee_id de su jefe inmediato.
 - Los registros de incidentes viven en la tabla incidents, y la columna tipo dice qué son: «Incidente», «Difusión» o «Capacitación» (sin tipo cuenta como Incidente). Una difusión es un registro con tipo = 'Difusión', no una encuesta: para contarlas o buscarlas, filtra incidents por tipo. title es el nombre, date la fecha, grado la severidad de un incidente y linked_incident_id el registro al que está vinculado. Cada uno se firma de enterado (incident_signatures, una fila por persona) y tiene sus fotos en incident_gallery.
-- El sistema de incidentes ya es obsoleto: hoy se cargan como encuestas de firma en una clasificación propia. Para pasar uno viejo a encuesta usa migrar_incidente_a_encuesta. Si el administrador no dice a qué clasificación, consulta clasificaciones_de_encuestas y propón la que parezca de incidentes (las que llevan firma y títulos como los de los registros); si hay duda, pregúntale cuál con dos o tres opciones. Busca antes el id del registro en incidents por su título o su fecha. Al migrar, sus fotos pasan al material, cada firma pasa como respuesta firmada con su fecha y el registro deja de salir en el listado de incidentes. Para migrar varios, uno por llamada, y las difusiones vinculadas a un incidente antes que el incidente: usan sus fotos.
+- El sistema de incidentes ya es obsoleto: hoy se cargan como encuestas de firma en una clasificación propia. Para pasar uno viejo a encuesta usa migrar_incidente_a_encuesta. Si el administrador no dice a qué clasificación, consulta clasificaciones_de_encuestas y propón la que parezca de incidentes (las que llevan firma y títulos como los de los registros); si hay duda, pregúntale cuál con dos o tres opciones. Busca antes el id del registro en incidents por su título o su fecha. Al migrar, sus fotos pasan al material, cada firma de alguien que sigue activo pasa como respuesta firmada con su fecha, las de gente dada de baja o que ya no está en la plantilla se eliminan, y el registro deja de salir en el listado de incidentes. Para migrar varios, uno por llamada, y las difusiones vinculadas a un incidente antes que el incidente: usan sus fotos.
 - Borrar un registro de incidentes con borrar_registros lo elimina por completo: sus firmas, sus fotos y los archivos de ambas en Storage, que es lo que libera espacio (cerca de 1 MB de firmas por registro). Los registros vinculados a él no se borran: se quedan sin vínculo. Las firmas no se borran sueltas.
 
 ${window.catalogoDeTiposParaAsistente()}
@@ -657,7 +657,8 @@ window.EJECUTAR_HERRAMIENTA = {
         try { previa = await window.previaDeMigracion(e.incidente_id, e.clasificacion, e.encuesta_modelo_id); }
         catch (err) { return { error: err.message || String(err) }; }
 
-        const n = previa.firmantes.length, f = previa.urls.length;
+        const n = previa.firmantes.length, f = previa.urls.length, d = (previa.descartados || []).length;
+        const porQue = [previa.bajas ? `${previa.bajas} de baja` : '', previa.fuera ? `${previa.fuera} que ya no ${previa.fuera === 1 ? 'está' : 'están'} en la plantilla` : ''].filter(Boolean).join(' y ');
         const fecha = previa.fecha ? previa.fecha.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : 'sin fecha';
         const dirigida = previa.padron == null ? 'Como el modelo'
             : `${previa.padron} ${previa.padron === 1 ? 'persona' : 'personas'}, como el modelo`
@@ -670,11 +671,13 @@ window.EJECUTAR_HERRAMIENTA = {
                 ['Clasificación', previa.fila.category || e.clasificacion],
                 ['Encuesta nueva', `${previa.titulo} · Única vez`],
                 ['Modelo', previa.modelo.title],
-                ['Firmas', n ? `${n} pasan como respuestas firmadas` : 'Ninguna'],
+                ['Firmas', n ? `${n} de gente activa pasan como respuestas firmadas` : 'Ninguna de gente activa'],
+                ...(d ? [['Se eliminan', `${d} ${d === 1 ? 'firma' : 'firmas'} de gente que ya no está (${porQue})`]] : []),
                 ['Material', f ? `${f} ${f === 1 ? 'foto' : 'fotos'}` : 'Sin fotos'],
                 ['Dirigida a', dirigida]
             ],
-            nota: 'El registro sale del listado de incidentes; sus firmas se conservan en la encuesta.'
+            nota: 'El registro sale del listado de incidentes; las firmas de gente activa se conservan en la encuesta.'
+                + (d ? ` Las ${d === 1 ? 'de la persona' : d + ' de las personas'} que ya no ${d === 1 ? 'está' : 'están'} se borran con su imagen y no se pueden recuperar.` : '')
                 + (previa.vinculados ? ` ${previa.vinculados === 1 ? 'Un registro vinculado' : previa.vinculados + ' registros vinculados'} a éste se quedará${previa.vinculados === 1 ? '' : 'n'} sin vínculo y sin las fotos que tomaba${previa.vinculados === 1 ? '' : 'n'} de él: conviene migrarlo${previa.vinculados === 1 ? '' : 's'} antes.` : '')
         });
         if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se migró nada.' };
@@ -682,7 +685,8 @@ window.EJECUTAR_HERRAMIENTA = {
         const r = await window.migrarIncidenteAEncuesta(previa, (t) => window.pintarEstadoAsistente(true, t));
         ctx.resultado(r.ok, r.ok ? `Migrado · ${r.respuestas} firmas · ${r.fotos} fotos` : 'No se migró');
         if (r.ok) despuesDeEscribir('evaluations');
-        return { aprobado: true, migrado: r.ok, encuesta_id: r.evaluationId || null, firmas: r.respuestas, fotos: r.fotos, detalle: window.textoDeMigracion(r) };
+        return { aprobado: true, migrado: r.ok, encuesta_id: r.evaluationId || null, firmas: r.respuestas, fotos: r.fotos,
+            firmas_eliminadas: r.ok ? (r.descartadas || 0) : 0, detalle: window.textoDeMigracion(r) };
     },
 
     // --- LAS QUE ESCRIBEN ---
