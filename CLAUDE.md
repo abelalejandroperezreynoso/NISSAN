@@ -8785,11 +8785,16 @@ Las reglas para usarlo:
     `respuestasDelPeriodoDeTodos`), con las mismas columnas y cachés
     (`prepararDatosDelAsistente`). Una herramienta que calcule por su cuenta
     acabaría dando otro número del que se lee en pantalla.
-  - **La conversación se copia desde el menú del «…»**
-    (`window.copiarConversacionAsistente`): sale del historial y no de lo
-    dibujado —«Tú:» y «Asistente:» con el Markdown tal cual, y las consultas
-    que hizo como renglones con «·»—, así que una pregunta que falló no se
-    copia. La opción sale apagada sin conversación o mientras se escribe la
+  - **La conversación se copia desde el menú del «…», entera**
+    (`window.copiarConversacionAsistente`): sale de `asistente.registro`, que
+    apunta todo lo que se vio y en su orden —«Tú:» y «Asistente:» con el
+    Markdown tal cual, las consultas como renglones con «·» y cuántas veces
+    fallaron, cada tarjeta de cambio con sus datos y lo que se decidió y quedó,
+    y los avisos y errores—. **No sale de `asistente.mensajes`**, que se deshace
+    cuando una pregunta falla: así se perdía justo la que hacía falta para saber
+    qué pasó. El registro lo llena el turno (`nuevoTurnoAsistente(apunte)`) y
+    sólo cuando se le pasa su entrada: al redibujar no se pasa, que ya está
+    apuntado. La opción sale apagada sin conversación o mientras se escribe la
     respuesta. Sin `navigator.clipboard` —contexto no seguro o Safari viejo—
     copia con un textarea escondido y `execCommand`; el aviso va al subtítulo.
   - **Lo que contesta se lee en un teléfono, y eso decide cómo se dibuja.**

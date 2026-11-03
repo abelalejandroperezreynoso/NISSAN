@@ -30,6 +30,7 @@ window.MAX_TEXTO_HERRAMIENTA = 40000;
 
 window.asistente = {
     mensajes: [],       // el historial que se le manda a la API, sin tocar
+    registro: [],       // lo que se vio en pantalla, para copiarlo: también lo que falló
     ocupado: false,
     flujo: null,        // el stream en curso, para poder detenerlo
     detenido: false,
@@ -1013,7 +1014,10 @@ window.preguntarAlAsistente = async (texto) => {
     const inicio = a.mensajes.length;
     a.mensajes.push({ role: 'user', content: texto.trim() });
     window.pintarMensajeUsuario(texto.trim());
-    const turno = window.nuevoTurnoAsistente();
+    // El registro no se deshace cuando la pregunta falla: es lo que se copia.
+    const apunte = { rol: 'asistente', partes: [] };
+    a.registro.push({ rol: 'tu', texto: texto.trim() }, apunte);
+    const turno = window.nuevoTurnoAsistente(apunte);
     window.pintarEstadoAsistente(true, 'Pensando…');
 
     let Anthropic;
@@ -1127,6 +1131,7 @@ window.detenerAsistente = () => {
 window.nuevaConversacionAsistente = () => {
     if (window.asistente.ocupado) window.detenerAsistente();
     window.asistente.mensajes = [];
+    window.asistente.registro = [];
     window.pintarAsistente();
 };
 
@@ -1137,27 +1142,39 @@ const ICONO_ASISTENTE_PARAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect
 const ICONO_ASISTENTE_COPIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/></svg>';
 
 // --- COPIAR LA CONVERSACIÓN ---
-// Sale del historial y no de lo que hay dibujado: es lo que de verdad se le
-// preguntó y se contestó, en Markdown tal cual llegó, con las consultas que
-// hizo entre medias. Una pregunta que falló ya no está en el historial
-// (se vuelve al de antes), así que tampoco se copia.
+// Sale de `asistente.registro`, que apunta todo lo que se vio en pantalla y en
+// el orden en que salió: las preguntas, el texto en Markdown tal cual llegó,
+// las consultas que hizo, las tarjetas de cambios con lo que se decidió y lo
+// que quedó, y los avisos y errores. No sale del historial que va a la API
+// porque ése se deshace cuando una pregunta falla, y justo ésa es la que hace
+// falta copiar para saber qué pasó.
 window.textoDeConversacionAsistente = () => {
     const partes = [];
-    window.asistente.mensajes.forEach(m => {
-        if (m.role === 'user' && typeof m.content === 'string') {
-            partes.push('Tú:\n' + m.content);
-        } else if (m.role === 'assistant' && Array.isArray(m.content)) {
-            const consultas = m.content.filter(b => b.type === 'tool_use')
-                .map(u => '· ' + window.rotuloDeHerramienta(u.name, u.input));
-            const texto = m.content.filter(b => b.type === 'text').map(b => b.text).join('\n\n').trim();
-            const cuerpo = [texto, consultas.join('\n')].filter(Boolean).join('\n\n');
-            if (!cuerpo) return;
-            // Una respuesta que pasó por herramientas llega en varios mensajes
-            // seguidos: se juntan bajo un solo «Asistente».
-            const ultima = partes[partes.length - 1];
-            if (ultima && ultima.startsWith('Asistente:\n')) partes[partes.length - 1] = ultima + '\n\n' + cuerpo;
-            else partes.push('Asistente:\n' + cuerpo);
-        }
+    (window.asistente.registro || []).forEach(e => {
+        if (e.rol === 'tu') { partes.push('Tú:\n' + e.texto); return; }
+        const trozos = [];
+        let consultas = [];
+        const soltarConsultas = () => { if (consultas.length) { trozos.push(consultas.join('\n')); consultas = []; } };
+        e.partes.forEach(p => {
+            if (p.tipo === 'consulta') {
+                const fallo = p.fallos >= p.veces ? ' (falló)' : (p.fallos ? ` (${p.fallos} ${p.fallos === 1 ? 'intento falló' : 'intentos fallaron'})` : '');
+                consultas.push('· ' + p.rotulo + (p.veces > 1 ? ` · ${p.veces} veces` : '') + fallo);
+                return;
+            }
+            soltarConsultas();
+            if (p.tipo === 'texto') { if (p.texto && p.texto.trim()) trozos.push(p.texto.trim()); }
+            else if (p.tipo === 'cambio') {
+                const lineas = ['[Tarjeta] ' + p.titulo];
+                (p.campos || []).forEach(([rot, v]) => { if (v !== undefined && v !== null && v !== '') lineas.push(`  ${rot}: ${v}`); });
+                (p.filas || []).forEach(f => lineas.push('  - ' + f));
+                if (p.resto > 0) lineas.push(`  - y ${p.resto} más`);
+                if (p.nota) lineas.push('  ' + p.nota);
+                lineas.push('  → ' + (p.estado || 'Sin decidir'));
+                trozos.push(lineas.join('\n'));
+            } else if (p.tipo === 'nota') trozos.push((p.error ? 'Error: ' : 'Aviso: ') + p.texto);
+        });
+        soltarConsultas();
+        if (trozos.length) partes.push('Asistente:\n' + trozos.join('\n\n'));
     });
     if (!partes.length) return '';
     const fecha = new Date().toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' });
@@ -1361,7 +1378,7 @@ const ICONO_MENU_CLAVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCo
 window.opcionesDelMenuAsistente = () => {
     const a = window.asistente;
     const enChat = a.pantalla === 'chat' && !!window.claveDelAsistente();
-    const hay = a.mensajes.length > 0;
+    const hay = a.mensajes.length > 0 || (a.registro || []).length > 0;
     return [
         { texto: 'Nueva conversación', icono: ICONO_MENU_NUEVA, accion: 'window.nuevaConversacionAsistente()', apagada: !enChat || (!hay && !a.ocupado) },
         { texto: 'Copiar conversación', icono: ICONO_ASISTENTE_COPIAR, accion: 'window.copiarConversacionAsistente()', apagada: !enChat || !hay || a.ocupado },
@@ -1656,8 +1673,11 @@ window.pintarMensajeUsuario = (texto) => {
 
 // Un turno del asistente: sus trozos de texto y las consultas de entre medias,
 // en el orden en que llegan.
-window.nuevoTurnoAsistente = () => {
+window.nuevoTurnoAsistente = (apunte) => {
     const cont = document.getElementById('asistente-mensajes');
+    // `apunte` es la entrada del registro que se copia; al redibujar no se pasa,
+    // que eso ya está apuntado.
+    const apuntar = (parte) => { if (apunte) apunte.partes.push(parte); return parte; };
     const nodo = document.createElement('div');
     nodo.className = 'asistente-turno esta-escribiendo';
     if (cont) cont.appendChild(nodo);
@@ -1666,13 +1686,15 @@ window.nuevoTurnoAsistente = () => {
             const t = document.createElement('div');
             t.className = 'asistente-texto';
             nodo.appendChild(t);
+            const parte = apuntar({ tipo: 'texto', texto: '' });
             return {
                 escribir(texto) {
+                    parte.texto = texto || '';
                     t.innerHTML = window.markdownAsistente(texto || '');
                     t.hidden = !texto;
                     bajarAlFinal();
                 },
-                quitar() { t.remove(); }
+                quitar() { t.remove(); parte.texto = ''; }
             };
         },
         // La misma consulta seguida no se apunta dos veces: se cuenta («· 3
@@ -1688,6 +1710,10 @@ window.nuevoTurnoAsistente = () => {
                 c.__veces = 0; c.__pendientes = 0; c.__fallos = 0;
                 nodo.appendChild(c);
             }
+            const previa = apunte && apunte.partes[apunte.partes.length - 1];
+            const parte = (previa && previa.tipo === 'consulta' && previa.rotulo === rotulo)
+                ? previa : apuntar({ tipo: 'consulta', rotulo, veces: 0, fallos: 0 });
+            parte.veces++;
             c.__veces++; c.__pendientes++;
             c.textContent = rotulo + (c.__veces > 1 ? ` · ${c.__veces} veces` : '');
             c.classList.add('esta-consultando');
@@ -1695,7 +1721,7 @@ window.nuevoTurnoAsistente = () => {
             return {
                 terminar(ok) {
                     c.__pendientes = Math.max(0, c.__pendientes - 1);
-                    if (!ok) c.__fallos++;
+                    if (!ok) { c.__fallos++; parte.fallos++; }
                     if (!c.__pendientes) c.classList.remove('esta-consultando');
                     c.classList.toggle('fallo', c.__fallos >= c.__veces);
                 }
@@ -1707,9 +1733,12 @@ window.nuevoTurnoAsistente = () => {
         // `resultado`, que escribe en la tarjeta lo que de verdad quedó.
         contextoDeEscritura() {
             let tarjeta = null;
+            let parte = null;
             return {
                 confirmar(p) {
                     const esc = window.sanitizeForHTML;
+                    parte = apuntar({ tipo: 'cambio', titulo: p.titulo, campos: (p.campos || []).filter(Boolean).map(c => [c[0], c[1] == null ? '' : String(c[1])]),
+                        filas: (p.filas || []).map(String), resto: p.resto || 0, nota: p.nota || '', estado: 'Esperando confirmación' });
                     tarjeta = document.createElement('div');
                     tarjeta.className = 'asistente-cambio' + (p.accion === 'borrar' ? ' es-borrado' : '');
                     // Una ficha: el título, y debajo cada dato como «Rótulo: valor»,
@@ -1739,6 +1768,7 @@ window.nuevoTurnoAsistente = () => {
                             const estado = tarjeta.querySelector('.asistente-cambio-estado');
                             estado.hidden = false;
                             estado.textContent = si ? 'Aplicando…' : 'Cancelado';
+                            parte.estado = si ? 'Confirmado' : 'Cancelado';
                             if (!si) tarjeta.classList.add('esta-cancelado');
                             window.pintarEstadoAsistente(true, si ? 'Escribiendo en la base…' : 'Pensando…');
                             resolve(si);
@@ -1750,6 +1780,7 @@ window.nuevoTurnoAsistente = () => {
                 },
                 resultado(ok, texto) {
                     if (!tarjeta) return;
+                    if (parte) parte.estado = (ok ? 'Hecho: ' : 'Falló: ') + texto;
                     const estado = tarjeta.querySelector('.asistente-cambio-estado');
                     if (estado) { estado.hidden = false; estado.textContent = texto; }
                     tarjeta.classList.add(ok ? 'esta-aplicado' : 'fallo');
@@ -1757,6 +1788,7 @@ window.nuevoTurnoAsistente = () => {
             };
         },
         nota(texto, esError) {
+            apuntar({ tipo: 'nota', texto, error: !!esError });
             const n = document.createElement('div');
             n.className = 'asistente-nota' + (esError ? ' es-error' : '');
             n.textContent = texto;
