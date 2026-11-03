@@ -263,7 +263,7 @@ window.HERRAMIENTAS_ASISTENTE = [
     },
     {
         name: 'consultar_tabla',
-        description: 'Consulta de sólo lectura sobre una tabla de la base, para lo que no cubren las demás herramientas. Tablas: evaluations, evaluation_questions, evaluation_responses, employees, areas, plantas, lineas, equipos, incidents, incident_signatures (sin signature_data), hallazgos, objectives, refacciones, scheduled_evaluations, vacaciones, cursos_previos, evaluaciones_aplica, clasificaciones_revisores, clasificaciones_objetivo, certificaciones_clasificacion. Con contar=true devuelve sólo cuántas filas cumplen los filtros.',
+        description: 'Consulta de sólo lectura sobre una tabla de la base, para lo que no cubren las demás herramientas. Tablas: evaluations, evaluation_questions, evaluation_responses, employees, areas, plantas, lineas, equipos, incidents, incident_signatures (sin signature_data), incident_gallery, hallazgos, objectives, refacciones, scheduled_evaluations, vacaciones, cursos_previos, evaluaciones_aplica, clasificaciones_revisores, clasificaciones_objetivo, certificaciones_clasificacion. Con contar=true devuelve sólo cuántas filas cumplen los filtros.',
         input_schema: {
             type: 'object',
             properties: {
@@ -370,7 +370,7 @@ window.MAX_FILAS_ESCRITURA = 50;
 window.HERRAMIENTAS_QUE_ESCRIBEN = ['crear_registros', 'modificar_registros', 'borrar_registros', 'migrar_incidente_a_encuesta'];
 
 window.TABLAS_DEL_ASISTENTE = ['evaluations', 'evaluation_questions', 'evaluation_responses', 'employees',
-    'areas', 'plantas', 'lineas', 'equipos', 'incidents', 'incident_signatures', 'hallazgos', 'objectives',
+    'areas', 'plantas', 'lineas', 'equipos', 'incidents', 'incident_signatures', 'incident_gallery', 'hallazgos', 'objectives',
     'refacciones', 'scheduled_evaluations', 'vacaciones', 'cursos_previos', 'evaluaciones_aplica',
     'clasificaciones_revisores', 'clasificaciones_objetivo', 'certificaciones_clasificacion'];
 
@@ -379,7 +379,7 @@ window.TABLAS_DEL_ASISTENTE = ['evaluations', 'evaluation_questions', 'evaluatio
 window.NOMBRE_DE_TABLA_ASISTENTE = {
     evaluations: 'las encuestas', evaluation_questions: 'las preguntas', evaluation_responses: 'las respuestas',
     employees: 'la plantilla', areas: 'las áreas', plantas: 'las plantas', lineas: 'las líneas',
-    equipos: 'los equipos', incidents: 'los registros de incidentes', incident_signatures: 'las firmas de enterado',
+    equipos: 'los equipos', incidents: 'los registros de incidentes', incident_signatures: 'las firmas de enterado', incident_gallery: 'las fotos de los registros',
     hallazgos: 'los hallazgos', objectives: 'los objetivos', refacciones: 'las refacciones',
     scheduled_evaluations: 'el calendario de encuestas', vacaciones: 'las vacaciones',
     cursos_previos: 'los cursos previos', evaluaciones_aplica: 'quién dijo si le aplica',
