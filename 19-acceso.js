@@ -75,9 +75,20 @@
         window.mostrarDashboard(ficha);
     };
 
+    // El aviso de «¿Primera vez con PIN?» sólo tiene sentido mientras la
+    // entrada por número siga abierta. Se le pregunta a la base; sin la función
+    // o sin red se enseña, que es lo que hace falta mientras dura la migración.
+    const pintarAvisoMigracion = async () => {
+        const aviso = $('login-aviso-migracion');
+        if (!aviso) return;
+        const r = await window.llamarAcceso('acceso_estado', {});
+        aviso.hidden = r && r.ok && r.acceso_por_numero === false;
+    };
+
     window.prepararPantallaDeAcceso = () => {
         estado.pendiente = null;
         verPaso('login-paso-entrar', 'Iniciar sesión', '');
+        pintarAvisoMigracion();
         const campo = $('login-numero');
         if (campo && !campo.value) setTimeout(() => campo.focus(), 80);
     };
@@ -117,11 +128,11 @@
         }
 
         if (r.motivo === 'sin_pin') {
-            if (r.acceso_por_numero === false) { decir(window.textoDeAcceso({ motivo: 'cerrado' })); return; }
+            if (r.acceso_por_numero === false) { $('login-aviso-migracion').hidden = true; decir(window.textoDeAcceso({ motivo: 'cerrado' })); return; }
             estado.sinScript = false;
             document.querySelectorAll('#login-paso-activar [data-con-pin]').forEach(n => { n.hidden = false; });
             verPaso('login-paso-activar', 'Primera vez',
-                'Ahora se entra con tu número de empleado y un PIN. Confirma quién eres, deja tu correo y crea tu PIN.');
+                'Ahora se entra con tu número de empleado y un PIN. Confirma quién eres, deja tu correo de la empresa y crea tu PIN.');
             setTimeout(() => $('login-activar-nombre').focus(), 60);
             return;
         }
@@ -135,6 +146,7 @@
             return;
         }
 
+        if (r.motivo === 'falta_pin') { decir('Ya tienes PIN: escríbelo para entrar.'); $('login-pin').focus(); return; }
         decir(window.textoDeAcceso(r));
         if (r.motivo === 'incorrecto') { $('login-pin').value = ''; $('login-pin').focus(); }
     };

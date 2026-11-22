@@ -116,6 +116,17 @@ body {
 .login-paso[hidden], .login-campo[hidden] { display: none; }
 .login-campo { display: flex; flex-direction: column; gap: 6px; }
 .login-campo > span { font-size: 0.82rem; font-weight: 600; color: #546e7a; }
+.login-campo > small { font-size: 0.78rem; color: #78909c; }
+.login-aviso {
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #1e3a8a;
+    background: #eff6ff;
+    border-radius: 12px;
+    padding: 12px 14px;
+}
+.login-aviso b { display: block; margin-bottom: 2px; }
+.login-aviso[hidden] { display: none; }
 .login-campo input {
     width: 100%;
     box-sizing: border-box;

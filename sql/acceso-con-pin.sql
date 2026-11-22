@@ -193,6 +193,9 @@ begin
         return jsonb_build_object('ok', false, 'motivo', 'sin_pin',
             'acceso_por_numero', coalesce((select acceso_por_numero from acceso_ajustes where id = 1), true));
     end if;
+    if trim(coalesce(p_pin, '')) = '' then
+        return jsonb_build_object('ok', false, 'motivo', 'falta_pin');
+    end if;
     if crypt(coalesce(p_pin, ''), v_cred.pin_hash) <> v_cred.pin_hash then
         return acceso_fallo(v_num, 'incorrecto');
     end if;
@@ -240,6 +243,14 @@ begin
     insert into credenciales_registro (employee_id, accion, por) values (v_num, 'activó', v_num);
     return acceso_emitir(v_num);
 end $$;
+
+-- Si la entrada por número sigue abierta: la pantalla de entrar enseña el
+-- aviso de «¿Primera vez con PIN?» sólo entonces.
+create or replace function acceso_estado() returns jsonb
+language sql stable security definer set search_path = public as $$
+    select jsonb_build_object('ok', true,
+        'acceso_por_numero', coalesce((select acceso_por_numero from acceso_ajustes where id = 1), true))
+$$;
 
 -- Cambiar el propio PIN (y dejar el correo si falta). Lo usa quien entró con
 -- un PIN temporal y quien lo quiere cambiar.
@@ -391,6 +402,9 @@ end $$;
 revoke execute on function acceso_nombre_normal(text), acceso_pin_debil(text, text), acceso_quien(text),
     acceso_es_admin(text), acceso_fallo(text, text), acceso_emitir(text)
     from public, anon, authenticated;
+
+revoke execute on function acceso_estado() from public;
+grant execute on function acceso_estado() to anon, authenticated;
 
 revoke execute on function acceso_iniciar(text, text), acceso_activar(text, text, text, text),
     acceso_cambiar_pin(text, text, text), acceso_restablecer(text, text), acceso_verificar_pin(text, text),

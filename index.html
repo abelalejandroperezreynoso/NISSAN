@@ -20,7 +20,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-11-22-1">
+    <link rel="stylesheet" href="estilos.css?v=2026-11-22-2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -76,6 +76,14 @@
             <p id="login-explicacion" class="login-explicacion" hidden></p>
 
             <form id="login-paso-entrar" class="login-paso" onsubmit="event.preventDefault(); window.entrarConPin();" novalidate>
+                <!-- Sólo mientras la entrada por número siga abierta: es lo que
+                     tiene que leer quien todavía no tiene PIN (19-acceso.js). -->
+                <div id="login-aviso-migracion" class="login-aviso" hidden>
+                    <b>¿Primera vez con PIN?</b>
+                    Escribe tu número de empleado, deja el PIN vacío y toca «Entrar». Te pediremos
+                    tu nombre y tu correo de la empresa, y crearás un PIN de 4 números: desde ese
+                    momento será tu contraseña.
+                </div>
                 <label class="login-campo">
                     <span>Número de empleado</span>
                     <input type="text" id="login-numero" inputmode="numeric" autocomplete="username"
@@ -97,9 +105,10 @@
                            placeholder="Con tus apellidos">
                 </label>
                 <label class="login-campo" data-con-pin>
-                    <span>Tu correo</span>
+                    <span>Correo de la empresa</span>
                     <input type="email" id="login-activar-correo" autocomplete="email" autocapitalize="none"
-                           autocorrect="off" spellcheck="false" placeholder="El de la empresa o uno personal">
+                           autocorrect="off" spellcheck="false" placeholder="nombre@empresa.com">
+                    <small>Si no tienes, escribe uno personal.</small>
                 </label>
                 <label class="login-campo" data-con-pin>
                     <span>Crea tu PIN de 4 números</span>
@@ -115,9 +124,10 @@
 
             <form id="login-paso-cambiar" class="login-paso" hidden onsubmit="event.preventDefault(); window.cambiarPinAlEntrar();" novalidate>
                 <label class="login-campo" id="login-cambiar-correo-campo">
-                    <span>Tu correo</span>
+                    <span>Correo de la empresa</span>
                     <input type="email" id="login-cambiar-correo" autocomplete="email" autocapitalize="none"
-                           autocorrect="off" spellcheck="false" placeholder="El de la empresa o uno personal">
+                           autocorrect="off" spellcheck="false" placeholder="nombre@empresa.com">
+                    <small>Si no tienes, escribe uno personal.</small>
                 </label>
                 <label class="login-campo">
                     <span>Tu nuevo PIN de 4 números</span>
@@ -1200,28 +1210,28 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-11-22-1"></script>
-    <script src="2a-core-nav.js?v=2026-11-22-1"></script>
-    <script src="2b-core-dashboard.js?v=2026-11-22-1"></script>
-    <script src="3-incidentes.js?v=2026-11-22-1"></script>
-    <script src="4-evaluaciones-base.js?v=2026-11-22-1"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-11-22-1"></script>
-    <script src="17-hoja-excel.js?v=2026-11-22-1"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-11-22-1"></script>
-    <script src="5-objetivos.js?v=2026-11-22-1"></script>
-    <script src="6-calendario.js?v=2026-11-22-1"></script>
-    <script src="7-pendientes.js?v=2026-11-22-1"></script>
-    <script src="8-hallazgos.js?v=2026-11-22-1"></script>
-    <script src="9-estadisticas.js?v=2026-11-22-1"></script>
+    <script src="1-config.js?v=2026-11-22-2"></script>
+    <script src="2a-core-nav.js?v=2026-11-22-2"></script>
+    <script src="2b-core-dashboard.js?v=2026-11-22-2"></script>
+    <script src="3-incidentes.js?v=2026-11-22-2"></script>
+    <script src="4-evaluaciones-base.js?v=2026-11-22-2"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-11-22-2"></script>
+    <script src="17-hoja-excel.js?v=2026-11-22-2"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-11-22-2"></script>
+    <script src="5-objetivos.js?v=2026-11-22-2"></script>
+    <script src="6-calendario.js?v=2026-11-22-2"></script>
+    <script src="7-pendientes.js?v=2026-11-22-2"></script>
+    <script src="8-hallazgos.js?v=2026-11-22-2"></script>
+    <script src="9-estadisticas.js?v=2026-11-22-2"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-11-22-1"></script>
-    <script src="13-gestion.js?v=2026-11-22-1"></script>
-    <script src="14-vacaciones.js?v=2026-11-22-1"></script>
-    <script src="15-presentacion.js?v=2026-11-22-1"></script>
-    <script src="16-cursos.js?v=2026-11-22-1"></script>
-    <script src="18-asistente.js?v=2026-11-22-1"></script>
-    <script src="19-acceso.js?v=2026-11-22-1"></script>
-    <script src="10-refacciones.js?v=2026-11-22-1"></script> 
+    <script src="12-almacenamiento.js?v=2026-11-22-2"></script>
+    <script src="13-gestion.js?v=2026-11-22-2"></script>
+    <script src="14-vacaciones.js?v=2026-11-22-2"></script>
+    <script src="15-presentacion.js?v=2026-11-22-2"></script>
+    <script src="16-cursos.js?v=2026-11-22-2"></script>
+    <script src="18-asistente.js?v=2026-11-22-2"></script>
+    <script src="19-acceso.js?v=2026-11-22-2"></script>
+    <script src="10-refacciones.js?v=2026-11-22-2"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {
