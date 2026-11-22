@@ -1675,6 +1675,19 @@ Las reglas para usarlo:
   bucket no se deja listar—. La tarjeta dice cuántas se eliminan, cuántas de
   baja y cuántas fuera de la plantilla.
 
+- **Una encuesta nueva se la pide al asistente copiando otra**
+  (`crear_encuesta_copiando`, en `18-asistente.js`): toma el modelo de la
+  clasificación con `modeloDeClasificacion` —la más reciente, o la que se
+  pida—, copia todo menos `COLUMNAS_QUE_NO_SE_COPIAN` y sus preguntas, le pone el
+  título con su fecha (`tituloDeCopia`) y, si se le dan, los `enlaces`
+  (validados con `urlDeEnlaceValida`). Es la difusión de un incidente nuevo, que
+  va en la clasificación de incidentes con su pregunta de firma. Enseña su
+  tarjeta y espera el «Confirmar»; si las preguntas no entran, borra la encuesta.
+  **No sube material**: el asistente no recibe archivos, así que eso se agrega
+  después desde la hoja de la encuesta. Sus instrucciones le dicen que use esta
+  herramienta y no `crear_registros`, que tendría que copiar a mano los
+  destinatarios y los revisores.
+
 - **Todo cambio del asistente se confirma en una ficha.** La tarjeta
   (`contextoDeEscritura` en `18-asistente.js`, estilos `.asistente-cambio*`)
   lleva el título —el nombre del registro entre comillas, sin su id—, cada dato

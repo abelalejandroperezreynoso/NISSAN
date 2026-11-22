@@ -169,6 +169,8 @@ Cómo funciona la aplicación:
 - Las encuestas hechas sólo de constancias (foto, firma, asistencia, curso previo) no se califican: entregarlas vale 100.
 - Los empleados se identifican por employee_id (texto); el nombre va como «Apellidos Nombres». supervisor_id es el employee_id de su jefe inmediato.
 - Los registros de incidentes viven en la tabla incidents, y la columna tipo dice qué son: «Incidente», «Difusión» o «Capacitación» (sin tipo cuenta como Incidente). Una difusión es un registro con tipo = 'Difusión', no una encuesta: para contarlas o buscarlas, filtra incidents por tipo. title es el nombre, date la fecha, grado la severidad de un incidente y linked_incident_id el registro al que está vinculado. Cada uno se firma de enterado (incident_signatures, una fila por persona) y tiene sus fotos en incident_gallery.
+- Para dar de alta una encuesta nueva que se parece a otras de su clasificación —la difusión de un incidente nuevo, la junta de esta semana— usa crear_encuesta_copiando, no crear_registros: copia del modelo a quién va dirigida, sus revisores y sus preguntas. Si no te dicen la clasificación, consulta clasificaciones_de_encuestas y propón la que corresponda (las difusiones de incidentes van en la de incidentes). Pide el título y la fecha del evento si no te los dieron.
+- Una encuesta puede llevar enlaces (columna enlaces de evaluations, un arreglo de { titulo, url }) a documentos que se leen antes de contestarla, casi siempre de SharePoint; los de SharePoint sólo se abren desde un equipo de la empresa. Para ponerlos al crear, usa el parámetro enlaces; para agregarlos a una que ya existe, modificar_registros con el arreglo completo (los que ya tenía más el nuevo). Tú no puedes subir archivos ni ver su contenido: el material (fotos, PDF, presentaciones) lo sube el administrador desde la hoja de la encuesta.
 - El sistema de incidentes ya es obsoleto: hoy se cargan como encuestas de firma en una clasificación propia. Para pasar uno viejo a encuesta usa migrar_incidente_a_encuesta. Si el administrador no dice a qué clasificación, consulta clasificaciones_de_encuestas y propón la que parezca de incidentes (las que llevan firma y títulos como los de los registros); si hay duda, pregúntale cuál con dos o tres opciones. Busca antes el id del registro en incidents por su título o su fecha. Al migrar, sus fotos pasan al material, cada firma de alguien que sigue activo pasa como respuesta firmada con su fecha, las de gente dada de baja o que ya no está en la plantilla se eliminan, y el registro deja de salir en el listado de incidentes. Para migrar varios, uno por llamada, y las difusiones vinculadas a un incidente antes que el incidente: usan sus fotos.
 - El acceso a la aplicación es con el número de empleado y un PIN de 4 números. Los PIN no se pueden leer ni consultar: no viven en ninguna tabla que puedas ver. Si te piden restablecer el PIN de alguien (lo olvidó, se bloqueó tras varios intentos), busca su employee_id y usa restablecer_pin; el PIN temporal lo ve el administrador en la tarjeta, no tú. Para saber quién ya tiene PIN, quién falta o cuántos correos hay, usa estado_de_acceso. El usuario es el número de empleado y no se cambia.
 - Borrar un registro de incidentes con borrar_registros lo elimina por completo: sus firmas, sus fotos y los archivos de ambas en Storage, que es lo que libera espacio (cerca de 1 MB de firmas por registro). Los registros vinculados a él no se borran: se quedan sin vínculo. Las firmas no se borran sueltas.
@@ -314,6 +316,27 @@ window.HERRAMIENTAS_ASISTENTE = [
         }
     },
     {
+        name: 'crear_encuesta_copiando',
+        description: 'Propone crear una encuesta nueva copiando la forma de otra de la misma clasificación (el modelo): a quién va dirigida, sus revisores, sus opciones y sus preguntas. Es la manera de dar de alta la difusión de un incidente, una junta o cualquier encuesta que se repite: no la armes con crear_registros. El título lleva la fecha entre paréntesis, como las demás copias. Puede llevar enlaces a documentos (SharePoint u otro sitio). No se escribe nada hasta que el administrador lo confirma en pantalla. El material (fotos, PDF, presentaciones) no se sube desde aquí: se agrega después desde la hoja de la encuesta.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                clasificacion: { type: 'string', description: 'La clasificación de la encuesta nueva, tal como la devuelve clasificaciones_de_encuestas.' },
+                titulo: { type: 'string', description: 'El título sin fecha, p. ej. «Atrapamiento de dedo en prensa»; la fecha se le pone sola.' },
+                fecha: { type: 'string', description: 'Opcional: la fecha del evento en YYYY-MM-DD, que va entre paréntesis en el título. Por defecto, hoy.' },
+                descripcion: { type: 'string', description: 'Opcional: lo que se lee arriba al contestarla. Por defecto, la del modelo.' },
+                enlaces: {
+                    type: 'array', description: 'Opcional: enlaces a documentos que se leen antes de contestar.',
+                    items: { type: 'object', properties: { titulo: { type: 'string' }, url: { type: 'string' } }, required: ['url'], additionalProperties: false }
+                },
+                encuesta_modelo_id: { type: 'integer', description: 'Opcional: la encuesta que sirve de modelo. Por defecto, la más reciente de la clasificación.' },
+                motivo: { type: 'string', description: 'En una frase, qué se va a crear.' }
+            },
+            required: ['clasificacion', 'titulo', 'motivo'],
+            additionalProperties: false
+        }
+    },
+    {
         name: 'estado_de_acceso',
         description: 'Cómo va el acceso con PIN: cuánta gente ya creó su PIN, quién lo tiene temporal o bloqueado, cuántos correos se han recogido y si la entrada por número (la primera vez) sigue abierta. Con empleado_id, el estado de esa persona y su correo. Nunca devuelve ningún PIN.',
         input_schema: {
@@ -395,7 +418,7 @@ window.ESCRITURA_DEL_ASISTENTE = {
     cursos_previos: 'cmb', evaluaciones_aplica: 'cmb', clasificaciones_revisores: 'cmb', clasificaciones_objetivo: 'cmb'
 };
 window.MAX_FILAS_ESCRITURA = 50;
-window.HERRAMIENTAS_QUE_ESCRIBEN = ['crear_registros', 'modificar_registros', 'borrar_registros', 'migrar_incidente_a_encuesta', 'restablecer_pin'];
+window.HERRAMIENTAS_QUE_ESCRIBEN = ['crear_registros', 'modificar_registros', 'borrar_registros', 'migrar_incidente_a_encuesta', 'crear_encuesta_copiando', 'restablecer_pin'];
 
 window.TABLAS_DEL_ASISTENTE = ['evaluations', 'evaluation_questions', 'evaluation_responses', 'employees',
     'areas', 'plantas', 'lineas', 'equipos', 'incidents', 'incident_signatures', 'incident_gallery', 'hallazgos', 'objectives',
@@ -432,6 +455,7 @@ window.rotuloDeHerramienta = (nombre, entrada) => {
         case 'consultar_tabla': return (e.contar ? 'Contó ' : 'Consultó ') + tabla;
         case 'clasificaciones_de_encuestas': return 'Revisó las clasificaciones';
         case 'migrar_incidente_a_encuesta': return 'Propuso migrar un registro a encuesta';
+        case 'crear_encuesta_copiando': return 'Propuso crear «' + (e.titulo || 'una encuesta') + '»';
         case 'estado_de_acceso': return e.empleado_id ? 'Revisó el acceso de ' + (window.employeeNameMap?.[e.empleado_id] || e.empleado_id) : 'Revisó cómo va el acceso con PIN';
         case 'restablecer_pin': return 'Propuso restablecer el PIN de ' + (window.employeeNameMap?.[e.empleado_id] || e.empleado_id);
         case 'crear_registros': return `Propuso un alta en ${tabla}`;
@@ -717,6 +741,94 @@ window.EJECUTAR_HERRAMIENTA = {
         if (r.ok) despuesDeEscribir('evaluations');
         return { aprobado: true, migrado: r.ok, encuesta_id: r.evaluationId || null, firmas: r.respuestas, fotos: r.fotos,
             firmas_eliminadas: r.ok ? (r.descartadas || 0) : 0, detalle: window.textoDeMigracion(r) };
+    },
+
+    // Una encuesta nueva con la forma de otra de su clasificación: la misma
+    // copia que hace el «+» de una clasificación al elegir «copiar», sin la
+    // hoja. Todo o nada: si las preguntas no entran, la encuesta se borra.
+    async crear_encuesta_copiando(e, ctx) {
+        if (!window.modeloDeClasificacion) return { error: 'Esta pantalla no sabe copiar encuestas.' };
+        let modelo;
+        try { modelo = await window.modeloDeClasificacion(e.clasificacion, e.encuesta_modelo_id); }
+        catch (err) { return { error: err.message || String(err) }; }
+        if (!modelo) return { error: `No hay ninguna encuesta en «${e.clasificacion}» que sirva de modelo.` };
+
+        const { data: preguntas, error: errQ } = await sb.from('evaluation_questions')
+            .select('*').eq('evaluation_id', modelo.id).order('order_index');
+        if (errQ) return { error: errQ.message };
+        if (!(preguntas || []).length) return { error: `El modelo «${modelo.title}» no tiene preguntas.` };
+
+        // La fecha va a mediodía local: «2026-11-20» se leería en UTC y
+        // saldría el día anterior.
+        let fecha = new Date();
+        if (e.fecha) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(e.fecha).trim());
+            if (!m) return { error: 'La fecha va en formato YYYY-MM-DD.' };
+            fecha = new Date(+m[1], +m[2] - 1, +m[3], 12);
+        }
+        const titulo = window.tituloDeCopia ? window.tituloDeCopia(String(e.titulo).trim(), fecha) : String(e.titulo).trim();
+
+        const enlaces = [];
+        for (const x of (e.enlaces || [])) {
+            let crudo = String((x && x.url) || '').trim();
+            if (crudo && !/^[a-z][a-z0-9+.-]*:/i.test(crudo)) crudo = 'https://' + crudo;
+            const url = window.urlDeEnlaceValida ? window.urlDeEnlaceValida(crudo) : '';
+            if (!url) return { error: `El enlace «${(x && x.titulo) || crudo}» no tiene una dirección válida.` };
+            enlaces.push({ titulo: String((x && x.titulo) || '').trim(), url });
+        }
+        const hayEnlaces = window.hayColumnaEnlaces ? await window.hayColumnaEnlaces() : false;
+        if (enlaces.length && !hayEnlaces) return { error: 'La base todavía no tiene la columna de enlaces.' };
+
+        const fila = {};
+        Object.entries(modelo).forEach(([k, v]) => { if (!window.COLUMNAS_QUE_NO_SE_COPIAN.includes(k)) fila[k] = v; });
+        fila.title = titulo;
+        fila.active = true;
+        if (e.descripcion != null) fila.description = String(e.descripcion);
+        if (hayEnlaces) fila.enlaces = enlaces;
+
+        const nuevas = preguntas.map(q => {
+            const c = { ...q };
+            delete c.id; delete c.created_at; delete c.evaluation_id;
+            return c;
+        });
+        const padron = window.padronDeLaEncuesta && (window.todosLosEmpleadosData || []).length
+            ? window.padronDeLaEncuesta(fila) : null;
+        const nombreTipo = (t) => (window.tipoDePregunta && window.tipoDePregunta(t)) ? window.tipoDePregunta(t).nombre : (t || 'Texto');
+
+        const aprobado = await ctx.confirmar({
+            accion: 'crear', tabla: 'evaluations', motivo: e.motivo,
+            titulo: `Crear «${titulo}»`,
+            campos: [
+                ['Clasificación', fila.category || e.clasificacion],
+                ['Frecuencia', window.textoDeFrecuencia ? window.textoDeFrecuencia(fila.frequency) : (fila.frequency || 'Única vez')],
+                ['Modelo', modelo.title],
+                ['Preguntas', nuevas.map(q => `${nombreTipo(q.question_type)}: ${q.question_text || ''}`).join(' · ')],
+                ['Enlaces', enlaces.length ? enlaces.map(x => x.titulo || window.sitioDeEnlace(x.url)).join(' · ') : 'Sin enlaces'],
+                ['Dirigida a', Array.isArray(padron) ? `${padron.length} ${padron.length === 1 ? 'persona' : 'personas'}, como el modelo` : 'Como el modelo'],
+                ...(e.descripcion != null ? [['Descripción', String(e.descripcion)]] : [])
+            ],
+            nota: 'El material —fotos, PDF o presentación— se agrega después desde la hoja de la encuesta.'
+        });
+        if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se creó nada.' };
+
+        const { data: ev, error: errEv } = await sb.from('evaluations').insert(fila).select('id').single();
+        if (errEv) { ctx.resultado(false, errEv.message); return { error: 'La base no aceptó la encuesta: ' + errEv.message }; }
+        const { data: qs, error: errIns } = await sb.from('evaluation_questions')
+            .insert(nuevas.map(q => ({ ...q, evaluation_id: ev.id }))).select('id');
+        if (errIns || (qs || []).length !== nuevas.length) {
+            const motivo = errIns ? errIns.message : 'la base guardó menos preguntas de las enviadas';
+            await sb.from('evaluation_questions').delete().eq('evaluation_id', ev.id);
+            const { data: borrada } = await sb.from('evaluations').delete().eq('id', ev.id).select('id');
+            ctx.resultado(false, 'No se creó');
+            return { error: `No se pudieron guardar las preguntas (${motivo}).`
+                + ((borrada || []).length ? ' La encuesta a medio crear se quitó.' : ` La encuesta a medio crear (id ${ev.id}) hay que quitarla a mano.`) };
+        }
+        if (window.cargarEncuestasQuePuntuan) window.cargarEncuestasQuePuntuan(true);
+        if (window.cargarVentanasDeAsistencia) window.cargarVentanasDeAsistencia(true);
+        ctx.resultado(true, `Creada · ${qs.length} ${qs.length === 1 ? 'pregunta' : 'preguntas'}`);
+        despuesDeEscribir('evaluations');
+        return { aprobado: true, creada: true, encuesta_id: ev.id, titulo, preguntas: qs.length, enlaces: enlaces.length,
+            nota: 'El material se agrega desde la hoja de la encuesta; dile al administrador que la abra si quiere subirlo.' };
     },
 
     // --- El acceso con PIN (19-acceso.js y sql/acceso-con-pin.sql) ---
@@ -1014,7 +1126,7 @@ const ROTULO_DE_COLUMNA_ASISTENTE = {
     active: 'Activa', is_active: 'Activo', description: 'Descripción', date: 'Fecha', tipo: 'Tipo',
     question_text: 'Pregunta', question_type: 'Tipo de pregunta', review_status: 'Estado', puesto: 'Puesto',
     department: 'Departamento', supervisor_id: 'Jefe inmediato', is_obligatory: 'Obligatoria',
-    vigente_desde: 'Aplica desde', grado: 'Grado', origen: 'Origen'
+    vigente_desde: 'Aplica desde', grado: 'Grado', origen: 'Origen', enlaces: 'Enlaces'
 };
 function valorLegible(k, v) {
     if (v === true) return 'Sí';
@@ -1022,6 +1134,7 @@ function valorLegible(k, v) {
     if (v === null) return 'Vacío';
     if (k === 'frequency' && window.textoDeFrecuencia) return window.textoDeFrecuencia(v);
     if (k === 'question_type' && window.tipoDePregunta && window.tipoDePregunta(v)) return window.tipoDePregunta(v).nombre;
+    if (k === 'enlaces' && Array.isArray(v)) return v.length ? v.map(x => (x && (x.titulo || x.url)) || '').join(' · ') : 'Sin enlaces';
     return valorCorto(v);
 }
 function camposDeFila(obj) {
