@@ -8791,8 +8791,10 @@ Las reglas para usarlo:
 
 - **El asistente habla con Claude desde el navegador, con la clave del
   administrador.** **No tiene botón a la vista**: se abre **manteniendo pulsado
-  cuatro segundos el título «Panel de administración»** (`#titulo-panel-admin`,
-  gesto al final de `18-asistente.js`, delegado en `document`), así que sólo lo
+  tres segundos el título o el subtítulo del panel de administración**
+  (`#titulo-panel-admin`, el `<div>` que envuelve a los dos y no deja
+  seleccionar su texto; el gesto, al final de `18-asistente.js`, delegado en
+  `document`), así que sólo lo
   alcanza quien tiene el modo encendido; `abrirAsistente` además lo comprueba
   con `checkAdmin`, y `pintarBotonAdmin` cierra la hoja al apagar el modo. Mover
   el dedo cancela la cuenta —ahí empieza el gesto de deslizar la hoja— y el

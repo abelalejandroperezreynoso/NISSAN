@@ -2174,10 +2174,11 @@ window.markdownAsistente = (md) => {
 };
 
 // ----------------------------------------------------------------
-// LA PUERTA: CUATRO SEGUNDOS SOBRE EL TÍTULO DEL PANEL
+// LA PUERTA: TRES SEGUNDOS SOBRE EL TÍTULO DEL PANEL
 // ----------------------------------------------------------------
 // El asistente no tiene botón a la vista: se abre manteniendo pulsado
-// «Panel de administración» (#titulo-panel-admin), que sólo ve quien tiene el
+// el título o el subtítulo del panel (#titulo-panel-admin, que los envuelve a
+// los dos y no deja seleccionar su texto), que sólo ve quien tiene el
 // modo encendido. Es el molde del monitor de datos sobre «Cerrar Sesión»
 // (1-config.js), con tres diferencias: el título no tiene click propio que
 // tragarse; mover el dedo cancela la cuenta —ahí empieza el gesto de
@@ -2186,7 +2187,7 @@ window.markdownAsistente = (md) => {
 // cerrarse el panel. Va delegado en `document` para no depender de cuándo
 // se cargue el marcado.
 (() => {
-    const SEGUNDOS_PUERTA_ASISTENTE = 4;
+    const SEGUNDOS_PUERTA_ASISTENTE = 3;
     let relojPuerta = null;
     let saltoPuerta = false;
 
