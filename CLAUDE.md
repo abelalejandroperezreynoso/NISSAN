@@ -140,7 +140,7 @@ Las reglas para usarlo:
 
   ```
   acceso_iniciar(numero, pin)                 → { ok, token, ficha, temporal, sin_correo } | { motivo }
-  acceso_activar(numero, nombre, pin, correo) la primera vez
+  acceso_activar(numero, nombre, pin, correo) la primera vez (el nombre ya no se pide)
   acceso_cambiar_pin(token, pin, correo)      el propio
   acceso_restablecer(token, objetivo)         el de otro → { pin } temporal
   acceso_verificar_pin(numero, pin)           sin abrir sesión: el modo prestado
@@ -168,10 +168,12 @@ Las reglas para usarlo:
     seguido, 15 minutos, y cada bloqueo siguiente el doble hasta 24 h; se pone
     a cero al acertar. Los PIN obvios —repetidos, escaleras, parte del número
     de empleado— se rechazan (`acceso_pin_debil`).
-  - **La migración**: quien no tiene PIN entra una vez con su número y su
-    **nombre completo** —lo mismo que pedía el login de antes; se compara sin
-    acentos y sin importar el orden de las palabras— y ahí crea su PIN y deja su
-    **correo** (el de la empresa o uno personal; no se comprueba). La entrada
+  - **La migración**: quien no tiene PIN entra una vez con su número —que era
+    la contraseña de antes; el nombre era el usuario y estaba a la vista en la
+    lista de sugerencias, así que pedirlo no protege nada— y ahí crea su PIN y
+    deja su **correo** (el de la empresa o uno personal; no se comprueba). Si
+    un teléfono con la versión anterior manda el nombre, `acceso_activar` lo
+    sigue comprobando. La entrada
     por número la cierra el administrador desde «Acceso y PINs»; cerrada, quien
     falte necesita un PIN temporal. Las sesiones ya abiertas no se cortan: se
     migran al volver a entrar.
@@ -199,7 +201,7 @@ Las reglas para usarlo:
     debe acercarse al bloqueo. El correo se pide como **«Correo de la
     empresa»**, con «Si no tienes, escribe uno personal» debajo.
   - **Sin el script en la base todo sigue en pie**: `acceso_iniciar` devuelve
-    `sin_script` y se entra como antes, con número y nombre comparados en el
+    `sin_script` y se entra como antes, con el número comparado en el
     navegador.
 
   Esto **no** hace que la base sepa quién está conectado en el resto de la

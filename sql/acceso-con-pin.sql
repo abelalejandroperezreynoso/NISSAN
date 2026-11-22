@@ -13,8 +13,8 @@
 --     PIN de cuatro cifras;
 --   · al acertar se emite un token de sesión (se guarda sólo su sha256): es lo
 --     que identifica ante la base a quien restablece el PIN de otro;
---   · la migración: quien todavía no tiene PIN entra una vez con su número y
---     su nombre completo, como antes, y ahí crea su PIN y deja su correo. El
+--   · la migración: quien todavía no tiene PIN entra una vez con su número —la
+--     contraseña de antes— y ahí crea su PIN y deja su correo. El
 --     administrador cierra ese camino con `acceso_ajustar` cuando quiera.
 --
 -- El correo vive en `credenciales.correo` y no en `employees`, que la clave de
@@ -205,7 +205,7 @@ begin
     return acceso_emitir(v_num);
 end $$;
 
--- La primera vez: número, nombre completo, PIN nuevo y correo.
+-- La primera vez: número, PIN nuevo y correo.
 create or replace function acceso_activar(p_numero text, p_nombre text, p_pin text, p_correo text) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
 declare
@@ -227,7 +227,10 @@ begin
         return jsonb_build_object('ok', false, 'motivo', 'cerrado');
     end if;
 
-    if acceso_nombre_normal(p_nombre) = '' or acceso_nombre_normal(p_nombre) <> acceso_nombre_normal(v_emp.name) then
+    -- El nombre ya no se pide: el número era la contraseña de antes y el
+    -- nombre, el usuario a la vista. Si llega —un teléfono con la versión
+    -- anterior— se sigue comprobando.
+    if acceso_nombre_normal(p_nombre) <> '' and acceso_nombre_normal(p_nombre) <> acceso_nombre_normal(v_emp.name) then
         return acceso_fallo(v_num, 'nombre');
     end if;
 

@@ -17,9 +17,9 @@
 //     window.puedeRestablecerPinDe(empId)           // ¿le enseño el botón?
 //     window.abrirAccesoAdmin()                     // la hoja del administrador
 //
-// La migración: quien todavía no tiene PIN entra una vez con su número y su
-// nombre completo —lo mismo que pedía el login de antes— y ahí crea su PIN y
-// deja su correo. El administrador cierra esa puerta desde «Acceso y PINs»; a
+// La migración: quien todavía no tiene PIN entra una vez con su número —que
+// era la contraseña de antes; el nombre era el usuario y estaba a la vista— y
+// ahí crea su PIN y deja su correo. El administrador cierra esa puerta desde «Acceso y PINs»; a
 // partir de ahí, quien falte necesita que le asignen un PIN temporal.
 
 (() => {
@@ -28,7 +28,7 @@
 
     // Lo que dejó el primer paso: el número, y si hubo que cambiar un PIN
     // temporal, la sesión que se abrió con él.
-    const estado = { numero: '', pendiente: null, sinScript: false };
+    const estado = { numero: '', pendiente: null };
 
     const PASOS = ['login-paso-entrar', 'login-paso-activar', 'login-paso-cambiar'];
 
@@ -61,11 +61,6 @@
     const soloDigitos = (v) => String(v || '').replace(/\D/g, '');
     const correoValido = (c) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c);
 
-    // El mismo criterio que `acceso_nombre_normal` de la base, para el camino
-    // de antes: sin acentos y con las palabras ordenadas.
-    const nombreNormal = (t) => String(t || '').toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
-        .replace(/[^a-z]+/g, ' ').trim().split(/\s+/).filter(Boolean).sort().join(' ');
 
     const entrar = (ficha, token) => {
         window.guardarSesionConToken(ficha, token);
@@ -129,20 +124,21 @@
 
         if (r.motivo === 'sin_pin') {
             if (r.acceso_por_numero === false) { $('login-aviso-migracion').hidden = true; decir(window.textoDeAcceso({ motivo: 'cerrado' })); return; }
-            estado.sinScript = false;
-            document.querySelectorAll('#login-paso-activar [data-con-pin]').forEach(n => { n.hidden = false; });
             verPaso('login-paso-activar', 'Primera vez',
-                'Ahora se entra con tu número de empleado y un PIN. Confirma quién eres, deja tu correo de la empresa y crea tu PIN.');
-            setTimeout(() => $('login-activar-nombre').focus(), 60);
+                'Ahora se entra con tu número de empleado y un PIN. Deja tu correo de la empresa y crea tu PIN.');
+            setTimeout(() => $('login-activar-correo').focus(), 60);
             return;
         }
 
-        // Sin el script en la base se entra como antes: número y nombre.
+        // Sin el script en la base se entra como antes: con el número, que era
+        // la contraseña (el nombre era el usuario y estaba a la vista).
         if (r.motivo === 'sin_script') {
-            estado.sinScript = true;
-            document.querySelectorAll('#login-paso-activar [data-con-pin]').forEach(n => { n.hidden = true; });
-            verPaso('login-paso-activar', 'Confirma quién eres', 'Escribe tu nombre completo para entrar.');
-            setTimeout(() => $('login-activar-nombre').focus(), 60);
+            ocupado('btn-login-action', true, 'Entrando…');
+            const lista = await window.cargarEmpleadosParaLogin();
+            ocupado('btn-login-action', false);
+            const u = lista.find(e => String(e.id) === numero);
+            if (!u) { decir(window.textoDeAcceso({ motivo: 'incorrecto' })); return; }
+            entrar(u, null);
             return;
         }
 
@@ -153,19 +149,6 @@
 
     // --- Paso 2: la primera vez ---
     window.activarAcceso = async () => {
-        const nombre = $('login-activar-nombre').value.trim();
-        if (!nombre) { decir('Escribe tu nombre completo, con tus apellidos.'); return; }
-
-        if (estado.sinScript) {
-            ocupado('btn-login-activar', true, 'Entrando…');
-            const lista = await window.cargarEmpleadosParaLogin();
-            ocupado('btn-login-activar', false);
-            const u = lista.find(e => String(e.id) === estado.numero && nombreNormal(e.name) === nombreNormal(nombre));
-            if (!u) { decir('El número o el nombre no coinciden.'); return; }
-            entrar(u, null);
-            return;
-        }
-
         const correo = $('login-activar-correo').value.trim().toLowerCase();
         const pin = soloDigitos($('login-activar-pin').value);
         const pin2 = soloDigitos($('login-activar-pin2').value);
@@ -175,7 +158,7 @@
 
         ocupado('btn-login-activar', true, 'Guardando…');
         const r = await window.llamarAcceso('acceso_activar',
-            { p_numero: estado.numero, p_nombre: nombre, p_pin: pin, p_correo: correo });
+            { p_numero: estado.numero, p_nombre: '', p_pin: pin, p_correo: correo });
         ocupado('btn-login-activar', false);
 
         if (r.ok) { entrar(r.ficha, r.token); return; }
