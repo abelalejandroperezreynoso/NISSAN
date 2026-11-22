@@ -207,7 +207,7 @@ Las reglas para usarlo:
     mismo que enseñaba la lista de sugerencias de antes, y se acaba al cerrar
     la entrada por número. Después de «Sí, soy yo» van **dos pantallas más,
     una para el correo y otra para el PIN**: el correo se pide como **«Correo
-    de la empresa»**, con «Si no tienes, escribe uno personal» debajo, y **el
+    electrónico»**, con «El de la empresa o uno personal» debajo, y **el
     PIN se escribe una sola vez**, con «Mostrar PIN» para revisarlo
     (`alternarVerPin`). El cambio de un PIN temporal también lo pide una vez;
     «Cambiar mi PIN» del perfil sigue pidiéndolo dos. `acceso_estado()` sigue en

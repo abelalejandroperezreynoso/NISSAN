@@ -291,7 +291,7 @@
             return;
         }
         verSubpaso('correo');
-        $('login-explicacion').textContent = 'Deja tu correo de la empresa.';
+        $('login-explicacion').textContent = 'Deja tu correo electrónico.';
         setTimeout(() => $('login-activar-correo').focus(), 60);
     };
 
@@ -307,7 +307,7 @@
 
     window.volverAlCorreo = () => {
         verSubpaso('correo');
-        $('login-explicacion').textContent = 'Deja tu correo de la empresa.';
+        $('login-explicacion').textContent = 'Deja tu correo electrónico.';
     };
 
     // El formulario es uno solo: Enter en el correo continúa, en el PIN crea.
