@@ -193,13 +193,17 @@ Las reglas para usarlo:
     token del administrador puesto, por eso «Cambiar mi PIN» pide
     `tokenDeSesion(true)`, que sólo vale si el token es de quien aparece como
     usuario.
-  - **La pantalla de entrar explica la primera vez** —«¿Primera vez con PIN?»:
-    número, PIN vacío y «Entrar»— sólo mientras la entrada por número siga
-    abierta: lo pregunta `acceso_estado()` al dibujarse, y sin respuesta se
-    enseña. Por eso **un PIN vacío no cuenta como intento** a quien ya tiene
-    PIN (`falta_pin`): el aviso pide dejarlo vacío y quien lo siga haciendo no
-    debe acercarse al bloqueo. El correo se pide como **«Correo de la
-    empresa»**, con «Si no tienes, escribe uno personal» debajo.
+  - **Se entra en dos pasos: primero sólo el número.** `acceso_iniciar` con el
+    PIN vacío dice qué sigue: a quien ya tiene PIN (`falta_pin`, que **no
+    cuenta como intento**) se le pide el PIN sin decir de quién es el número;
+    a quien no lo tiene (`sin_pin`) le devuelve su nombre, puesto y
+    departamento en `persona` —sólo mientras la entrada por número esté
+    abierta— y la pantalla pregunta **«¿Eres tú?»** antes de pedir el correo y
+    el PIN. Eso deja ver el nombre de un número sin PIN a quien lo teclee, lo
+    mismo que enseñaba la lista de sugerencias de antes, y se acaba al cerrar
+    la entrada por número. El correo se pide como **«Correo de la empresa»**,
+    con «Si no tienes, escribe uno personal» debajo. `acceso_estado()` sigue en
+    la base aunque la pantalla ya no lo use.
   - **Sin el script en la base todo sigue en pie**: `acceso_iniciar` devuelve
     `sin_script` y se entra como antes, con el número comparado en el
     navegador.

@@ -30,7 +30,7 @@
     // temporal, la sesión que se abrió con él.
     const estado = { numero: '', pendiente: null };
 
-    const PASOS = ['login-paso-entrar', 'login-paso-activar', 'login-paso-cambiar'];
+    const PASOS = ['login-paso-entrar', 'login-paso-pin', 'login-paso-activar', 'login-paso-cambiar'];
 
     const decir = (texto, tipo) => {
         const caja = $('error-msg');
@@ -70,20 +70,9 @@
         window.mostrarDashboard(ficha);
     };
 
-    // El aviso de «¿Primera vez con PIN?» sólo tiene sentido mientras la
-    // entrada por número siga abierta. Se le pregunta a la base; sin la función
-    // o sin red se enseña, que es lo que hace falta mientras dura la migración.
-    const pintarAvisoMigracion = async () => {
-        const aviso = $('login-aviso-migracion');
-        if (!aviso) return;
-        const r = await window.llamarAcceso('acceso_estado', {});
-        aviso.hidden = r && r.ok && r.acceso_por_numero === false;
-    };
-
     window.prepararPantallaDeAcceso = () => {
         estado.pendiente = null;
         verPaso('login-paso-entrar', 'Iniciar sesión', '');
-        pintarAvisoMigracion();
         const campo = $('login-numero');
         if (campo && !campo.value) setTimeout(() => campo.focus(), 80);
     };
@@ -91,42 +80,58 @@
     window.volverAEntrar = () => {
         estado.pendiente = null;
         verPaso('login-paso-entrar', 'Iniciar sesión', '');
+        setTimeout(() => $('login-numero').focus(), 60);
     };
 
     window.olvideMiPin = () => {
         decir('Pide a tu jefe inmediato o al administrador que restablezca tu PIN. Te darán uno temporal y, al entrar con él, crearás el tuyo.', 'aviso');
     };
 
-    // --- Paso 1: número y PIN ---
+    // Lo que se hace con una sesión recién abierta: entrar, o antes cambiar el
+    // PIN temporal / dejar el correo que falta.
+    const trasAcertar = (r) => {
+        if (r.temporal || r.sin_correo) {
+            estado.pendiente = r;
+            $('login-cambiar-correo-campo').hidden = !r.sin_correo;
+            verPaso('login-paso-cambiar', r.temporal ? 'Crea tu PIN' : 'Deja tu correo',
+                r.temporal
+                    ? 'Entraste con un PIN temporal. Crea ahora tu propio PIN de 4 números; el temporal deja de servir.'
+                    : 'Falta tu correo. Escribe el de la empresa o, si no tienes, uno personal, y confirma tu PIN.');
+            return;
+        }
+        entrar(r.ficha, r.token);
+    };
+
+    // --- Paso 1: el número de empleado ---
+    // Se le pregunta a la base sin PIN: si ya lo tiene, se le pide (sin decir
+    // de quién es el número); si no, es la primera vez y se le enseña quién es
+    // para que confirme.
     window.entrarConPin = async () => {
         const numero = soloDigitos($('login-numero').value) || String($('login-numero').value || '').trim();
-        const pin = soloDigitos($('login-pin').value);
         if (!numero) { decir('Escribe tu número de empleado.'); return; }
         estado.numero = numero;
 
-        ocupado('btn-login-action', true, 'Entrando…');
-        const r = await window.llamarAcceso('acceso_iniciar', { p_numero: numero, p_pin: pin });
+        ocupado('btn-login-action', true, 'Buscando…');
+        const r = await window.llamarAcceso('acceso_iniciar', { p_numero: numero, p_pin: '' });
         ocupado('btn-login-action', false);
 
-        if (r.ok) {
-            if (r.temporal || r.sin_correo) {
-                estado.pendiente = r;
-                $('login-cambiar-correo-campo').hidden = !r.sin_correo;
-                verPaso('login-paso-cambiar', r.temporal ? 'Crea tu PIN' : 'Deja tu correo',
-                    r.temporal
-                        ? 'Entraste con un PIN temporal. Crea ahora tu propio PIN de 4 números; el temporal deja de servir.'
-                        : 'Falta tu correo. Escribe el de la empresa o, si no tienes, uno personal, y confirma tu PIN.');
-                return;
-            }
-            entrar(r.ficha, r.token);
+        if (r.motivo === 'falta_pin') {
+            $('login-pin-numero').textContent = numero;
+            $('login-pin').value = '';
+            verPaso('login-paso-pin', 'Escribe tu PIN', '');
+            setTimeout(() => $('login-pin').focus(), 60);
             return;
         }
 
         if (r.motivo === 'sin_pin') {
-            if (r.acceso_por_numero === false) { $('login-aviso-migracion').hidden = true; decir(window.textoDeAcceso({ motivo: 'cerrado' })); return; }
-            verPaso('login-paso-activar', 'Primera vez',
-                'Ahora se entra con tu número de empleado y un PIN. Deja tu correo de la empresa y crea tu PIN.');
-            setTimeout(() => $('login-activar-correo').focus(), 60);
+            if (r.acceso_por_numero === false) { decir(window.textoDeAcceso({ motivo: 'cerrado' })); return; }
+            const p = r.persona || {};
+            $('login-persona-nombre').textContent = p.nombre || `Número ${numero}`;
+            $('login-persona-detalle').textContent = [p.puesto, p.departamento].filter(Boolean).join(' · ');
+            $('login-persona-detalle').hidden = !(p.puesto || p.departamento);
+            $('login-confirmar-persona').hidden = false;
+            $('login-activar-datos').hidden = true;
+            verPaso('login-paso-activar', 'Primera vez', 'Con ese número de empleado encontramos a:');
             return;
         }
 
@@ -142,12 +147,39 @@
             return;
         }
 
-        if (r.motivo === 'falta_pin') { decir('Ya tienes PIN: escríbelo para entrar.'); $('login-pin').focus(); return; }
+        if (r.motivo === 'incorrecto') { decir('No encontramos ese número de empleado. Revísalo.'); return; }
         decir(window.textoDeAcceso(r));
-        if (r.motivo === 'incorrecto') { $('login-pin').value = ''; $('login-pin').focus(); }
+    };
+
+    // --- Paso 1b: el PIN de quien ya lo tiene ---
+    window.confirmarPinDeEntrada = async () => {
+        const pin = soloDigitos($('login-pin').value);
+        if (pin.length !== 4) { decir('Escribe tu PIN de 4 números.'); return; }
+        ocupado('btn-login-pin', true, 'Entrando…');
+        const r = await window.llamarAcceso('acceso_iniciar', { p_numero: estado.numero, p_pin: pin });
+        ocupado('btn-login-pin', false);
+        if (r.ok) { trasAcertar(r); return; }
+        decir(r.motivo === 'incorrecto' ? 'PIN incorrecto.' + (r.restantes !== undefined && r.restantes <= 3
+            ? ` Te ${r.restantes === 1 ? 'queda 1 intento' : 'quedan ' + r.restantes + ' intentos'} antes de que se bloquee.` : '')
+            : window.textoDeAcceso(r));
+        $('login-pin').value = '';
+        $('login-pin').focus();
     };
 
     // --- Paso 2: la primera vez ---
+    // Primero confirma que es esa persona; después deja su correo y crea el PIN.
+    window.confirmarPersona = (soyYo) => {
+        if (!soyYo) {
+            window.volverAEntrar();
+            decir('Revisa tu número de empleado y vuelve a escribirlo.');
+            return;
+        }
+        $('login-confirmar-persona').hidden = true;
+        $('login-activar-datos').hidden = false;
+        $('login-explicacion').textContent = 'Deja tu correo de la empresa y crea el PIN con el que vas a entrar desde ahora.';
+        setTimeout(() => $('login-activar-correo').focus(), 60);
+    };
+
     window.activarAcceso = async () => {
         const correo = $('login-activar-correo').value.trim().toLowerCase();
         const pin = soloDigitos($('login-activar-pin').value);

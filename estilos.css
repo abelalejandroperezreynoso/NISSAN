@@ -117,16 +117,20 @@ body {
 .login-campo { display: flex; flex-direction: column; gap: 6px; }
 .login-campo > span { font-size: 0.82rem; font-weight: 600; color: #546e7a; }
 .login-campo > small { font-size: 0.78rem; color: #78909c; }
-.login-aviso {
-    font-size: 0.85rem;
-    line-height: 1.4;
-    color: #1e3a8a;
-    background: #eff6ff;
-    border-radius: 12px;
-    padding: 12px 14px;
+.login-numero-elegido { font-size: 0.88rem; color: #546e7a; text-align: center; }
+.login-numero-elegido b { color: #1c1c1e; margin-left: 4px; }
+.login-persona {
+    background: #f2f2f7;
+    border-radius: 14px;
+    padding: 14px;
+    text-align: center;
 }
-.login-aviso b { display: block; margin-bottom: 2px; }
-.login-aviso[hidden] { display: none; }
+.login-persona-nombre { font-size: 1.05rem; font-weight: 700; color: #1c1c1e; line-height: 1.3; }
+.login-persona-detalle { font-size: 0.85rem; color: #64748b; margin-top: 4px; }
+.login-persona-detalle[hidden] { display: none; }
+.login-confirmar, .login-paso-datos { display: flex; flex-direction: column; gap: 14px; }
+.login-confirmar[hidden], .login-paso-datos[hidden] { display: none; }
+.login-confirmar-pregunta { text-align: center; font-weight: 600; color: #1c1c1e; }
 .login-campo input {
     width: 100%;
     box-sizing: border-box;

@@ -181,6 +181,7 @@ declare
     v_num  text := trim(coalesce(p_numero, ''));
     v_act  boolean;
     v_cred credenciales%rowtype;
+    v_abierto boolean;
 begin
     select coalesce(is_active, true) into v_act from employees where employee_id = v_num limit 1;
     if not found or not v_act then return jsonb_build_object('ok', false, 'motivo', 'incorrecto'); end if;
@@ -190,8 +191,14 @@ begin
         return jsonb_build_object('ok', false, 'motivo', 'bloqueado', 'hasta', v_cred.bloqueado_hasta);
     end if;
     if v_cred.pin_hash is null then
-        return jsonb_build_object('ok', false, 'motivo', 'sin_pin',
-            'acceso_por_numero', coalesce((select acceso_por_numero from acceso_ajustes where id = 1), true));
+        -- La primera vez se le enseña quién es ese número para que confirme
+        -- que es él; sólo mientras la entrada por número esté abierta, y
+        -- nunca de quien ya tiene PIN.
+        v_abierto := coalesce((select acceso_por_numero from acceso_ajustes where id = 1), true);
+        return jsonb_build_object('ok', false, 'motivo', 'sin_pin', 'acceso_por_numero', v_abierto,
+            'persona', case when v_abierto then (
+                select jsonb_build_object('nombre', e.name, 'puesto', e.puesto, 'departamento', e.department)
+                  from employees e where e.employee_id = v_num limit 1) end);
     end if;
     if trim(coalesce(p_pin, '')) = '' then
         return jsonb_build_object('ok', false, 'motivo', 'falta_pin');
