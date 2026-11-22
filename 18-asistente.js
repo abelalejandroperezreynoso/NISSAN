@@ -170,7 +170,8 @@ Cómo funciona la aplicación:
 - Los empleados se identifican por employee_id (texto); el nombre va como «Apellidos Nombres». supervisor_id es el employee_id de su jefe inmediato.
 - Los registros de incidentes viven en la tabla incidents, y la columna tipo dice qué son: «Incidente», «Difusión» o «Capacitación» (sin tipo cuenta como Incidente). Una difusión es un registro con tipo = 'Difusión', no una encuesta: para contarlas o buscarlas, filtra incidents por tipo. title es el nombre, date la fecha, grado la severidad de un incidente y linked_incident_id el registro al que está vinculado. Cada uno se firma de enterado (incident_signatures, una fila por persona) y tiene sus fotos en incident_gallery.
 - Para dar de alta una encuesta nueva que se parece a otras de su clasificación —la difusión de un incidente nuevo, la junta de esta semana— usa crear_encuesta_copiando, no crear_registros: copia del modelo a quién va dirigida, sus revisores y sus preguntas. Si no te dicen la clasificación, consulta clasificaciones_de_encuestas y propón la que corresponda (las difusiones de incidentes van en la de incidentes). Pide el título y la fecha del evento si no te los dieron.
-- Una encuesta puede llevar enlaces (columna enlaces de evaluations, un arreglo de { titulo, url }) a documentos que se leen antes de contestarla, casi siempre de SharePoint; los de SharePoint sólo se abren desde un equipo de la empresa. Para ponerlos al crear, usa el parámetro enlaces; para agregarlos a una que ya existe, modificar_registros con el arreglo completo (los que ya tenía más el nuevo). Tú no puedes subir archivos ni ver su contenido: el material (fotos, PDF, presentaciones) lo sube el administrador desde la hoja de la encuesta.
+- Una encuesta puede llevar enlaces (columna enlaces de evaluations, un arreglo de { titulo, url }) a documentos que se leen antes de contestarla, casi siempre de SharePoint; los de SharePoint sólo se abren desde un equipo de la empresa. Para ponerlos al crear, usa el parámetro enlaces; para agregarlos a una que ya existe, modificar_registros con el arreglo completo (los que ya tenía más el nuevo). Tú no puedes subir archivos ni abrir enlaces: el material (fotos, PDF, presentaciones) lo sube el administrador desde la hoja de la encuesta.
+- El administrador puede pegarte imágenes —una captura de un reporte de incidente, de una minuta—. Léelas para llenar lo que te pide (el título, la fecha, la descripción) y di qué tomaste de la imagen; lo que no se lea bien, pregúntalo en vez de inventarlo. Una imagen pegada en la conversación no se guarda en ningún lado: si debe quedar como material de una encuesta, se sube desde su hoja.
 - El sistema de incidentes ya es obsoleto: hoy se cargan como encuestas de firma en una clasificación propia. Para pasar uno viejo a encuesta usa migrar_incidente_a_encuesta. Si el administrador no dice a qué clasificación, consulta clasificaciones_de_encuestas y propón la que parezca de incidentes (las que llevan firma y títulos como los de los registros); si hay duda, pregúntale cuál con dos o tres opciones. Busca antes el id del registro en incidents por su título o su fecha. Al migrar, sus fotos pasan al material, cada firma de alguien que sigue activo pasa como respuesta firmada con su fecha, las de gente dada de baja o que ya no está en la plantilla se eliminan, y el registro deja de salir en el listado de incidentes. Para migrar varios, uno por llamada, y las difusiones vinculadas a un incidente antes que el incidente: usan sus fotos.
 - El acceso a la aplicación es con el número de empleado y un PIN de 4 números. Los PIN no se pueden leer ni consultar: no viven en ninguna tabla que puedas ver. Si te piden restablecer el PIN de alguien (lo olvidó, se bloqueó tras varios intentos), busca su employee_id y usa restablecer_pin; el PIN temporal lo ve el administrador en la tarjeta, no tú. Para saber quién ya tiene PIN, quién falta o cuántos correos hay, usa estado_de_acceso. El usuario es el número de empleado y no se cambia.
 - Borrar un registro de incidentes con borrar_registros lo elimina por completo: sus firmas, sus fotos y los archivos de ambas en Storage, que es lo que libera espacio (cerca de 1 MB de firmas por registro). Los registros vinculados a él no se borran: se quedan sin vínculo. Las firmas no se borran sueltas.
@@ -1186,20 +1187,27 @@ window.ejecutarHerramientaAsistente = async (bloque, ctx) => {
 
 // --- LA CONVERSACIÓN ---
 
-window.preguntarAlAsistente = async (texto) => {
+window.preguntarAlAsistente = async (texto, imagenes = []) => {
     const a = window.asistente;
-    if (a.ocupado || !texto.trim()) return;
+    imagenes = (imagenes || []).filter(i => i && i.datos);
+    if (a.ocupado || (!texto.trim() && !imagenes.length)) return;
     const clave = window.claveDelAsistente();
     if (!clave) { window.pintarAsistente(); return; }
 
     a.ocupado = true;
     a.detenido = false;
     const inicio = a.mensajes.length;
-    a.mensajes.push({ role: 'user', content: texto.trim() });
-    window.pintarMensajeUsuario(texto.trim());
+    // Con imágenes el contenido es una lista de bloques: las imágenes primero
+    // y el texto detrás, que es como mejor las lee el modelo.
+    const textoFinal = texto.trim() || (imagenes.length === 1 ? 'Lee esta imagen.' : 'Lee estas imágenes.');
+    a.mensajes.push({ role: 'user', content: imagenes.length
+        ? [...imagenes.map(i => ({ type: 'image', source: { type: 'base64', media_type: i.tipo, data: i.datos } })),
+           { type: 'text', text: textoFinal }]
+        : textoFinal });
+    window.pintarMensajeUsuario(texto.trim(), imagenes.map(i => i.url));
     // El registro no se deshace cuando la pregunta falla: es lo que se copia.
     const apunte = { rol: 'asistente', partes: [] };
-    a.registro.push({ rol: 'tu', texto: texto.trim() }, apunte);
+    a.registro.push({ rol: 'tu', texto: texto.trim(), imagenes: imagenes.length }, apunte);
     const turno = window.nuevoTurnoAsistente(apunte);
     window.pintarEstadoAsistente(true, 'Pensando…');
 
@@ -1334,7 +1342,10 @@ const ICONO_ASISTENTE_COPIAR = '<svg viewBox="0 0 24 24" fill="none" stroke="cur
 window.textoDeConversacionAsistente = () => {
     const partes = [];
     (window.asistente.registro || []).forEach(e => {
-        if (e.rol === 'tu') { partes.push('Tú:\n' + e.texto); return; }
+        if (e.rol === 'tu') {
+            const fotos = e.imagenes ? `[${e.imagenes} ${e.imagenes === 1 ? 'imagen' : 'imágenes'}]` : '';
+            partes.push('Tú:\n' + [fotos, e.texto].filter(Boolean).join('\n')); return;
+        }
         const trozos = [];
         let consultas = [];
         const soltarConsultas = () => { if (consultas.length) { trozos.push(consultas.join('\n')); consultas = []; } };
@@ -1440,8 +1451,15 @@ window.montarHojaAsistente = () => {
             </div>
             <div id="asistente-mensajes" class="asistente-mensajes"></div>
             <form id="asistente-redactor" class="asistente-redactor" onsubmit="event.preventDefault(); window.enviarDesdeRedactor();">
+                <div id="asistente-adjuntos" class="asistente-adjuntos" hidden></div>
+                <label for="inp-adjunto-asistente" class="asistente-adjuntar" title="Adjuntar imagen" aria-label="Adjuntar imagen">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5.5-5.5L6 20"/></svg>
+                </label>
+                <input id="inp-adjunto-asistente" type="file" accept="image/*" multiple hidden
+                       onchange="window.adjuntarImagenesAsistente(this.files); this.value='';">
                 <textarea id="asistente-entrada" rows="1" placeholder="Pregunta algo…" enterkeyhint="send"
-                          oninput="window.ajustarAltoRedactor()" onkeydown="window.teclaEnRedactor(event)"></textarea>
+                          oninput="window.ajustarAltoRedactor()" onkeydown="window.teclaEnRedactor(event)"
+                          onpaste="window.pegarEnRedactorAsistente(event)"></textarea>
                 <button id="btn-enviar-asistente" type="submit" class="asistente-enviar" title="Enviar" aria-label="Enviar">${ICONO_ASISTENTE_ENVIAR}</button>
             </form>
         </div>`;
@@ -1470,7 +1488,7 @@ window.engancharBotonEnviarAsistente = () => {
         e.preventDefault();
         const entrada = document.getElementById('asistente-entrada');
         const ocupado = window.asistente.ocupado;
-        const habiaTexto = !!(entrada && entrada.value.trim());
+        const habiaTexto = !!(entrada && entrada.value.trim()) || !!(window.asistente.adjuntos || []).length;
         window.enviarDesdeRedactor();
         // Sólo se cierra el teclado si de verdad se mandó algo: con el campo
         // vacío el toque no hace nada y no hay por qué quitarle el teclado.
@@ -1643,8 +1661,12 @@ window.pintarAsistente = () => {
 window.redibujarHistorialAsistente = () => {
     let turno = null;
     window.asistente.mensajes.forEach(m => {
-        if (m.role === 'user' && typeof m.content === 'string') {
-            window.pintarMensajeUsuario(m.content);
+        const conImagenes = m.role === 'user' && Array.isArray(m.content) && m.content.some(b => b.type === 'image');
+        if (m.role === 'user' && (typeof m.content === 'string' || conImagenes)) {
+            if (conImagenes) {
+                window.pintarMensajeUsuario(m.content.filter(b => b.type === 'text').map(b => b.text).join('\n'),
+                    m.content.filter(b => b.type === 'image').map(b => `data:${b.source.media_type};base64,${b.source.data}`));
+            } else window.pintarMensajeUsuario(m.content);
             turno = window.nuevoTurnoAsistente();
         } else if (m.role === 'assistant' && turno) {
             const texto = m.content.filter(b => b.type === 'text').map(b => b.text).join('\n\n');
@@ -1814,10 +1836,15 @@ window.enviarDesdeRedactor = () => {
     if (window.asistente.ocupado) { window.detenerAsistente(); return; }
     const inp = document.getElementById('asistente-entrada');
     const texto = inp.value;
-    if (!texto.trim()) return;
+    const adjuntos = window.asistente.adjuntos || [];
+    // Con una imagen todavía encogiéndose no se envía: saldría sin ella.
+    if (adjuntos.some(x => x.cargando)) return;
+    if (!texto.trim() && !adjuntos.length) return;
     inp.value = '';
     window.ajustarAltoRedactor();
-    window.preguntarAlAsistente(texto);
+    window.asistente.adjuntos = [];
+    window.pintarAdjuntosAsistente();
+    window.preguntarAlAsistente(texto, adjuntos);
 };
 
 // En un teclado físico, Intro envía y Mayús+Intro parte la línea. En el
@@ -1843,15 +1870,108 @@ const bajarAlFinal = () => {
     if (cont.scrollHeight - cont.scrollTop - cont.clientHeight < 120) cont.scrollTop = cont.scrollHeight;
 };
 
-window.pintarMensajeUsuario = (texto) => {
+window.pintarMensajeUsuario = (texto, imagenes = []) => {
     const cont = document.getElementById('asistente-mensajes');
     if (!cont) return;
     if (cont.querySelector('.asistente-vacio')) cont.innerHTML = '';
-    const div = document.createElement('div');
-    div.className = 'asistente-usuario';
-    div.textContent = texto;
-    cont.appendChild(div);
+    if (imagenes.length) {
+        // Las imágenes van encima de la burbuja, como en Mensajes; tocarlas
+        // las abre en el visor, que se amplía con los dedos.
+        const fila = document.createElement('div');
+        fila.className = 'asistente-usuario-imagenes';
+        imagenes.forEach((url, i) => {
+            const img = document.createElement('img');
+            img.src = url; img.alt = 'Imagen adjunta';
+            img.onclick = () => window.abrirVisorImagenes && window.abrirVisorImagenes(imagenes.slice(i).concat(imagenes.slice(0, i)));
+            fila.appendChild(img);
+        });
+        cont.appendChild(fila);
+    }
+    if (texto) {
+        const div = document.createElement('div');
+        div.className = 'asistente-usuario';
+        div.textContent = texto;
+        cont.appendChild(div);
+    }
     cont.scrollTop = cont.scrollHeight;
+};
+
+// --- LAS IMÁGENES ADJUNTAS ---
+// Se encogen al elegirlas, como las fotos de las encuestas: 1568 px por su
+// lado largo es lo más que aprovecha el modelo, y basta para leer un reporte.
+// Esperan en `asistente.adjuntos` hasta enviarse; viven sólo en memoria y en el
+// historial de la conversación, no se guardan en ningún sitio.
+window.MAX_ADJUNTOS_ASISTENTE = 4;
+window.MAX_LADO_ADJUNTO_ASISTENTE = 1568;
+window.MAX_BYTES_ADJUNTO_ASISTENTE = 900 * 1024;
+
+const blobABase64Asistente = (blob) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+    r.readAsDataURL(blob);
+});
+
+// Un aviso pasajero en el subtítulo, que es donde la conversación dice su estado.
+const avisoDelAsistente = (texto) => {
+    const sub = document.getElementById('subtitulo-asistente');
+    if (!sub) return;
+    sub.textContent = texto;
+    setTimeout(() => { if (sub.textContent === texto) window.pintarEstadoAsistente(window.asistente.ocupado); }, 4000);
+};
+
+window.adjuntarImagenesAsistente = async (archivos) => {
+    const a = window.asistente;
+    a.adjuntos = a.adjuntos || [];
+    const lista = [...(archivos || [])].filter(f => f && /^image\//.test(f.type || ''));
+    if (!lista.length) return;
+    for (const f of lista) {
+        if (a.adjuntos.length >= window.MAX_ADJUNTOS_ASISTENTE) {
+            avisoDelAsistente(`Como mucho ${window.MAX_ADJUNTOS_ASISTENTE} imágenes por mensaje.`);
+            break;
+        }
+        const ficha = { url: '', datos: '', tipo: '', cargando: true };
+        a.adjuntos.push(ficha);
+        window.pintarAdjuntosAsistente();
+        try {
+            const blob = await window.optimizarImagen(f, { maxLado: window.MAX_LADO_ADJUNTO_ASISTENTE, maxBytes: window.MAX_BYTES_ADJUNTO_ASISTENTE });
+            ficha.tipo = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(blob.type) ? blob.type : 'image/jpeg';
+            ficha.datos = await blobABase64Asistente(blob);
+            ficha.url = `data:${ficha.tipo};base64,${ficha.datos}`;
+            ficha.cargando = false;
+        } catch (err) {
+            a.adjuntos = a.adjuntos.filter(x => x !== ficha);
+            avisoDelAsistente(err.message || 'No se pudo leer la imagen.');
+        }
+        window.pintarAdjuntosAsistente();
+    }
+};
+
+window.quitarAdjuntoAsistente = (i) => {
+    const a = window.asistente;
+    (a.adjuntos || []).splice(i, 1);
+    window.pintarAdjuntosAsistente();
+};
+
+window.pintarAdjuntosAsistente = () => {
+    const hueco = document.getElementById('asistente-adjuntos');
+    if (!hueco) return;
+    const lista = window.asistente.adjuntos || [];
+    hueco.hidden = !lista.length;
+    hueco.innerHTML = lista.map((x, i) => `
+        <div class="asistente-adjunto${x.cargando ? ' esta-cargando' : ''}">
+            ${x.url ? `<img src="${x.url}" alt="">` : '<span class="asistente-giro" aria-hidden="true"></span>'}
+            <button type="button" class="asistente-adjunto-quitar" onclick="window.quitarAdjuntoAsistente(${i})" title="Quitar imagen" aria-label="Quitar imagen"></button>
+        </div>`).join('');
+};
+
+// Pegar: si lo pegado trae imágenes se adjuntan; el texto se pega como siempre.
+window.pegarEnRedactorAsistente = (e) => {
+    const items = [...((e.clipboardData && e.clipboardData.items) || [])];
+    const imagenes = items.filter(it => it.kind === 'file' && /^image\//.test(it.type)).map(it => it.getAsFile()).filter(Boolean);
+    if (!imagenes.length) return;
+    if (!items.some(it => it.type === 'text/plain')) e.preventDefault();
+    window.adjuntarImagenesAsistente(imagenes);
 };
 
 // Un turno del asistente: sus trozos de texto y las consultas de entre medias,

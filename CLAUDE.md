@@ -8975,6 +8975,17 @@ Las reglas para usarlo:
       todas: el modelo reintenta y acierta, y el renglón entero en rojo se leía
       como que algo se había roto. Las tarjetas de cambios nombran la tabla
       igual.
+  - **Se le pueden pasar imágenes**: el botón de la izquierda del redactor
+    (un `<label for>` sobre `#inp-adjunto-asistente`, por el toque fantasma de
+    iOS) o pegarlas en el campo (`pegarEnRedactorAsistente`). Se encogen al
+    elegirlas a 1568 px y 900 KB (`MAX_LADO_ADJUNTO_ASISTENTE`,
+    `MAX_BYTES_ADJUNTO_ASISTENTE`, con `optimizarImagen`), esperan en
+    `asistente.adjuntos` —cuatro como mucho— y viajan en el mensaje como bloques
+    `image` en base64, delante del texto. **No se guardan en ningún sitio**: sólo
+    viven en el historial de la conversación, y lo que se pega sale hacia
+    Anthropic, así que un documento confidencial no se pega. `redibujarHistorialAsistente`
+    distingue un mensaje del usuario con imágenes de un `tool_result` porque
+    trae bloques `image`; la copia de la conversación dice «[2 imágenes]».
   - **El historial sólo crece por el final**: la respuesta se guarda con sus
     bloques de pensamiento tal cual. Si algo falla a media pregunta se vuelve al
     historial de antes de ella, que un `tool_use` sin su resultado rompería la
