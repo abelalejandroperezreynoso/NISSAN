@@ -297,7 +297,7 @@ window.HERRAMIENTAS_ASISTENTE = [
     },
     {
         name: 'clasificaciones_de_encuestas',
-        description: 'Las clasificaciones de encuestas que existen, cada una con cuántas encuestas tiene, cuántas llevan pregunta de firma, la más reciente y su fecha. Úsala para ayudar a elegir a qué clasificación migrar un registro de incidentes.',
+        description: 'Las clasificaciones de encuestas que existen, cada una con cuántas encuestas tiene, cuántas llevan pregunta de firma, la más reciente y su fecha y los títulos de unas cuantas. Úsala para elegir, por su nombre y por los títulos que ya tiene, a qué clasificación va una encuesta nueva o un registro de incidentes que se migra; si dos encajan, pregunta cuál.',
         input_schema: { type: 'object', properties: {}, additionalProperties: false }
     },
     {
