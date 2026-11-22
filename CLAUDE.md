@@ -8790,12 +8790,15 @@ Las reglas para usarlo:
   que no es se parece demasiado a lo que esa nota vino a evitar.
 
 - **El asistente habla con Claude desde el navegador, con la clave del
-  administrador.** Se entra por **«✨ Asistente»**, el primer botón del panel de
-  administración (grupo «Consultar»), así que sólo lo alcanza quien tiene el
-  modo encendido; `abrirAsistente` además lo comprueba con `checkAdmin`, cierra
-  el panel antes de abrirse, y `pintarBotonAdmin` cierra la hoja al apagar el
-  modo. Estuvo un tiempo como botón suelto en el encabezado, junto al «+», y se
-  llevó al panel para no sumar otro icono ahí. Vive en `18-asistente.js`, en
+  administrador.** **No tiene botón a la vista**: se abre **manteniendo pulsado
+  cuatro segundos el título «Panel de administración»** (`#titulo-panel-admin`,
+  gesto al final de `18-asistente.js`, delegado en `document`), así que sólo lo
+  alcanza quien tiene el modo encendido; `abrirAsistente` además lo comprueba
+  con `checkAdmin`, y `pintarBotonAdmin` cierra la hoja al apagar el modo. Mover
+  el dedo cancela la cuenta —ahí empieza el gesto de deslizar la hoja— y el
+  `touchend` posterior se cancela para que el click sintetizado no caiga sobre
+  lo de debajo. Fue antes un botón suelto en el encabezado y después «✨
+  Asistente» dentro del panel; se escondió a petición del usuario. Vive en `18-asistente.js`, en
   `#modal-asistente`, montado la primera vez que se abre.
 
   **Va a pantalla completa, no como hoja**, a petición del usuario: es una

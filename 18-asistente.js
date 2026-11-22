@@ -2172,3 +2172,50 @@ window.markdownAsistente = (md) => {
     }
     return salida.join('');
 };
+
+// ----------------------------------------------------------------
+// LA PUERTA: CUATRO SEGUNDOS SOBRE EL TÍTULO DEL PANEL
+// ----------------------------------------------------------------
+// El asistente no tiene botón a la vista: se abre manteniendo pulsado
+// «Panel de administración» (#titulo-panel-admin), que sólo ve quien tiene el
+// modo encendido. Es el molde del monitor de datos sobre «Cerrar Sesión»
+// (1-config.js), con tres diferencias: el título no tiene click propio que
+// tragarse; mover el dedo cancela la cuenta —ahí empieza el gesto de
+// deslizar la hoja hacia abajo—; y el `touchend` que sigue al gesto se
+// cancela, o el click sintetizado caería sobre lo que quede debajo al
+// cerrarse el panel. Va delegado en `document` para no depender de cuándo
+// se cargue el marcado.
+(() => {
+    const SEGUNDOS_PUERTA_ASISTENTE = 4;
+    let relojPuerta = null;
+    let saltoPuerta = false;
+
+    const enTitulo = (ev) => ev.target && ev.target.closest && ev.target.closest('#titulo-panel-admin');
+    const cancelar = () => { if (relojPuerta) { clearTimeout(relojPuerta); relojPuerta = null; } };
+    const agarrar = (ev) => {
+        if (!enTitulo(ev)) return;
+        cancelar();
+        saltoPuerta = false;
+        relojPuerta = setTimeout(() => {
+            relojPuerta = null;
+            saltoPuerta = true;
+            try { if (navigator.vibrate) navigator.vibrate(25); } catch (e) {}
+            if (typeof window.cerrarPanelAdmin === 'function') window.cerrarPanelAdmin();
+            window.abrirAsistente();
+        }, SEGUNDOS_PUERTA_ASISTENTE * 1000);
+    };
+    const soltar = (ev) => {
+        cancelar();
+        if (saltoPuerta && ev && ev.type === 'touchend' && ev.cancelable) ev.preventDefault();
+        saltoPuerta = false;
+    };
+
+    document.addEventListener('touchstart', agarrar, { passive: true });
+    document.addEventListener('touchmove', cancelar, { passive: true });
+    document.addEventListener('touchend', soltar);
+    document.addEventListener('touchcancel', soltar);
+    document.addEventListener('mousedown', agarrar);
+    document.addEventListener('mouseup', soltar);
+    document.addEventListener('mouseout', (ev) => { if (enTitulo(ev)) cancelar(); });
+    document.addEventListener('contextmenu', (ev) => { if (enTitulo(ev)) ev.preventDefault(); });
+})();

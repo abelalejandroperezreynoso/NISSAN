@@ -8139,3 +8139,7 @@ a.fila-ios { text-decoration: none; color: inherit; }
     font-weight: 600;
     cursor: pointer;
 }
+
+/* Mantenerlo pulsado abre el asistente: sin esto, iOS saca su menú de
+   copiar y la selección del texto encima del gesto. */
+#titulo-panel-admin { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
