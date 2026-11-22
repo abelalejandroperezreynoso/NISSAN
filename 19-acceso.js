@@ -70,6 +70,86 @@
         window.mostrarDashboard(ficha);
     };
 
+    // ======================================================================
+    // LAS CUATRO CAJAS DEL PIN
+    // ======================================================================
+    // Cada campo de PIN se dibuja como cuatro cajas, pero el campo de verdad
+    // sigue ahí: un <input> invisible tendido encima de ellas. Así el teclado
+    // numérico, borrar, pegar y el autollenado del teléfono funcionan como en
+    // cualquier campo, y las cajas sólo pintan lo que tiene.
+    //
+    // El `value` del campo se intercepta para que poner `campo.value = ''`
+    // desde cualquier sitio repinte las cajas: un `input` programático no
+    // dispara ningún evento.
+    //
+    //     <input type="password" data-cajas-pin data-siguiente="otro-id" …>
+    //     window.montarCajasDePin(raiz)   // engancha los que haya dentro
+    const DIGITOS_PIN = 4;
+    const valorNativo = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+
+    const montarUnaCaja = (campo) => {
+        if (campo.__cajasPin) return;
+        campo.__cajasPin = true;
+        const caja = document.createElement('div');
+        caja.className = 'pin-cajas';
+        campo.parentNode.insertBefore(caja, campo);
+        for (let i = 0; i < DIGITOS_PIN; i++) {
+            const c = document.createElement('span');
+            c.className = 'pin-caja';
+            c.setAttribute('aria-hidden', 'true');
+            caja.appendChild(c);
+        }
+        caja.appendChild(campo);
+        campo.classList.add('pin-cajas-campo');
+        campo.setAttribute('maxlength', String(DIGITOS_PIN));
+
+        const pintar = () => {
+            const largo = (valorNativo.get.call(campo) || '').length;
+            caja.querySelectorAll('.pin-caja').forEach((c, i) => {
+                c.classList.toggle('llena', i < largo);
+                c.classList.toggle('actual', i === Math.min(largo, DIGITOS_PIN - 1));
+            });
+        };
+        Object.defineProperty(campo, 'value', {
+            configurable: true,
+            get() { return valorNativo.get.call(this); },
+            set(v) { valorNativo.set.call(this, v); pintar(); }
+        });
+
+        campo.addEventListener('input', () => {
+            const limpio = String(valorNativo.get.call(campo) || '').replace(/\D/g, '').slice(0, DIGITOS_PIN);
+            if (limpio !== valorNativo.get.call(campo)) valorNativo.set.call(campo, limpio);
+            pintar();
+            caja.classList.remove('con-error');
+            if (limpio.length === DIGITOS_PIN) {
+                const sig = campo.dataset.siguiente && $(campo.dataset.siguiente);
+                if (sig) sig.focus();
+                else if (campo.dataset.alCompletar) window[campo.dataset.alCompletar]();
+            }
+        });
+        // El cursor siempre al final: con cajas no hay dónde ponerlo en medio.
+        const alFinal = () => { const n = (valorNativo.get.call(campo) || '').length; try { campo.setSelectionRange(n, n); } catch (e) { /* nada */ } };
+        campo.addEventListener('focus', () => { caja.classList.add('con-foco'); alFinal(); });
+        campo.addEventListener('click', alFinal);
+        campo.addEventListener('blur', () => caja.classList.remove('con-foco'));
+        pintar();
+    };
+
+    window.montarCajasDePin = (raiz) => {
+        (raiz || document).querySelectorAll('input[data-cajas-pin]').forEach(montarUnaCaja);
+    };
+
+    // Sacude las cajas del campo: lo que se escribió no sirvió.
+    const cajasConError = (id) => {
+        const c = $(id) && $(id).closest('.pin-cajas');
+        if (!c) return;
+        c.classList.remove('con-error');
+        void c.offsetWidth;
+        c.classList.add('con-error');
+    };
+
+    window.montarCajasDePin(document);
+
     window.prepararPantallaDeAcceso = () => {
         estado.pendiente = null;
         verPaso('login-paso-entrar', 'Iniciar sesión', '');
@@ -159,6 +239,7 @@
         const r = await window.llamarAcceso('acceso_iniciar', { p_numero: estado.numero, p_pin: pin });
         ocupado('btn-login-pin', false);
         if (r.ok) { trasAcertar(r); return; }
+        cajasConError('login-pin');
         decir(r.motivo === 'incorrecto' ? 'PIN incorrecto.' + (r.restantes !== undefined && r.restantes <= 3
             ? ` Te ${r.restantes === 1 ? 'queda 1 intento' : 'quedan ' + r.restantes + ' intentos'} antes de que se bloquee.` : '')
             : window.textoDeAcceso(r));
@@ -186,7 +267,7 @@
         const pin2 = soloDigitos($('login-activar-pin2').value);
         if (!correoValido(correo)) { decir(window.textoDeAcceso({ motivo: 'correo' })); return; }
         if (pin.length !== 4) { decir('El PIN debe ser de 4 números.'); return; }
-        if (pin !== pin2) { decir('Los dos PIN no coinciden.'); $('login-activar-pin2').value = ''; return; }
+        if (pin !== pin2) { decir('Los dos PIN no coinciden.'); $('login-activar-pin2').value = ''; cajasConError('login-activar-pin2'); $('login-activar-pin2').focus(); return; }
 
         ocupado('btn-login-activar', true, 'Guardando…');
         const r = await window.llamarAcceso('acceso_activar',
@@ -207,7 +288,7 @@
         const correo = $('login-cambiar-correo-campo').hidden ? '' : $('login-cambiar-correo').value.trim().toLowerCase();
         if (!$('login-cambiar-correo-campo').hidden && !correoValido(correo)) { decir(window.textoDeAcceso({ motivo: 'correo' })); return; }
         if (pin.length !== 4) { decir('El PIN debe ser de 4 números.'); return; }
-        if (pin !== pin2) { decir('Los dos PIN no coinciden.'); $('login-cambiar-pin2').value = ''; return; }
+        if (pin !== pin2) { decir('Los dos PIN no coinciden.'); $('login-cambiar-pin2').value = ''; cajasConError('login-cambiar-pin2'); $('login-cambiar-pin2').focus(); return; }
 
         ocupado('btn-login-cambiar', true, 'Guardando…');
         const r = await window.llamarAcceso('acceso_cambiar_pin', { p_token: p.token, p_pin: pin, p_correo: correo });
@@ -242,11 +323,11 @@
             <form onsubmit="event.preventDefault(); window.guardarMiPin();" novalidate>
                 <div class="form-group">
                     <label for="inp-mi-pin">Nuevo PIN de 4 números</label>
-                    <input type="password" id="inp-mi-pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password">
+                    <input type="password" id="inp-mi-pin" data-cajas-pin data-siguiente="inp-mi-pin2" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label for="inp-mi-pin2">Repite tu PIN</label>
-                    <input type="password" id="inp-mi-pin2" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password">
+                    <input type="password" id="inp-mi-pin2" data-cajas-pin inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label for="inp-mi-correo">Correo <span style="font-weight:400; color:#8e8e93;">(déjalo vacío para no cambiarlo)</span></label>
@@ -264,6 +345,7 @@
             return;
         }
         const hoja = hojaCambiarPin();
+        window.montarCajasDePin(hoja);
         ['inp-mi-pin', 'inp-mi-pin2', 'inp-mi-correo'].forEach(id => { $(id).value = ''; });
         $('error-cambiar-pin').hidden = true;
         $('subtitulo-cambiar-pin').textContent = '';

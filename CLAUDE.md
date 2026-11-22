@@ -204,6 +204,17 @@ Las reglas para usarlo:
     la entrada por número. El correo se pide como **«Correo de la empresa»**,
     con «Si no tienes, escribe uno personal» debajo. `acceso_estado()` sigue en
     la base aunque la pantalla ya no lo use.
+  - **El PIN se escribe en cuatro cajas** (`window.montarCajasDePin(raiz)`, en
+    `19-acceso.js`, sobre todo `input[data-cajas-pin]`). Las cajas sólo pintan:
+    el campo de verdad va **invisible encima de ellas**, y es lo que conserva
+    el teclado numérico, borrar, pegar y el autollenado del teléfono —cuatro
+    campos sueltos rompen las tres cosas—. Su `value` se intercepta para que
+    `campo.value = ''` desde cualquier sitio repinte las cajas, que un cambio
+    programático no dispara `input`. `data-siguiente` pasa el foco al campo de
+    repetir al completar cuatro dígitos y `data-al-completar` llama a una
+    función de `window` (el PIN de entrar se envía solo). Un PIN que no sirvió
+    sacude las cajas en rojo (`.con-error`). Una hoja que se monte después
+    tiene que llamar a `montarCajasDePin` con su raíz.
   - **Sin el script en la base todo sigue en pie**: `acceso_iniciar` devuelve
     `sin_script` y se entra como antes, con el número comparado en el
     navegador.

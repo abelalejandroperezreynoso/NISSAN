@@ -117,6 +117,65 @@ body {
 .login-campo { display: flex; flex-direction: column; gap: 6px; }
 .login-campo > span { font-size: 0.82rem; font-weight: 600; color: #546e7a; }
 .login-campo > small { font-size: 0.78rem; color: #78909c; }
+/* Las cuatro cajas del PIN (19-acceso.js, `montarCajasDePin`). El campo de
+   verdad va invisible encima de ellas y es quien recibe el dedo; las cajas sólo
+   pintan cuántos dígitos lleva. Sigue a 16px para que Safari no haga zoom. */
+.pin-cajas {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+.pin-caja {
+    width: 54px;
+    height: 58px;
+    box-sizing: border-box;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    background: #f9fafb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.pin-caja.llena::after {
+    content: '';
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #1c1c1e;
+}
+.pin-cajas.con-foco .pin-caja.actual {
+    border-color: #007aff;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+}
+.pin-cajas.con-error .pin-caja { border-color: #ef4444; }
+.pin-cajas.con-error { animation: pin-sacudida 0.35s ease; }
+@keyframes pin-sacudida {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(8px); }
+    60% { transform: translateX(-5px); }
+    80% { transform: translateX(5px); }
+}
+.pin-cajas input.pin-cajas-campo {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    color: transparent !important;
+    caret-color: transparent;
+    font-size: 16px !important;
+    letter-spacing: 0 !important;
+    opacity: 0;
+    -webkit-user-select: none;
+    user-select: none;
+}
 .login-numero-elegido { font-size: 0.88rem; color: #546e7a; text-align: center; }
 .login-numero-elegido b { color: #1c1c1e; margin-left: 4px; }
 .login-persona {
