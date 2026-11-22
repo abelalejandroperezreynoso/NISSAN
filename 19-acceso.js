@@ -64,7 +64,7 @@
 
     const entrar = (ficha, token) => {
         window.guardarSesionConToken(ficha, token);
-        ['login-pin', 'login-activar-pin', 'login-activar-pin2', 'login-cambiar-pin', 'login-cambiar-pin2']
+        ['login-pin', 'login-activar-pin', 'login-cambiar-pin']
             .forEach(id => { const c = $(id); if (c) c.value = ''; });
         estado.pendiente = null;
         window.mostrarDashboard(ficha);
@@ -105,11 +105,15 @@
 
         const pintar = () => {
             const largo = (valorNativo.get.call(campo) || '').length;
+            const valor = valorNativo.get.call(campo) || '';
+            const ver = campo.dataset.ver === '1';
             caja.querySelectorAll('.pin-caja').forEach((c, i) => {
-                c.classList.toggle('llena', i < largo);
+                c.classList.toggle('llena', i < largo && !ver);
+                c.textContent = ver && i < largo ? valor[i] : '';
                 c.classList.toggle('actual', i === Math.min(largo, DIGITOS_PIN - 1));
             });
         };
+        campo.__pintarCajas = pintar;
         Object.defineProperty(campo, 'value', {
             configurable: true,
             get() { return valorNativo.get.call(this); },
@@ -121,6 +125,8 @@
             if (limpio !== valorNativo.get.call(campo)) valorNativo.set.call(campo, limpio);
             pintar();
             caja.classList.remove('con-error');
+            // El aviso del intento anterior ya no habla de lo que se escribe.
+            if (campo.closest('#vista-login')) decir('');
             if (limpio.length === DIGITOS_PIN) {
                 const sig = campo.dataset.siguiente && $(campo.dataset.siguiente);
                 if (sig) sig.focus();
@@ -137,6 +143,26 @@
 
     window.montarCajasDePin = (raiz) => {
         (raiz || document).querySelectorAll('input[data-cajas-pin]').forEach(montarUnaCaja);
+    };
+
+    // «Mostrar PIN»: los dígitos en las cajas en vez de los puntos, para
+    // revisarlo cuando se escribe una sola vez.
+    window.alternarVerPin = (id, boton) => {
+        const campo = $(id);
+        if (!campo) return;
+        const ver = campo.dataset.ver !== '1';
+        campo.dataset.ver = ver ? '1' : '';
+        if (campo.__pintarCajas) campo.__pintarCajas();
+        if (boton) boton.textContent = ver ? 'Ocultar PIN' : 'Mostrar PIN';
+        campo.focus();
+    };
+    const ocultarPin = (id) => {
+        const campo = $(id);
+        if (!campo) return;
+        campo.dataset.ver = '';
+        if (campo.__pintarCajas) campo.__pintarCajas();
+        const b = campo.closest('form') && campo.closest('form').querySelector('.login-ver-pin');
+        if (b) b.textContent = 'Mostrar PIN';
     };
 
     // Sacude las cajas del campo: lo que se escribió no sirvió.
@@ -176,7 +202,7 @@
             verPaso('login-paso-cambiar', r.temporal ? 'Crea tu PIN' : 'Deja tu correo',
                 r.temporal
                     ? 'Entraste con un PIN temporal. Crea ahora tu propio PIN de 4 números; el temporal deja de servir.'
-                    : 'Falta tu correo. Escribe el de la empresa o, si no tienes, uno personal, y confirma tu PIN.');
+                    : 'Falta tu correo. Escribe el de la empresa o, si no tienes, uno personal, y elige tu PIN.');
             return;
         }
         entrar(r.ficha, r.token);
@@ -210,7 +236,8 @@
             $('login-persona-detalle').textContent = [p.puesto, p.departamento].filter(Boolean).join(' · ');
             $('login-persona-detalle').hidden = !(p.puesto || p.departamento);
             $('login-confirmar-persona').hidden = false;
-            $('login-activar-datos').hidden = true;
+            $('login-activar-correo-paso').hidden = true;
+            $('login-activar-pin-paso').hidden = true;
             verPaso('login-paso-activar', 'Primera vez', 'Con ese número de empleado encontramos a:');
             return;
         }
@@ -248,26 +275,52 @@
     };
 
     // --- Paso 2: la primera vez ---
-    // Primero confirma que es esa persona; después deja su correo y crea el PIN.
+    // Tres pantallas seguidas: confirma que es esa persona, deja su correo y
+    // crea el PIN, que se escribe una sola vez («Mostrar PIN» para revisarlo).
+    const verSubpaso = (cual) => {
+        $('login-confirmar-persona').hidden = cual !== 'persona';
+        $('login-activar-correo-paso').hidden = cual !== 'correo';
+        $('login-activar-pin-paso').hidden = cual !== 'pin';
+        decir('');
+    };
+
     window.confirmarPersona = (soyYo) => {
         if (!soyYo) {
             window.volverAEntrar();
             decir('Revisa tu número de empleado y vuelve a escribirlo.');
             return;
         }
-        $('login-confirmar-persona').hidden = true;
-        $('login-activar-datos').hidden = false;
-        $('login-explicacion').textContent = 'Deja tu correo de la empresa y crea el PIN con el que vas a entrar desde ahora.';
+        verSubpaso('correo');
+        $('login-explicacion').textContent = 'Deja tu correo de la empresa.';
         setTimeout(() => $('login-activar-correo').focus(), 60);
+    };
+
+    window.continuarConCorreo = () => {
+        const correo = $('login-activar-correo').value.trim().toLowerCase();
+        if (!correoValido(correo)) { decir(window.textoDeAcceso({ motivo: 'correo' })); return; }
+        $('login-activar-pin').value = '';
+        ocultarPin('login-activar-pin');
+        verSubpaso('pin');
+        $('login-explicacion').textContent = 'Crea el PIN de 4 números con el que vas a entrar desde ahora.';
+        setTimeout(() => $('login-activar-pin').focus(), 60);
+    };
+
+    window.volverAlCorreo = () => {
+        verSubpaso('correo');
+        $('login-explicacion').textContent = 'Deja tu correo de la empresa.';
+    };
+
+    // El formulario es uno solo: Enter en el correo continúa, en el PIN crea.
+    window.enviarPasoActivar = () => {
+        if (!$('login-activar-correo-paso').hidden) window.continuarConCorreo();
+        else if (!$('login-activar-pin-paso').hidden) window.activarAcceso();
     };
 
     window.activarAcceso = async () => {
         const correo = $('login-activar-correo').value.trim().toLowerCase();
         const pin = soloDigitos($('login-activar-pin').value);
-        const pin2 = soloDigitos($('login-activar-pin2').value);
-        if (!correoValido(correo)) { decir(window.textoDeAcceso({ motivo: 'correo' })); return; }
-        if (pin.length !== 4) { decir('El PIN debe ser de 4 números.'); return; }
-        if (pin !== pin2) { decir('Los dos PIN no coinciden.'); $('login-activar-pin2').value = ''; cajasConError('login-activar-pin2'); $('login-activar-pin2').focus(); return; }
+        if (!correoValido(correo)) { window.volverAlCorreo(); decir(window.textoDeAcceso({ motivo: 'correo' })); return; }
+        if (pin.length !== 4) { decir('El PIN debe ser de 4 números.'); cajasConError('login-activar-pin'); return; }
 
         ocupado('btn-login-activar', true, 'Guardando…');
         const r = await window.llamarAcceso('acceso_activar',
@@ -276,7 +329,9 @@
 
         if (r.ok) { entrar(r.ficha, r.token); return; }
         if (r.motivo === 'ya_tiene_pin') { window.volverAEntrar(); decir(window.textoDeAcceso(r), 'aviso'); return; }
+        if (r.motivo === 'correo') { window.volverAlCorreo(); decir(window.textoDeAcceso(r)); return; }
         decir(window.textoDeAcceso(r));
+        if (r.motivo === 'pin_debil') { cajasConError('login-activar-pin'); $('login-activar-pin').value = ''; $('login-activar-pin').focus(); }
     };
 
     // --- Paso 3: cambiar el PIN temporal (o dejar el correo que falta) ---
@@ -284,17 +339,16 @@
         const p = estado.pendiente;
         if (!p) { window.volverAEntrar(); return; }
         const pin = soloDigitos($('login-cambiar-pin').value);
-        const pin2 = soloDigitos($('login-cambiar-pin2').value);
         const correo = $('login-cambiar-correo-campo').hidden ? '' : $('login-cambiar-correo').value.trim().toLowerCase();
         if (!$('login-cambiar-correo-campo').hidden && !correoValido(correo)) { decir(window.textoDeAcceso({ motivo: 'correo' })); return; }
-        if (pin.length !== 4) { decir('El PIN debe ser de 4 números.'); return; }
-        if (pin !== pin2) { decir('Los dos PIN no coinciden.'); $('login-cambiar-pin2').value = ''; cajasConError('login-cambiar-pin2'); $('login-cambiar-pin2').focus(); return; }
+        if (pin.length !== 4) { decir('El PIN debe ser de 4 números.'); cajasConError('login-cambiar-pin'); return; }
 
         ocupado('btn-login-cambiar', true, 'Guardando…');
         const r = await window.llamarAcceso('acceso_cambiar_pin', { p_token: p.token, p_pin: pin, p_correo: correo });
         ocupado('btn-login-cambiar', false);
         if (r.ok) { entrar(p.ficha, p.token); return; }
         decir(window.textoDeAcceso(r));
+        if (r.motivo === 'pin_debil') { cajasConError('login-cambiar-pin'); $('login-cambiar-pin').value = ''; $('login-cambiar-pin').focus(); }
     };
 
     // ======================================================================

@@ -145,6 +145,8 @@ body {
     border-radius: 50%;
     background: #1c1c1e;
 }
+.pin-caja { font-size: 1.5rem; font-weight: 600; color: #1c1c1e; }
+.login-ver-pin { margin-top: -6px; }
 .pin-cajas.con-foco .pin-caja.actual {
     border-color: #007aff;
     background: #fff;

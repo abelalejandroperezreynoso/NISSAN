@@ -201,8 +201,12 @@ Las reglas para usarlo:
     abierta— y la pantalla pregunta **«¿Eres tú?»** antes de pedir el correo y
     el PIN. Eso deja ver el nombre de un número sin PIN a quien lo teclee, lo
     mismo que enseñaba la lista de sugerencias de antes, y se acaba al cerrar
-    la entrada por número. El correo se pide como **«Correo de la empresa»**,
-    con «Si no tienes, escribe uno personal» debajo. `acceso_estado()` sigue en
+    la entrada por número. Después de «Sí, soy yo» van **dos pantallas más,
+    una para el correo y otra para el PIN**: el correo se pide como **«Correo
+    de la empresa»**, con «Si no tienes, escribe uno personal» debajo, y **el
+    PIN se escribe una sola vez**, con «Mostrar PIN» para revisarlo
+    (`alternarVerPin`). El cambio de un PIN temporal también lo pide una vez;
+    «Cambiar mi PIN» del perfil sigue pidiéndolo dos. `acceso_estado()` sigue en
     la base aunque la pantalla ya no lo use.
   - **El PIN se escribe en cuatro cajas** (`window.montarCajasDePin(raiz)`, en
     `19-acceso.js`, sobre todo `input[data-cajas-pin]`). Las cajas sólo pintan:
