@@ -8002,3 +8002,61 @@ html.fondo-anclado body {
     color: #0f172a;
     padding: 8px 0;
 }
+
+/* --- Enlaces de una encuesta (1-config.js, `bloqueDeEnlaces`) -------------
+   Documentos de SharePoint y otros sitios: la aplicación sólo enseña el enlace
+   y el sitio decide si se abre. Son filas de la lista de iOS hechas con `<a>`,
+   así que se les quita el subrayado y el color del enlace. */
+.enlaces-encuesta { margin: 0 0 18px; }
+a.fila-ios { text-decoration: none; color: inherit; }
+.enlaces-encuesta-nota {
+    margin: 6px 4px 0;
+    font-size: 0.75rem;
+    color: #94a3b8;
+}
+
+/* El campo de la hoja de edición: un renglón por enlace, con el título encima
+   de la dirección y la «×» a la derecha. 16px en los campos por el zoom de
+   Safari. */
+.enlace-edicion {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+}
+.enlace-edicion-campos { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.enlace-edicion-campos input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 16px;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: white;
+}
+.enlace-edicion-campos input.con-error { border-color: #ef4444; }
+.enlace-edicion-quitar {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.enlace-agregar {
+    background: none;
+    border: none;
+    padding: 6px 0;
+    color: #007aff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+}

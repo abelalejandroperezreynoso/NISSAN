@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-11-22-7';
+window.VERSION_APP = '2026-11-22-8';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3450,6 +3450,78 @@ window.hayColumnaUnaRespuesta = () => window.hayColumna('evaluations', 'una_sola
 
 window.camposConUnaRespuesta = (campos) =>
     window.camposConColumna(campos, 'evaluations', 'una_sola_respuesta');
+
+// --- ENLACES DE UNA ENCUESTA ---
+// Hay información que no puede salir de la empresa, y ésa vive en SharePoint:
+// Microsoft sólo la abre desde los equipos de la empresa. Una encuesta puede
+// llevar enlaces a esos documentos —o a cualquier otro sitio—, y la aplicación
+// **no copia nada**: enseña el enlace y quien decide si se abre es SharePoint,
+// según el aparato. Copiar ese contenido a Supabase lo dejaría al alcance de
+// cualquiera con la clave `anon`.
+//
+// Viven en `evaluations.enlaces`, un arreglo de `{ titulo, url }`
+// (`sql/enlaces-de-encuesta.sql`). Sin la columna no hay enlaces y el campo de
+// la hoja de edición se esconde.
+window.hayColumnaEnlaces = () => window.hayColumna('evaluations', 'enlaces');
+window.camposConEnlaces = (campos) => window.camposConColumna(campos, 'evaluations', 'enlaces');
+
+// Sólo http y https: un `javascript:` en un enlace sería código que corre al
+// tocarlo.
+window.urlDeEnlaceValida = (url) => {
+    try {
+        const u = new URL(String(url || '').trim());
+        return (u.protocol === 'https:' || u.protocol === 'http:') ? u.href : '';
+    } catch (e) { return ''; }
+};
+
+window.enlacesDeEncuesta = (ev) => {
+    let lista = ev ? ev.enlaces : null;
+    if (typeof lista === 'string') { try { lista = JSON.parse(lista); } catch (e) { lista = null; } }
+    if (!Array.isArray(lista)) return [];
+    return lista.map(e => ({
+        titulo: String((e && e.titulo) || '').trim(),
+        url: window.urlDeEnlaceValida(e && e.url)
+    })).filter(e => e.url);
+};
+
+// Lo que se lee debajo del título: SharePoint por su nombre, cualquier otro
+// sitio por su dominio.
+window.sitioDeEnlace = (url) => {
+    try {
+        const host = new URL(url).hostname.toLowerCase();
+        return /sharepoint\.com$/.test(host) ? 'SharePoint' : host.replace(/^www\./, '');
+    } catch (e) { return ''; }
+};
+
+const ICONO_ENLACE_ENCUESTA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
+
+// La lista, o '' si no hay enlaces. Cada fila es un `<a target="_blank">`: en
+// la aplicación instalada abre el navegador, que es donde vive la sesión de
+// Microsoft.
+window.bloqueDeEnlaces = (enlaces, conRotulo = true) => {
+    const lista = (enlaces || []).filter(e => e && e.url);
+    if (!lista.length) return '';
+    const esc = window.sanitizeForHTML;
+    const filas = lista.map(e => {
+        const sitio = window.sitioDeEnlace(e.url);
+        return `
+        <a class="fila-ios enlace-encuesta" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">
+            <span class="fila-ios-icono fila-ios-icono--tinta" style="background:#0f6cbd;">${ICONO_ENLACE_ENCUESTA}</span>
+            <span class="fila-ios-texto">
+                <span class="fila-ios-titulo">${esc(e.titulo || sitio || 'Enlace')}</span>
+                <span class="fila-ios-detalle">${esc(sitio)}</span>
+            </span>
+            <span class="fila-ios-chevron" aria-hidden="true">›</span>
+        </a>`;
+    }).join('');
+    const hayShare = lista.some(e => window.sitioDeEnlace(e.url) === 'SharePoint');
+    return `
+    <div class="enlaces-encuesta">
+        ${conRotulo ? '<div class="hoja-grupo-titulo">Enlaces</div>' : ''}
+        <div class="lista-ios">${filas}</div>
+        ${hayShare ? '<div class="enlaces-encuesta-nota">Los de SharePoint se abren sólo desde un equipo de la empresa.</div>' : ''}
+    </div>`;
+};
 
 // **Se cuenta por periodo y no por vida de la encuesta**, que es lo único
 // coherente con el resto: una mensual con esto puesto se contesta una vez **al

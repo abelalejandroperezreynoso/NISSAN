@@ -3823,6 +3823,41 @@ Las reglas para usarlo:
   antiguo: se exportan a PDF —o se guardan como `.xlsx`— y el aviso lo dice con
   esas palabras.
 
+- **Una encuesta puede llevar enlaces, y la aplicación no copia lo que hay
+  detrás.** Hay información que no puede salir de la empresa y vive en
+  SharePoint, que Microsoft sólo abre desde los equipos de la empresa (Acceso
+  Condicional de Entra ID). La encuesta guarda el **enlace** y nada más: desde un
+  equipo de la empresa se abre, desde un teléfono personal Microsoft lo niega, y
+  esa decisión no la toma esta aplicación. Se eligió así frente a leer
+  SharePoint con Microsoft Graph, que habría pedido registrar la app con
+  Sistemas.
+
+  ```js
+  window.enlacesDeEncuesta(ev)        // [{ titulo, url }], sólo http(s)
+  window.bloqueDeEnlaces(enlaces)     // la lista de iOS, o '' sin enlaces
+  window.urlDeEnlaceValida(url)  window.sitioDeEnlace(url)   // «SharePoint» o el dominio
+  window.hayColumnaEnlaces()  window.camposConEnlaces(campos)
+  window.pintarEnlacesEval(lista)  window.leerEnlacesEval()  // la hoja de edición → { enlaces, error }
+  ```
+
+  Cuatro cosas que hay que mantener:
+
+  - **Nunca se copia a Supabase el contenido de un enlace protegido**: lo que
+    se guarda ahí lo lee cualquiera con la clave `anon`, desde cualquier aparato.
+  - **Sólo `http` y `https`** (`urlDeEnlaceValida`): un `javascript:` en un `href`
+    sería código que corre al tocarlo. Sin «https://» delante se le pone, que es
+    como se pega desde el teléfono.
+  - **Se escriben en el campo «Enlaces» del grupo «Datos»**, debajo del material,
+    y se leen en la hoja de la encuesta (debajo del material) y en la de
+    contestar (encima de las preguntas; en la previa, los de la hoja de
+    edición). Una copia los hereda: son los documentos de referencia, no de una
+    vuelta. Una dirección inválida detiene el guardado y se marca en rojo.
+  - **La columna es `evaluations.enlaces`** (`sql/enlaces-de-encuesta.sql`,
+    también en `supabase/migrations/`), y las consultas que no van con
+    `select('*')` la encadenan con `camposConEnlaces`
+    (`encuestaDeLaRespuesta`, `responderDirecto`). Sin ella el campo se esconde
+    y no hay enlaces.
+
 - **Cuánto ocupa todo esto en Supabase.** La cuenta es gratuita y tiene un tope
   —1 GB de archivos y 500 MB de base—, y hasta ahora no había manera de saber
   por dónde iba sin entrar al panel de Supabase, que es justo lo que no se hace

@@ -20,7 +20,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-11-22-7">
+    <link rel="stylesheet" href="estilos.css?v=2026-11-22-8">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -510,6 +510,16 @@
                         <label>Material</label>
                         <div id="material-edicion"></div>
                         <p id="aviso-material-sin-guardar" class="form-ayuda" style="display:none; margin-top:8px;">Se sube al publicar la encuesta.</p>
+                    </div>
+
+                    <!-- Enlaces a documentos que no salen de la empresa —SharePoint
+                         sólo los abre desde sus equipos—. Se guardan en
+                         evaluations.enlaces; ver window.bloqueDeEnlaces. -->
+                    <div class="form-group" id="campo-enlaces" hidden>
+                        <label>Enlaces</label>
+                        <div id="lista-enlaces-eval"></div>
+                        <button type="button" class="enlace-agregar" onclick="window.agregarEnlaceEval()">+ Agregar enlace</button>
+                        <p class="form-ayuda" style="margin-top:4px;">Documentos de SharePoint u otro sitio. Los de SharePoint se abren sólo desde un equipo de la empresa.</p>
                     </div>
 
                     <div class="form-group"><label>Título</label><input type="text" id="eval-title-input" placeholder="Ej. Encuesta de Clima Laboral"></div>
@@ -1218,28 +1228,28 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-11-22-7"></script>
-    <script src="2a-core-nav.js?v=2026-11-22-7"></script>
-    <script src="2b-core-dashboard.js?v=2026-11-22-7"></script>
-    <script src="3-incidentes.js?v=2026-11-22-7"></script>
-    <script src="4-evaluaciones-base.js?v=2026-11-22-7"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-11-22-7"></script>
-    <script src="17-hoja-excel.js?v=2026-11-22-7"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-11-22-7"></script>
-    <script src="5-objetivos.js?v=2026-11-22-7"></script>
-    <script src="6-calendario.js?v=2026-11-22-7"></script>
-    <script src="7-pendientes.js?v=2026-11-22-7"></script>
-    <script src="8-hallazgos.js?v=2026-11-22-7"></script>
-    <script src="9-estadisticas.js?v=2026-11-22-7"></script>
+    <script src="1-config.js?v=2026-11-22-8"></script>
+    <script src="2a-core-nav.js?v=2026-11-22-8"></script>
+    <script src="2b-core-dashboard.js?v=2026-11-22-8"></script>
+    <script src="3-incidentes.js?v=2026-11-22-8"></script>
+    <script src="4-evaluaciones-base.js?v=2026-11-22-8"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-11-22-8"></script>
+    <script src="17-hoja-excel.js?v=2026-11-22-8"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-11-22-8"></script>
+    <script src="5-objetivos.js?v=2026-11-22-8"></script>
+    <script src="6-calendario.js?v=2026-11-22-8"></script>
+    <script src="7-pendientes.js?v=2026-11-22-8"></script>
+    <script src="8-hallazgos.js?v=2026-11-22-8"></script>
+    <script src="9-estadisticas.js?v=2026-11-22-8"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-11-22-7"></script>
-    <script src="13-gestion.js?v=2026-11-22-7"></script>
-    <script src="14-vacaciones.js?v=2026-11-22-7"></script>
-    <script src="15-presentacion.js?v=2026-11-22-7"></script>
-    <script src="16-cursos.js?v=2026-11-22-7"></script>
-    <script src="18-asistente.js?v=2026-11-22-7"></script>
-    <script src="19-acceso.js?v=2026-11-22-7"></script>
-    <script src="10-refacciones.js?v=2026-11-22-7"></script> 
+    <script src="12-almacenamiento.js?v=2026-11-22-8"></script>
+    <script src="13-gestion.js?v=2026-11-22-8"></script>
+    <script src="14-vacaciones.js?v=2026-11-22-8"></script>
+    <script src="15-presentacion.js?v=2026-11-22-8"></script>
+    <script src="16-cursos.js?v=2026-11-22-8"></script>
+    <script src="18-asistente.js?v=2026-11-22-8"></script>
+    <script src="19-acceso.js?v=2026-11-22-8"></script>
+    <script src="10-refacciones.js?v=2026-11-22-8"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

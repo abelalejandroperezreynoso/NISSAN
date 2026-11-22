@@ -1316,9 +1316,10 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
         // si le aplica no se abre hasta que esa persona diga que sí, y sin la
         // columna el freno de aquí abajo no se enteraría —una que no se pidió
         // llega `undefined`, que no es `true`—.
-        const camposEval = await window.camposConAplica(await window.camposConUnaRespuesta(
+        // Y los enlaces, que la hoja de contestar enseña encima de las preguntas.
+        const camposEval = await window.camposConEnlaces(await window.camposConAplica(await window.camposConUnaRespuesta(
             await window.camposConRelanzamiento(
-                'range_labels, description, frequency, evaluates_area, mode')));
+                'range_labels, description, frequency, evaluates_area, mode'))));
 
         const p1 = sb.from('evaluation_questions').select('*').eq('evaluation_id', evalId).order('order_index');
         const p2 = sb.from('evaluations').select(camposEval).eq('id', evalId).single();
@@ -1458,7 +1459,8 @@ window.responderDirecto = async (evalId, title, mode = 'self') => {
 
         const listaAreasOficiales = resA.data || [];
 
-        window.prepararRespuesta(evalId, title, fetchedLabels, fetchedDesc, fetchedFreq, evaluatesArea, listaAreasOficiales);
+        window.prepararRespuesta(evalId, title, fetchedLabels, fetchedDesc, fetchedFreq, evaluatesArea, listaAreasOficiales,
+            { enlaces: window.enlacesDeEncuesta(resE.data) });
     } catch (e) {
         alert("Error al cargar la encuesta: " + e.message);
     } finally {
@@ -1667,6 +1669,19 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
            </div>`
         : '';
 
+    // Los enlaces de la encuesta —documentos de SharePoint que se leen antes de
+    // contestar— van encima de las preguntas. En la previa salen de la hoja de
+    // edición, que es lo que se está escribiendo.
+    let enlacesDeLaEncuesta = [];
+    if (opciones && Array.isArray(opciones.enlaces)) {
+        enlacesDeLaEncuesta = opciones.enlaces;
+    } else if (!vistaPrevia) {
+        const ficha = (window.evalCache && window.evalCache.evals || []).find(e => e.id === evalId)
+            || (window.cacheEncuestasRevision && window.cacheEncuestasRevision[String(evalId)]);
+        enlacesDeLaEncuesta = window.enlacesDeEncuesta(ficha);
+    }
+    const enlacesHtml = window.bloqueDeEnlaces ? window.bloqueDeEnlaces(enlacesDeLaEncuesta) : '';
+
     // En una previa el subtítulo lo dice desde el encabezado, que es lo único
     // que se queda a la vista al desplazar las preguntas: quien la abre para
     // revisar una escala no puede acabar creyendo que está contestando.
@@ -1695,6 +1710,7 @@ window.prepararRespuesta = (evalId, title, explicitLabels = null, explicitDesc =
         </div>
         <div id="simple-form-container" style="flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; touch-action:pan-y; padding: 14px 15px calc(25px + env(safe-area-inset-bottom)); box-sizing: border-box;">
             ${introHtml}
+            ${enlacesHtml}
             <div id="dynamic-questions-root"></div>
             ${accionHtml}
         </div>

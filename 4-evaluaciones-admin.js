@@ -86,10 +86,10 @@ window.encuestaDeLaRespuesta = async (evaluationId) => {
     // vuelve a ofrecer el botón: una columna que no se pidió llega `undefined`,
     // que no es `true`, así que sin encadenarla la encuesta cerrada se dejaría
     // contestar otra vez desde esta puerta. Es la trampa de siempre.
-    const campos = await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(
+    const campos = await window.camposConEnlaces(await window.camposConAplica(await window.camposConUnaRespuesta(await window.camposConVigencia(
         await window.camposConRelanzamiento(await window.camposConRevisores(
         'id, title, mode, category, frequency, created_at, description, evaluates_area, '
-        + 'is_obligatory, target_employees, target_positions, target_departments')))));
+        + 'is_obligatory, target_employees, target_positions, target_departments'))))));
     const { data } = await sb.from('evaluations').select(campos).eq('id', evaluationId).single();
     if (data) window.cacheEncuestasRevision[String(evaluationId)] = data;
     return data || null;
@@ -673,6 +673,8 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
     // cuando ya hay encabezado en el documento donde insertarla.
     window.hayPortadaEnLaHoja = window.documentosConPortada(window.materialesEncuesta).length > 0;
     const materialHtml = `<div id="material-encuesta">${window.bloqueDeMaterial(evalId, false, { soloAgregar: !!imparte })}</div>`;
+    // Los enlaces, debajo del material: SharePoint decide si se abren.
+    const enlacesHtml = window.bloqueDeEnlaces(window.enlacesDeEncuesta(evalData));
 
     window.paseDeLista = {
         ev: evalData,
@@ -691,6 +693,7 @@ window.abrirHistorialEvaluacion = async (evalId, title, maintainScroll = false) 
 
         ${bannerHtml}
         ${materialHtml}
+        ${enlacesHtml}
         ${quienAplicaHtml}
         ${cursoPrevioHtml}
         ${paseDeListaHtml}
@@ -5593,7 +5596,7 @@ window.vistaPreviaEncuesta = () => {
         Object.assign({}, q, { id: `previa-${i}` }));
 
     window.prepararRespuesta(null, titulo, etiquetas, desc, freq, evaluaArea, [],
-        { vistaPrevia: true });
+        { vistaPrevia: true, enlaces: window.leerEnlacesEval().enlaces });
 };
 
 // El cierre lo comparten la cruz, el botón del pie y el gesto de deslizar hacia
@@ -5775,6 +5778,77 @@ window.avisarSiFaltaColumnaVigencia = async () => {
 // corre a mano: sin ella la casilla se queda apagada y desmarcada —que es el
 // comportamiento de siempre, poder volver a contestar— en vez de dejar marcar
 // algo que el guardado no podría escribir.
+// --- LOS ENLACES DE LA HOJA DE EDICIÓN ---
+// Un renglón por enlace, con su título y su dirección. Lo que está escrito vive
+// en los campos y se lee al guardar (`leerEnlacesEval`): no hay estado aparte
+// que se pueda quedar atrás.
+window.renglonDeEnlaceEval = (e = {}) => {
+    const esc = window.sanitizeForHTML;
+    return `
+    <div class="enlace-edicion">
+        <div class="enlace-edicion-campos">
+            <input type="text" class="enlace-titulo" placeholder="Título (ej. Procedimiento de bloqueo)" value="${esc(e.titulo || '')}">
+            <input type="url" class="enlace-url" placeholder="https://…sharepoint.com/…" value="${esc(e.url || '')}" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
+        <button type="button" class="enlace-edicion-quitar" onclick="window.quitarEnlaceEval(this)" title="Quitar este enlace" aria-label="Quitar este enlace">×</button>
+    </div>`;
+};
+
+window.pintarEnlacesEval = (lista) => {
+    const hueco = document.getElementById('lista-enlaces-eval');
+    if (hueco) hueco.innerHTML = (lista || []).map(window.renglonDeEnlaceEval).join('');
+};
+
+window.agregarEnlaceEval = () => {
+    const hueco = document.getElementById('lista-enlaces-eval');
+    if (!hueco) return;
+    hueco.insertAdjacentHTML('beforeend', window.renglonDeEnlaceEval());
+    const nuevo = hueco.lastElementChild;
+    const campo = nuevo && nuevo.querySelector('.enlace-url');
+    if (campo) campo.focus();
+};
+
+window.quitarEnlaceEval = (btn) => {
+    const renglon = btn && btn.closest('.enlace-edicion');
+    if (renglon) renglon.remove();
+};
+
+// → { enlaces, error }. Un renglón vacío se ignora; uno con título y sin una
+// dirección que valga se marca en rojo y detiene el guardado.
+window.leerEnlacesEval = () => {
+    const enlaces = [];
+    let error = '';
+    document.querySelectorAll('#lista-enlaces-eval .enlace-edicion').forEach(r => {
+        const tit = r.querySelector('.enlace-titulo');
+        const dir = r.querySelector('.enlace-url');
+        const titulo = (tit ? tit.value : '').trim();
+        let crudo = (dir ? dir.value : '').trim();
+        if (dir) dir.classList.remove('con-error');
+        if (!titulo && !crudo) return;
+        // Pegar sin el «https://» es lo normal desde el teléfono.
+        if (crudo && !/^[a-z][a-z0-9+.-]*:/i.test(crudo)) crudo = 'https://' + crudo;
+        const url = window.urlDeEnlaceValida(crudo);
+        if (!url) {
+            if (dir) dir.classList.add('con-error');
+            if (!error) error = titulo
+                ? `El enlace «${titulo}» no tiene una dirección válida.`
+                : 'Hay un enlace sin una dirección válida.';
+            return;
+        }
+        enlaces.push({ titulo, url });
+    });
+    return { enlaces, error };
+};
+
+// Al abrir la hoja: el campo sólo se enseña si la base tiene la columna. Una
+// copia hereda los enlaces, que son los documentos de referencia de la
+// encuesta y no de una vuelta.
+window.prepararEnlacesEval = async (ev) => {
+    const campo = document.getElementById('campo-enlaces');
+    window.pintarEnlacesEval(window.enlacesDeEncuesta(ev));
+    if (campo) campo.hidden = !(await window.hayColumnaEnlaces());
+};
+
 window.avisarSiFaltaColumnaUnaRespuesta = async () => {
     const hay = await window.hayColumnaUnaRespuesta();
     const aviso = document.getElementById('aviso-una-respuesta-no-disponible');
@@ -6193,6 +6267,7 @@ window.abrirModalCrearEval = async (categoria) => {
     await window.avisarSiFaltaColumnaVigencia();
     await window.avisarSiFaltaColumnaUnaRespuesta();
     await window.avisarSiFaltaColumnaAplica();
+    await window.prepararEnlacesEval(null);
 
     window.encuestaEnEdicion = null;
     window.asignacionesEnEdicion = {};
@@ -6416,6 +6491,7 @@ window.editarEvaluacion = async (id, soloDestinatarios = false, comoCopia = fals
     await window.avisarSiFaltaColumnaVigencia();
     await window.avisarSiFaltaColumnaUnaRespuesta();
     await window.avisarSiFaltaColumnaAplica();
+    await window.prepararEnlacesEval(evaluacion);
 
     await window.prepararInputCategorias(evaluacion.category || 'General');
 
@@ -7636,6 +7712,8 @@ window.publicarEncuestaDeLaHoja = async () => {
     // Con las secciones plegadas, «Faltan datos» no dice dónde faltan: se abre
     // la que los tiene y se lleva a la vista.
     if (!tit) { window.abrirGrupoEval('grupo-datos'); alert("Falta el título de la encuesta."); return; }
+    const enlacesDeLaHoja = window.leerEnlacesEval();
+    if (enlacesDeLaHoja.error) { window.abrirGrupoEval('grupo-datos'); alert(enlacesDeLaHoja.error); return; }
     if (wr.length === 0) { window.abrirGrupoEval('grupo-preguntas'); alert("Agrega al menos una pregunta."); return; }
     
     try{
@@ -7710,6 +7788,10 @@ window.publicarEncuestaDeLaHoja = async () => {
                 const chkUmbral = document.getElementById('chk-eval-umbral');
                 if (await window.hayColumna('evaluations', 'requires_min_score')) {
                     payload.requires_min_score = chkUmbral ? chkUmbral.checked : true;
+                }
+
+                if (await window.hayColumnaEnlaces()) {
+                    payload.enlaces = enlacesDeLaHoja.enlaces;
                 }
 
                 // Una sola respuesta por periodo. Sin la columna no se puede
