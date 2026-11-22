@@ -8088,6 +8088,21 @@ html.fondo-anclado body {
    así que se les quita el subrayado y el color del enlace. */
 .enlaces-encuesta { margin: 0 0 18px; }
 a.fila-ios { text-decoration: none; color: inherit; }
+/* La miniatura de SharePoint va encima de la fila, a todo lo ancho; nace
+   escondida y sólo sale si el navegador la pudo traer (`miniaturasDeSharePoint`). */
+.enlace-encuesta { flex-wrap: wrap; }
+.enlace-miniatura {
+    display: block;
+    flex: 1 1 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 220px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+.enlace-miniatura[hidden] { display: none; }
+.enlace-miniatura img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
 .enlaces-encuesta-nota {
     margin: 6px 4px 0;
     font-size: 0.75rem;

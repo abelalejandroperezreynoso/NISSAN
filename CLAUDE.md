@@ -3865,6 +3865,17 @@ Las reglas para usarlo:
     contestar (encima de las preguntas; en la previa, los de la hoja de
     edición). Una copia los hereda: son los documentos de referencia, no de una
     vuelta. Una dirección inválida detiene el guardado y se marca en rojo.
+  - **Un enlace de SharePoint intenta enseñar su miniatura**
+    (`window.miniaturasDeSharePoint`, `siguienteMiniaturaDeEnlace`,
+    `miniaturaDeEnlaceCargo`): un `<img>` que pide el navegador de quien mira,
+    con su sesión de Microsoft, así que tampoco pasa nada por Supabase. Se
+    prueban dos direcciones en orden —`getpreview.ashx` con el GUID de
+    `sourcedoc` y `_api/v2.1/shares/u!…/driveItem/thumbnails`— y la caja nace
+    `hidden` y sólo sale si llega una imagen de verdad (más de 40px). Sin
+    sesión, sin permiso o en un navegador que no manda la cookie a una imagen
+    dentro de otra página —Safari en iPhone, casi seguro— la fila se queda como
+    siempre. **Sin `loading="lazy"`**: dentro de una caja `hidden` una imagen
+    perezosa no se pide nunca.
   - **La columna es `evaluations.enlaces`** (`sql/enlaces-de-encuesta.sql`,
     también en `supabase/migrations/`), y las consultas que no van con
     `select('*')` la encadenan con `camposConEnlaces`
