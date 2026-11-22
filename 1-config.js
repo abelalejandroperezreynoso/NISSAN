@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-11-22-14';
+window.VERSION_APP = '2026-11-22-15';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -3493,57 +3493,6 @@ window.sitioDeEnlace = (url) => {
     } catch (e) { return ''; }
 };
 
-// La miniatura de un archivo de SharePoint, pedida por el navegador de quien
-// mira y con su sesión de Microsoft: la aplicación no copia nada y Supabase no
-// la ve pasar. Sólo sale donde ese navegador manda la sesión de SharePoint a
-// una imagen dentro de otra página —una computadora de la empresa, casi seguro
-// no un iPhone— y donde quien mira tiene permiso sobre el archivo. Si no carga,
-// la fila se queda como siempre.
-//
-// Hay dos maneras de pedirla y no se sabe de antemano cuál deja pasar el
-// dominio, así que se prueban en orden (`siguienteMiniaturaDeEnlace`): la vista
-// previa de la biblioteca, con el GUID que trae el enlace en `sourcedoc`, y la
-// API de SharePoint sobre el enlace entero (`shares/u!…`), que sirve aunque el
-// enlace no traiga GUID.
-window.miniaturasDeSharePoint = (url) => {
-    let u;
-    try { u = new URL(url); } catch (e) { return []; }
-    if (!/\.sharepoint\.com$/i.test(u.hostname)) return [];
-    const origen = u.origin;
-    const sitio = (u.pathname.match(/\/(?:sites|teams)\/[^/]+/i) || [''])[0];
-    const base = origen + sitio;
-    const candidatas = [];
-    const guid = (u.searchParams.get('sourcedoc') || '').replace(/[{}]/g, '');
-    if (/^[0-9a-f-]{36}$/i.test(guid)) {
-        candidatas.push(`${base}/_layouts/15/getpreview.ashx?guidFile=${encodeURIComponent('{' + guid + '}')}&resolution=3`);
-    }
-    try {
-        const b64 = btoa(unescape(encodeURIComponent(url))).replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
-        candidatas.push(`${base}/_api/v2.1/shares/u!${b64}/driveItem/thumbnails/0/large/content`);
-    } catch (e) {}
-    return candidatas;
-};
-
-window.siguienteMiniaturaDeEnlace = (img) => {
-    let lista = [];
-    try { lista = JSON.parse(img.dataset.candidatas || '[]'); } catch (e) {}
-    const i = Number(img.dataset.intento || 0) + 1;
-    if (i >= lista.length) { img.removeAttribute('src'); return; }
-    img.dataset.intento = String(i);
-    img.src = lista[i];
-};
-
-// Un 1×1 o una imagen de error también disparan `load`: sólo se enseña lo que
-// tiene tamaño de miniatura.
-window.miniaturaDeEnlaceCargo = (img) => {
-    if ((img.naturalWidth || 0) < 40 || (img.naturalHeight || 0) < 40) {
-        window.siguienteMiniaturaDeEnlace(img);
-        return;
-    }
-    const caja = img.closest('.enlace-miniatura');
-    if (caja) caja.hidden = false;
-};
-
 const ICONO_ENLACE_ENCUESTA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>';
 
 // La lista, o '' si no hay enlaces. Cada fila es un `<a target="_blank">`: en
@@ -3555,13 +3504,8 @@ window.bloqueDeEnlaces = (enlaces, conRotulo = true) => {
     const esc = window.sanitizeForHTML;
     const filas = lista.map(e => {
         const sitio = window.sitioDeEnlace(e.url);
-        const candidatas = window.miniaturasDeSharePoint(e.url);
-        const miniatura = candidatas.length ? `
-            <span class="enlace-miniatura" hidden><img alt="" referrerpolicy="no-referrer-when-downgrade"
-                data-candidatas="${esc(JSON.stringify(candidatas))}" data-intento="0" src="${esc(candidatas[0])}"
-                onload="window.miniaturaDeEnlaceCargo(this)" onerror="window.siguienteMiniaturaDeEnlace(this)"></span>` : '';
         return `
-        <a class="fila-ios enlace-encuesta" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">${miniatura}
+        <a class="fila-ios enlace-encuesta" href="${esc(e.url)}" target="_blank" rel="noopener noreferrer">
             <span class="fila-ios-icono fila-ios-icono--tinta" style="background:#0f6cbd;">${ICONO_ENLACE_ENCUESTA}</span>
             <span class="fila-ios-texto">
                 <span class="fila-ios-titulo">${esc(e.titulo || sitio || 'Enlace')}</span>

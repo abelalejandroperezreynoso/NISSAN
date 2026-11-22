@@ -3865,17 +3865,14 @@ Las reglas para usarlo:
     contestar (encima de las preguntas; en la previa, los de la hoja de
     edición). Una copia los hereda: son los documentos de referencia, no de una
     vuelta. Una dirección inválida detiene el guardado y se marca en rojo.
-  - **Un enlace de SharePoint intenta enseñar su miniatura**
-    (`window.miniaturasDeSharePoint`, `siguienteMiniaturaDeEnlace`,
-    `miniaturaDeEnlaceCargo`): un `<img>` que pide el navegador de quien mira,
-    con su sesión de Microsoft, así que tampoco pasa nada por Supabase. Se
-    prueban dos direcciones en orden —`getpreview.ashx` con el GUID de
-    `sourcedoc` y `_api/v2.1/shares/u!…/driveItem/thumbnails`— y la caja nace
-    `hidden` y sólo sale si llega una imagen de verdad (más de 40px). Sin
-    sesión, sin permiso o en un navegador que no manda la cookie a una imagen
-    dentro de otra página —Safari en iPhone, casi seguro— la fila se queda como
-    siempre. **Sin `loading="lazy"`**: dentro de una caja `hidden` una imagen
-    perezosa no se pide nunca.
+  - **Un enlace no lleva miniatura, y se probó.** Se intentó pedir la del
+    archivo desde el navegador de quien mira, con su sesión de Microsoft:
+    `getpreview.ashx` responde 403 en este tenant y la API
+    `_api/v2.1/shares/u!…/driveItem/thumbnails` responde «unauthenticated» aun
+    abierta a mano en un equipo de la empresa con sesión —sólo acepta un token
+    de OAuth, no la cookie—. Conseguir ese token es registrar la aplicación en
+    Entra ID con Sistemas, así que se quitó en vez de dejarla haciendo
+    peticiones que fallan en cada encuesta.
   - **La columna es `evaluations.enlaces`** (`sql/enlaces-de-encuesta.sql`,
     también en `supabase/migrations/`), y las consultas que no van con
     `select('*')` la encadenan con `camposConEnlaces`
