@@ -20,7 +20,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Sistema de Gestión de Seguridad</title>
     
-    <link rel="stylesheet" href="estilos.css?v=2026-11-03-4">
+    <link rel="stylesheet" href="estilos.css?v=2026-11-22-1">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
@@ -66,26 +66,72 @@
 </head>
 <body>
 
+    <!-- El acceso: número de empleado y PIN de 4 dígitos, comprobados dentro
+         de la base (19-acceso.js y sql/acceso-con-pin.sql). Tres pasos en la
+         misma tarjeta: entrar, la primera vez —crear el PIN y dejar el correo—
+         y cambiar un PIN temporal. Ya no se baja ni se enseña ningún nombre. -->
     <div id="vista-login" class="login-view hidden">
         <div class="login-card">
-            <h2 style="color:#1e40af; margin-bottom:20px;">Iniciar Sesión</h2>
-            
-            <div id="login-loading"><div class="spinner"></div><div style="font-size:0.8rem">Conectando...</div></div>
-            
-            <div id="login-form-content">
-                <div class="input-group">
-                    <input type="text" id="login-name" autocomplete="off" placeholder="Usuario / Nombre">
-                    <div id="suggestions-list"></div>
-                </div>
-                
-                <div class="input-group">
-                    <input type="password" id="login-id" placeholder="Contraseña">
-                </div>
-                
-                <button id="btn-login-action" class="btn-login">Ingresar al Sistema</button>
-            </div>
-            
-            <div id="error-msg"></div>
+            <h2 id="login-titulo" class="login-titulo">Iniciar sesión</h2>
+            <p id="login-explicacion" class="login-explicacion" hidden></p>
+
+            <form id="login-paso-entrar" class="login-paso" onsubmit="event.preventDefault(); window.entrarConPin();" novalidate>
+                <label class="login-campo">
+                    <span>Número de empleado</span>
+                    <input type="text" id="login-numero" inputmode="numeric" autocomplete="username"
+                           autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next">
+                </label>
+                <label class="login-campo">
+                    <span>PIN</span>
+                    <input type="password" id="login-pin" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+                           autocomplete="current-password" enterkeyhint="go">
+                </label>
+                <button type="submit" id="btn-login-action" class="btn-login">Entrar</button>
+                <button type="button" class="login-enlace" onclick="window.olvideMiPin()">¿Olvidaste tu PIN?</button>
+            </form>
+
+            <form id="login-paso-activar" class="login-paso" hidden onsubmit="event.preventDefault(); window.activarAcceso();" novalidate>
+                <label class="login-campo">
+                    <span>Tu nombre completo</span>
+                    <input type="text" id="login-activar-nombre" autocomplete="name" autocorrect="off" spellcheck="false"
+                           placeholder="Con tus apellidos">
+                </label>
+                <label class="login-campo" data-con-pin>
+                    <span>Tu correo</span>
+                    <input type="email" id="login-activar-correo" autocomplete="email" autocapitalize="none"
+                           autocorrect="off" spellcheck="false" placeholder="El de la empresa o uno personal">
+                </label>
+                <label class="login-campo" data-con-pin>
+                    <span>Crea tu PIN de 4 números</span>
+                    <input type="password" id="login-activar-pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password">
+                </label>
+                <label class="login-campo" data-con-pin>
+                    <span>Repite tu PIN</span>
+                    <input type="password" id="login-activar-pin2" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password" enterkeyhint="go">
+                </label>
+                <button type="submit" id="btn-login-activar" class="btn-login">Crear mi PIN y entrar</button>
+                <button type="button" class="login-enlace" onclick="window.volverAEntrar()">Volver</button>
+            </form>
+
+            <form id="login-paso-cambiar" class="login-paso" hidden onsubmit="event.preventDefault(); window.cambiarPinAlEntrar();" novalidate>
+                <label class="login-campo" id="login-cambiar-correo-campo">
+                    <span>Tu correo</span>
+                    <input type="email" id="login-cambiar-correo" autocomplete="email" autocapitalize="none"
+                           autocorrect="off" spellcheck="false" placeholder="El de la empresa o uno personal">
+                </label>
+                <label class="login-campo">
+                    <span>Tu nuevo PIN de 4 números</span>
+                    <input type="password" id="login-cambiar-pin" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password">
+                </label>
+                <label class="login-campo">
+                    <span>Repite tu PIN</span>
+                    <input type="password" id="login-cambiar-pin2" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="new-password" enterkeyhint="go">
+                </label>
+                <button type="submit" id="btn-login-cambiar" class="btn-login">Guardar y entrar</button>
+                <button type="button" class="login-enlace" onclick="window.volverAEntrar()">Cancelar</button>
+            </form>
+
+            <div id="error-msg" role="alert"></div>
         </div>
     </div>
 
@@ -876,6 +922,9 @@
                     <div class="hoja-grupo-titulo">Consultar</div>
                     <div class="admin-hoja-lista">
                         <button class="admin-btn" onclick="window.abrirAsistente()" style="border-color: #d97757; color: #c2410c;"><span aria-hidden="true">✨</span><span data-texto>Asistente</span></button>
+                        <!-- Quién ya tiene PIN, quién falta, los correos recogidos
+                             y la entrada por número de la migración (19-acceso.js). -->
+                        <button class="admin-btn" onclick="window.cerrarPanelAdmin(); window.abrirAccesoAdmin();" style="border-color: #0369a1; color: #0369a1;"><span aria-hidden="true">🔑</span><span data-texto>Acceso y PINs</span></button>
                     </div>
                 </div>
 
@@ -1151,27 +1200,28 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-    <script src="1-config.js?v=2026-11-03-4"></script>
-    <script src="2a-core-nav.js?v=2026-11-03-4"></script>
-    <script src="2b-core-dashboard.js?v=2026-11-03-4"></script>
-    <script src="3-incidentes.js?v=2026-11-03-4"></script>
-    <script src="4-evaluaciones-base.js?v=2026-11-03-4"></script>
-    <script src="4-evaluaciones-admin.js?v=2026-11-03-4"></script>
-    <script src="17-hoja-excel.js?v=2026-11-03-4"></script>
-    <script src="4b-evaluaciones-stats.js?v=2026-11-03-4"></script>
-    <script src="5-objetivos.js?v=2026-11-03-4"></script>
-    <script src="6-calendario.js?v=2026-11-03-4"></script>
-    <script src="7-pendientes.js?v=2026-11-03-4"></script>
-    <script src="8-hallazgos.js?v=2026-11-03-4"></script>
-    <script src="9-estadisticas.js?v=2026-11-03-4"></script>
+    <script src="1-config.js?v=2026-11-22-1"></script>
+    <script src="2a-core-nav.js?v=2026-11-22-1"></script>
+    <script src="2b-core-dashboard.js?v=2026-11-22-1"></script>
+    <script src="3-incidentes.js?v=2026-11-22-1"></script>
+    <script src="4-evaluaciones-base.js?v=2026-11-22-1"></script>
+    <script src="4-evaluaciones-admin.js?v=2026-11-22-1"></script>
+    <script src="17-hoja-excel.js?v=2026-11-22-1"></script>
+    <script src="4b-evaluaciones-stats.js?v=2026-11-22-1"></script>
+    <script src="5-objetivos.js?v=2026-11-22-1"></script>
+    <script src="6-calendario.js?v=2026-11-22-1"></script>
+    <script src="7-pendientes.js?v=2026-11-22-1"></script>
+    <script src="8-hallazgos.js?v=2026-11-22-1"></script>
+    <script src="9-estadisticas.js?v=2026-11-22-1"></script>
     <!-- Agrega aquí el nuevo archivo independiente -->
-    <script src="12-almacenamiento.js?v=2026-11-03-4"></script>
-    <script src="13-gestion.js?v=2026-11-03-4"></script>
-    <script src="14-vacaciones.js?v=2026-11-03-4"></script>
-    <script src="15-presentacion.js?v=2026-11-03-4"></script>
-    <script src="16-cursos.js?v=2026-11-03-4"></script>
-    <script src="18-asistente.js?v=2026-11-03-4"></script>
-    <script src="10-refacciones.js?v=2026-11-03-4"></script> 
+    <script src="12-almacenamiento.js?v=2026-11-22-1"></script>
+    <script src="13-gestion.js?v=2026-11-22-1"></script>
+    <script src="14-vacaciones.js?v=2026-11-22-1"></script>
+    <script src="15-presentacion.js?v=2026-11-22-1"></script>
+    <script src="16-cursos.js?v=2026-11-22-1"></script>
+    <script src="18-asistente.js?v=2026-11-22-1"></script>
+    <script src="19-acceso.js?v=2026-11-22-1"></script>
+    <script src="10-refacciones.js?v=2026-11-22-1"></script> 
     <script>
         window.addEventListener('load', () => {
             if(window.iniciarApp) {

@@ -43,6 +43,7 @@ Los mensajes de commit van en español.
 | `16-cursos.js` | Las hojas de «Programar curso» (el jefe, para quien no ha tomado el curso de una encuesta) y «Elige a tu jefe inmediato»; las reglas viven en `1-config.js` |
 | `17-hoja-excel.js` | Convierte un libro de Excel en páginas de material: dibuja sus celdas, fotos y figuras en un lienzo |
 | `18-asistente.js` | El asistente del administrador: una conversación con Claude que lee los datos de la aplicación y, con la confirmación del administrador, los crea, modifica y borra |
+| `19-acceso.js` | El acceso con número de empleado y PIN: la pantalla de entrar, la primera vez, cambiar y restablecer el PIN y la hoja «Acceso y PINs»; las reglas viven en la base (`sql/acceso-con-pin.sql`) |
 | `10-refacciones.html` | Panel de refacciones completo, con su JS inline |
 | `11-mapa-activos.html` | Mapa de activos: treemap de refacciones, con tres puntos de vista — activos (planta → línea → equipo), solicitantes (departamento → persona) y atendedores |
 | `estilos.css` | Estilos compartidos |
@@ -120,8 +121,83 @@ Las reglas para usarlo:
   `estilos.css`.
 - Textos de interfaz, nombres de variables y comentarios: en español.
 - La sesión se guarda en `localStorage` bajo la clave `usuarioLogueado`.
+  Quien entró con su PIN lleva además `tokenSesion` (y `tokenSesionDe`, de
+  quién es): es lo que la identifica ante la base para restablecer o cambiar
+  un PIN. Ver «El acceso es con número de empleado y PIN».
 
 ## Trampas conocidas
+
+- **El acceso es con número de empleado y PIN, y el PIN sólo lo ve la base.**
+  Se entraba con el nombre y el número, y la comparación la hacía el navegador
+  sobre la plantilla entera, que se bajaba **antes** de iniciar sesión: con la
+  consola abierta se tenía el «usuario» y la «contraseña» de todo el mundo. Hoy
+  el usuario es el número de empleado, la contraseña un PIN de 4 dígitos, y
+  todo lo que decide vive en `sql/acceso-con-pin.sql` (también en
+  `supabase/migrations/`): las tablas `credenciales`, `sesiones`,
+  `credenciales_registro`, `administradores_acceso` y `acceso_ajustes` llevan
+  RLS sin políticas y sin permisos para `anon`, y sólo se entra por las
+  funciones `security definer`:
+
+  ```
+  acceso_iniciar(numero, pin)                 → { ok, token, ficha, temporal, sin_correo } | { motivo }
+  acceso_activar(numero, nombre, pin, correo) la primera vez
+  acceso_cambiar_pin(token, pin, correo)      el propio
+  acceso_restablecer(token, objetivo)         el de otro → { pin } temporal
+  acceso_verificar_pin(numero, pin)           sin abrir sesión: el modo prestado
+  acceso_resumen(token)  acceso_ajustar(token, abierto)  acceso_cerrar_sesion(token)
+  ```
+
+  ```js
+  await window.llamarAcceso(funcion, args)   // en 1-config.js; nunca lanza
+  window.textoDeAcceso(resultado)            // el mensaje de cada `motivo`
+  window.tokenDeSesion(propio)               // `propio`: sólo si es de quien aparece como usuario
+  window.restablecerPinDe(empId, nombre, { preguntar, enseñar })
+  window.puedeRestablecerPinDe(empId)        // ¿se enseña la fila?
+  window.abrirCambiarMiPin()  window.abrirAccesoAdmin()
+  ```
+
+  Ocho cosas que hay que mantener:
+
+  - **La pantalla de entrar no baja la plantilla ni enseña ningún nombre.**
+    `cargarEmpleadosParaLogin` sólo la pide el camino de sin script (abajo).
+  - **El PIN se guarda como huella bcrypt** y no se puede leer ni devolver. Lo
+    que se le da a quien lo olvidó es un **PIN temporal**, que al entrar
+    obliga a crear el suyo (`pin_temporal`).
+  - **Cuatro dígitos sólo aguantan con el bloqueo de la base**: al quinto fallo
+    seguido, 15 minutos, y cada bloqueo siguiente el doble hasta 24 h; se pone
+    a cero al acertar. Los PIN obvios —repetidos, escaleras, parte del número
+    de empleado— se rechazan (`acceso_pin_debil`).
+  - **La migración**: quien no tiene PIN entra una vez con su número y su
+    **nombre completo** —lo mismo que pedía el login de antes; se compara sin
+    acentos y sin importar el orden de las palabras— y ahí crea su PIN y deja su
+    **correo** (el de la empresa o uno personal; no se comprueba). La entrada
+    por número la cierra el administrador desde «Acceso y PINs»; cerrada, quien
+    falte necesita un PIN temporal. Las sesiones ya abiertas no se cortan: se
+    migran al volver a entrar.
+  - **Restablecen el administrador y cada jefe a su gente**, y lo decide la
+    base: el token dice quién lo pide, y o está en `administradores_acceso`
+    —el modo administrador de la aplicación es una contraseña escrita en el
+    JavaScript y no puede autorizar esto— o la persona está por debajo en la
+    cadena de `supervisor_id`. Nadie se restablece a sí mismo: el propio se
+    **cambia**. Queda apuntado en `credenciales_registro`. La fila sale en la
+    hoja de cada persona (`abrirStatsEmpleado`), y el asistente lo hace con
+    `restablecer_pin`, con su tarjeta de confirmación: **el PIN temporal se
+    enseña en la tarjeta y no se le manda al modelo**.
+  - **El correo vive en `credenciales.correo`, no en `employees`**, que la
+    clave `anon` lee entera. Se ve y se descarga en CSV desde «Acceso y PINs».
+  - **Una sesión vieja (sin token) sigue valiendo**, pero no puede restablecer
+    ni cambiar PINs: se le pide volver a entrar. Y «Entrar como …» deja el
+    token del administrador puesto, por eso «Cambiar mi PIN» pide
+    `tokenDeSesion(true)`, que sólo vale si el token es de quien aparece como
+    usuario.
+  - **Sin el script en la base todo sigue en pie**: `acceso_iniciar` devuelve
+    `sin_script` y se entra como antes, con número y nombre comparados en el
+    navegador.
+
+  Esto **no** hace que la base sepa quién está conectado en el resto de la
+  aplicación: las demás tablas siguen pasando por `anon` y `usuarioLogueado` se
+  puede escribir a mano. Cerrar eso es rehacer las políticas de RLS con el
+  token (o con Supabase Auth), y es otro cambio.
 
 - **Un teléfono puede llevar semanas con el JavaScript viejo.** No hay service
   worker ni paso de compilación: el navegador se guarda los `.js` y el `.html`
@@ -5083,15 +5159,13 @@ Las reglas para usarlo:
 
   Siete cosas que hay que mantener:
 
-  - **La contraseña de cada quien es su número de empleado**, que es lo que
-    compara el login (`e.name === n && e.id == p`). Aquí se pregunta lo mismo y
-    se compara igual, **sin consultar nada** —el número viene en la ficha que
-    se le pasa— y sin guardarlo en ningún sitio: se compara y se borra el
-    campo. La contrapartida es que quien sepa el número de un compañero puede
-    contestar por él; eso ya era cierto en la pantalla de login y esto no abre
-    ninguna puerta nueva, pero sí la pone más a mano. **Por eso el número de
-    empleado no se enseña en ninguna de estas pantallas**, y una tarjeta nueva
-    del panel de pendientes tampoco puede enseñarlo.
+  - **Lo que se teclea es su PIN, y lo comprueba la base**
+    (`acceso_verificar_pin`, con los mismos intentos y el mismo bloqueo que el
+    login; ver «El acceso es con número de empleado y PIN»). Mientras la
+    entrada por número siga abierta, quien todavía no tiene PIN teclea su
+    número, como antes. El número de empleado ya no es secreto —es el
+    usuario—, pero el PIN sí, y la hoja no guarda nada: se compara y se borra
+    el campo.
   - **Los dos frenos de `responderDirecto` se preguntan del colaborador.** Eran
     `mode === 'self'` y hoy son «todo lo que no sea el modo jefe», contra
     `quienContesta`: es su encuesta, así que si se contesta una sola vez, o si

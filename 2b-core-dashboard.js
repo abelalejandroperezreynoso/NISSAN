@@ -14,26 +14,25 @@ if (window.modoAdminSostenido()) {
 }
 
 // --- CARGA DE DATOS PARA LOGIN ---
+// Ya no la usa la pantalla de acceso, que no baja la plantilla. Sólo la pide
+// `19-acceso.js` si la base todavía no tiene `sql/acceso-con-pin.sql`, para
+// entrar como antes (nombre y número) mientras tanto.
 window.cargarEmpleadosParaLogin = async () => {
-    document.getElementById('login-loading').style.display = 'block';
-    // Cambiamos "area" por "areas(nombre)" y filtramos inactivos
     const { data, error } = await sb.from('employees')
         .select('name, employee_id, department, areas(nombre), puesto, supervisor_id')
         .not('is_active', 'eq', false);
-
-    if(!error && data) {
+    if (!error && data) {
         window.empleadosLoginCache = data.map(d => ({
-            name: d.name, 
-            id: d.employee_id, 
-            dept: d.department, 
-            area: d.areas ? d.areas.nombre : "Sin Área", // Extraemos el texto de la tabla relacional
-            puesto: d.puesto, 
-            supId: d.supervisor_id, 
+            name: d.name,
+            id: d.employee_id,
+            dept: d.department,
+            area: d.areas ? d.areas.nombre : "Sin Área",
+            puesto: d.puesto,
+            supId: d.supervisor_id,
             sup: "Sin Supervisor"
         }));
-        document.getElementById('login-loading').style.display = 'none';
-        document.getElementById('login-form-content').style.display = 'block';
     }
+    return window.empleadosLoginCache || [];
 };
 // --- CARGAR ÚLTIMOS INCIDENTES (OPTIMIZADO CON CACHÉ Y SKELETON) ---
 window.cargarUltimosIncidentes = async () => {
@@ -4768,6 +4767,34 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
             </button>
         </div>` : '';
 
+    // El PIN: el propio se cambia; el de alguien de su gente —o el de
+    // cualquiera, administrando— se restablece (19-acceso.js). La base vuelve a
+    // comprobar los dos permisos: esto sólo decide qué fila enseñar.
+    const iconoPin = `<span class="fila-ios-icono fila-ios-icono--tinta" style="background:#0369a1;" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                </span>`;
+    const filaPin = esYo ? `
+        <div class="lista-ios persona-seccion">
+            <button type="button" class="fila-ios" onclick="window.abrirCambiarMiPin()">
+                ${iconoPin}
+                <span class="fila-ios-texto">
+                    <span class="fila-ios-titulo">Cambiar mi PIN</span>
+                    <span class="fila-ios-detalle fila-ios-detalle--envuelve">El de 4 números con el que entras, y tu correo</span>
+                </span>
+                <span class="fila-ios-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>
+        </div>` : (window.puedeRestablecerPinDe && window.puedeRestablecerPinDe(empId) && !(emp && emp.isActive === false)) ? `
+        <div class="lista-ios persona-seccion">
+            <button type="button" class="fila-ios" onclick="window.restablecerPinDe('${escPersona(empId)}', window.accesoAdmin.nombreDe('${escPersona(empId)}'))">
+                ${iconoPin}
+                <span class="fila-ios-texto">
+                    <span class="fila-ios-titulo">Restablecer el PIN de ${escPersona(nombreCorto)}</span>
+                    <span class="fila-ios-detalle fila-ios-detalle--envuelve">Le da un PIN temporal que cambiará al entrar</span>
+                </span>
+                <span class="fila-ios-chevron" aria-hidden="true">&rsaquo;</span>
+            </button>
+        </div>` : '';
+
     cuerpo.innerHTML = `
         ${window.fichaDePersona(emp, empId, nombre, puesto)}
 
@@ -4783,6 +4810,7 @@ window.abrirStatsEmpleado = async (empId, empName, empPuesto, isBack = false) =>
             <div class="hoja-grupo-titulo">Equipo a su cargo · ${suyos.length}</div>
             <div id="persona-equipo" class="lista-ios persona-seccion"></div>` : ''}
 
+        ${filaPin}
         ${filaEntrarComo}
     `;
 

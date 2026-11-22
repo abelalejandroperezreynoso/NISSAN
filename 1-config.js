@@ -20,7 +20,7 @@ window.TAMANO_PAGINA = 5;
 // permite que un dispositivo con el JavaScript viejo cargado se entere de que
 // hay una versión nueva; ver el bloque «Comprobación de versión» al final de
 // este archivo.
-window.VERSION_APP = '2026-11-03-4';
+window.VERSION_APP = '2026-11-22-1';
 
 // --- CONFIGURACIÓN DE CONSUMO DE DATOS (GLOBAL) ---
 // Valor inicial (se actualiza automáticamente al conectar con la BD)
@@ -5329,6 +5329,95 @@ window.sostenerModoAdmin = (activo) => {
 window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === 'true';
 
 // ==========================================
+// ACCESO CON NÚMERO DE EMPLEADO Y PIN
+// ==========================================
+// El usuario es el número de empleado y la contraseña un PIN de 4 dígitos. El
+// PIN no lo ve nunca el navegador: se comprueba dentro de la base, en las
+// funciones `acceso_*` de `sql/acceso-con-pin.sql`, y lo que vuelve al acertar
+// es la ficha y un token de sesión. El token es lo que identifica ante la base
+// a quien restablece el PIN de otro o cambia el suyo; la sesión de la
+// aplicación sigue siendo `usuarioLogueado`, como siempre.
+//
+//     await window.llamarAcceso('acceso_iniciar', { p_numero, p_pin })
+//     window.textoDeAcceso(resultado)      // lo que se le dice a quien mira
+//     window.tokenDeSesion(propio)          // el token, o null
+//     window.guardarSesionConToken(ficha, token)
+//     window.olvidarTokenDeSesion()
+//
+// `tokenDeSesion(true)` sólo lo devuelve si es de quien aparece como usuario:
+// «Entrar como …» del administrador cambia `usuarioLogueado` y deja el token
+// del administrador, y cambiar «mi» PIN ahí le cambiaría el suyo.
+window.tokenDeSesion = (propio) => {
+    try {
+        const t = localStorage.getItem('tokenSesion');
+        if (!t) return null;
+        if (propio) {
+            const u = JSON.parse(localStorage.getItem('usuarioLogueado') || 'null');
+            if (!u || String(u.id) !== localStorage.getItem('tokenSesionDe')) return null;
+        }
+        return t;
+    } catch (e) { return null; }
+};
+
+window.guardarSesionConToken = (ficha, token) => {
+    localStorage.setItem('usuarioLogueado', JSON.stringify(ficha));
+    localStorage.setItem('loginTimestamp', Date.now().toString());
+    if (token) {
+        localStorage.setItem('tokenSesion', token);
+        localStorage.setItem('tokenSesionDe', String(ficha.id));
+    }
+};
+
+window.olvidarTokenDeSesion = () => {
+    localStorage.removeItem('tokenSesion');
+    localStorage.removeItem('tokenSesionDe');
+};
+
+// Nunca lanza. Sin la función en la base devuelve `sin_script`, que es lo que
+// deja la aplicación en pie mientras el script no se haya corrido.
+window.llamarAcceso = async (funcion, args) => {
+    try {
+        const { data, error } = await sb.rpc(funcion, args || {});
+        if (error) {
+            const msg = error.message || '';
+            if (error.code === 'PGRST202' || /could not find the function/i.test(msg)) return { ok: false, motivo: 'sin_script' };
+            if (/fetch|network|load failed/i.test(msg)) return { ok: false, motivo: 'red' };
+            return { ok: false, motivo: 'error', mensaje: msg };
+        }
+        return data || { ok: false, motivo: 'error', mensaje: 'Respuesta vacía.' };
+    } catch (e) {
+        return { ok: false, motivo: 'red', mensaje: e && e.message };
+    }
+};
+
+window.textoDeAcceso = (r) => {
+    if (!r) return 'No se pudo completar.';
+    const quedan = (r.restantes !== undefined && r.restantes <= 3)
+        ? ` Te ${r.restantes === 1 ? 'queda 1 intento' : 'quedan ' + r.restantes + ' intentos'} antes de que se bloquee.` : '';
+    switch (r.motivo) {
+        case 'incorrecto': return 'Número de empleado o PIN incorrectos.' + quedan;
+        case 'bloqueado': {
+            const h = r.hasta ? new Date(r.hasta) : null;
+            const cuando = h && !isNaN(h) ? ' a las ' + h.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ' más tarde';
+            return `Demasiados intentos fallidos. Podrás volver a intentarlo${cuando}, o pide a tu jefe inmediato que restablezca tu PIN.`;
+        }
+        case 'nombre': return 'El nombre no coincide con el registrado. Escríbelo completo, con tus apellidos.' + quedan;
+        case 'pin_debil': return r.mensaje || 'Elige otro PIN.';
+        case 'correo': return 'Escribe un correo válido: el de la empresa o, si no tienes, uno personal.';
+        case 'cerrado': return 'La entrada por número ya se cerró. Pide a tu jefe inmediato o al administrador que te asigne un PIN.';
+        case 'ya_tiene_pin': return 'Ya tienes PIN. Entra con tu número de empleado y tu PIN.';
+        case 'sesion': return 'Para esto hace falta haber entrado con tu número y tu PIN. Cierra sesión y vuelve a entrar.';
+        case 'sin_permiso': return 'Sólo puedes restablecer el PIN de la gente a tu cargo.';
+        case 'propio': return 'Tu propio PIN se cambia desde tu perfil, con «Cambiar mi PIN».';
+        case 'inactivo': return 'Esa persona está dada de baja.';
+        case 'no_existe': return 'No hay nadie con ese número de empleado.';
+        case 'sin_script': return 'El acceso con PIN todavía no está listo en la base (falta sql/acceso-con-pin.sql).';
+        case 'red': return 'No se pudo conectar. Revisa tu conexión e inténtalo de nuevo.';
+        default: return 'No se pudo completar' + (r.mensaje ? ': ' + r.mensaje : '.');
+    }
+};
+
+// ==========================================
 // HOJAS DE CONTRASEÑA
 // ==========================================
 // Dos hojas salen de aquí, y las dos preguntan lo mismo de dos maneras:
@@ -5365,7 +5454,7 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
 (() => {
     // Una hoja por receta. `nombres` son las funciones que cuelgan de `window`,
     // porque el marcado es una cadena y sus `onclick` no pueden ver un closure.
-    const crearHojaDeClave = ({ id, sufijo, nombres, acierta }) => {
+    const crearHojaDeClave = ({ id, sufijo, nombres, acierta, rotulo = 'Contraseña', atributosCampo = '' }) => {
         let alAcertar = null;
         let contexto = null;
 
@@ -5391,16 +5480,16 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
             </div>
 
             <div class="form-group">
-                <label for="${idCampo}">Contraseña</label>
+                <label for="${idCampo}">${rotulo}</label>
                 <div style="display:flex; gap:8px; align-items:stretch;">
-                    <input type="password" id="${idCampo}" placeholder="Contraseña"
+                    <input type="password" id="${idCampo}" placeholder="${rotulo}"
                            autocapitalize="none" autocorrect="off" autocomplete="current-password"
-                           spellcheck="false" enterkeyhint="go"
+                           spellcheck="false" enterkeyhint="go" ${atributosCampo}
                            onkeypress="window.${nombres.enter}(event)"
                            style="flex:1; min-width:0;">
                     <button type="button" id="${idOjo}" class="clave-ojo" onclick="window.${nombres.alternar}()" style="flex-shrink:0; width:44px; border:none; border-radius:10px; background:#f2f2f7; color:#007aff; display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;"></button>
                 </div>
-                <div id="${idError}" style="visibility:hidden; margin-top:6px; font-size:0.78rem; color:#ff3b30; font-weight:500;">Contraseña incorrecta.</div>
+                <div id="${idError}" style="visibility:hidden; margin-top:6px; font-size:0.78rem; color:#ff3b30; font-weight:500;">${rotulo} incorrecto.</div>
             </div>
 
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">
@@ -5449,13 +5538,28 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
             if (c) c.value = '';
         };
 
-        window[nombres.confirmar] = () => {
+        // `acierta` puede contestar en el acto o con una promesa —el PIN de
+        // una persona se comprueba en la base—, y con `true`, `false` o el
+        // texto del error que hay que enseñar.
+        let comprobando = false;
+        window[nombres.confirmar] = async () => {
             const c = campo();
-            if (!c) return;
+            if (!c || comprobando) return;
 
-            if (!acierta(c.value, contexto)) {
+            const datos = contexto;
+            comprobando = true;
+            let veredicto;
+            try { veredicto = await acierta(c.value, datos); }
+            finally { comprobando = false; }
+            // La hoja pudo cerrarse mientras se preguntaba.
+            if (contexto !== datos) return;
+
+            if (veredicto !== true) {
                 const error = document.getElementById(idError);
-                if (error) error.style.visibility = 'visible';
+                if (error) {
+                    error.textContent = typeof veredicto === 'string' ? veredicto : `${rotulo} incorrecto.`;
+                    error.style.visibility = 'visible';
+                }
                 c.value = '';
                 c.focus();
                 return;
@@ -5522,13 +5626,25 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
             enter: 'manejarEnterClaveEmpleado', alternar: 'alternarVisibilidadClaveEmpleado',
             icono: 'actualizarIconoClaveEmpleado'
         },
-        acierta: (escrito, datos) => !!datos && escrito.trim() === datos.esperada
+        rotulo: 'PIN',
+        atributosCampo: 'inputmode="numeric" pattern="[0-9]*" maxlength="12"',
+        // Se pregunta a la base, que es la única que sabe el PIN y la que
+        // cuenta los intentos. Mientras la migración siga abierta, quien no
+        // tiene PIN todavía usa su número de empleado; y sin el script de la
+        // base, también, que es lo de antes.
+        acierta: async (escrito, datos) => {
+            if (!datos) return false;
+            const r = await window.llamarAcceso('acceso_verificar_pin', { p_numero: datos.esperada, p_pin: escrito.trim() });
+            if (r.ok) return true;
+            if (r.motivo === 'sin_script') return escrito.trim() === datos.esperada;
+            return window.textoDeAcceso(r);
+        }
     });
 
     // --- La de una persona de la plantilla ---
-    // La contraseña de cada quien es su número de empleado, que es lo que
-    // compara el login: aquí se pregunta lo mismo y se compara igual, sin
-    // consultar nada —el número ya viene en la ficha que se le pasa—.
+    // Pide el PIN de esa persona y lo comprueba la base, con los mismos
+    // intentos y el mismo bloqueo que el login (ver «ACCESO CON NÚMERO DE
+    // EMPLEADO Y PIN», más arriba).
     //
     // El encabezado lleva el nombre de quien tiene que teclear, no el de quien
     // sostiene el teléfono: lo que esta hoja impide es exactamente que lo
@@ -5537,7 +5653,7 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
         if (!emp || emp.id === undefined || emp.id === null) return;
         pedirClaveEmpleado({
             titulo: emp.name || 'Identifícate',
-            subtitulo: 'Escribe tu contraseña para contestar tu encuesta',
+            subtitulo: 'Escribe tu PIN para contestar tu encuesta',
             esperada: String(emp.id).trim()
         }, seguirAlAcertar);
     };
@@ -5908,6 +6024,9 @@ window.modoAdminSostenido = () => sessionStorage.getItem('adminSostenido') === '
         if (mensaje) alert(mensaje);
         localStorage.removeItem('usuarioLogueado');
         localStorage.removeItem('loginTimestamp');
+        const token = window.tokenDeSesion();
+        if (token) window.llamarAcceso('acceso_cerrar_sesion', { p_token: token });
+        window.olvidarTokenDeSesion();
         if (window.sostenerModoAdmin) window.sostenerModoAdmin(false);
 
         const enElPanel = /(^|\/)index\.html$/.test(window.location.pathname)

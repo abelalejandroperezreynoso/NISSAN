@@ -350,8 +350,8 @@ window.forzarInicioDeSesion = async () => {
 };
 
 // --- LOGIN Y GESTIÓN DE SESIÓN ---
-const btnLoginAction = document.getElementById('btn-login-action');
-const inpLoginName = document.getElementById('login-name');
+// La pantalla de acceso vive en `19-acceso.js`: número de empleado y PIN,
+// comprobados por la base. Aquí se queda sólo el arranque.
 
 window.iniciarApp = () => {
     // 1. Verificamos si la sesión expiró antes de iniciar
@@ -367,49 +367,20 @@ window.iniciarApp = () => {
     }
 }
 
+// Ya no se baja la plantilla antes de entrar: la comparación la hace la base y
+// la lista de nombres y números a la vista de cualquiera era justo lo que había
+// que quitar.
 window.mostrarLogin = () => {
     document.getElementById('vista-login').classList.remove('hidden');
     document.getElementById('vista-dashboard').classList.add('hidden');
-    if(window.cargarEmpleadosParaLogin) window.cargarEmpleadosParaLogin();
-}
-
-if(inpLoginName) {
-    inpLoginName.addEventListener('input', () => {
-        const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-        const val = normalize(inpLoginName.value);
-        const list = document.getElementById('suggestions-list');
-        list.innerHTML = ''; list.style.display='none';
-        if(val.length < 2) return;
-        
-        if(!window.empleadosLoginCache) return;
-                // Se eliminó el .slice(0,5) para que muestre todos los resultados
-                const matches = window.empleadosLoginCache.filter(e => normalize(e.name).includes(val));
-                if(matches.length > 0) {
-            list.style.display='block';
-            matches.forEach(e => {
-                const d=document.createElement('div'); d.className='suggestion-item'; d.innerText=e.name;
-                d.onclick=()=>{inpLoginName.value=e.name; list.style.display='none'; document.getElementById('login-id').focus();}
-                list.appendChild(d);
-            });
-        }
-    });
-}
-
-if(btnLoginAction) {
-    btnLoginAction.addEventListener('click', () => {
-        const n = inpLoginName.value.trim(), p = document.getElementById('login-id').value.trim();
-        const user = window.empleadosLoginCache ? window.empleadosLoginCache.find(e => e.name === n && e.id == p) : null;
-        if(user) {
-            // Guardamos el usuario y registramos el timestamp de inicio de sesión
-            localStorage.setItem("usuarioLogueado", JSON.stringify(user));
-            localStorage.setItem("loginTimestamp", Date.now().toString());
-            
-            window.mostrarDashboard(user);
-        } else alert("Credenciales incorrectas o datos cargando...");
-    });
+    if (window.prepararPantallaDeAcceso) window.prepararPantallaDeAcceso();
 }
 
 document.getElementById('btn-logout').onclick = () => {
+    // La sesión de la base se cierra también; si no llega, caduca sola.
+    const token = window.tokenDeSesion && window.tokenDeSesion();
+    if (token) window.llamarAcceso('acceso_cerrar_sesion', { p_token: token });
+    if (window.olvidarTokenDeSesion) window.olvidarTokenDeSesion();
     localStorage.removeItem("usuarioLogueado");
     localStorage.removeItem("loginTimestamp"); // Limpiamos también el timestamp al salir manualmente
     window.sostenerModoAdmin(false);

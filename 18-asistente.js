@@ -170,6 +170,7 @@ Cómo funciona la aplicación:
 - Los empleados se identifican por employee_id (texto); el nombre va como «Apellidos Nombres». supervisor_id es el employee_id de su jefe inmediato.
 - Los registros de incidentes viven en la tabla incidents, y la columna tipo dice qué son: «Incidente», «Difusión» o «Capacitación» (sin tipo cuenta como Incidente). Una difusión es un registro con tipo = 'Difusión', no una encuesta: para contarlas o buscarlas, filtra incidents por tipo. title es el nombre, date la fecha, grado la severidad de un incidente y linked_incident_id el registro al que está vinculado. Cada uno se firma de enterado (incident_signatures, una fila por persona) y tiene sus fotos en incident_gallery.
 - El sistema de incidentes ya es obsoleto: hoy se cargan como encuestas de firma en una clasificación propia. Para pasar uno viejo a encuesta usa migrar_incidente_a_encuesta. Si el administrador no dice a qué clasificación, consulta clasificaciones_de_encuestas y propón la que parezca de incidentes (las que llevan firma y títulos como los de los registros); si hay duda, pregúntale cuál con dos o tres opciones. Busca antes el id del registro en incidents por su título o su fecha. Al migrar, sus fotos pasan al material, cada firma de alguien que sigue activo pasa como respuesta firmada con su fecha, las de gente dada de baja o que ya no está en la plantilla se eliminan, y el registro deja de salir en el listado de incidentes. Para migrar varios, uno por llamada, y las difusiones vinculadas a un incidente antes que el incidente: usan sus fotos.
+- El acceso a la aplicación es con el número de empleado y un PIN de 4 números. Los PIN no se pueden leer ni consultar: no viven en ninguna tabla que puedas ver. Si te piden restablecer el PIN de alguien (lo olvidó, se bloqueó tras varios intentos), busca su employee_id y usa restablecer_pin; el PIN temporal lo ve el administrador en la tarjeta, no tú. Para saber quién ya tiene PIN, quién falta o cuántos correos hay, usa estado_de_acceso. El usuario es el número de empleado y no se cambia.
 - Borrar un registro de incidentes con borrar_registros lo elimina por completo: sus firmas, sus fotos y los archivos de ambas en Storage, que es lo que libera espacio (cerca de 1 MB de firmas por registro). Los registros vinculados a él no se borran: se quedan sin vínculo. Las firmas no se borran sueltas.
 
 ${window.catalogoDeTiposParaAsistente()}
@@ -313,6 +314,28 @@ window.HERRAMIENTAS_ASISTENTE = [
         }
     },
     {
+        name: 'estado_de_acceso',
+        description: 'Cómo va el acceso con PIN: cuánta gente ya creó su PIN, quién lo tiene temporal o bloqueado, cuántos correos se han recogido y si la entrada por número (la primera vez) sigue abierta. Con empleado_id, el estado de esa persona y su correo. Nunca devuelve ningún PIN.',
+        input_schema: {
+            type: 'object',
+            properties: { empleado_id: { type: 'string', description: 'Opcional: el número de empleado (employee_id) de una persona.' } },
+            additionalProperties: false
+        }
+    },
+    {
+        name: 'restablecer_pin',
+        description: 'Propone restablecer el PIN de acceso de una persona: se le asigna un PIN temporal de 4 números, que tendrá que cambiar al entrar, y se desbloquea si estaba bloqueada. No se escribe nada hasta que el administrador lo confirma en pantalla; el PIN temporal se le enseña a él en la tarjeta y a ti no te llega. Una persona por llamada; busca antes su employee_id con buscar_empleados.',
+        input_schema: {
+            type: 'object',
+            properties: {
+                empleado_id: { type: 'string', description: 'El número de empleado (employee_id), como texto.' },
+                motivo: { type: 'string', description: 'En una frase, por qué (olvidó su PIN, está bloqueado…).' }
+            },
+            required: ['empleado_id', 'motivo'],
+            additionalProperties: false
+        }
+    },
+    {
         name: 'crear_registros',
         description: 'Propone dar de alta registros nuevos en una tabla. No se escribe nada hasta que el administrador lo confirma en pantalla; la herramienta devuelve si lo aprobó y qué quedó guardado. Hasta 50 filas por llamada. Consulta antes las columnas de la tabla para no inventarlas.',
         input_schema: {
@@ -372,7 +395,7 @@ window.ESCRITURA_DEL_ASISTENTE = {
     cursos_previos: 'cmb', evaluaciones_aplica: 'cmb', clasificaciones_revisores: 'cmb', clasificaciones_objetivo: 'cmb'
 };
 window.MAX_FILAS_ESCRITURA = 50;
-window.HERRAMIENTAS_QUE_ESCRIBEN = ['crear_registros', 'modificar_registros', 'borrar_registros', 'migrar_incidente_a_encuesta'];
+window.HERRAMIENTAS_QUE_ESCRIBEN = ['crear_registros', 'modificar_registros', 'borrar_registros', 'migrar_incidente_a_encuesta', 'restablecer_pin'];
 
 window.TABLAS_DEL_ASISTENTE = ['evaluations', 'evaluation_questions', 'evaluation_responses', 'employees',
     'areas', 'plantas', 'lineas', 'equipos', 'incidents', 'incident_signatures', 'incident_gallery', 'hallazgos', 'objectives',
@@ -409,6 +432,8 @@ window.rotuloDeHerramienta = (nombre, entrada) => {
         case 'consultar_tabla': return (e.contar ? 'Contó ' : 'Consultó ') + tabla;
         case 'clasificaciones_de_encuestas': return 'Revisó las clasificaciones';
         case 'migrar_incidente_a_encuesta': return 'Propuso migrar un registro a encuesta';
+        case 'estado_de_acceso': return e.empleado_id ? 'Revisó el acceso de ' + (window.employeeNameMap?.[e.empleado_id] || e.empleado_id) : 'Revisó cómo va el acceso con PIN';
+        case 'restablecer_pin': return 'Propuso restablecer el PIN de ' + (window.employeeNameMap?.[e.empleado_id] || e.empleado_id);
         case 'crear_registros': return `Propuso un alta en ${tabla}`;
         case 'modificar_registros': return `Propuso un cambio en ${tabla}`;
         case 'borrar_registros': return `Propuso borrar en ${tabla}`;
@@ -692,6 +717,51 @@ window.EJECUTAR_HERRAMIENTA = {
         if (r.ok) despuesDeEscribir('evaluations');
         return { aprobado: true, migrado: r.ok, encuesta_id: r.evaluationId || null, firmas: r.respuestas, fotos: r.fotos,
             firmas_eliminadas: r.ok ? (r.descartadas || 0) : 0, detalle: window.textoDeMigracion(r) };
+    },
+
+    // --- El acceso con PIN (19-acceso.js y sql/acceso-con-pin.sql) ---
+    // Las dos pasan por las funciones de la base con el token del
+    // administrador, que es quien decide; el asistente no ve ningún PIN.
+    async estado_de_acceso(e) {
+        const token = window.tokenDeSesion && window.tokenDeSesion();
+        if (!token) return { error: window.textoDeAcceso({ motivo: 'sesion' }) };
+        const r = await window.llamarAcceso('acceso_resumen', { p_token: token });
+        if (!r.ok) return { error: window.textoDeAcceso(r) };
+        const gente = r.personas || [];
+        const estado = (p) => p.bloqueado ? 'bloqueado' : !p.pin ? 'sin PIN' : p.temporal ? 'PIN temporal' : 'con PIN';
+        if (e.empleado_id) {
+            const p = gente.find(x => String(x.id) === String(e.empleado_id).trim());
+            if (!p) return { error: 'No hay nadie activo con ese número de empleado.' };
+            return { empleado_id: p.id, nombre: window.employeeNameMap?.[p.id] || null, estado: estado(p),
+                correo: p.correo || null, ultimo_acceso: p.ultimo || null };
+        }
+        const cuenta = (t) => gente.filter(p => estado(p) === t).length;
+        return { activos: gente.length, con_pin: cuenta('con PIN'), temporal: cuenta('PIN temporal'),
+            bloqueados: cuenta('bloqueado'), sin_pin: cuenta('sin PIN'), con_correo: gente.filter(p => p.correo).length,
+            entrada_por_numero_abierta: r.acceso_por_numero !== false };
+    },
+
+    async restablecer_pin(e, ctx) {
+        const id = String(e.empleado_id).trim();
+        if (!window.tokenDeSesion || !window.tokenDeSesion()) return { error: window.textoDeAcceso({ motivo: 'sesion' }) };
+        const { data: emp, error } = await sb.from('employees').select('employee_id, name, department, puesto, is_active').eq('employee_id', id).maybeSingle();
+        if (error) return { error: error.message };
+        if (!emp) return { error: 'No hay nadie con ese número de empleado.' };
+        if (emp.is_active === false) return { error: 'Esa persona está dada de baja.' };
+
+        const aprobado = await ctx.confirmar({
+            accion: 'modificar', motivo: e.motivo,
+            titulo: `Restablecer el PIN de «${emp.name}»`,
+            campos: [['Número de empleado', emp.employee_id], ['Departamento', emp.department], ['Puesto', emp.puesto], ['Motivo', e.motivo]],
+            nota: 'Se le asigna un PIN temporal, que verás aquí y tendrás que darle en persona. Al entrar con él se le pide crear el suyo; el anterior deja de servir.'
+        });
+        if (!aprobado) return { aprobado: false, resultado: 'El administrador canceló. No se cambió nada.' };
+
+        const r = await window.restablecerPinDe(id, emp.name, { preguntar: false, enseñar: false });
+        ctx.resultado(r.ok, r.ok ? `PIN temporal: ${r.pin} · dáselo en persona` : window.textoDeAcceso(r));
+        return r.ok
+            ? { aprobado: true, restablecido: true, nombre: emp.name, nota: 'El PIN temporal se le enseñó al administrador en la tarjeta. No lo repitas ni lo inventes.' }
+            : { aprobado: true, restablecido: false, error: window.textoDeAcceso(r) };
     },
 
     // --- LAS QUE ESCRIBEN ---
