@@ -94,19 +94,11 @@ language sql immutable set search_path = public as $$
     where w <> ''
 $$;
 
--- null si el PIN vale; si no, por qué no.
+-- null si el PIN vale; si no, por qué no. Sólo se pide que sea de 4 números.
 create or replace function acceso_pin_debil(p_pin text, p_numero text) returns text
 language plpgsql immutable set search_path = public as $$
 begin
     if p_pin is null or p_pin !~ '^[0-9]{4}$' then return 'El PIN debe ser de 4 números.'; end if;
-    if p_pin ~ '^(.)\1\1\1$' then return 'El PIN no puede ser el mismo número repetido.'; end if;
-    if p_pin in ('0123','1234','2345','3456','4567','5678','6789','9876','8765','7654',
-                 '6543','5432','4321','3210','1212','2121','1122','2211','1100','0011') then
-        return 'Ese PIN es demasiado fácil de adivinar. Elige otro.';
-    end if;
-    if p_numero is not null and (p_pin = right(p_numero, 4) or p_pin = left(p_numero, 4)) then
-        return 'El PIN no puede ser parte de tu número de empleado.';
-    end if;
     return null;
 end $$;
 

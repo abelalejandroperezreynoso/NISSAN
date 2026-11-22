@@ -166,8 +166,10 @@ Las reglas para usarlo:
     obliga a crear el suyo (`pin_temporal`).
   - **Cuatro dígitos sólo aguantan con el bloqueo de la base**: al quinto fallo
     seguido, 15 minutos, y cada bloqueo siguiente el doble hasta 24 h; se pone
-    a cero al acertar. Los PIN obvios —repetidos, escaleras, parte del número
-    de empleado— se rechazan (`acceso_pin_debil`).
+    a cero al acertar. **No se rechaza ningún PIN por fácil**: 0000, 1234 o
+    los dígitos del número de empleado valen. Se rechazaban (`acceso_pin_debil`)
+    y se quitó a petición del usuario; esa función sólo comprueba ya que sean
+    4 números.
   - **La migración**: quien no tiene PIN entra una vez con su número —que era
     la contraseña de antes; el nombre era el usuario y estaba a la vista en la
     lista de sugerencias, así que pedirlo no protege nada— y ahí crea su PIN y
