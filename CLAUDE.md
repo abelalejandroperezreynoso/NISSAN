@@ -164,12 +164,14 @@ Las reglas para usarlo:
   - **El PIN se guarda como huella bcrypt** y no se puede leer ni devolver. Lo
     que se le da a quien lo olvidó es un **PIN temporal**, que al entrar
     obliga a crear el suyo (`pin_temporal`).
-  - **Cuatro dígitos sólo aguantan con el bloqueo de la base**: al quinto fallo
-    seguido, 15 minutos, y cada bloqueo siguiente el doble hasta 24 h; se pone
-    a cero al acertar. **No se rechaza ningún PIN por fácil**: 0000, 1234 o
-    los dígitos del número de empleado valen. Se rechazaban (`acceso_pin_debil`)
-    y se quitó a petición del usuario; esa función sólo comprueba ya que sean
-    4 números.
+  - **No hay bloqueo ni PIN prohibidos, a petición del usuario.** Al quinto
+    fallo seguido se bloqueaba el número 15 minutos, doblando hasta 24 h, y se
+    rechazaban los PIN obvios —0000, 1234, parte del número de empleado—.
+    Las dos cosas se quitaron: `acceso_fallo` sólo devuelve el motivo y
+    `acceso_pin_debil` sólo comprueba que sean 4 números. **Con eso un PIN de
+    cuatro cifras se adivina probando**, y lo sabe quien lo pidió. Las columnas
+    `intentos`, `bloqueos` y `bloqueado_hasta` y el texto de `bloqueado` siguen
+    ahí por si se vuelve a poner.
   - **La migración**: quien no tiene PIN entra una vez con su número —que era
     la contraseña de antes; el nombre era el usuario y estaba a la vista en la
     lista de sugerencias, así que pedirlo no protege nada— y ahí crea su PIN y
@@ -5191,7 +5193,7 @@ Las reglas para usarlo:
   Siete cosas que hay que mantener:
 
   - **Lo que se teclea es su PIN, y lo comprueba la base**
-    (`acceso_verificar_pin`, con los mismos intentos y el mismo bloqueo que el
+    (`acceso_verificar_pin`, con las mismas reglas que el
     login; ver «El acceso es con número de empleado y PIN»). Mientras la
     entrada por número siga abierta, quien todavía no tiene PIN teclea su
     número, como antes. El número de empleado ya no es secreto —es el

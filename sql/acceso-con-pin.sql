@@ -8,9 +8,9 @@
 --   · el usuario es el número de empleado y la contraseña un PIN de 4 dígitos;
 --   · el PIN se guarda sólo como huella bcrypt, en una tabla que la aplicación
 --     no puede leer, y se comprueba aquí dentro, en funciones `security definer`;
---   · cinco fallos seguidos bloquean la cuenta 15 minutos, y cada bloqueo
---     siguiente dura el doble (hasta 24 h), que es lo que hace aguantable un
---     PIN de cuatro cifras;
+--   · no hay bloqueo por intentos fallidos ni PIN rechazados por fáciles: se
+--     quitaron a petición del usuario (las columnas `intentos`, `bloqueos` y
+--     `bloqueado_hasta` se quedan, pero ya nada las llena);
 --   · al acertar se emite un token de sesión (se guarda sólo su sha256): es lo
 --     que identifica ante la base a quien restablece el PIN de otro;
 --   · la migración: quien todavía no tiene PIN entra una vez con su número —la
@@ -119,23 +119,11 @@ language sql stable security definer set search_path = public as $$
     select exists (select 1 from administradores_acceso where employee_id = p_emp)
 $$;
 
--- Un intento fallido: cuenta y, al quinto, bloquea.
+-- Un intento fallido. Ya no cuenta ni bloquea: sólo dice que no es.
 create or replace function acceso_fallo(p_emp text, p_motivo text) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare v credenciales%rowtype;
 begin
-    insert into credenciales (employee_id) values (p_emp) on conflict do nothing;
-    update credenciales set intentos = intentos + 1, actualizado_en = now()
-     where employee_id = p_emp returning * into v;
-    if v.intentos >= 5 then
-        update credenciales
-           set intentos = 0, bloqueos = bloqueos + 1,
-               bloqueado_hasta = now() + least(interval '15 minutes' * power(2, bloqueos), interval '24 hours')
-         where employee_id = p_emp returning * into v;
-        insert into credenciales_registro (employee_id, accion) values (p_emp, 'bloqueo');
-        return jsonb_build_object('ok', false, 'motivo', 'bloqueado', 'hasta', v.bloqueado_hasta);
-    end if;
-    return jsonb_build_object('ok', false, 'motivo', p_motivo, 'restantes', 5 - v.intentos);
+    return jsonb_build_object('ok', false, 'motivo', p_motivo);
 end $$;
 
 -- Emite la sesión y devuelve la ficha con la forma de `usuarioLogueado`.
